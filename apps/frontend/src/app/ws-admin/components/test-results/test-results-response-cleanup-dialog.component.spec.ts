@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Subject, of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestResultsResponseCleanupDialogComponent } from './test-results-response-cleanup-dialog.component';
 import { TestResultBackendService } from '../../../shared/services/test-result/test-result-backend.service';
 import { FileBackendService } from '../../../shared/services/file/file-backend.service';
@@ -13,7 +14,7 @@ describe('TestResultsResponseCleanupDialogComponent zoneless rendering', () => {
   beforeEach(async () => {
     response = new Subject<{ units: string[] }>();
     await TestBed.configureTestingModule({
-      imports: [TestResultsResponseCleanupDialogComponent],
+      imports: [GermanTranslationsTestingModule, TestResultsResponseCleanupDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1 } },

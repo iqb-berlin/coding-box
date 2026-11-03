@@ -3,6 +3,7 @@ import { TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { AppService } from '../../../core/services/app.service';
 import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
 import {
@@ -52,6 +53,7 @@ describe('TestResultsSearchComponent', () => {
     dialogRef = { close: jest.fn() };
     snackBar = { open: jest.fn() };
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: ChangeDetectorRef, useValue: { markForCheck: jest.fn() } },
         TestResultsSearchComponent,

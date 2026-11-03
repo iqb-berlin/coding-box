@@ -5,6 +5,7 @@ import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { FilesValidationDialogComponent } from './files-validation.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { WorkspaceService } from '../../../workspace/services/workspace.service';
@@ -23,7 +24,7 @@ describe('FilesValidationDialogComponent selection without Zone.js', () => {
       testTaker: 'TESTTAKERS', login: 'other-login', mode: 'other-mode', consider: false
     });
     await TestBed.configureTestingModule({
-      imports: [FilesValidationDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, FilesValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(), provideHttpClient(),
         { provide: SERVER_URL, useValue: '/api/' },

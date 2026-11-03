@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ChangeDetectionStrategy, Component, input, output
 } from '@angular/core';
@@ -14,7 +15,7 @@ import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.ut
 @Component({
   selector: 'coding-box-job-coder-capacity',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule, MatTooltipModule],
+  imports: [TranslateModule, FormsModule, MatButtonModule, MatIconModule, MatFormFieldModule, MatInputModule, MatProgressSpinnerModule, MatTooltipModule],
   templateUrl: './job-coder-capacity.component.html',
   styleUrls: ['./job-coder-capacity.component.scss'],
   host: { style: 'display: block' }

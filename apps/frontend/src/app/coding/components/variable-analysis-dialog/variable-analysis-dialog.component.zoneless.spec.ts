@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { VariableAnalysisDialogComponent } from './variable-analysis-dialog.component';
 import { CodingStatisticsService } from '../../services/coding-statistics.service';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
@@ -68,7 +69,7 @@ describe('Code/score distribution without Zone', () => {
     });
     openSnackBar = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [VariableAnalysisDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, VariableAnalysisDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 5 } },

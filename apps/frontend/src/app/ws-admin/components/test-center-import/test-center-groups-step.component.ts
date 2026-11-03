@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   ChangeDetectionStrategy, Component, input, output
 } from '@angular/core';
@@ -12,7 +13,7 @@ import { TestGroupsInfoDto } from '../../../../../../../api-dto/files/test-group
 @Component({
   selector: 'coding-box-test-center-groups-step',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [CommonModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatTableModule, MatTooltipModule],
+  imports: [TranslateModule, CommonModule, MatButtonModule, MatIconModule, MatCheckboxModule, MatTableModule, MatTooltipModule],
   templateUrl: './test-center-groups-step.component.html',
   styleUrls: ['./test-center-groups-step.component.scss'],
   host: { style: 'display: block' }

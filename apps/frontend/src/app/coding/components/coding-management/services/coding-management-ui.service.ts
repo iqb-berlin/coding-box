@@ -5,6 +5,7 @@ import {
 } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../../shared/utils/ui-translator';
 import { AppService } from '../../../../core/services/app.service';
 import { FileService } from '../../../../shared/services/file/file.service';
 import { CodingStatisticsService } from '../../../services/coding-statistics.service';
@@ -19,6 +20,8 @@ import { takeUntilWorkspaceChanged } from '../../../../shared/utils/workspace-re
   providedIn: 'root'
 })
 export class CodingManagementUiService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private appService = inject(AppService);
   private fileService = inject(FileService);
@@ -33,7 +36,7 @@ export class CodingManagementUiService {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!response.id) {
-      this.snackBar.open('Fehlende Response-ID für Replay', 'Schließen', {
+      this.snackBar.open(this.uiTranslate('ui-text.coding-management-ui.replay-response-id-missing'), this.uiTranslate('deferred-view.close'), {
         duration: 5000,
         panelClass: ['error-snackbar']
       });
@@ -44,8 +47,8 @@ export class CodingManagementUiService {
       switchMap(result => {
         if (!result.replayUrl) {
           this.snackBar.open(
-            'Fehler beim Generieren der Replay-URL',
-            'Schließen',
+            this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -57,8 +60,8 @@ export class CodingManagementUiService {
       }),
       catchError(() => {
         this.snackBar.open(
-          'Fehler beim Generieren der Replay-URL',
-          'Schließen',
+          this.uiTranslate('ui-text.coding-jobs.replay-url-failed'),
+          this.uiTranslate('deferred-view.close'),
           {
             duration: 5000,
             panelClass: ['error-snackbar']
@@ -79,8 +82,8 @@ export class CodingManagementUiService {
       switchMap(xmlContent => {
         if (!xmlContent) {
           this.snackBar.open(
-            `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,
-            'Schließen',
+            this.uiTranslate('coding-management.descriptions.error-unit-coding-xml', { unitId: unitId }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -92,8 +95,8 @@ export class CodingManagementUiService {
         const codingSchemeRef = readCodingSchemeReference(xmlContent);
         if (!codingSchemeRef) {
           this.snackBar.open(
-            `Kein Kodierschema in Kodierdaten für die Unit ${unitId} gefunden.`,
-            'Schließen',
+            this.uiTranslate('coding-management.descriptions.no-coding-schema-unit', { unitId: unitId }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000
             }
@@ -105,8 +108,8 @@ export class CodingManagementUiService {
       }),
       catchError(() => {
         this.snackBar.open(
-          `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,
-          'Schließen',
+          this.uiTranslate('coding-management.descriptions.error-unit-coding-xml', { unitId: unitId }),
+          this.uiTranslate('deferred-view.close'),
           {
             duration: 5000,
             panelClass: ['error-snackbar']
@@ -125,8 +128,8 @@ export class CodingManagementUiService {
       return readCodingSchemeReference(xmlContent)?.content || null;
     } catch (error) {
       this.snackBar.open(
-        'Fehler beim Verarbeiten der Unit-XML-Daten',
-        'Schließen',
+        this.uiTranslate('coding-management.descriptions.error-unit-xml-processing'),
+        this.uiTranslate('deferred-view.close'),
         {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -151,8 +154,8 @@ export class CodingManagementUiService {
         takeUntilDestroyed(owner),
         catchError(() => {
           this.snackBar.open(
-            `Fehler beim Abrufen des Kodierschemas '${codingSchemeRef}'`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-management-ui.schema-fetch-failed', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -164,8 +167,8 @@ export class CodingManagementUiService {
       .subscribe(fileData => {
         if (!fileData || !fileData.base64Data) {
           this.snackBar.open(
-            `Kodierschema '${codingSchemeRef}' in Kodierdaten nicht gefunden.`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-management-ui.schema-not-found', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -191,8 +194,8 @@ export class CodingManagementUiService {
           });
         } catch (error) {
           this.snackBar.open(
-            `Fehler beim Verarbeiten des Kodierschemas '${codingSchemeRef}'`,
-            'Schließen',
+            this.uiTranslate('ui-text.coding-management-ui.schema-parse-failed', { codingSchemeRef: codingSchemeRef }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -215,8 +218,8 @@ export class CodingManagementUiService {
         takeUntilDestroyed(owner),
         catchError(() => {
           this.snackBar.open(
-            `Fehler beim Abrufen der Unit-XML-Daten für Unit ${unitId}`,
-            'Schließen',
+            this.uiTranslate('coding-management.descriptions.error-unit-coding-xml', { unitId: unitId }),
+            this.uiTranslate('deferred-view.close'),
             {
               duration: 5000,
               panelClass: ['error-snackbar']
@@ -230,7 +233,7 @@ export class CodingManagementUiService {
         this.dialog.open(ContentDialogComponent, {
           width: '80%',
           data: {
-            title: `Unit-XML für Unit ${unitId}`,
+            title: this.uiTranslate('coding-management.descriptions.unit-xml-title', { unitId: unitId }),
             content: xmlContent,
             isXml: true
           }

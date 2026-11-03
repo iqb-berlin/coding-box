@@ -27,7 +27,7 @@
                   <span class="variable-trigger-name">{{ activeItem.label }}</span>
                   <span class="variable-trigger-progress">({{ prog.coded }}/{{ prog.total }})</span>
                 } @else {
-                  Variable wählen
+                  {{ 'ui-text.code-selector.select-variable' | translate }}
                 }
               </span>
               <mat-icon class="variable-trigger-icon">{{ isVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -91,7 +91,7 @@
                   <span class="variable-trigger-name">{{ activeBundleVariable.label }}</span>
                   <span class="variable-trigger-progress">({{ activeBundleVariable.progress.coded }}/{{ activeBundleVariable.progress.total }})</span>
                 } @else {
-                  Variable wählen
+                  {{ 'ui-text.code-selector.select-variable' | translate }}
                 }
               </span>
               <mat-icon class="variable-trigger-icon">{{ isBundleVariablePanelOpen() ? 'expand_less' : 'expand_more' }}</mat-icon>
@@ -136,7 +136,7 @@
     <div class="progress-actions">
       @if (unitsData()) {
         <div class="nav-controls">
-          <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" matTooltip="Vorherige Aufgabe"
+          <button mat-icon-button [disabled]="!hasPreviousUnit()" (click)="previousUnit()" [matTooltip]="'accessibility.actions.previous-unit' | translate"
             class="nav-button prev-button" [attr.aria-label]="'accessibility.actions.previous-unit' | translate">
             <mat-icon>chevron_left</mat-icon>
           </button>
@@ -147,7 +147,7 @@
             <span class="total-units">{{ totalNavigationUnits }}</span>
           </div>
 
-          <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" matTooltip="Nächste Aufgabe"
+          <button mat-icon-button [disabled]="!hasNextUnit()" (click)="nextUnit()" [matTooltip]="'accessibility.actions.next-unit' | translate"
             class="nav-button next-button" [attr.aria-label]="'accessibility.actions.next-unit' | translate">
             <mat-icon>chevron_right</mat-icon>
           </button>
@@ -294,7 +294,7 @@
       </div>
 
       <div class="deselect-container">
-        <button mat-button class="deselect-button" [disabled]="isReadOnly()" (click)="deselectAll()">Auswahl entfernen</button>
+        <button mat-button class="deselect-button" [disabled]="isReadOnly()" (click)="deselectAll()">{{ 'ui-text.code-selector.clear-selection' | translate }}</button>
       </div>
 
       @if (allowComments()) {

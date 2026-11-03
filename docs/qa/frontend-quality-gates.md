@@ -118,3 +118,45 @@ Cypress/Electron runner, Enter dispatch does not activate a plain HTML button;
 the nested-button browser regression therefore uses Space. Component tests
 verify that both Enter and Space remain uncanceled on the native button, and the
 browser regression separately exercises Enter on the custom toast header.
+
+
+## Grenzen für Komplexität und Größe
+
+Die gemeinsamen ESLint-Regeln in `config/quality/eslint-structure.cjs` gelten für
+produktiven TypeScript-Code in Frontend und Backend. Die lokalen Regeln
+`structure/complexity`, `structure/max-depth`, `structure/max-lines-per-function`
+und `structure/max-lines` verwenden die Messung der gleichnamigen ESLint-Regeln:
+Komplexität höchstens 20, Verschachtelung höchstens 4, höchstens 100 Zeilen pro
+Funktion und 800 pro Datei. Leerzeilen und reine Kommentarzeilen zählen bei den
+Zeilengrenzen nicht mit. Tests, Test-Factories, Mocks und Deklarationsdateien sind
+davon ausgenommen. `api-dto` und Skripte liegen außerhalb dieses bestehenden
+Lint-Geltungsbereichs.
+
+`config/quality/structure-baseline.json` enthält die am 02.11.2026 gemessenen
+Überschreitungen. Funktionsgrenzen gelten ausschließlich für die dort benannte
+Funktion mit ihrem Klassen-/Namensraumkontext. Neue Methoden, Funktionen und
+Klassen erhalten die Standardgrenzen, auch in einer Bestandsdatei. Identische
+Namen in unterschiedlichen Klassen sowie Getter, Setter, statische Methoden und
+Feldinitialisierungen haben getrennte Kennungen. Anonyme Rückrufe werden außerdem
+an ihren tokenisierten Quelltext gebunden: Kommentare und Leerraum verändern die
+Kennung nicht; geänderte anonyme Funktionen müssen die Standardgrenzen erfüllen.
+Nur die Dateigröße hat naturgemäß eine Ausnahme für die gesamte Datei.
+
+Die Regeln melden auch nicht mehr benötigte oder zu hohe Ausnahmen als Fehler.
+Nach einer Verbesserung werden vorhandene Grenzen mit diesen Befehlen automatisch
+abgesenkt oder entfernt, jeweils getrennt pro Anwendung:
+
+```sh
+npx nx run backend:prune-structure-baseline
+npx nx run frontend:prune-structure-baseline
+```
+
+Diese Befehle können weder neue Ausnahmen hinzufügen noch bestehende Grenzen
+erhöhen. Ein vergrößerter Bestandsbereich oder neue zu große Funktionen bleiben
+anschließend Lint-Fehler. Die CI verändert die Baseline nicht selbst.
+
+Beide Nx-Lint-Ziele und ihre bestehenden CI-Jobs verwenden dieselbe Konfiguration.
+Nx berücksichtigt Änderungen an Regeln und Baseline in den gemeinsamen
+Cache-Eingaben. `frontend:test-quality-gates` prüft die wirksamen Regeln beider
+Anwendungen sowie Funktionsidentität, neue Funktionen innerhalb von Bestandsdateien,
+veraltete Ausnahmen und die ausschließlich absenkende Aktualisierung.

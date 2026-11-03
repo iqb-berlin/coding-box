@@ -14,6 +14,7 @@ import {
   Observable, of, Subject, throwError
 } from 'rxjs';
 import { FormBuilder, ReactiveFormsModule } from '@angular/forms';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { JobDistributionPreviewComponent } from './job-distribution-preview.component';
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
 import { JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
@@ -170,8 +171,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
     };
 
     mockTranslateService = {
-      instant: jest.fn().mockImplementation((key: string) => key),
-      get: jest.fn().mockImplementation((key: string) => of(key)),
+      instant: jest.fn().mockImplementation((key: string, params?: Record<string, unknown>) => (key.startsWith('ui-text.') ? translateGerman(key, params) : key)),
+      get: jest.fn().mockImplementation((key: string, params?: Record<string, unknown>) => of(key.startsWith('ui-text.') ? translateGerman(key, params) : key)),
       onLangChange: new EventEmitter<unknown>(),
       onTranslationChange: new EventEmitter<unknown>(),
       onDefaultLangChange: new EventEmitter<unknown>()
@@ -182,7 +183,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         CodingJobDefinitionDialogComponent,
         ReactiveFormsModule,
         TranslateModule.forRoot()

@@ -25,7 +25,7 @@ import { TestResultsFilterOptionsService } from './test-results-filter-options.s
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsSearchService } from './test-results-search.service';
 import {
-  LogAnomalyDashboardSummary, LogAnomalyDetailsResponse, LogAnomalySummary, QuickSearchResult, ResponseSearchSortBy, ResponseSearchSortDirection, TestResultsExportFilters, WorkspaceOverviewStats
+  FlatResponseOptions, FlatResponseResult, LogAnomalyDashboardSummary, LogAnomalyDetailsResponse, QuickSearchResult, ResponseSearchSortBy, ResponseSearchSortDirection, TestResultsExportFilters, WorkspaceOverviewStats
 } from './workspace-test-results.types';
 
 export type {
@@ -163,64 +163,9 @@ export class WorkspaceTestResultsService {
 
   async findFlatResponses(
     workspaceId: number,
-    options: {
-      page: number;
-      limit: number;
-      code?: string;
-      group?: string;
-      login?: string;
-      booklet?: string;
-      unit?: string;
-      response?: string;
-      responseStatus?: string;
-      responseValue?: string;
-      tags?: string;
-      geogebra?: string;
-      audioLow?: string;
-      hasValue?: string;
-      audioLowThreshold?: number | string;
-      shortProcessing?: string;
-      shortProcessingThresholdMs?: number | string;
-      longLoading?: string;
-      longLoadingThresholdMs?: number | string;
-      processingDurations?: string;
-      processingDurationThresholdMs?: number | string;
-      processingDurationMin?: string;
-      processingDurationMax?: string;
-      unitProgress?: string;
-      sessionBrowsers?: string;
-      sessionOs?: string;
-      sessionScreens?: string;
-      sessionIds?: string;
-      logAnomalies?: string;
-      includeLogAnomalies?: string;
-      focusLostThresholdMs?: number | string;
-      sessionSpanThresholdMs?: number | string;
-      repeatedStartThreshold?: number | string;
-      regexSearch?: boolean;
-    },
+    options: FlatResponseOptions,
     queryRunner?: QueryRunner
-  ): Promise<
-    [
-      Array<{
-        bookletId: number;
-        responseId: number;
-        unitId: number;
-        personId: number;
-        code: string;
-        group: string;
-        login: string;
-        booklet: string;
-        unit: string;
-        response: string;
-        responseStatus: string;
-        responseValue: string;
-        tags: string[];
-        logAnomalies: LogAnomalySummary[];
-      }>,
-      number
-    ]
-  > {
+  ): Promise<FlatResponseResult> {
     return this.responses.findFlatResponses(workspaceId, options, queryRunner);
   }
 

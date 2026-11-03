@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatExpansionModule } from '@angular/material/expansion';
 import { MatIconModule } from '@angular/material/icon';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { ValidationPanelHeaderComponent } from './validation-panel-header.component';
 
 describe('ValidationPanelHeaderComponent', () => {
@@ -10,7 +11,7 @@ describe('ValidationPanelHeaderComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         MatExpansionModule,
         MatIconModule,
         MatProgressSpinnerModule,

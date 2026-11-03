@@ -8,6 +8,7 @@ import { TranslateService } from '@ngx-translate/core';
 import {
   Observable, Subject, of, switchMap, tap
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
@@ -22,6 +23,8 @@ import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 /** Aggregation writes, confirmations and analysis restart belong to one view lifetime. */
 @Injectable()
 export class ManualCodingAggregationFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly settings = inject(ManualCodingSettingsFacade);
@@ -55,14 +58,14 @@ export class ManualCodingAggregationFacade {
   private setResponseAnalysisGuardActive(active: boolean): void { this.analysis.setResponseAnalysisGuardActive(active); }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['success-snackbar']
     });
@@ -200,7 +203,7 @@ export class ManualCodingAggregationFacade {
       .subscribe({
         next: () => {
           this.setResponseAnalysisGuardActive(true);
-          this.snackBar.open('Antwortanalyse wurde gestartet.', 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.manual-coding-aggregation.analysis-started'), 'OK', { duration: 3000 });
           if (shouldRefreshAggregationDependentViews) {
             this.refreshRequested.next({ scope: 'aggregation', includeResponseAnalysis: false });
           }
@@ -211,7 +214,7 @@ export class ManualCodingAggregationFacade {
           this.analysis.analysisStartFailed();
           if (settingsReadyForAnalysis) {
             this.snackBar.open(
-              `Fehler beim Starten der Antwortanalyse: ${error.message || error}`,
+              this.uiTranslate('ui-text.manual-coding-aggregation.analysis-start-failed', { value1: error.message || error }),
               'OK',
               { duration: 3000 }
             );
@@ -282,7 +285,7 @@ export class ManualCodingAggregationFacade {
             this.showError(
               this.translateService.instant(
                 'coding-management-manual.response-analysis.apply-empty-coding-error',
-                { error: 'Unbekannter Fehler' }
+                { error: this.uiTranslate('error.unknown') }
               )
             );
           }
@@ -382,7 +385,7 @@ export class ManualCodingAggregationFacade {
             this.showError(
               this.translateService.instant(
                 'coding-management-manual.duplicate-aggregation.error',
-                { error: 'Unbekannter Fehler' }
+                { error: this.uiTranslate('error.unknown') }
               )
             );
           }
@@ -439,7 +442,7 @@ export class ManualCodingAggregationFacade {
           },
           error: () => {
             this.applyingAggregation.set(false);
-            this.showError('Fehler beim Deaktivieren der Aggregation');
+            this.showError(this.uiTranslate('ui-text.manual-coding-aggregation.disable-failed'));
           }
         });
     });

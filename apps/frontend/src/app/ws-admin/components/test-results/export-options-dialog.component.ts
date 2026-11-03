@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, inject, OnInit, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -25,7 +26,7 @@ export interface ExportOptions {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-export-options-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatFormFieldModule,
     MatInputModule,
@@ -36,23 +37,23 @@ export interface ExportOptions {
     MatCheckboxModule
   ],
   template: `
-    <h1 mat-dialog-title>Export-Optionen</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.test-files-zip-export-options-dialog.title' | translate }}</h1>
     <div mat-dialog-content>
-      <p>Wählen Sie die Daten aus, die exportiert werden sollen.</p>
+      <p>{{ 'ui-text.export-options-dialog.description' | translate }}</p>
 
       @if (dialogData?.exportType === 'results') {
         <div class="export-extra-options">
           <mat-checkbox [(ngModel)]="data.includeLogAnomalies">
-            Log-Auffälligkeiten als Zusatzspalten exportieren
+            {{ 'ui-text.export-options-dialog.include-log-anomalies' | translate }}
           </mat-checkbox>
         </div>
       }
 
       <mat-tab-group>
-        <mat-tab label="Testgruppen">
+        <mat-tab [label]="'ws-admin.test-groups' | translate">
           <div class="selection-actions">
-            <button mat-button (click)="groupsList.selectAll()">Alle auswählen</button>
-            <button mat-button (click)="groupsList.deselectAll()">Alle abwählen</button>
+            <button mat-button (click)="groupsList.selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+            <button mat-button (click)="groupsList.deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>
           </div>
           <div class="list-container">
             <mat-selection-list #groupsList [(ngModel)]="data.groupNames">
@@ -65,10 +66,10 @@ export interface ExportOptions {
           </div>
         </mat-tab>
 
-        <mat-tab label="Testpersonen">
+        <mat-tab [label]="'ws-admin.test-persons' | translate">
           <div class="selection-actions">
-            <button mat-button (click)="personsList.selectAll()">Alle auswählen</button>
-            <button mat-button (click)="personsList.deselectAll()">Alle abwählen</button>
+            <button mat-button (click)="personsList.selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+            <button mat-button (click)="personsList.deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>
           </div>
           <div class="list-container">
             <mat-selection-list #personsList [(ngModel)]="data.personIds">
@@ -81,10 +82,10 @@ export interface ExportOptions {
           </div>
         </mat-tab>
 
-        <mat-tab label="Testhefte">
+        <mat-tab [label]="'ui-text.files-validation.booklets' | translate">
           <div class="selection-actions">
-            <button mat-button (click)="bookletsList.selectAll()">Alle auswählen</button>
-            <button mat-button (click)="bookletsList.deselectAll()">Alle abwählen</button>
+            <button mat-button (click)="bookletsList.selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+            <button mat-button (click)="bookletsList.deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>
           </div>
           <div class="list-container">
             <mat-selection-list #bookletsList [(ngModel)]="data.bookletNames">
@@ -97,10 +98,10 @@ export interface ExportOptions {
           </div>
         </mat-tab>
 
-        <mat-tab label="Aufgaben">
+        <mat-tab [label]="'coding.jobs.table.units' | translate">
           <div class="selection-actions">
-            <button mat-button (click)="unitsList.selectAll()">Alle auswählen</button>
-            <button mat-button (click)="unitsList.deselectAll()">Alle abwählen</button>
+            <button mat-button (click)="unitsList.selectAll()">{{ 'manual-coding-export.select-all' | translate }}</button>
+            <button mat-button (click)="unitsList.deselectAll()">{{ 'manual-coding-export.deselect-all' | translate }}</button>
           </div>
           <div class="list-container">
             <mat-selection-list #unitsList [(ngModel)]="data.unitNames">
@@ -116,8 +117,8 @@ export interface ExportOptions {
 
     </div>
     <div mat-dialog-actions align="end">
-      <button mat-button (click)="onNoClick()">Abbrechen</button>
-      <button mat-raised-button color="primary" [mat-dialog-close]="data">Exportieren</button>
+      <button mat-button (click)="onNoClick()">{{ 'cancel' | translate }}</button>
+      <button mat-raised-button color="primary" [mat-dialog-close]="data">{{ 'export' | translate }}</button>
     </div>
   `,
   styles: [`

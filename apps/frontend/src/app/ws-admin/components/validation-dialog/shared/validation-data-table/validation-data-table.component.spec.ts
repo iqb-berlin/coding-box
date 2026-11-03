@@ -4,6 +4,7 @@ import { MatTableModule } from '@angular/material/table';
 import { MatPaginatorModule } from '@angular/material/paginator';
 import { MatCheckboxModule } from '@angular/material/checkbox';
 import { MatIconModule } from '@angular/material/icon';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { ValidationDataTableComponent, ValidationTableColumn } from './validation-data-table.component';
 
 interface TestData {
@@ -29,7 +30,7 @@ describe('ValidationDataTableComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         CommonModule,
         MatTableModule,
         MatPaginatorModule,

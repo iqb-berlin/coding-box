@@ -29,6 +29,8 @@ import {
   finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
+import { completionReadinessTitle } from './manual-completion-readiness';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { variableKey } from '../../utils/variable-key.util';
 import { ManualCodingPreparationViewComponent } from './manual-coding-preparation-view.component';
 import { ManualCodingPlanningViewComponent } from './manual-coding-planning-view.component';
@@ -99,7 +101,7 @@ import type {
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import {
-  CODING_FRESHNESS_TASK_RESULT_HELP,
+  CODING_FRESHNESS_TASK_RESULT_HELP_KEY,
   formatCodingFreshnessResponseCount,
   formatCodingFreshnessTaskResultCount,
   getCodingFreshnessAffectedResponseCount,
@@ -162,6 +164,8 @@ interface ManualFreshnessJobSummary {
   ]
 })
 export class CodingManagementManualComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected readonly variableKey = variableKey;
 
   private readonly destroy$ = new Subject<void>();
@@ -370,7 +374,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     openDoubleCodingConflictCount: this.openDoubleCodingConflictCount,
     getAvailableCasesForNewJobs: this.getAvailableCasesForNewJobs(),
     getUnavailableCasesForNewJobs: this.getUnavailableCasesForNewJobs()
-  }));
+  }, this.uiTranslate));
 
   constructor() {
     this.refreshWorkflow.connect({
@@ -649,14 +653,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   // Note: Validation functionality has been moved to the export dialog and dedicated validation results dialog
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['success-snackbar']
     });
@@ -689,7 +693,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
   }
 
   openTrainingDiscussion(): void {
@@ -700,7 +704,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const coderTrainings = this.getCoderTrainingsForExport();
 
     if (coderTrainings.length === 0) {
-      this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
       return;
     }
 
@@ -722,12 +726,12 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
   }
 
   openExecutionTransferCases(): void {
     if (!this.canManageManualCodingJobs()) {
-      this.showError('Keine Berechtigung zum Verwalten von Kodierjobs.');
+      this.showError(this.uiTranslate('ui-text.coding-jobs.manage-permission-required'));
       return;
     }
 
@@ -737,7 +741,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return;
     }
 
-    this.showError('Die Kodierjobs werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.jobs-loading'));
   }
 
   openExecutionReliability(): void {
@@ -766,7 +770,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const coderTrainingIds = this.getCoderTrainingIds();
 
     if (coderTrainingIds.length === 0) {
-      this.showError('Die Schulungen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
       return;
     }
 
@@ -817,14 +821,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.showError('Kein Arbeitsbereich ausgewählt.');
+      this.showError(this.uiTranslate('ui-text.coding-management-manual.no-workspace'));
       return;
     }
 
     const config = createManualCodingExportConfig(context, result, this.appService.userId, context === 'training' ? this.getCoderTrainingIds() : this.getJobDefinitionIds());
     this.exports.start(workspaceId, config, warning => this.confirmLargeExport(warning))
       .subscribe(outcome => {
-        if (outcome === 'started') this.showSuccess('Exportjob wurde gestartet.');
+        if (outcome === 'started') this.showSuccess(this.uiTranslate('ui-text.coding-management-manual.export-started'));
         if (outcome === 'estimate-failed') this.showError(this.translateService.instant('manual-coding-export.worksheet-estimate-failed'));
       });
   }
@@ -872,7 +876,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
         const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
         return {
           id: jobDefinition.id as number,
-          label: `${getJobDefinitionDisplayLabel(jobDefinition)}${status}: ${variableCount} Variablen, ${bundleCount} Bündel`
+          label: this.uiTranslate('ui-text.coding-management-manual.variable-bundle-summary', {
+            value1: getJobDefinitionDisplayLabel(jobDefinition), status: status, variableCount: variableCount, bundleCount: bundleCount
+          })
         };
       });
   }
@@ -883,13 +889,13 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   private ensureExecutionJobDefinitionScopeReady(): boolean {
     if (this.exportScope.ensureDefinitionsReady(!!this.codingJobDefinitionsComponent())) return true;
-    this.showError('Die Jobdefinitionen werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.definitions-loading'));
     return false;
   }
 
   private ensureCoderScopeReady(): boolean {
     if (this.exportScope.ensureCodersReady()) return true;
-    this.showError('Die Kodierer werden noch geladen. Bitte versuchen Sie es gleich erneut.');
+    this.showError(this.uiTranslate('ui-text.coding-management-manual.coders-loading'));
     return false;
   }
 
@@ -1119,26 +1125,9 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   getCompletionActionTitle(): string {
-    if (this.isCompletionComplete()) {
-      return 'Alle Ergebnisse sind übernommen';
-    }
-
-    if (this.hasCompletedJobsReadyForApply()) {
-      if (this.hasCompletedJobsBlockedForReview()) {
-        return `${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) bereit zum Anwenden, ${this.completedJobsBlockedForReview().length} mit offenen Hinweisen`;
-      }
-      return `${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
-    }
-
-    if (this.hasCompletedJobsBlockedForReview()) {
-      return `${this.completedJobsBlockedForReview().length} abgeschlossene Kodierjob(s) benötigen Review`;
-    }
-
-    if (this.hasExecutionOpenWork()) {
-      return 'Noch nicht alle Kodierfälle sind abgeschlossen';
-    }
-
-    return 'Keine übernahmebereiten Kodierjobs gefunden';
+    return completionReadinessTitle({
+      complete: this.isCompletionComplete(), readyJobs: this.completedJobsReadyForApply().length, reviewJobs: this.completedJobsBlockedForReview().length, executionOpen: this.hasExecutionOpenWork()
+    }, this.uiTranslate);
   }
 
   getCodingJobResultSummary(job: CodingJob): string {
@@ -1146,10 +1135,10 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     const codedUnits = job.codedUnits ?? 0;
 
     if (totalUnits > 0) {
-      return `${codedUnits}/${totalUnits} Ergebnisse kodiert`;
+      return this.uiTranslate('ui-text.coding-management-manual.coded-results', { codedUnits: codedUnits, totalUnits: totalUnits });
     }
 
-    return 'Kodierergebnisse vorhanden';
+    return this.uiTranslate('ui-text.coding-management-manual.results-available');
   }
 
   protected isApplyingJobResults(jobId: number): boolean {
@@ -1264,15 +1253,15 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       );
     }
 
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+    return getCodingFreshnessAttentionTitle(this.uiTranslate, this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessSummaryText(): string {
     if (this.hasOnlySecondAutocodingWarnings) {
-      const taskResults = formatCodingFreshnessTaskResultCount(
+      const taskResults = formatCodingFreshnessTaskResultCount(this.uiTranslate,
         getCodingFreshnessAffectedTaskResultCount(this.codingFreshnessWarnings)
       );
-      const responses = formatCodingFreshnessResponseCount(
+      const responses = formatCodingFreshnessResponseCount(this.uiTranslate,
         getCodingFreshnessAffectedResponseCount(this.codingFreshnessWarnings)
       );
 
@@ -1285,7 +1274,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       );
     }
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+    return getCodingFreshnessSummaryText(this.uiTranslate, this.codingFreshnessWarnings);
   }
 
   get manualCodingFreshnessExplanationText(): string {
@@ -1293,23 +1282,23 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       return this.translateService.instant(
         'coding-management-manual.freshness.second-autocoding-ready-help',
         {
-          taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP
+          taskResultHelp: this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY)
         }
       );
     }
 
-    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(this.uiTranslate,
       this.codingFreshnessWarnings
     );
     if (guidanceText) {
-      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+      return `${guidanceText} ${this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY)}`;
     }
 
-    return CODING_FRESHNESS_TASK_RESULT_HELP;
+    return this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY);
   }
 
   getManualFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
-    return getCodingFreshnessChipLabel(item);
+    return getCodingFreshnessChipLabel(this.uiTranslate, item);
   }
 
   private get hasOnlySecondAutocodingWarnings(): boolean {
@@ -1734,14 +1723,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
           );
 
           this.showSuccess(
-            `Schulung erfolgreich generiert: ${packages.length} Kodierer-Pakete mit insgesamt ${totalResponses} Antworten erstellt`
+            this.uiTranslate('ui-text.coding-management-manual.training-generated', { length: packages.length, totalResponses: totalResponses })
           );
           this.closeCoderTraining();
           this.refreshAllStatistics();
           this.refreshCodingJobsAfterDataChange('training');
         },
         error: () => {
-          this.showError('Fehler beim Generieren der Kodierer-Schulungspakete');
+          this.showError(this.uiTranslate('ui-text.coding-management-manual.training-generation-failed'));
         }
       });
   }

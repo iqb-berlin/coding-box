@@ -1,10 +1,10 @@
             <div class="coders-tab-content">
-              <p class="section-description">Wählen Sie die Kodierer aus, die diesem Job zugewiesen werden sollen.</p>
+              <p class="section-description">{{ 'coding-job-definition-dialog.coders-section.description' | translate }}</p>
 
               @if (loading()) {
               <div class="loading-container">
                 <mat-spinner diameter="40"></mat-spinner>
-                <p class="loading-text">Lade verfügbare Kodierer...</p>
+                <p class="loading-text">{{ 'coding-job-definition-dialog.loading.coders' | translate }}</p>
               </div>
               }
 
@@ -13,10 +13,10 @@
                 <button mat-stroked-button color="primary" type="button" (click)="toggleAll.emit()"
                   class="select-all-button" [disabled]="readOnly()">
                   <mat-icon>{{ isAllCodersSelected() ? 'deselect' : 'select_all' }}</mat-icon>
-                  {{ isAllCodersSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                  {{ isAllCodersSelected() ? ('manual-coding-export.deselect-all' | translate) : ('manual-coding-export.select-all' | translate) }}
                 </button>
                 <div class="selection-count">
-                  {{ selected().length }} von {{ coders().length }} Kodierern ausgewählt
+                  {{ 'ui-text.job-coder-capacity.selected-count' | translate: { value1: (selected().length), value2: (coders().length) } }}
                 </div>
               </div>
 
@@ -44,11 +44,11 @@
                       @if (mode() === 'definition' && isSelected(coder)) {
                       <mat-form-field appearance="outline" class="coder-capacity-field"
                         (click)="$event.stopPropagation()">
-                        <mat-label>Kapazität</mat-label>
+                        <mat-label>{{ 'ui-text.job-coder-capacity.capacity' | translate }}</mat-label>
                         <input #coderCapacityInput matInput type="number" min="10" max="300" step="10"
                           [ngModel]="coder.capacityPercent" [ngModelOptions]="{standalone: true}"
                           [disabled]="readOnly()" (blur)="capacityChanged.emit({coder, value: coderCapacityInput.value})"
-                          matTooltip="100 % = normale Last">
+                          [matTooltip]="'ui-text.job-coder-capacity.normal-capacity-hint' | translate">
                         <span matSuffix>%</span>
                       </mat-form-field>
                       }
@@ -62,9 +62,8 @@
               @if (!loading() && coders().length === 0) {
               <div class="empty-state">
                 <mat-icon class="empty-icon">person</mat-icon>
-                <h3>Keine Kodierer verfügbar</h3>
-                <p class="empty-text">Im Arbeitsbereich sind keine Kodierer verfügbar. Fügen Sie zuerst Benutzer zum
-                  Arbeitsbereich hinzu.</p>
+                <h3>{{ 'coding-job-definition-dialog.empty-states.no-coders' | translate }}</h3>
+                <p class="empty-text">{{ 'coding-job-definition-dialog.empty-states.no-coders-description' | translate }}</p>
               </div>
               }
             </div>

@@ -1,9 +1,9 @@
-<h1 mat-dialog-title>Itemliste</h1>
+<h1 mat-dialog-title>{{ 'ui-text.item-list-dialog.title' | translate }}</h1>
 <div mat-dialog-content class="dialog-content">
   @if (isLoading()) {
     <div class="loading-container">
       <mat-spinner diameter="40"></mat-spinner>
-      <p>Lade Item-IDs...</p>
+      <p>{{ 'ui-text.item-list-dialog.loading' | translate }}</p>
     </div>
   }
 
@@ -11,7 +11,7 @@
     <div class="error-container">
       <mat-icon color="warn">error</mat-icon>
       <p>{{ error() }}</p>
-      <button mat-button color="primary" (click)="loadItemIds()">Erneut versuchen</button>
+      <button mat-button color="primary" (click)="loadItemIds()">{{ 'admin.user-directory-retry' | translate }}</button>
     </div>
   }
 
@@ -19,14 +19,14 @@
     <div>
       @if (itemGroups().length === 0) {
         <div class="empty-state">
-          <p>Keine Items in den Metadaten-Dateien gefunden.</p>
+          <p>{{ 'ui-text.item-list-dialog.empty' | translate }}</p>
         </div>
       }
       @if (itemGroups().length > 0) {
         <div class="groups-container">
           @for (group of itemGroups(); track group) {
             <div class="file-group">
-              <h3 class="group-header pointer" (click)="openMetadata(group)" matTooltip="Metadaten anzeigen (Unit)"
+              <h3 class="group-header pointer" (click)="openMetadata(group)" [matTooltip]="'ui-text.item-list-dialog.unit-metadata-aria' | translate"
                 role="button"
                 tabindex="0"
                 (keydown.enter)="onActionKeydown($event)"
@@ -37,7 +37,7 @@
               <div class="items-grid">
                 @for (id of group.items; track id) {
                   <div class="item-chip pointer" (click)="openMetadata(group, id)"
-                    matTooltip="Metadaten anzeigen (Item)"
+                    [matTooltip]="'ui-text.item-list-dialog.item-metadata-aria' | translate"
                     role="button"
                     tabindex="0"
                     (keydown.enter)="onActionKeydown($event)"
@@ -54,5 +54,5 @@
   }
 </div>
 <div mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Schließen</button>
+  <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </div>

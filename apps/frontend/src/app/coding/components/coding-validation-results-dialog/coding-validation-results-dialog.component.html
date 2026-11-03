@@ -5,9 +5,7 @@
       <div>
         <h2 class="section-title">{{ 'coding-validation-results.title' | translate }}</h2>
         <p class="section-description">
-          Insgesamt: {{validationResults.total}} |
-          Fehlend: {{validationResults.missing}} |
-          Seite {{validationResults.currentPage}} von {{validationResults.totalPages}}
+          {{ 'coding-management-manual.descriptions.validation-summary' | translate: { total: (validationResults.total), missing: (validationResults.missing), currentPage: (validationResults.currentPage), totalPages: (validationResults.totalPages) } }}
         </p>
       </div>
       <div class="fx-row-center-center fx-gap-10">
@@ -31,7 +29,7 @@
               {{ 'coding-validation-results.previous-page' | translate }}
             </button>
             <span class="pagination-info">
-              Seite {{currentPage}} von {{totalPages}}
+              {{ 'ui-text.coding-validation-results-dialog.page-count' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
             </span>
             <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
               {{ 'coding-validation-results.next-page' | translate }}
@@ -97,7 +95,7 @@
             {{ 'coding-validation-results.previous-page' | translate }}
           </button>
           <span class="pagination-info">
-            Seite {{currentPage}} von {{totalPages}}
+            {{ 'ui-text.coding-validation-results-dialog.page-count' | translate: { currentPage: (currentPage), totalPages: (totalPages) } }}
           </span>
           <button mat-button [disabled]="!hasNextPage" (click)="nextPage()">
             {{ 'coding-validation-results.next-page' | translate }}

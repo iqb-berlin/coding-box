@@ -115,14 +115,14 @@ export interface DownloadCodingResultsDialogData {
             <mat-radio-button value="csv" class="radio-option">
               <div class="radio-content">
                 <mat-icon>table_chart</mat-icon>
-                <span class="option-title">CSV</span>
+                <span class="option-title">{{ 'ws-admin.export-options.results-format-csv' | translate }}</span>
               </div>
             </mat-radio-button>
 
             <mat-radio-button value="excel" class="radio-option">
               <div class="radio-content">
                 <mat-icon>table_chart</mat-icon>
-                <span class="option-title">Excel</span>
+                <span class="option-title">{{ 'ws-admin.export-options.results-format-excel' | translate }}</span>
               </div>
             </mat-radio-button>
           </mat-radio-group>

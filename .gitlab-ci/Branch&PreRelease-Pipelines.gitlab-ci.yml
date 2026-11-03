@@ -4,6 +4,13 @@
 
 # https://gitlab.com/gitlab-org/gitlab/-/issues/206960
 # https://docs.gitlab.com/ee/ci/jobs/job_control.html#cicd-variable-expressions
+.proxy_image_pull_retry:
+  # Proxy pulls can fail before scripts start. Retry runner failures once;
+  # script and test failures must not trigger an automatic retry.
+  retry: &proxy_image_pull_retry
+    max: 1
+    when: runner_system_failure
+
 .default_rules:
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
@@ -194,6 +201,7 @@ check-pre-release-rules:
 
 install-dependencies:
   stage: build
+  retry: *proxy_image_pull_retry
   image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   rules:
@@ -214,6 +222,7 @@ install-dependencies:
 
 build-cicd-base-image:
   stage: build
+  retry: *proxy_image_pull_retry
   rules:
     - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop"
       changes:
@@ -261,6 +270,7 @@ build-cicd-base-image:
 
 .distributed:
   interruptible: true
+  retry: *proxy_image_pull_retry
   rules:
     - !reference [ .default_rules, rules ]
   needs:
@@ -274,6 +284,7 @@ build-cicd-base-image:
 
 build-db-image:
   stage: build
+  retry: *proxy_image_pull_retry
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
@@ -311,6 +322,7 @@ build-db-image:
 
 build-liquibase-image:
   stage: build
+  retry: *proxy_image_pull_retry
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
@@ -366,6 +378,7 @@ build-app:
 
 test-backend-container:
   stage: test
+  retry: *proxy_image_pull_retry
   interruptible: true
   allow_failure: false
   rules:
@@ -406,6 +419,7 @@ test-backend-container:
 
 test-db:
   stage: test-db
+  retry: *proxy_image_pull_retry
   interruptible: true
   rules:
     - !reference [ .default_db_rules, rules ]
@@ -577,6 +591,7 @@ test-backend-integration:
 
 test-frontend:
   stage: test-units
+  retry: *proxy_image_pull_retry
   image: ${DOCKER_HUB_PROXY}node:24.22.1-bookworm
   interruptible: true
   allow_failure: false
@@ -636,6 +651,7 @@ test-browser:
 
 test-replay-live:
   stage: test-replay
+  retry: *proxy_image_pull_retry
   interruptible: true
   allow_failure: false
   image: ${CYPRESS_IMAGE}
@@ -697,6 +713,7 @@ lint-app:
 
 audit-app:
   stage: audit
+  retry: *proxy_image_pull_retry
   interruptible: true
   allow_failure: false
   rules:

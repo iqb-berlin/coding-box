@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { ValidationStateService } from './validation-state.service';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 
@@ -7,6 +8,7 @@ describe('ValidationStateService', () => {
 
   beforeEach(() => {
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [ValidationStateService]
     });
     service = TestBed.inject(ValidationStateService);

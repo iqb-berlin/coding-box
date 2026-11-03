@@ -1,4 +1,5 @@
 import * as ExcelJS from 'exceljs';
+import { translateGerman } from '../../../../testing/german-translations';
 import {
   buildFormatDialogData, detectCodingImportFormat, detectCsvDelimiter, detectFormatFromHeaders,
   normalizeImportHeader, readImportHeaders, splitCsvHeaderLine
@@ -13,7 +14,7 @@ describe('coding import interpretation', () => {
   it.each([';', ',', '\t'] as const)('reads %p-separated headers with BOM, quoting and blank lines', async delimiter => {
     const file = csvFile(`\n\uFEFF"Unit Key"${delimiter}"variable-id"${delimiter}"score"`);
     expect(await readImportHeaders(file)).toEqual(['unit_key', 'variable_id', 'score']);
-    const result = await detectCodingImportFormat(file);
+    const result = await detectCodingImportFormat(translateGerman, file);
     expect(result.detectedFormat).toBe('external-coding');
     expect(result.canImport).toBe(true);
   });
@@ -35,12 +36,12 @@ describe('coding import interpretation', () => {
   ] as const)('classifies %p as %p', (headers, format, canImport) => {
     const detected = detectFormatFromHeaders([...headers]);
     expect(detected).toBe(format);
-    expect(buildFormatDialogData('file.csv', detected, [...headers]).canImport).toBe(canImport);
+    expect(buildFormatDialogData(translateGerman, 'file.csv', detected, [...headers]).canImport).toBe(canImport);
   });
 
   it('offers only present coding versions and prefers v2', () => {
     const headers = ['variable_id', 'score_v1', 'code_v2', 'status_v3'];
-    const result = buildFormatDialogData('coding.csv', detectFormatFromHeaders(headers), headers);
+    const result = buildFormatDialogData(translateGerman, 'coding.csv', detectFormatFromHeaders(headers), headers);
     expect(result.availableVersions).toEqual(['v1', 'v2', 'v3']);
     expect(result.selectedVersion).toBe('v2');
   });
@@ -55,7 +56,7 @@ describe('coding import interpretation', () => {
 
   it('keeps an unreadable file in the format dialog with import disabled', async () => {
     const file = { name: 'broken.xlsx', arrayBuffer: async () => { throw new Error('broken'); } } as unknown as File;
-    const result = await detectCodingImportFormat(file);
+    const result = await detectCodingImportFormat(translateGerman, file);
     expect(result.canImport).toBe(false);
     expect(result.detectedFormat).toBe('unknown');
     expect(result.helpItems.length).toBeGreaterThan(0);

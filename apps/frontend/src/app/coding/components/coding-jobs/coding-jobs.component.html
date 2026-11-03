@@ -6,7 +6,7 @@
     <div class="fx-row-center-center-stretch fx-gap-16 header-row">
       <div class="fx-row-center-center fx-gap-16 filters-row">
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Name filtern</mat-label>
+          <mat-label>{{ 'coding.my-coding-jobs.filter-job-name' | translate }}</mat-label>
           <input
             matInput
             type="text"
@@ -16,12 +16,12 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Kodierer filtern</mat-label>
+          <mat-label>{{ 'manual-coding-export.coder-filter' | translate }}</mat-label>
           <mat-select
             [(value)]="selectedCoderId"
             (selectionChange)="onCoderFilterChange()"
             >
-            <mat-option [value]="null">Alle Kodierer</mat-option>
+            <mat-option [value]="null">{{ 'ws-admin.export-options.all-coders' | translate }}</mat-option>
             @for (coder of allCoders(); track coder.id) {
               <mat-option [value]="coder.id">
                 {{ coder.displayName || coder.name }}
@@ -31,21 +31,21 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline" class="filter-field">
-          <mat-label>Status filtern</mat-label>
+          <mat-label>{{ 'coding.my-coding-jobs.filter-status' | translate }}</mat-label>
           <mat-select
             [(value)]="selectedStatus"
             (selectionChange)="onStatusFilterChange()"
             >
-            <mat-option [value]="null">Alle Status</mat-option>
-            <mat-option value="active">Aktiv</mat-option>
-            <mat-option value="completed">Abgeschlossen</mat-option>
+            <mat-option [value]="null">{{ 'process-overview.filters.all-status' | translate }}</mat-option>
+            <mat-option value="active">{{ 'system-notifications.status.active' | translate }}</mat-option>
+            <mat-option value="completed">{{ 'status-completed' | translate }}</mat-option>
             <mat-option value="results_applied"
-              >Ergebnisse angewendet</mat-option
+              >{{ 'coding.my-coding-jobs.filter-results-applied' | translate }}</mat-option
               >
-              <mat-option value="pending">Ausstehend</mat-option>
-              <mat-option value="paused">Pausiert</mat-option>
-              <mat-option value="open">Offen</mat-option>
-              <mat-option value="review">Zur Überprüfung</mat-option>
+              <mat-option value="pending">{{ 'status-pending' | translate }}</mat-option>
+              <mat-option value="paused">{{ 'process-overview.status.paused' | translate }}</mat-option>
+              <mat-option value="open">{{ 'coding.my-coding-jobs.filter-open' | translate }}</mat-option>
+              <mat-option value="review">{{ 'coding.my-coding-jobs.filter-review' | translate }}</mat-option>
             </mat-select>
           </mat-form-field>
 
@@ -54,13 +54,13 @@
               appearance="outline"
               class="filter-field"
               >
-              <mat-label>Nach Training filtern</mat-label>
+              <mat-label>{{ 'ui-text.coding-jobs.filter-training' | translate }}</mat-label>
               <mat-select
                 [(value)]="selectedTrainingId"
                 (selectionChange)="onTrainingFilterChange()"
                 >
-                <mat-option [value]="null">Alle Trainings</mat-option>
-                <mat-option value="none">Ohne Training</mat-option>
+                <mat-option [value]="null">{{ 'ui-text.coding-jobs.all-trainings' | translate }}</mat-option>
+                <mat-option value="none">{{ 'ui-text.coding-jobs.without-training' | translate }}</mat-option>
                 @for (training of coderTrainings(); track training.id) {
                   <mat-option
                     [value]="training.id"
@@ -82,23 +82,23 @@
                 class="bulk-apply-button"
                 >
                 <mat-icon>rule</mat-icon>
-                Alle Ergebnisse anwenden
+                {{ 'ui-text.coding-jobs.apply-all' | translate }}
               </button>
             }
             @if (canManageCodingJobs() && showTransferAction()) {
               <button mat-button (click)="openTransferCodingCasesDialog()">
                 <mat-icon>swap_horiz</mat-icon>
-                Fälle übertragen
+                {{ 'ui-text.coding-jobs.transfer-cases' | translate }}
               </button>
             }
             @if (showComparisonActions()) {
               <button mat-button (click)="openDoubleCodedReviewDialog()">
                 <mat-icon>compare</mat-icon>
-                Doppelkodierungsreview
+                {{ 'ui-text.coding-jobs.double-coding-review' | translate }}
               </button>
               <button mat-button (click)="openCohensKappaStatisticsDialog()">
                 <mat-icon>analytics</mat-icon>
-                Interrater-Reliabilität
+                {{ 'coding.trainings.compare.reliability-title' | translate }}
               </button>
             }
           </div>
@@ -107,7 +107,7 @@
             @if (showRefreshAction()) {
               <button mat-button (click)="loadCodingJobs()">
                 <mat-icon>refresh</mat-icon>
-                Aktualisieren
+                {{ 'process-overview.refresh' | translate }}
               </button>
             }
             @if (canManageCodingJobs() && showBulkDeleteAction()) {
@@ -119,7 +119,7 @@
                 class="bulk-delete-button"
                 >
                 <mat-icon>delete_sweep</mat-icon>
-                {{ selection.selected.length }} löschen
+                {{ 'ui-text.coding-jobs.delete-count' | translate: { length: (selection.selected.length) } }}
               </button>
             }
           </div>
@@ -167,7 +167,7 @@
         </ng-container>
 
         <ng-container matColumnDef="actions">
-          <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+          <mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</mat-header-cell>
           <mat-cell *matCellDef="let element">
             <div class="job-row-actions">
               @switch (getPrimaryJobAction(element)) {
@@ -287,7 +287,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('review', element)"
                     >
                     <mat-icon>visibility</mat-icon>
-                    <span>Review öffnen</span>
+                    <span>{{ 'coding.my-coding-jobs.open-review' | translate }}</span>
                   </button>
                 }
                 @if (getPrimaryJobAction(element) !== 'results') {
@@ -298,7 +298,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('results', element)"
                     >
                     <mat-icon>assessment</mat-icon>
-                    <span>Ergebnisse anzeigen</span>
+                    <span>{{ 'variable-analysis.view-results' | translate }}</span>
                   </button>
                 }
                 @if (canRestartCodingJob(element)) {
@@ -309,7 +309,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('restart', element)"
                     >
                     <mat-icon>restart_alt</mat-icon>
-                    <span>Offene Fälle ansehen</span>
+                    <span>{{ 'ui-text.coding-jobs.view-open-cases' | translate }}</span>
                   </button>
                 }
                 @if (
@@ -325,7 +325,7 @@
                     [disabled]="!canApplyCodingResults(element)"
                     >
                     <mat-icon>check_circle</mat-icon>
-                    <span>Ergebnisse anwenden</span>
+                    <span>{{ 'ui-text.coding-job-result-dialog.apply-results' | translate }}</span>
                   </button>
                 }
                 @if (canManageCodingJobs() && showBulkDeleteAction()) {
@@ -338,7 +338,7 @@
                     [attr.aria-label]="getJobActionAriaLabel('delete', element)"
                     >
                     <mat-icon>delete</mat-icon>
-                    <span>Kodierjob löschen</span>
+                    <span>{{ 'ui-text.coding-jobs.delete-job' | translate }}</span>
                   </button>
                 }
               </mat-menu>
@@ -348,7 +348,7 @@
 
         <ng-container matColumnDef="name">
           <mat-header-cell *matHeaderCellDef mat-sort-header
-            >Name</mat-header-cell
+            >{{ 'user.full-name' | translate }}</mat-header-cell
             >
             <mat-cell *matCellDef="let element">
               <div class="job-name-cell">
@@ -362,7 +362,7 @@
 
           <ng-container matColumnDef="description">
             <mat-header-cell *matHeaderCellDef mat-sort-header
-              >Beschreibung</mat-header-cell
+              >{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-header-cell
               >
               <mat-cell *matCellDef="let element">
                 {{ element.description }}
@@ -371,7 +371,7 @@
 
             <ng-container matColumnDef="status">
               <mat-header-cell *matHeaderCellDef mat-sort-header
-                >Status</mat-header-cell
+                >{{ 'process-overview.filters.status' | translate }}</mat-header-cell
                 >
                 <mat-cell *matCellDef="let element">
                   <span [class]="getStatusClass(element.status)">{{
@@ -381,7 +381,7 @@
               </ng-container>
 
               <ng-container matColumnDef="assignedCoders">
-                <mat-header-cell *matHeaderCellDef>Zugewiesene Kodierer</mat-header-cell>
+                <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.assigned-coders' | translate }}</mat-header-cell>
                 <mat-cell
                   *matCellDef="let element"
                   class="assigned-coders-cell"
@@ -392,7 +392,7 @@
               </ng-container>
 
               <ng-container matColumnDef="variables">
-                <mat-header-cell *matHeaderCellDef>Variablen</mat-header-cell>
+                <mat-header-cell *matHeaderCellDef>{{ 'coding.my-coding-jobs.job-variables' | translate }}</mat-header-cell>
                 <mat-cell
                   *matCellDef="let element"
                   class="variables-cell"
@@ -403,7 +403,7 @@
               </ng-container>
 
               <ng-container matColumnDef="variableBundles">
-                <mat-header-cell *matHeaderCellDef>Variablenbündel</mat-header-cell>
+                <mat-header-cell *matHeaderCellDef>{{ 'coding-management-manual.titles.variable-bundles' | translate }}</mat-header-cell>
                 <mat-cell
                   *matCellDef="let element"
                   class="variable-bundles-cell"
@@ -414,7 +414,7 @@
               </ng-container>
 
               <ng-container matColumnDef="progress">
-                <mat-header-cell *matHeaderCellDef>Fortschritt</mat-header-cell>
+                <mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.progress' | translate }}</mat-header-cell>
                 <mat-cell *matCellDef="let element">
                   {{ getProgress(element) }}
                 </mat-cell>
@@ -422,7 +422,7 @@
 
               <ng-container matColumnDef="createdAt">
                 <mat-header-cell *matHeaderCellDef mat-sort-header
-                  >Erstellt am</mat-header-cell
+                  >{{ 'coding.my-coding-jobs.job-created-at' | translate }}</mat-header-cell
                   >
                   <mat-cell *matCellDef="let element">
                     {{ element.createdAt | date: 'dd.MM.yyyy HH:mm' }}
@@ -431,7 +431,7 @@
 
                 <ng-container matColumnDef="updatedAt">
                   <mat-header-cell *matHeaderCellDef mat-sort-header
-                    >Aktualisiert am</mat-header-cell
+                    >{{ 'coding.my-coding-jobs.job-updated-at' | translate }}</mat-header-cell
                     >
                     <mat-cell *matCellDef="let element">
                       {{ element.updatedAt | date: 'dd.MM.yyyy HH:mm' }}
@@ -439,7 +439,7 @@
                   </ng-container>
 
                   <ng-container matColumnDef="hasIssues">
-                    <mat-header-cell *matHeaderCellDef>Probleme</mat-header-cell>
+                    <mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-jobs.issues' | translate }}</mat-header-cell>
                     <mat-cell
                       *matCellDef="let element"
                       [class.has-issues]="element.hasIssues"
@@ -482,8 +482,7 @@
                   @if (dataSource.data.length === 0) {
                     <div class="no-data-message">
                       <p>
-                        Keine Kodierjobs vorhanden. Erstellen Sie eine neue
-                        Kodierjob-Definition mit dem Button oben.
+                        {{ 'ui-text.coding-jobs.empty' | translate }}
                       </p>
                     </div>
                   }

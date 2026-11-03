@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import {
@@ -11,6 +12,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatIconModule } from '@angular/material/icon';
 import { MatRadioModule } from '@angular/material/radio';
 import { MatSelectModule } from '@angular/material/select';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 
 export type CodingImportSourceFormat =
   | 'external-coding'
@@ -51,7 +53,7 @@ export interface CodingImportFormatDialogResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-coding-import-format-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,
@@ -72,11 +74,11 @@ export interface CodingImportFormatDialogResult {
 
       <div class="format-summary" [class.warning]="!data.canImport">
         <div>
-          <span class="label">Datei</span>
+          <span class="label">{{ 'process-overview.details.fileName' | translate }}</span>
           <span class="value">{{ data.fileName }}</span>
         </div>
         <div>
-          <span class="label">Erkanntes Format</span>
+          <span class="label">{{ 'ui-text.coding-import-format-dialog.detected-format' | translate }}</span>
           <span class="value">{{ getFormatLabel() }}</span>
         </div>
       </div>
@@ -84,7 +86,7 @@ export interface CodingImportFormatDialogResult {
       @if (data.canImport) {
         <div class="target-box">
           <mat-icon>input</mat-icon>
-          <span>Importziel: manuelle Kodierung (v2) mit Status, Code und Score aus der Datei.</span>
+          <span>{{ 'ui-text.coding-import-format-dialog.import-target' | translate }}</span>
         </div>
       }
 
@@ -93,7 +95,7 @@ export interface CodingImportFormatDialogResult {
           appearance="outline"
           class="version-field"
           >
-          <mat-label>Version aus Datei</mat-label>
+          <mat-label>{{ 'ui-text.coding-import-format-dialog.file-version' | translate }}</mat-label>
           <mat-select [(ngModel)]="selectedVersion">
             @for (version of data.availableVersions; track version) {
               <mat-option [value]="version">
@@ -106,24 +108,24 @@ export interface CodingImportFormatDialogResult {
 
       @if (data.canImport) {
         <section class="mode-section">
-          <h3>Vorhandene Kodierungen</h3>
+          <h3>{{ 'ui-text.coding-import-format-dialog.existing-codings' | translate }}</h3>
           <mat-radio-group class="mode-options" [(ngModel)]="existingCodingMode">
             <mat-radio-button value="skip-conflicts">
-              <span class="mode-title">Konflikte überspringen</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.skip-conflicts' | translate }}</span>
               <span class="mode-description">
-                Leere Kodierungen werden gefüllt, abweichende vorhandene manuelle Kodierungen bleiben unverändert.
+                {{ 'ui-text.coding-import-format-dialog.skip-conflicts-hint' | translate }}
               </span>
             </mat-radio-button>
             <mat-radio-button value="fill-empty">
-              <span class="mode-title">Nur leere Kodierungen füllen</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.fill-empty-only' | translate }}</span>
               <span class="mode-description">
-                Sobald in v2 bereits Status, Code oder Score vorhanden ist, wird der Fall übersprungen.
+                {{ 'ui-text.coding-import-format-dialog.fill-empty-hint' | translate }}
               </span>
             </mat-radio-button>
             <mat-radio-button value="overwrite">
-              <span class="mode-title">Bestehende Kodierungen überschreiben</span>
+              <span class="mode-title">{{ 'ui-text.coding-import-format-dialog.overwrite' | translate }}</span>
               <span class="mode-description">
-                Vorhandene manuelle Kodierungen in v2 werden durch die Werte aus der Datei ersetzt.
+                {{ 'ui-text.coding-import-format-dialog.overwrite-hint' | translate }}
               </span>
             </mat-radio-button>
           </mat-radio-group>
@@ -132,7 +134,7 @@ export interface CodingImportFormatDialogResult {
 
       @if (data.helpItems.length > 0) {
         <section class="help-section">
-          <h3>{{ data.canImport ? 'Hinweise' : 'Was ist zu tun?' }}</h3>
+          <h3>{{ data.canImport ? ('file-upload.failure-suggestions.title' | translate) : 'Was ist zu tun?' }}</h3>
           <ul>
             @for (item of data.helpItems; track item) {
               <li>{{ item }}</li>
@@ -144,10 +146,10 @@ export interface CodingImportFormatDialogResult {
       <mat-divider></mat-divider>
 
       <section class="headers-section">
-        <h3>Erkannte Spalten</h3>
+        <h3>{{ 'ui-text.coding-import-format-dialog.detected-columns' | translate }}</h3>
         @if (data.headers.length === 0) {
           <p class="muted">
-            Keine Spaltenüberschriften gefunden.
+            {{ 'ui-text.coding-import-format-dialog.no-headers' | translate }}
           </p>
         }
         @if (data.headers.length > 0) {
@@ -162,12 +164,12 @@ export interface CodingImportFormatDialogResult {
 
     <mat-dialog-actions align="end">
       <button mat-button (click)="cancel()">
-        {{ data.canImport ? 'Abbrechen' : 'Schließen' }}
+        {{ data.canImport ? ('cancel' | translate) : ('deferred-view.close' | translate) }}
       </button>
       @if (data.canImport) {
         <button mat-raised-button color="primary" (click)="confirm()">
           <mat-icon>preview</mat-icon>
-          Vorschau starten
+          {{ 'ui-text.coding-import-format-dialog.start-preview' | translate }}
         </button>
       }
     </mat-dialog-actions>
@@ -312,6 +314,8 @@ export interface CodingImportFormatDialogResult {
   `]
 })
 export class CodingImportFormatDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<CodingImportFormatDialogComponent>>(MatDialogRef);
   protected data = inject<CodingImportFormatDialogData>(MAT_DIALOG_DATA);
 
@@ -327,9 +331,9 @@ export class CodingImportFormatDialogComponent {
   protected getFormatLabel(): string {
     switch (this.data.detectedFormat) {
       case 'external-coding':
-        return 'Kodierungen aus Datei';
+        return this.uiTranslate('ui-text.coding-import-format-dialog.file-codings');
       case 'coding-list':
-        return 'Kodierliste';
+        return this.uiTranslate('coding-management.buttons.coding-list');
       case 'coding-results':
         return 'Kodierergebnis-Export';
       case 'test-results':
@@ -337,15 +341,15 @@ export class CodingImportFormatDialogComponent {
       case 'test-logs':
         return 'Testlogs-Export';
       default:
-        return 'Unbekannt';
+        return this.uiTranslate('process-overview.status.unknown');
     }
   }
 
   protected getVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
     const labels = {
-      v1: 'v1 - erster Autocoder-Lauf',
-      v2: 'v2 - manuelle Kodierung',
-      v3: 'v3 - zweiter Autocoder-Lauf'
+      v1: this.uiTranslate('ui-text.coding-import-format-dialog.first-auto-version'),
+      v2: this.uiTranslate('ui-text.coding-import-format-dialog.manual-version'),
+      v3: this.uiTranslate('ui-text.coding-import-format-dialog.second-auto-version')
     };
     return labels[version];
   }

@@ -7,6 +7,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   Subscription, timer, exhaustMap, map, takeWhile, finalize
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultBackendService, TestResultExportJob } from '../../../shared/services/test-result/test-result-backend.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -15,6 +16,8 @@ import { ExportOptionsDialogComponent, ExportOptions } from './export-options-di
 
 @Injectable()
 export class TestResultsExportFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly dialog = inject(MatDialog);
@@ -132,7 +135,7 @@ export class TestResultsExportFacade {
             this.exportJobIdState.set(response.jobId);
             this.exportJobStatusState.set('active');
             this.snackBar.open(
-              'Export gestartet. Sie werden benachrichtigt, wenn der Download bereitsteht.',
+              this.uiTranslate('ui-text.test-results-export.started'),
               'OK',
               { duration: 3000 }
             );
@@ -142,7 +145,7 @@ export class TestResultsExportFacade {
             if (generation !== this.exportGeneration) return;
             this.isExportingState.set(false);
             this.exportTypeInProgressState.set(null);
-            this.snackBar.open('Fehler beim Starten des Exports', 'Fehler', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.start-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
               duration: 3000
             });
           }
@@ -199,15 +202,15 @@ export class TestResultsExportFacade {
         this.exportJobProgressState.set(job.progress);
         if (job.status === 'completed') {
           this.isExportingState.set(false);
-          const ref = this.snackBar.open('Export abgeschlossen', 'Herunterladen', { duration: 10000 });
+          const ref = this.snackBar.open(this.uiTranslate('ui-text.test-results-export.completed'), 'Herunterladen', { duration: 10000 });
           ref.onAction().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
             .subscribe(() => this.downloadExportResult(jobId));
         } else if (job.status === 'failed') {
           this.isExportingState.set(false);
-          this.snackBar.open('Export fehlgeschlagen', 'Fehler', { duration: 5000 });
+          this.snackBar.open(this.uiTranslate('export-toast.errors.generic-title'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), { duration: 5000 });
         } else if (job.status === 'cancelled') {
           this.resetExportState();
-          this.snackBar.open('Export abgebrochen', 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', { duration: 3000 });
         }
       },
       error: () => this.resetExportState()
@@ -225,18 +228,18 @@ export class TestResultsExportFacade {
         next: response => {
           if (response.success) {
             if (!this.exportJobId() || jobId === this.exportJobId()) this.resetExportState();
-            this.snackBar.open('Export abgebrochen', 'OK', {
+            this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', {
               duration: 3000
             });
             return;
           }
 
-          this.snackBar.open('Export konnte nicht abgebrochen werden', 'Fehler', {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancel-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 5000
           });
         },
         error: () => {
-          this.snackBar.open('Export konnte nicht abgebrochen werden', 'Fehler', {
+          this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancel-failed'), this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'), {
             duration: 5000
           });
         }
@@ -288,8 +291,8 @@ export class TestResultsExportFacade {
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Herunterladen der Ergebnisse',
-            'Fehler',
+            this.uiTranslate('ui-text.test-results-export.download-failed'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }

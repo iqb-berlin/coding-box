@@ -20,12 +20,12 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Test Center auswählen</mat-label>
+          <mat-label>{{ 'ui-text.test-center-login-step.select-test-center' | translate }}</mat-label>
           <mat-select
             formControlName="testCenter"
             (valueChange)="serverSelected.emit($event)"
           >
-            <mat-option [value]="6">individuelle Testcenter URL</mat-option>
+            <mat-option [value]="6">{{ 'ui-text.test-center-login-step.individual-url' | translate }}</mat-option>
             @for (testCenter of testCenters();track testCenter){
             <mat-option [value]="testCenter.id">{{
               testCenter.label
@@ -36,14 +36,13 @@
         </mat-form-field>
 
         <mat-form-field appearance="outline">
-          <mat-label>Testcenter Instanz URL verwenden</mat-label>
+          <mat-label>{{ 'ui-text.test-center-login-step.use-instance-url' | translate }}</mat-label>
           <input formControlName="testCenterIndividual" matInput type="text" />
           <mat-icon matSuffix>link</mat-icon>
           <mat-hint>
-            Erwartetes Format z.&nbsp;B.:
-            <code>https://mein-testcenter.example.org</code> oder
-            <code>https://mein-testcenter.example.org/tci</code>. Die URL muss
-            per HTTPS erreichbar sein.
+            {{ 'ui-text.test-center-login-step.format-example' | translate }}
+            <code>https://mein-testcenter.example.org</code> {{ 'ui-text.test-center-login-step.alternative' | translate }}
+            <code>https://mein-testcenter.example.org/tci</code>{{ 'ui-text.test-center-login-step.https-required' | translate }}
           </mat-hint>
         </mat-form-field>
       </div>

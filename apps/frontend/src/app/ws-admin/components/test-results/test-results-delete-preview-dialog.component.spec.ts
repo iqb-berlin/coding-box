@@ -1,6 +1,7 @@
 import { TranslateModule } from '@ngx-translate/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import {
   TestResultsDeletePreviewDialogComponent,
   TestResultsDeletePreviewDialogData
@@ -36,7 +37,7 @@ describe('TestResultsDeletePreviewDialogComponent', () => {
     dialogRef = { close: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [TestResultsDeletePreviewDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestResultsDeletePreviewDialogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MatDialogRef, useValue: dialogRef },
         { provide: MAT_DIALOG_DATA, useValue: data }

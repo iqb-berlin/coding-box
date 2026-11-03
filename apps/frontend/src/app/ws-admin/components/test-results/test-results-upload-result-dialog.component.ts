@@ -13,6 +13,7 @@ import { MatOptionModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { buildCsv, downloadCsvFile } from '../validation-dialog/shared/validation-export.util';
 import {
@@ -21,7 +22,7 @@ import {
   CodingFreshnessVersion
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import {
-  CODING_FRESHNESS_TASK_RESULT_HELP,
+  CODING_FRESHNESS_TASK_RESULT_HELP_KEY,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
   getCodingFreshnessAttentionTitle,
@@ -71,6 +72,8 @@ type ImportOutcomeMetric = { label: string; value: number };
   styleUrls: ['./test-results-upload-result-dialog.component.scss']
 })
 export class TestResultsUploadResultDialogComponent implements OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<TestResultsUploadResultDialogComponent>>(MatDialogRef);
   private translateService = inject(TranslateService);
   data = inject<TestResultsUploadResultDialogData>(MAT_DIALOG_DATA);
@@ -100,10 +103,10 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
 
   get dialogTitle(): string {
     if (this.result.importedResponses && this.result.importedLogs) {
-      return 'Upload-Ergebnis (Antworten und Logs)';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.responses-and-logs-title');
     }
 
-    return `Upload-Ergebnis (${this.resultTypeLabel})`;
+    return this.uiTranslate('ui-text.test-results-upload-result-dialog.title', { resultTypeLabel: this.resultTypeLabel });
   }
 
   get dialogIcon(): string {
@@ -199,60 +202,60 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
   }
 
   get resultTypeLabel(): string {
-    return this.data.resultType === 'logs' ? 'Logs' : 'Antworten';
+    return this.data.resultType === 'logs' ? 'Logs' : this.uiTranslate('variable-analysis.total-cases');
   }
 
   get importOutcomeTitle(): string {
     if (this.result.overviewPending) {
-      return 'Import verarbeitet, Übersicht wird aktualisiert';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-refreshing');
     }
 
     if (this.issues.length > 0 && this.hasCodingFreshnessWarning) {
-      return 'Import verarbeitet, Hinweise und Auto-Coding prüfen';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-issues-and-coding');
     }
 
     if (this.issues.length > 0) {
-      return 'Import verarbeitet, Hinweise prüfen';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-issues');
     }
 
     return this.hasCodingFreshnessWarning ?
-      'Import verarbeitet, Auto-Coding ausstehend' :
-      'Import erfolgreich verarbeitet';
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-coding-pending') :
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-success');
   }
 
   get importOutcomeText(): string {
     if (this.result.overviewPending) {
       return this.appendCodingCompletenessNote(
         this.result.overviewMessage ||
-        'Die Daten wurden verarbeitet; die Arbeitsbereichszahlen werden noch aktualisiert.'
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.processed-overview-pending')
       );
     }
 
     if (this.issues.length > 0) {
       const issueCount = this.formatCount(
         this.issues.length,
-        'technischer Hinweis',
-        'technische Hinweise'
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.issue-singular'),
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.issue-plural')
       );
       return this.appendCodingCompletenessNote(
-        `Im Tab Probleme ${issueCount} prüfen, bevor mit den Daten weitergearbeitet wird.`
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.check-issues-hint', { issueCount: issueCount })
       );
     }
 
     if (this.result.importedResponses && this.result.importedLogs) {
       return this.appendCodingCompletenessNote(
-        'Antworten und Logs wurden verarbeitet. Keine technischen Importprobleme gefunden.'
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.responses-and-logs-success')
       );
     }
 
     if (this.result.importedLogs) {
       return this.appendCodingCompletenessNote(
-        'Logs wurden vorhandenen Testergebnissen zugeordnet. Keine technischen Importprobleme gefunden.'
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.logs-success')
       );
     }
 
     return this.appendCodingCompletenessNote(
-      'Antwortdaten wurden verarbeitet. Keine technischen Importprobleme gefunden.'
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.responses-success')
     );
   }
 
@@ -261,29 +264,29 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
 
     if (this.result.importedResponses) {
       metrics.push(
-        { label: 'Testpersonen', value: this.result.expected.testPersons },
-        { label: 'Testhefte', value: this.result.expected.uniqueBooklets },
-        { label: 'Aufgaben-IDs', value: this.result.expected.uniqueUnits },
-        { label: 'Antwortwerte', value: this.result.expected.uniqueResponses }
+        { label: this.uiTranslate('ws-admin.test-persons'), value: this.result.expected.testPersons },
+        { label: this.uiTranslate('ui-text.files-validation.booklets'), value: this.result.expected.uniqueBooklets },
+        { label: this.uiTranslate('ui-text.test-results-upload-result-dialog.unit-ids'), value: this.result.expected.uniqueUnits },
+        { label: this.uiTranslate('variable-analysis.analysis-results'), value: this.result.expected.uniqueResponses }
       );
     }
 
     if (this.result.importedResponses && this.result.importSummary) {
       if (this.result.importSummary.savedResponses !== undefined) {
         metrics.push({
-          label: 'gespeicherte Antwortwerte',
+          label: this.uiTranslate('ui-text.test-results-upload-result-dialog.saved-responses'),
           value: this.result.importSummary.savedResponses
         });
       }
       if (this.result.importSummary.skippedExistingUnits !== undefined) {
         metrics.push({
-          label: 'übersprungene vorhandene Units',
+          label: this.uiTranslate('ui-text.test-results-upload-result-dialog.skipped-units'),
           value: this.result.importSummary.skippedExistingUnits
         });
       }
       if (this.result.importSummary.skippedExistingResponses !== undefined) {
         metrics.push({
-          label: 'nicht gemergte Antwortwerte',
+          label: this.uiTranslate('ui-text.test-results-upload-result-dialog.unmerged-responses'),
           value: this.result.importSummary.skippedExistingResponses
         });
       }
@@ -292,8 +295,8 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
     if (this.result.importedLogs && this.result.importSummary) {
       metrics.push(
         { label: 'Log-Zeilen', value: this.result.importSummary.logRows ?? 0 },
-        { label: 'gespeicherte Logs', value: this.result.importSummary.savedLogs ?? 0 },
-        { label: 'übersprungene Logs', value: this.result.importSummary.skippedLogs ?? 0 }
+        { label: this.uiTranslate('ui-text.test-results-upload-result-dialog.saved-logs'), value: this.result.importSummary.savedLogs ?? 0 },
+        { label: this.uiTranslate('ui-text.test-results-upload-result-dialog.skipped-logs'), value: this.result.importSummary.skippedLogs ?? 0 }
       );
     }
 
@@ -319,19 +322,19 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
       const savedResponses = summary.savedResponses ?? 0;
 
       if (skippedUnits > 0 || skippedResponses > 0) {
-        return `Skip-Modus: ${this.formatCount(skippedUnits, 'vorhandene Unit wurde', 'vorhandene Units wurden')} vollständig übersprungen. ` +
-          `${this.formatCount(skippedResponses, 'Antwortwert daraus wurde', 'Antwortwerte daraus wurden')} nicht in diese Unit gemerged. ` +
-          `${this.formatCount(savedResponses, 'neuer Antwortwert wurde', 'neue Antwortwerte wurden')} gespeichert.`;
+        return this.uiTranslate('ui-text.test-results-upload-result-dialog.skipped-unit-outcome', { value1: this.formatCount(skippedUnits, this.uiTranslate('ui-text.test-results-upload-result-dialog.existing-unit-singular'), this.uiTranslate('ui-text.test-results-upload-result-dialog.existing-unit-plural')) }) +
+          this.uiTranslate('ui-text.test-results-upload-result-dialog.not-merged-outcome', { value1: this.formatCount(skippedResponses, this.uiTranslate('ui-text.test-results-upload-result-dialog.existing-response-singular'), this.uiTranslate('ui-text.test-results-upload-result-dialog.existing-response-plural')) }) +
+          this.uiTranslate('ui-text.test-results-upload-result-dialog.saved-outcome', { value1: this.formatCount(savedResponses, this.uiTranslate('ui-text.test-results-upload-result-dialog.new-response-singular'), this.uiTranslate('ui-text.test-results-upload-result-dialog.new-response-plural')) });
       }
 
-      return 'Skip-Modus: Vorhandene Units bleiben vollständig unverändert. In diesem Import wurde keine vorhandene Unit getroffen.';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.skip-mode-hint');
     }
 
     if (summary.overwriteMode === 'merge') {
-      return 'Merge-Modus: Fehlende Antwortwerte wurden ergänzt; vorhandene Antwortwerte blieben unverändert.';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.merge-mode-hint');
     }
 
-    return 'Replace-Modus: Bestehende Antwortwerte im betroffenen Bereich wurden ersetzt.';
+    return this.uiTranslate('ui-text.test-results-upload-result-dialog.replace-mode-hint');
   }
 
   get statusCounts(): Array<{ status: string; count: number }> {
@@ -391,7 +394,7 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
       return this.getSecondAutocodingWaitingSummaryText();
     }
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings);
+    return getCodingFreshnessSummaryText(this.uiTranslate, this.codingFreshnessWarnings);
   }
 
   get codingFreshnessDialogTitle(): string {
@@ -399,33 +402,33 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
       return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.title);
     }
 
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings);
+    return getCodingFreshnessAttentionTitle(this.uiTranslate, this.codingFreshnessWarnings);
   }
 
   protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState) {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.help,
-        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+        { taskResultHelp: this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY) }
       );
     }
 
-    const guidanceText = getCodingFreshnessManualReviewGuidanceText(
+    const guidanceText = getCodingFreshnessManualReviewGuidanceText(this.uiTranslate,
       this.codingFreshnessWarnings
     );
     if (guidanceText) {
-      return `${guidanceText} ${CODING_FRESHNESS_TASK_RESULT_HELP}`;
+      return `${guidanceText} ${this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY)}`;
     }
 
-    return CODING_FRESHNESS_TASK_RESULT_HELP;
+    return this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY);
   }
 
   getVersionLabel(version: CodingFreshnessVersion): string {
-    return getCodingFreshnessVersionLabel(version);
+    return getCodingFreshnessVersionLabel(this.uiTranslate, version);
   }
 
   getFreshnessStateLabel(state: CodingFreshnessState): string {
-    return getCodingFreshnessStateLabel(state);
+    return getCodingFreshnessStateLabel(this.uiTranslate, state);
   }
 
   getCodingFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
@@ -433,13 +436,13 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
       return this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.chip,
         {
-          version: getCodingFreshnessVersionLabel(item.version),
-          count: formatCodingFreshnessTaskResultCount(item.unitCount)
+          version: getCodingFreshnessVersionLabel(this.uiTranslate, item.version),
+          count: formatCodingFreshnessTaskResultCount(this.uiTranslate, item.unitCount)
         }
       );
     }
 
-    return getCodingFreshnessChipLabel(item);
+    return getCodingFreshnessChipLabel(this.uiTranslate, item);
   }
 
   private get secondAutocodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
@@ -480,18 +483,18 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
 
   getCategoryLabel(category: string): string {
     const labels: Record<string, string> = {
-      log_format: 'Log-Format ungültig',
-      unit_not_found: 'Unit nicht gefunden',
-      invalid_unit: 'Ungültige Unit',
-      laststate: 'Letzter Status Fehler',
-      missing_booklet: 'Booklet fehlt',
-      missing_status: 'Status fehlt',
-      invalid_status: 'Status ungültig',
-      csv_columns: 'CSV-Spalten fehlen',
-      missing_identity: 'Zuordnung unvollständig',
-      timestamp: 'Zeitstempel auffällig',
-      missing_booklet_log: 'Booklet-Log fehlt',
-      no_logs_saved: 'Keine Logs gespeichert',
+      log_format: this.uiTranslate('ui-text.test-results-upload-result-dialog.invalid-log-format'),
+      unit_not_found: this.uiTranslate('ui-text.test-results-upload-result-dialog.unit-not-found'),
+      invalid_unit: this.uiTranslate('ui-text.test-results-upload-result-dialog.invalid-unit-label'),
+      laststate: this.uiTranslate('ui-text.test-results-upload-result-dialog.last-status-error'),
+      missing_booklet: this.uiTranslate('ui-text.test-results-upload-result-dialog.missing-booklet-label'),
+      missing_status: this.uiTranslate('ui-text.test-results-upload-result-dialog.missing-status'),
+      invalid_status: this.uiTranslate('ui-text.test-results-upload-result-dialog.invalid-status'),
+      csv_columns: this.uiTranslate('ui-text.test-results-upload-result-dialog.missing-csv-columns'),
+      missing_identity: this.uiTranslate('ui-text.test-results-upload-result-dialog.incomplete-mapping'),
+      timestamp: this.uiTranslate('ui-text.test-results-upload-result-dialog.suspicious-timestamp'),
+      missing_booklet_log: this.uiTranslate('ui-text.test-results-upload-result-dialog.missing-booklet-log'),
+      no_logs_saved: this.uiTranslate('ui-text.test-results-upload-result-dialog.no-saved-logs'),
       other: 'Sonstiges'
     };
     return labels[category] || category;
@@ -502,7 +505,7 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
     return Object.entries(issueCounts)
       .map(([category, count]) => ({
         category,
-        label: category === 'uncategorized' ? 'Ohne Kategorie' : this.getCategoryLabel(category),
+        label: category === 'uncategorized' ? this.uiTranslate('ui-text.test-results-upload-result-dialog.no-category') : this.getCategoryLabel(category),
         count: Number(count || 0)
       }))
       .filter(entry => entry.count > 0)
@@ -546,7 +549,7 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
         { header: 'Kategorie', value: row => row.category },
         { header: 'Kategorie (Text)', value: row => row.categoryLabel },
         { header: 'Meldung', value: row => row.message },
-        { header: 'Datei', value: row => row.fileName },
+        { header: this.uiTranslate('process-overview.details.fileName'), value: row => row.fileName },
         { header: 'Zeile', value: row => row.rowIndex }
       ]
     );
@@ -582,7 +585,7 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
 
   get emptyDetailMessage(): string {
     if (!this.hasAnyLogDetails) {
-      return 'Detaildaten konnten nicht geladen werden.';
+      return this.uiTranslate('ui-text.test-results-upload-result-dialog.details-load-failed');
     }
 
     const hasFilter = (this.detailFilterText || '').trim().length > 0 ||
@@ -590,19 +593,19 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
 
     if (hasFilter) {
       return this.detailView === 'booklets' ?
-        'Keine Booklets passend zum Filter gefunden.' :
-        'Keine Units passend zum Filter gefunden.';
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.no-matching-booklets') :
+        this.uiTranslate('ui-text.test-results-upload-result-dialog.no-matching-units');
     }
 
     return this.detailView === 'booklets' ?
-      'Keine Booklets gefunden.' :
-      'Keine Units gefunden.';
+      this.uiTranslate('ui-text.booklet-search-dialog.empty') :
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.no-units');
   }
 
   get emptyIssuesMessage(): string {
     return this.hasActiveIssueFilter ?
-      'Keine passenden technischen Importprobleme gefunden.' :
-      'Keine technischen Importprobleme gefunden.';
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.no-matching-issues') :
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.no-issues');
   }
 
   get filteredBookletDetails(): LogBookletDetail[] {
@@ -696,7 +699,7 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
       return text;
     }
 
-    return `${text} Die Kodier- und Auswertungsansicht ist erst vollständig, ` +
-      'nachdem die offenen Auto-Coding-Schritte abgeschlossen wurden.';
+    return this.uiTranslate('ui-text.test-results-upload-result-dialog.coding-incomplete-prefix', { text: text }) +
+      this.uiTranslate('ui-text.test-results-upload-result-dialog.coding-incomplete-suffix');
   }
 }

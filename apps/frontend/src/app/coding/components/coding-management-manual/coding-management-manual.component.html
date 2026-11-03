@@ -21,7 +21,7 @@
   ) {
     <div class="fx-column-start-start fx-gap-10 validation-progress">
       <div class="statistics-card manual-planning-card">
-        <h2 class="section-title">Validierung läuft</h2>
+        <h2 class="section-title">{{ 'coding-management-manual.titles.validation-running' | translate }}</h2>
         <p class="section-description">
           {{ validationProgressValue.message }}
         </p>
@@ -34,8 +34,7 @@
           <p class="progress-text">{{ validationProgressValue.progress }}%</p>
         </div>
         <p class="progress-note">
-          Sie können andere Aufgaben erledigen, während die Validierung im
-          Hintergrund läuft.
+          {{ 'coding-management-manual.descriptions.validation-note' | translate }}
         </p>
       </div>
     </div>
@@ -44,7 +43,7 @@
   @if (validationProgressValue && validationProgressValue.status === 'error') {
     <div class="fx-column-start-start fx-gap-10 validation-error">
       <div class="statistics-card error-card">
-        <h2 class="section-title">Fehler bei der Validierung</h2>
+        <h2 class="section-title">{{ 'coding-management-manual.errors.validation-failed' | translate }}</h2>
         <p class="section-description">
           {{ validationProgressValue.message }}
         </p>
@@ -63,10 +62,9 @@
     <div class="statistics-card">
       <div class="header-row">
         <div>
-          <h2 class="section-title">Manuelle Kodierung</h2>
+          <h2 class="section-title">{{ 'ws-admin.manual-coding' | translate }}</h2>
           <p class="section-description">
-            Bereiten Sie Kodierfälle vor, planen Sie Jobs und schließen Sie
-            manuelle Ergebnisse ab.
+            {{ 'ui-text.coding-management-manual.description' | translate }}
           </p>
         </div>
         <div class="header-actions">
@@ -173,13 +171,13 @@
       @if (shouldShowPlanningOverview()) {
         <div
           class="planning-overview-grid"
-          aria-label="Übersicht zur manuellen Kodierungsplanung"
+          [attr.aria-label]="'ui-text.coding-management-manual.planning-overview' | translate"
         >
           <div class="overview-metric">
-            <span class="metric-label">Offene Arbeitsfälle</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.open-work-cases' | translate }}</span>
             <span class="metric-value">{{ getOpenCodingCases() }}</span>
             <span class="metric-hint"
-              >effektive Kodierfälle nach Aggregation</span
+              >{{ 'ui-text.coding-management-manual.effective-cases' | translate }}</span
             >
             @if (getManualCaseScopeSummaryText()) {
               <span class="metric-explainer">
@@ -188,53 +186,43 @@
             }
           </div>
           <div class="overview-metric">
-            <span class="metric-label">Für neue Jobs verfügbar</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.available-for-new-jobs' | translate }}</span>
             <span class="metric-value">{{
               getAvailableCasesForNewJobs()
             }}</span>
             <span class="metric-hint">
               @if (getUnavailableCasesForNewJobs() > 0) {
-                {{ getUnavailableCasesForNewJobs() }} Arbeitsfälle reserviert
-                oder verteilt
+                {{ 'ui-text.coding-management-manual.reserved-cases' | translate: { value1: (getUnavailableCasesForNewJobs()) } }}
               } @else {
-                aus aktueller Variablenauswahl
+                {{ 'ui-text.coding-management-manual.current-selection' | translate }}
               }
             </span>
           </div>
           <div class="overview-metric">
-            <span class="metric-label">Variablenabdeckung</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.variable-coverage' | translate }}</span>
             <span class="metric-value"
               >{{ getVariableCoveragePercentage() | number: '1.0-0' }}%</span
             >
             <span class="metric-hint"
-              >{{
-                variableCoverageOverviewValue?.missingVariables || 0
-              }}
-              fehlend</span
+              >{{ 'ui-text.coding-management-manual.missing-variables' | translate: { value1: (variableCoverageOverviewValue?.missingVariables || 0) } }}</span
             >
           </div>
           <div class="overview-metric">
-            <span class="metric-label">In Jobs verteilt</span>
+            <span class="metric-label">{{ 'ui-text.coding-management-manual.distributed-in-jobs' | translate }}</span>
             <span class="metric-value">{{
               caseCoverageOverviewValue?.effectiveCasesInJobs || 0
             }}</span>
             <span class="metric-hint"
-              >{{
-                caseCoverageOverviewValue?.effectiveUnassignedCases || 0
-              }}
-              Arbeitsfälle nicht zugewiesen</span
+              >{{ 'ui-text.coding-management-manual.unassigned-cases' | translate: { value1: (caseCoverageOverviewValue?.effectiveUnassignedCases || 0) } }}</span
             >
           </div>
           <div class="overview-metric">
-            <span class="metric-label">Ergebnisse angewendet</span>
+            <span class="metric-label">{{ 'coding.my-coding-jobs.filter-results-applied' | translate }}</span>
             <span class="metric-value"
               >{{ getAppliedResultsPercentage() | number: '1.0-0' }}%</span
             >
             <span class="metric-hint"
-              >{{
-                appliedResultsOverviewValue?.remainingResponses || 0
-              }}
-              Arbeitsfälle verbleibend</span
+              >{{ 'ui-text.coding-management-manual.remaining-cases' | translate: { value1: (appliedResultsOverviewValue?.remainingResponses || 0) } }}</span
             >
           </div>
         </div>
@@ -327,7 +315,7 @@
             class="coding-jobs-container manual-section-block"
           >
             <h3 class="manual-section-title">
-              Kodierjobs
+              {{ 'coding.trainings.table.jobs' | translate }}
               <button
                 mat-icon-button
                 (click)="showCodingJobsInfo.set(!showCodingJobsInfo())"
@@ -369,7 +357,7 @@
                 (click)="openExecutionExport()"
               >
                 <mat-icon>download</mat-icon>
-                Export
+                {{ 'workspace.export' | translate }}
               </button>
               @if (canManageManualCodingJobs()) {
                 <button
@@ -379,7 +367,7 @@
                   (click)="openExecutionTransferCases()"
                 >
                   <mat-icon>swap_horiz</mat-icon>
-                  Fälle übertragen
+                  {{ 'ui-text.coding-jobs.transfer-cases' | translate }}
                 </button>
               }
               <button
@@ -389,7 +377,7 @@
                 (click)="openExecutionReliability()"
               >
                 <mat-icon>analytics</mat-icon>
-                Interrater-Reliabilität
+                {{ 'coding.trainings.compare.reliability-title' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -398,7 +386,7 @@
                 (click)="openExecutionDoubleCodedReview()"
               >
                 <mat-icon>compare</mat-icon>
-                Doppelkodierungsreview
+                {{ 'ui-text.coding-jobs.double-coding-review' | translate }}
               </button>
               @if (shouldShowManualRefreshButton()) {
                 <button
@@ -461,7 +449,7 @@
           >
             <div class="statistics-card">
               <h2 class="section-title section-title-with-action">
-                Fälle in Kodierjobs
+                {{ 'ui-text.coding-management-manual.cases-in-jobs' | translate }}
                 <button
                   mat-icon-button
                   (click)="showCaseCoverageInfo.set(!showCaseCoverageInfo())"
@@ -503,39 +491,39 @@
               }
               <div class="coverage-stats">
                 <div class="stat-item">
-                  <span class="stat-label">Effektive Kodierfälle gesamt:</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.total-effective-cases' | translate }}</span>
                   <span class="stat-value">{{
                     caseCoverageOverviewValue.effectiveTotalCasesToCode
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">Arbeitsfälle in Jobs:</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.work-cases-in-jobs' | translate }}</span>
                   <span class="stat-value covered">{{
                     caseCoverageOverviewValue.effectiveCasesInJobs
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">Doppelt kodierte Fälle:</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.double-coded-cases' | translate }}</span>
                   <span class="stat-value">{{
                     caseCoverageOverviewValue.doubleCodedCases
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">Einfach kodierte Fälle:</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.single-coded-cases' | translate }}</span>
                   <span class="stat-value">{{
                     effectiveSingleCodedCases()
                   }}</span>
                 </div>
                 <div class="stat-item">
                   <span class="stat-label"
-                    >Nicht zugewiesene Arbeitsfälle:</span
+                    >{{ 'ui-text.coding-management-manual.unassigned-work-cases' | translate }}</span
                   >
                   <span class="stat-value missing">{{
                     caseCoverageOverviewValue.effectiveUnassignedCases
                   }}</span>
                 </div>
                 <div class="stat-item">
-                  <span class="stat-label">Abdeckungsrate:</span>
+                  <span class="stat-label">{{ 'ui-text.coding-management-manual.coverage-rate' | translate }}</span>
                   <span class="stat-value percentage"
                     >{{
                       caseCoverageOverviewValue.coveragePercentage
@@ -607,7 +595,7 @@
             class="coder-training-list-container manual-section-block"
           >
             <h3 class="manual-section-title">
-              Kodierer-Schulungen
+              {{ 'coding.trainings.title' | translate }}
               <button
                 mat-icon-button
                 (click)="showCoderTrainingsInfo.set(!showCoderTrainingsInfo())"
@@ -647,7 +635,7 @@
                 (click)="openCoderTraining()"
               >
                 <mat-icon>add</mat-icon>
-                Kodierschulung erstellen
+                {{ 'ui-text.coding-management-manual.create-training' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -659,7 +647,7 @@
                 (click)="openTrainingExport()"
               >
                 <mat-icon>download</mat-icon>
-                Export
+                {{ 'workspace.export' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -668,7 +656,7 @@
                 (click)="openTrainingReliability()"
               >
                 <mat-icon>analytics</mat-icon>
-                Interrater-Reliabilität
+                {{ 'coding.trainings.compare.reliability-title' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -677,7 +665,7 @@
                 (click)="openTrainingDiscussion()"
               >
                 <mat-icon>forum</mat-icon>
-                Diskussion
+                {{ 'ui-text.coding-management-manual.discussion' | translate }}
               </button>
               <button
                 mat-stroked-button
@@ -686,7 +674,7 @@
                 (click)="openTrainingComparison()"
               >
                 <mat-icon>compare_arrows</mat-icon>
-                Schulungen vergleichen
+                {{ 'ui-text.coding-management-manual.compare-trainings' | translate }}
               </button>
               @if (shouldShowManualRefreshButton()) {
                 <button
@@ -736,7 +724,7 @@
               }
             }
             <div class="coding-jobs-container manual-section-block">
-              <h3 class="manual-section-title">Kodierjobs</h3>
+              <h3 class="manual-section-title">{{ 'coding.trainings.table.jobs' | translate }}</h3>
               @if (shouldRenderManualTabData('training')) {
                 @defer (on immediate) {
                   <coding-box-coding-jobs
@@ -762,7 +750,7 @@
         @if (isManualTab('preparation')) {
           <div class="variable-bundle-container manual-section-block">
             <h3 class="manual-section-title">
-              Variablenbündel
+              {{ 'coding-management-manual.titles.variable-bundles' | translate }}
               <button
                 mat-icon-button
                 (click)="

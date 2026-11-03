@@ -140,7 +140,7 @@ describe('WorkspaceGroupsComponent', () => {
     expect(component.workspacesChanged()).toBe(true);
     expect(snackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
-      'error',
+      'error.error_title',
       { duration: 5000 }
     );
   });

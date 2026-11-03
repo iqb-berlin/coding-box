@@ -5,6 +5,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBarModule } from '@angular/material/snack-bar';
 import { of, EMPTY } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { TestTakersValidationPanelComponent } from './test-takers-validation-panel.component';
 import { TestTakersValidationService } from '../../../../services/validation';
 import { ValidationPanelHeaderComponent, ValidationGuidanceComponent } from '../../shared';
@@ -40,7 +41,7 @@ describe('TestTakersValidationPanelComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         CommonModule,
         MatExpansionModule,
         MatProgressSpinnerModule,

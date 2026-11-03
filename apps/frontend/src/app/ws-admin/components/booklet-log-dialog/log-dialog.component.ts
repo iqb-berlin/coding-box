@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, inject, ChangeDetectionStrategy
 } from '@angular/core';
@@ -16,17 +17,17 @@ import { MatButton } from '@angular/material/button';
   selector: 'coding-box-log-dialog',
   template: `
     <div class="dialog-header">
-      <h1 mat-dialog-title>Booklet Logs</h1>
+      <h1 mat-dialog-title>{{ 'ui-text.log-dialog.title' | translate }}</h1>
       <div class="header-info">
-        <span class="log-count">{{ data.logs.length }} Einträge</span>
+        <span class="log-count">{{ 'ui-text.log-dialog.entry-count' | translate: { length: (data.logs.length) } }}</span>
         @if (processingDuration) {
         <span class="processing-duration">
-          <span class="duration-label">Bearbeitungsdauer:</span>
+          <span class="duration-label">{{ 'ui-text.log-dialog.processing-duration' | translate }}</span>
           <span class="duration-value">{{ processingDuration }}</span>
         </span>
         } @if (data.units && data.units.length > 0) {
         <span class="unit-progress">
-          <span class="progress-label">Unit-Fortschritt:</span>
+          <span class="progress-label">{{ 'ui-text.log-dialog.unit-progress' | translate }}</span>
           <span
             class="progress-value"
             [class]="{
@@ -34,7 +35,7 @@ import { MatButton } from '@angular/material/button';
               incomplete: !unitProgressComplete
             }"
           >
-            {{ unitProgressComplete ? 'Vollständig' : 'Unvollständig' }}
+            {{ unitProgressComplete ? ('ui-text.files-validation.complete' | translate) : ('double-coded-review.decision.status-incomplete' | translate) }}
           </span>
         </span>
         }
@@ -46,8 +47,8 @@ import { MatButton } from '@angular/material/button';
       @if (data.sessions && data.sessions.length > 0) {
       <div class="session-section">
         <div class="section-header">
-          <h2>Session Information</h2>
-          <span class="session-count">{{ data.sessions.length }} Sessions</span>
+          <h2>{{ 'ui-text.log-dialog.session-info' | translate }}</h2>
+          <span class="session-count">{{ 'ui-text.log-dialog.sessions' | translate: { length: (data.sessions.length) } }}</span>
         </div>
         <div class="session-list">
           @for (session of data.sessions; track session) {
@@ -59,17 +60,17 @@ import { MatButton } from '@angular/material/button';
             </div>
             <div class="session-details">
               <div class="detail-item">
-                <span class="detail-label">Browser:</span>
+                <span class="detail-label">{{ 'ui-text.log-dialog.browser' | translate }}</span>
                 <span class="detail-value">{{
                   session.browser || 'Unknown'
                 }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">OS:</span>
+                <span class="detail-label">{{ 'ui-text.log-dialog.operating-system' | translate }}</span>
                 <span class="detail-value">{{ session.os || 'Unknown' }}</span>
               </div>
               <div class="detail-item">
-                <span class="detail-label">Screen:</span>
+                <span class="detail-label">{{ 'ui-text.log-dialog.screen' | translate }}</span>
                 <span class="detail-value">{{
                   session.screen || 'Unknown'
                 }}</span>
@@ -84,11 +85,11 @@ import { MatButton } from '@angular/material/button';
       <!-- Logs Section -->
       <div class="logs-section">
         <div class="section-header">
-          <h2>Booklet Logs</h2>
+          <h2>{{ 'ui-text.log-dialog.title' | translate }}</h2>
           <div class="search-box">
             <input
               type="text"
-              placeholder="Suchen..."
+              [placeholder]="'ui-text.training-sample-editor.search' | translate"
               (input)="filterLogs($event)"
             />
           </div>
@@ -111,7 +112,7 @@ import { MatButton } from '@angular/material/button';
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-stroked-button (click)="closeDialog()">Schließen</button>
+      <button mat-stroked-button (click)="closeDialog()">{{ 'deferred-view.close' | translate }}</button>
     </div>
   `,
   styles: [
@@ -371,7 +372,7 @@ import { MatButton } from '@angular/material/button';
     `
   ],
 
-  imports: [
+  imports: [TranslateModule,
     MatListItem,
     MatList,
     MatDialogContent,

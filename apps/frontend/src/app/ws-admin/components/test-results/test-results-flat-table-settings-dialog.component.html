@@ -1,29 +1,28 @@
-<h2 mat-dialog-title>Testauswertung – Filtereinstellungen</h2>
+<h2 mat-dialog-title>{{ 'ui-text.test-results-flat-table-settings-dialog.title' | translate }}</h2>
 
 <div mat-dialog-content style="overflow: auto; padding: 8px 24px 16px 24px">
-  <div style="margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">Audio-Filter</div>
+  <div style="margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">{{ 'ui-text.test-results-flat-table-settings-dialog.audio-filter' | translate }}</div>
   <mat-form-field
     appearance="outline"
     style="width: 100%; margin-bottom: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Audio-Schwellwert</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.audio-threshold' | translate }}</mat-label>
     <input matInput type="number" step="0.01" [(ngModel)]="audioLowThreshold" />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Nur Audio-Variablen (variableId beginnt mit „audio“) mit numerischem Wert
-      kleiner als der Schwellwert.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.audio-threshold-hint' | translate }}
     </mat-hint>
   </mat-form-field>
 
   <div style="margin-top: 8px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
-    Log-Filter
+    {{ 'ui-text.test-results-flat-table-settings-dialog.log-filter' | translate }}
   </div>
   <mat-form-field
     appearance="outline"
     style="width: 100%; margin-bottom: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Früh abgebrochen (max. Bearbeitungszeit in ms)</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.short-processing-threshold' | translate }}</mat-label>
     <input
       matInput
       type="number"
@@ -31,8 +30,7 @@
       [(ngModel)]="shortProcessingThresholdMs"
       />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Bestimmt über Testheft-Logs: CONTROLLER/RUNNING → CONTROLLER/TERMINATED.
-      Wenn die Dauer kleiner als dieser Wert ist.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.short-processing-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -40,7 +38,7 @@
     style="width: 100%; margin-top: 4px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Lange Ladezeit (min. Ladezeit in ms)</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.long-loading-threshold' | translate }}</mat-label>
     <input
       matInput
       type="number"
@@ -48,8 +46,7 @@
       [(ngModel)]="longLoadingThresholdMs"
       />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Bestimmt über Aufgaben-Logs: STARTED → ENDED. Wenn die Dauer mindestens
-      dieser Wert ist.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.long-loading-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -57,7 +54,7 @@
     style="width: 100%; margin-top: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Langer Fokusverlust (min. Dauer in ms)</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.focus-loss-threshold' | translate }}</mat-label>
     <input
       matInput
       type="number"
@@ -65,7 +62,7 @@
       [(ngModel)]="focusLostThresholdMs"
       />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Bestimmt ab welcher Dauer FOCUS/HAS_NOT bis FOCUS/HAS als auffällig gilt.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.focus-loss-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -73,7 +70,7 @@
     style="width: 100%; margin-top: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Lange Log-Zeitspanne (min. Dauer in ms)</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.session-span-threshold' | translate }}</mat-label>
     <input
       matInput
       type="number"
@@ -81,8 +78,7 @@
       [(ngModel)]="sessionSpanThresholdMs"
       />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Bestimmt ab welcher Spanne zwischen erstem und letztem Log-Eintrag ein
-      Durchlauf als ungewöhnlich lang markiert wird.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.session-span-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -90,7 +86,7 @@
     style="width: 100%; margin-top: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Mehrfach gestartet (min. CONTROLLER/LOADING)</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.repeated-start-threshold' | translate }}</mat-label>
     <input
       matInput
       type="number"
@@ -99,13 +95,12 @@
       [(ngModel)]="repeatedStartThreshold"
       />
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Bestimmt ab wie vielen CONTROLLER/LOADING-Einträgen ein Durchlauf als
-      mehrfach gestartet zählt.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.repeated-start-hint' | translate }}
     </mat-hint>
   </mat-form-field>
 
   <div style="margin-top: 16px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
-    Bearbeitungsdauer
+    {{ 'ui-text.test-results-flat-table-settings-dialog.processing-duration' | translate }}
   </div>
   <div style="display: flex; gap: 12px; margin-bottom: 16px">
     <mat-form-field
@@ -113,10 +108,10 @@
       style="flex: 1"
       subscriptSizing="dynamic"
       >
-      <mat-label>Bearbeitungszeit min. (mm:ss)</mat-label>
+      <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.minimum-duration' | translate }}</mat-label>
       <input matInput type="text" [(ngModel)]="processingDurationMin" />
       <mat-hint style="white-space: normal; line-height: 1.35">
-        Wird angewendet, wenn im Spezialfilter „Bearbeitungszeit“ aktiviert ist.
+        {{ 'ui-text.test-results-flat-table-settings-dialog.duration-enabled-hint' | translate }}
       </mat-hint>
     </mat-form-field>
     <mat-form-field
@@ -124,23 +119,23 @@
       style="flex: 1"
       subscriptSizing="dynamic"
       >
-      <mat-label>Bearbeitungszeit max. (mm:ss)</mat-label>
+      <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.maximum-duration' | translate }}</mat-label>
       <input matInput type="text" [(ngModel)]="processingDurationMax" />
       <mat-hint style="white-space: normal; line-height: 1.35">
-        Bearbeitungszeit = CONTROLLER/RUNNING → CONTROLLER/TERMINATED.
+        {{ 'ui-text.test-results-flat-table-settings-dialog.duration-source-hint' | translate }}
       </mat-hint>
     </mat-form-field>
   </div>
 
   <div style="margin-top: 8px; margin-bottom: 12px; color: rgba(0, 0, 0, 0.6)">
-    Session-Filter
+    {{ 'test-results-table.session' | translate }}
   </div>
   <mat-form-field
     appearance="outline"
     style="width: 100%; margin-bottom: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>Browser</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.browser' | translate }}</mat-label>
     <mat-select [(ngModel)]="sessionBrowsersAllowlist" multiple>
       @for (browser of availableSessionBrowsers; track browser) {
         <mat-option
@@ -151,7 +146,7 @@
       }
     </mat-select>
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.session-filter-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -159,7 +154,7 @@
     style="width: 100%; margin-bottom: 16px"
     subscriptSizing="dynamic"
     >
-    <mat-label>OS</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.operating-system' | translate }}</mat-label>
     <mat-select [(ngModel)]="sessionOsAllowlist" multiple>
       @for (os of availableSessionOs; track os) {
         <mat-option [value]="os">
@@ -168,7 +163,7 @@
       }
     </mat-select>
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.session-filter-hint' | translate }}
     </mat-hint>
   </mat-form-field>
   <mat-form-field
@@ -176,7 +171,7 @@
     style="width: 100%"
     subscriptSizing="dynamic"
     >
-    <mat-label>Screen</mat-label>
+    <mat-label>{{ 'ui-text.test-results-flat-table-settings-dialog.screen' | translate }}</mat-label>
     <mat-select [(ngModel)]="sessionScreensAllowlist" multiple>
       @for (screen of availableSessionScreens; track screen) {
         <mat-option
@@ -187,12 +182,12 @@
       }
     </mat-select>
     <mat-hint style="white-space: normal; line-height: 1.35">
-      Wird angewendet, wenn im Media-Filter „Session-Filter" aktiviert ist.
+      {{ 'ui-text.test-results-flat-table-settings-dialog.session-filter-hint' | translate }}
     </mat-hint>
   </mat-form-field>
 </div>
 
 <div mat-dialog-actions align="end">
-  <button mat-button (click)="close()">Abbrechen</button>
-  <button mat-raised-button color="primary" (click)="save()">Speichern</button>
+  <button mat-button (click)="close()">{{ 'cancel' | translate }}</button>
+  <button mat-raised-button color="primary" (click)="save()">{{ 'save' | translate }}</button>
 </div>

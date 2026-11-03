@@ -5,6 +5,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../../testing/german-translations';
 import { CodingJobResultDialogComponent } from './coding-job-result-dialog.component';
 import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
 import { FileService } from '../../../../shared/services/file/file.service';
@@ -113,7 +114,7 @@ describe('CodingJobResultDialogComponent', () => {
     }));
 
     await TestBed.configureTestingModule({
-      imports: [CodingJobResultDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, CodingJobResultDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: mockDialogRef },

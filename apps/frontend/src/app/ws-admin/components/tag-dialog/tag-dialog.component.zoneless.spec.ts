@@ -6,6 +6,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TagDialogComponent } from './tag-dialog.component';
 import { UnitTagService } from '../../../shared/services/unit/unit-tag.service';
 import { AppService } from '../../../core/services/app.service';
@@ -46,7 +47,7 @@ describe('TagDialogComponent zoneless mutations', () => {
     createUnitTag = jest.fn().mockReturnValue(createResponse);
     deleteUnitTag = jest.fn().mockReturnValue(deleteResponse);
     await TestBed.configureTestingModule({
-      imports: [TranslateModule.forRoot(), TagsDialogHostComponent, MatDialogModule, MatSnackBarModule],
+      imports: [GermanTranslationsTestingModule, TranslateModule.forRoot(), TagsDialogHostComponent, MatDialogModule, MatSnackBarModule],
       providers: [
         provideZonelessChangeDetection(),
         { provide: UnitTagService, useValue: { createUnitTag, deleteUnitTag } },

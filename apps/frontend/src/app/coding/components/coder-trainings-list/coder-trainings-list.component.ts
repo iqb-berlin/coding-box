@@ -22,6 +22,7 @@ import {
 } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
 import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
@@ -70,6 +71,8 @@ interface TrainingNameFilterOption {
   styleUrls: ['./coder-trainings-list.component.scss']
 })
 export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -268,7 +271,7 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   }
 
   getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Job', 'Jobs');
+    return getTrainingOptionMeta(this.uiTranslate, training, 'Job', 'Jobs');
   }
 
   getTrainingTableMeta(training: CoderTraining): string {
@@ -308,11 +311,11 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
       case 'details':
         return `Details anzeigen: ${target}`;
       case 'compare':
-        return `Ergebnisse vergleichen: ${target}`;
+        return this.uiTranslate('ui-text.coder-trainings-list.compare-results', { target: target });
       case 'edit':
-        return `Schulung bearbeiten: ${target}`;
+        return this.uiTranslate('ui-text.coder-trainings-list.edit-training', { target: target });
       case 'delete':
-        return `Schulung löschen: ${target}`;
+        return this.uiTranslate('ui-text.coder-trainings-list.delete-training', { target: target });
       case 'more':
         return `Weitere Aktionen: ${target}`;
       default:
@@ -323,34 +326,34 @@ export class CoderTrainingsListComponent implements OnInit, OnChanges, OnDestroy
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Älteste zuerst';
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first');
       case 'newest_first':
-        return 'Neueste zuerst';
+        return this.uiTranslate('ui-text.coder-trainings-list.newest-first');
       case 'random':
-        return 'Zufällig';
+        return this.uiTranslate('ui-text.coder-trainings-list.random');
       case 'random_per_testgroup':
-        return 'Zufällig je Testgruppe';
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return 'Zufällige Testgruppen';
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return 'Älteste zuerst';
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Älteste verfügbare Fälle pro Variable';
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first-hint');
       case 'newest_first':
-        return 'Neueste verfügbare Fälle pro Variable';
+        return this.uiTranslate('ui-text.coder-trainings-list.newest-first-hint');
       case 'random':
-        return 'Zufällig aus allen verfügbaren Fällen';
+        return this.uiTranslate('ui-text.coder-trainings-list.random-cases-hint');
       case 'random_per_testgroup':
-        return 'Möglichst gleichmäßig über Testgruppen';
+        return this.uiTranslate('ui-text.coder-trainings-list.random-per-group-hint');
       case 'random_testgroups':
-        return 'Erst Testgruppen, dann Fälle zufällig';
+        return this.uiTranslate('ui-text.coder-trainings-list.random-groups-hint');
       default:
-        return 'Älteste verfügbare Fälle pro Variable';
+        return this.uiTranslate('ui-text.coder-trainings-list.oldest-first-hint');
     }
   }
 

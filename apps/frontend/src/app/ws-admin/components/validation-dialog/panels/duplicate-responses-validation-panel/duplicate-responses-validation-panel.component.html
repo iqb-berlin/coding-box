@@ -3,7 +3,7 @@
 <mat-expansion-panel>
   <mat-expansion-panel-header>
     <coding-box-validation-panel-header
-      title="Duplikate-Prüfung"
+      [title]="'ui-text.duplicate-responses-validation-panel.title' | translate"
       [status]="status"
       [badgeText]="
         totalDuplicates() > 0 ? totalDuplicates() + ' Duplikate' : undefined
@@ -25,7 +25,7 @@
       (click)="onValidate()"
       [disabled]="isRunning() || disabled()"
     >
-      Duplikate prüfen
+      {{ 'ui-text.duplicate-responses-validation-panel.run' | translate }}
     </button>
   </div>
 
@@ -46,7 +46,7 @@
           [value]="activeTaskValue?.progress"
         ></mat-spinner>
         <p class="loading-text">
-          Doppelte Antworten werden geprüft...
+          {{ 'ui-text.duplicate-responses-validation-panel.running' | translate }}
           @if (activeTaskValue?.progress) {
             ({{ activeTaskValue?.progress }}%)
           }
@@ -57,7 +57,7 @@
     @if (errorMessageValue) {
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
-        <span>Fehler bei der Validierung: {{ errorMessageValue }}</span>
+        <span>{{ 'ui-text.duplicate-responses-validation-panel.validation-error' | translate: { errorMessageValue: (errorMessageValue) } }}</span>
       </div>
     }
 
@@ -65,25 +65,24 @@
       <div class="validation-result validation-error">
         <mat-icon>error</mat-icon>
         <span
-          >Prüfung fehlgeschlagen: {{ totalDuplicates() }} doppelte Antworten
-          gefunden.</span
+          >{{ 'ui-text.duplicate-responses-validation-panel.duplicates-found' | translate: { value1: (totalDuplicates()) } }}</span
         >
       </div>
 
       @if (duplicateResponses().length > 0) {
         <div class="auto-resolve-info">
-          <p class="auto-resolve-info-title">Was macht „Alle automatisch auflösen“?</p>
+          <p class="auto-resolve-info-title">{{ 'ui-text.duplicate-responses-validation-panel.resolution-help-title' | translate }}</p>
           <ul>
-            <li>Pro Duplikatgruppe bleibt genau eine Antwort erhalten.</li>
-            <li>Bevorzugt werden nicht-leere Werte.</li>
-            <li>Bei Gleichstand bleibt die neueste Antwort (höchste Antwort-ID).</li>
-            <li>Alle übrigen Antworten der Gruppe werden gelöscht.</li>
+            <li>{{ 'ui-text.duplicate-responses-validation-panel.keep-one-hint' | translate }}</li>
+            <li>{{ 'ui-text.duplicate-responses-validation-panel.prefer-nonempty-hint' | translate }}</li>
+            <li>{{ 'ui-text.duplicate-responses-validation-panel.newest-response-hint' | translate }}</li>
+            <li>{{ 'ui-text.duplicate-responses-validation-panel.delete-others-hint' | translate }}</li>
           </ul>
         </div>
 
         <div class="actions-container">
           <button mat-button (click)="toggleExpansion()">
-            {{ expandedPanel() ? 'Details ausblenden' : 'Details anzeigen' }}
+            {{ expandedPanel() ? ('error.hide_details' | translate) : ('ws-admin.export-options.item-dataset-diagnostics-show-details' | translate) }}
           </button>
           <button
             mat-button
@@ -91,9 +90,9 @@
             [disabled]="isExporting() || isLoadingPage()"
           >
             @if (isExporting()) {
-              <mat-spinner diameter="20"></mat-spinner> Export...
+              <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.duplicate-responses-validation-panel.exporting' | translate }}
             } @else {
-              CSV exportieren
+              {{ 'ui-text.duplicate-responses-validation-panel.export-csv' | translate }}
             }
           </button>
           <button
@@ -105,9 +104,9 @@
             "
           >
             @if (isResolvingDuplicates()) {
-              <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.files-validation.resolving-duplicates' | translate }}
             } @else {
-              Ausgewählte behalten ({{ getSelectedDuplicateResponsesCount() }})
+              {{ 'ui-text.duplicate-responses-validation-panel.keep-selection' | translate: { value1: (getSelectedDuplicateResponsesCount()) } }}
             }
           </button>
           <button
@@ -119,9 +118,9 @@
             "
           >
             @if (isResolvingDuplicates()) {
-              <mat-spinner diameter="20"></mat-spinner> Wird bearbeitet...
+              <mat-spinner diameter="20"></mat-spinner> {{ 'ui-text.files-validation.resolving-duplicates' | translate }}
             } @else {
-              Alle automatisch auflösen ({{ totalDuplicates() }})
+              {{ 'ui-text.duplicate-responses-validation-panel.resolve-all' | translate: { value1: (totalDuplicates()) } }}
             }
           </button>
         </div>
@@ -132,10 +131,10 @@
               <div class="duplicate-response-item">
                 <div class="duplicate-response-header">
                   <div class="duplicate-response-info">
-                    <strong>Unit:</strong> {{ duplicate.unitName }} |
-                    <strong>Variable:</strong> {{ duplicate.variableId }} |
-                    <strong>Subform:</strong> {{ duplicate.subform }} |
-                    <strong>Testperson:</strong> {{ duplicate.testTakerLogin
+                    <strong>{{ 'ui-text.review-list-dialog.unit' | translate }}</strong> {{ duplicate.unitName }} |
+                    <strong>{{ 'ui-text.duplicate-responses-validation-panel.variable' | translate }}</strong> {{ duplicate.variableId }} |
+                    <strong>{{ 'ui-text.duplicate-responses-validation-panel.subform' | translate }}</strong> {{ duplicate.subform }} |
+                    <strong>{{ 'ui-text.duplicate-responses-validation-panel.person' | translate }}</strong> {{ duplicate.testTakerLogin
                     }}{{
                       duplicate.testTakerCode
                         ? ' (' + duplicate.testTakerCode + ')'
@@ -145,7 +144,7 @@
                         ? ' [' + duplicate.testTakerGroup + ']'
                         : ''
                     }}
-                    | <strong>Booklet:</strong> {{ duplicate.bookletName }}
+                    | <strong>{{ 'ui-text.duplicate-responses-validation-panel.booklet' | translate }}</strong> {{ duplicate.bookletName }}
                   </div>
                 </div>
 
@@ -153,9 +152,9 @@
                   <span>
                     <strong>{{ getDuplicateConflictLabel(duplicate) }}</strong>
                     @if (isDuplicateGroupTouched(duplicate)) {
-                      <span> | Auswahl gesetzt</span>
+                      <span> {{ 'ui-text.duplicate-responses-validation-panel.selection-set' | translate }}</span>
                     } @else {
-                      <span> | Keine Auswahl gesetzt</span>
+                      <span> {{ 'ui-text.duplicate-responses-validation-panel.no-selection' | translate }}</span>
                     }
                   </span>
                   <button
@@ -163,7 +162,7 @@
                     (click)="selectSuggestedDuplicateResponse(duplicate)"
                     [disabled]="isResolvingDuplicates()"
                   >
-                    Vorschlag übernehmen
+                    {{ 'ui-text.duplicate-responses-validation-panel.use-suggestion' | translate }}
                   </button>
                   <button
                     mat-button
@@ -174,7 +173,7 @@
                       !isDuplicateGroupTouched(duplicate)
                     "
                   >
-                    Auflösen
+                    {{ 'ui-text.duplicate-responses-validation-panel.resolve' | translate }}
                   </button>
                 </div>
 
@@ -182,10 +181,10 @@
                   <table class="duplicate-response-table">
                     <thead>
                       <tr>
-                        <th>Auswählen</th>
-                        <th>Antwort-ID</th>
-                        <th>Wert</th>
-                        <th>Status</th>
+                        <th>{{ 'coding.select' | translate }}</th>
+                        <th>{{ 'ui-text.duplicate-responses-validation-panel.response-id' | translate }}</th>
+                        <th>{{ 'coding.value' | translate }}</th>
+                        <th>{{ 'process-overview.filters.status' | translate }}</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -266,7 +265,7 @@
               [pageIndex]="currentPage() - 1"
               [disabled]="isLoadingPage()"
               (page)="onPageChange($event)"
-              aria-label="Seite auswählen"
+              [attr.aria-label]="'journal.select-page' | translate"
             >
             </mat-paginator>
           </div>
@@ -283,7 +282,7 @@
   ) {
     <div class="validation-result validation-success">
       <mat-icon>check_circle</mat-icon>
-      <span>Prüfung bestanden: Keine doppelten Antworten gefunden.</span>
+      <span>{{ 'ui-text.duplicate-responses-validation-panel.no-duplicates' | translate }}</span>
     </div>
   }
 </mat-expansion-panel>

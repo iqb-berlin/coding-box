@@ -4,6 +4,7 @@ import {
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Subject, takeUntil } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { AppService } from '../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -14,6 +15,8 @@ import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 /** Response-analysis polling and the background guard have distinct lifetimes. */
 @Injectable()
 export class ManualCodingAnalysisFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly testPersonCodingService = inject(TestPersonCodingService);
@@ -325,7 +328,7 @@ export class ManualCodingAnalysisFacade {
 
           this.isLoadingResponseAnalysisState.set(false);
           this.viewUpdatedSubject.next();
-          const responseAnalysisError = `Fehler beim Laden der Antwortanalyse: ${error.message || error}`;
+          const responseAnalysisError = this.uiTranslate('ui-text.manual-coding-analysis.load-failed', { value1: error.message || error });
           if (this.shouldKeepResponseAnalysisGuardAfterPollingError(workspaceId)) {
             if (!this.hasShownResponseAnalysisPollingError) {
               this.hasShownResponseAnalysisPollingError = true;

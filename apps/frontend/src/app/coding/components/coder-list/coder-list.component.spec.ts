@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { TranslateModule } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { CoderListComponent } from './coder-list.component';
 import { CoderService } from '../../services/coder.service';
 
@@ -30,7 +31,7 @@ describe('CoderListComponent', () => {
     snackBar = { open: jest.fn() };
 
     await TestBed.configureTestingModule({
-      imports: [CoderListComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, CoderListComponent, TranslateModule.forRoot()],
       providers: [
         { provide: CoderService, useValue: coderService },
         { provide: MatSnackBar, useValue: snackBar }

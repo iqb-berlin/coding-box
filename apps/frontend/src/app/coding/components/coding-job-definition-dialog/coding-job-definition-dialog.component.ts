@@ -21,6 +21,8 @@ import { SelectionChange, SelectionModel } from '@angular/cdk/collections';
 import {
   merge, Subject, Subscription, takeUntil
 } from 'rxjs';
+import { filterJobDefinitionVariables } from './job-variable-filter';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { JobCoderCapacityComponent } from './job-coder-capacity.component';
 import { JobVariableSelectionComponent, JobVariableFilters, JobVariableRow } from './job-variable-selection.component';
 import { JobBundleSelectionComponent, JobBundleRow } from './job-bundle-selection.component';
@@ -95,6 +97,8 @@ export {
     TranslateModule]
 })
 export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<CodingJobDefinitionDialogComponent>>(MatDialogRef);
   data = inject<CodingJobDefinitionDialogData>(MAT_DIALOG_DATA);
 
@@ -869,53 +873,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     this.applyAvailabilityFilter();
   }
 
-  applyAvailabilityFilter(): void {
-    let filteredData = this.variables();
-    if (this.unitNameFilter() || this.variableIdFilter()) {
-      filteredData = filteredData.filter(v => {
-        const matchesUnit = !this.unitNameFilter() ||
-          v.unitName?.toLowerCase().includes(this.unitNameFilter().toLowerCase());
-        const matchesVariable = !this.variableIdFilter() ||
-          v.variableId?.toLowerCase().includes(this.variableIdFilter().toLowerCase());
-        return matchesUnit && matchesVariable;
-      });
-    }
-
-    if (this.availabilityFilter() !== 'all') {
-      filteredData = filteredData.filter(v => {
-        const effectiveTotal = this.variableCasePolicy().getVariableSelectableEffectiveCases(v);
-        const availableRaw = this.variableCasePolicy().getVariableSelectableAvailableCases(v);
-        const totalRaw = effectiveTotal !== undefined ?
-          effectiveTotal :
-          availableRaw;
-
-        const available = Number(availableRaw ?? 0);
-        const total = Number(totalRaw ?? 0);
-
-        if (total <= 0) {
-          // No cases at all => treat as none
-          return this.availabilityFilter() === 'none';
-        }
-
-        const isFull = available >= total;
-        const isNone = available <= 0;
-        const isPartial = !isFull && !isNone;
-
-        switch (this.availabilityFilter()) {
-          case 'full':
-            return isFull;
-          case 'partial':
-            return isPartial;
-          case 'none':
-            return isNone;
-          default:
-            return true;
-        }
-      });
-    }
-
-    this.dataSource.data = filteredData;
-  }
+  applyAvailabilityFilter(): void { this.dataSource.data = filterJobDefinitionVariables(this.variables(), { unitName: this.unitNameFilter(), variableId: this.variableIdFilter(), availability: this.availabilityFilter() }, this.variableCasePolicy()); }
 
   protected applyBundleFilter(): void {
     if (this.bundleNameFilter()) {
@@ -972,7 +930,7 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
   protected getVariableDisabledReason(variable: Variable): string {
     if (this.variableCasePolicy().getVariableSelectableAvailableCases(variable) === 0) {
       const effectiveTotal = this.variableCasePolicy().getVariableSelectableEffectiveCases(variable);
-      return `Alle ${effectiveTotal} Fälle bereits verteilt`;
+      return this.uiTranslate('ui-text.coding-job-definition-dialog.all-cases-distributed', { effectiveTotal: effectiveTotal });
     }
 
     // Check if variable is included in currently selected variable bundle
@@ -981,10 +939,10 @@ export class CodingJobDefinitionDialogComponent implements OnInit, OnDestroy {
     );
 
     if (selectedBundle) {
-      return `Bereits in Variablenbündel "${selectedBundle.name}" enthalten`;
+      return this.uiTranslate('ui-text.coding-job-definition-dialog.already-in-bundle', { name: selectedBundle.name });
     }
 
-    return 'Bereits in anderen Definitionen verwendet';
+    return this.uiTranslate('ui-text.coding-job-definition-dialog.used-by-other-definitions');
   }
 
   protected getVariableCount(bundle: VariableBundle): number {

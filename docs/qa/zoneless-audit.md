@@ -2695,3 +2695,32 @@ kontrollierte HTTP- und Keycloak-Antworten mit echten Routen und Templates;
 Live-Backend-/Keycloak-E2E wurden nicht erneut ausgeführt. Die vollständige
 Browser-Suite wurde für diesen einzelnen Befund nicht erneut gestartet.
 Remote-CI, Merge und Deployment sind separate Nachweise.
+
+## Nachlauf vom 02.11.2026 auf origin/develop a7bf3c6
+
+### ZL-058: Alte Filteroptionen überschreiben einen neueren Tabellenabruf
+
+Die komponentenlokale `TestResultsFlatTableDataFacade` beendet das alte
+Filteroptionenabonnement vor dem neuen Abruf. Seiten, Notizen und
+Häufigkeitsdaten werden ebenfalls bei Ersetzung oder Kontextende abgebrochen.
+Die nativen Fälle in `test-results-flat-table.component.spec.ts` geben
+Antworten bewusst in umgekehrter Reihenfolge frei und prüfen den erhaltenen
+neuen Optionsstand. Die Tabellenkomponente bezieht nur lesbare Zustände von
+der Fassade.
+
+### ZL-059: Einstellungsdialog überlebt seinen ursprünglichen Workspace
+
+Die `TestResultsFlatTableSettingsFacade` bindet Vorbereitung und
+Dialogergebnis an den ersten Workspace-Wechsel und an `DestroyRef`.
+Der Dialog wird beim Kontextende geschlossen. Die Regressionen prüfen
+Antworten nach Workspace-Wechsel, Zerstörung und A → B → A sowie ein
+verspätetes Dialogergebnis ohne Änderung der Einstellungen. Die zusätzliche
+Aktions-Fassade besitzt ihre Zeilendialoge selbst; Tests prüfen Cache-Sharing,
+Kontexterneuerung und eine alte Löschbestätigung.
+
+Der Folgeumbau aller 17 großen Komponenten, die UI-Übersetzungen und die
+aktuellen lokalen Prüfungen sind in
+[large-component-refactoring.md](../architecture/large-component-refactoring.md)
+dokumentiert. Historische Abnahmen oben bleiben ihren jeweiligen Ständen
+zugeordnet. Die Risikomatrix verweist auf die neuen konkreten Tests;
+die generierte Detailmatrix wird aus dem Quellstand neu erzeugt.

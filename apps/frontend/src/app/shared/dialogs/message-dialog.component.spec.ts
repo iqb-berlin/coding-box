@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { CUSTOM_ELEMENTS_SCHEMA } from '@angular/core';
 import { MAT_DIALOG_DATA } from '@angular/material/dialog';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 
 import { MessageDialogComponent } from './message-dialog.component';
 
@@ -16,6 +17,7 @@ describe('MessageDialogComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         {
           provide: MAT_DIALOG_DATA,

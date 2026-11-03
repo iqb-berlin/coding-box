@@ -24,18 +24,11 @@ import { WorkspaceFilesService } from '../../database/services/workspace/workspa
 import { VariableDetailDto } from '../../models/unit-variable-details.dto';
 import { VariableAnalysisOptions } from '../../../../../../api-dto/coding/variable-analysis-options';
 import {
-  getExplicitSchemaValues, resolveSchemaValue, SchemaValueDefinition
+  resolveSchemaValue, SchemaValueDefinition
 } from './variable-analysis-schema.util';
+import { enrichSchemaValueDefinition, getVariableAnalysisMetadata, VariableAnalysisMetadata } from './variable-analysis-metadata.util';
 
 type SchemaCodeInfo = SchemaValueDefinition;
-
-interface VariableAnalysisMetadata {
-  coding?: VariableDetailDto['coding'];
-  type: VariableDetailDto['type'];
-  multiple: boolean;
-  categoryDefinitions: SchemaCodeInfo[];
-  valuesByPosition: SchemaCodeInfo[];
-}
 
 interface SchemaValueCountRow {
   unitName: string;
@@ -147,9 +140,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       await job.updateProgress(0);
 
       const workspaceId = job.data.workspaceId;
-      const unitId = job.data.unitId;
-      const variableId = job.data.variableId;
-      const analysisMode = job.data.analysisMode ?? 'values';
+      const { unitId, variableId, analysisMode = 'values' } = job.data;
       const cacheKey = job.data.cacheKey || this.createResultCacheKey(workspaceId, job.id);
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
@@ -707,27 +698,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         seenLogicalKeys.add(logicalKey);
 
         const unitId = getUnitId(normalizedUnitName);
-        const metadata = this.getVariableMetadata(variable, options);
-        const combo: VariableCombo = {
-          unitId,
-          unitName,
-          variableId: variableAlias,
-          sourceVariableId,
-          variableAlias: variableAlias !== sourceVariableId ?
-            variableAlias :
-            undefined,
-          selectionSource: this.getSelectionSource(variable),
-          sourceType: variable.sourceType,
-          isDerived: variable.isDerived,
-          hasCodingScheme: variable.hasCodingScheme,
-          analysisMode: options.analysisMode ?? 'values',
-          codingVersion: options.analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined,
-          totalCount: 0,
-          emptyCount: 0,
-          emptyPercentage: 0,
-          distinctValueCount: 0,
-          statusCounts: []
-        };
+        const metadata = getVariableAnalysisMetadata(variable, options);
+        const combo = this.createVariableCombo(unitId, unitName, variableAlias, sourceVariableId, variable, options);
 
         entries.push({
           combo,
@@ -754,6 +726,36 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     ));
   }
 
+  private createVariableCombo(
+    unitId: number,
+    unitName: string,
+    variableAlias: string,
+    sourceVariableId: string,
+    variable: VariableDetailDto,
+    options: VariableAnalysisOptions
+  ): VariableCombo {
+    return {
+      unitId,
+      unitName,
+      variableId: variableAlias,
+      sourceVariableId,
+      variableAlias: variableAlias !== sourceVariableId ?
+        variableAlias :
+        undefined,
+      selectionSource: this.getSelectionSource(variable),
+      sourceType: variable.sourceType,
+      isDerived: variable.isDerived,
+      hasCodingScheme: variable.hasCodingScheme,
+      analysisMode: options.analysisMode ?? 'values',
+      codingVersion: options.analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined,
+      totalCount: 0,
+      emptyCount: 0,
+      emptyPercentage: 0,
+      distinctValueCount: 0,
+      statusCounts: []
+    };
+  }
+
   private async getRepresentativeUnitIdsByUnitName(
     query: SelectQueryBuilder<ResponseEntity>
   ): Promise<Map<string, number>> {
@@ -772,94 +774,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         ])
         .filter(([, unitId]) => Number.isFinite(unitId)) as [string, number][]
     );
-  }
-
-  private getVariableMetadata(
-    variable: VariableDetailDto,
-    options: VariableAnalysisOptions = {}
-  ): VariableAnalysisMetadata {
-    const seenValues = new Set<string>();
-    const categoryDefinitions = (options.analysisMode === 'codes' ? variable.codes || [] : []).reduce<SchemaCodeInfo[]>(
-      (items, code) => {
-        const value = String(code.id);
-        if (seenValues.has(value)) {
-          return items;
-        }
-        seenValues.add(value);
-        items.push({
-          value,
-          label: code.label,
-          score: code.score,
-          order: items.length
-        });
-        return items;
-      },
-      []
-    );
-    if (options.analysisMode !== 'codes') {
-      categoryDefinitions.push(...getExplicitSchemaValues(variable));
-      categoryDefinitions.forEach(definition => seenValues.add(definition.value));
-    }
-
-    if (options.analysisMode === 'codes') {
-      return {
-        type: variable.type, multiple: false, categoryDefinitions, valuesByPosition: []
-      };
-    }
-
-    (variable.values || []).forEach(valueInfo => {
-      const value = String(valueInfo.value);
-      if (seenValues.has(value)) {
-        return;
-      }
-      seenValues.add(value);
-      categoryDefinitions.push({
-        value,
-        label: valueInfo.label,
-        order: categoryDefinitions.length
-      });
-    });
-
-    const variableValues = variable.values || [];
-    const valuePositionLabels = variable.valuePositionLabels || [];
-    const positionCount = Math.max(
-      variableValues.length,
-      valuePositionLabels.length
-    );
-    const valuesByPosition: SchemaCodeInfo[] = [];
-    Array.from({ length: positionCount }).forEach((_, index) => {
-      const variableValue = variableValues[index]?.value;
-      const label =
-        valuePositionLabels[index] ||
-        variableValues[index]?.label ||
-        String(variableValue ?? index + 1);
-      valuesByPosition.push({
-        value: variableValue !== undefined ?
-          String(variableValue) :
-          String(index + 1),
-        label,
-        order: index
-      });
-    });
-
-    valuesByPosition.forEach(positionValue => {
-      if (seenValues.has(positionValue.value)) {
-        return;
-      }
-      seenValues.add(positionValue.value);
-      categoryDefinitions.push({
-        ...positionValue,
-        order: categoryDefinitions.length
-      });
-    });
-
-    return {
-      coding: variable.coding,
-      type: variable.type,
-      multiple: variable.multiple === true,
-      categoryDefinitions,
-      valuesByPosition
-    };
   }
 
   private getVariableMetadataByComboKey(
@@ -1365,14 +1279,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         const definition = this.resolveObservedSchemaValue(
           schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
         );
-        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ? schemaValue : {
-          ...schemaValue,
-          label: definition?.label ?? schemaValue.label,
-          score: definition?.score,
-          code: definition?.code,
-          order: definition?.order ?? schemaValue.order,
-          isFromSchema: definition?.isFromSchema
-        };
+        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ?
+          schemaValue : enrichSchemaValueDefinition(schemaValue, definition);
         const valuePreview = entry.multiple ?
           this.formatDirectValuePreview(schemaCode.value) :
           this.formatSchemaValuePreview(schemaCode.value);
@@ -1386,15 +1294,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         }
 
         if (existingRow) {
-          existingRow.label = existingRow.label ?? schemaCode.label;
-          if (valuePreview !== '') {
-            existingRow.score = existingRow.score ?? schemaCode.score;
-            existingRow.code = existingRow.code ?? schemaCode.code;
-            existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
-          }
-          existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
-          existingRow.validOccurrenceCount =
-            existingRow.validOccurrenceCount ?? validOccurrenceCount;
+          this.enrichSchemaFrequencyRow(existingRow, schemaCode, validOccurrenceCount);
           return;
         }
 
@@ -1418,6 +1318,22 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
       frequencies[entry.comboKey] = rows;
     });
+  }
+
+  private enrichSchemaFrequencyRow(
+    existingRow: VariableFrequencyDto,
+    schemaCode: SchemaCodeInfo,
+    validOccurrenceCount: number
+  ): void {
+    existingRow.label = existingRow.label ?? schemaCode.label;
+    if (existingRow.value !== '') {
+      existingRow.score = existingRow.score ?? schemaCode.score;
+      existingRow.code = existingRow.code ?? schemaCode.code;
+      existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
+    }
+    existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
+    existingRow.validOccurrenceCount =
+      existingRow.validOccurrenceCount ?? validOccurrenceCount;
   }
 
   private async getObservedSchemaValueCounts(

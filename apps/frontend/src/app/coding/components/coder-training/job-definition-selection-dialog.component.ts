@@ -24,16 +24,16 @@ import { JobDefinition } from '../../services/coding-job-backend.service';
   ],
   template: `
     <div class="dialog-header">
-      <h2>Jobdefinition auswählen</h2>
+      <h2>{{ 'coding.job-definition-picker-title' | translate }}</h2>
       <button mat-icon-button (click)="close()" [attr.aria-label]="'deferred-view.close' | translate">
         <mat-icon>close</mat-icon>
       </button>
     </div>
     <div class="dialog-config">
       <mat-form-field appearance="outline" class="sample-count-field">
-        <mat-label>Standard-Stichprobenanzahl</mat-label>
+        <mat-label>{{ 'ui-text.job-definition-selection-dialog.default-sample-count' | translate }}</mat-label>
         <input matInput type="number" [formControl]="defaultSampleCountControl" min="1" max="1000">
-        <mat-hint>Dieser Wert wird für alle importierten Variablen verwendet</mat-hint>
+        <mat-hint>{{ 'ui-text.job-definition-selection-dialog.sample-count-hint' | translate }}</mat-hint>
       </mat-form-field>
     </div>
     <div class="dialog-content">

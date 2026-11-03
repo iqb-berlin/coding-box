@@ -8,6 +8,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule } from '@ngx-translate/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ManualCodingCompletionFacade } from './manual-coding-completion.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 import { ManualCodingSummaryFacade } from './manual-coding-summary.facade';
@@ -23,6 +24,8 @@ import { ManualCodingViewState } from './manual-coding-view-state.service';
   host: { style: 'display: contents' }
 })
 export class ManualCodingCompletionViewComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly statistics = inject(ManualCodingStatisticsFacade);
   private readonly summary = inject(ManualCodingSummaryFacade);
   private readonly completion = inject(ManualCodingCompletionFacade);
@@ -70,49 +73,49 @@ export class ManualCodingCompletionViewComponent {
 
   protected getCompletionActionTitle(): string {
     if (this.isCompletionComplete()) {
-      return 'Alle Ergebnisse sind übernommen';
+      return this.uiTranslate('ui-text.coding-management-manual.results-applied');
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
       if (this.hasCompletedJobsBlockedForReview()) {
-        return `${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) bereit zum Anwenden, ${this.completedJobsBlockedForReview().length} mit offenen Hinweisen`;
+        return this.uiTranslate('ui-text.coding-management-manual.ready-jobs-with-issues', { value1: this.completedJobsReadyForApply().length, value2: this.completedJobsBlockedForReview().length });
       }
-      return `${this.completedJobsReadyForApply().length} abgeschlossene Kodierjob(s) bereit zum Anwenden`;
+      return this.uiTranslate('ui-text.coding-management-manual.ready-jobs', { value1: this.completedJobsReadyForApply().length });
     }
 
     if (this.hasCompletedJobsBlockedForReview()) {
-      return `${this.completedJobsBlockedForReview().length} abgeschlossene Kodierjob(s) benötigen Review`;
+      return this.uiTranslate('ui-text.coding-management-manual.jobs-require-review', { value1: this.completedJobsBlockedForReview().length });
     }
 
     if (this.hasExecutionOpenWork()) {
-      return 'Noch nicht alle Kodierfälle sind abgeschlossen';
+      return this.uiTranslate('ui-text.coding-management-manual.execution-incomplete');
     }
 
-    return 'Keine übernahmebereiten Kodierjobs gefunden';
+    return this.uiTranslate('ui-text.coding-management-manual.no-ready-jobs');
   }
 
   protected getCompletionActionDescription(): string {
     if (this.isCompletionComplete()) {
-      return 'Die manuelle Kodierung ist abgeschlossen und die Ergebnisse sind final in den Datenbestand übernommen.';
+      return this.uiTranslate('ui-text.manual-coding-completion-view.completion-hint');
     }
 
     if (this.hasCompletedJobsReadyForApply()) {
       if (!this.canApplyCompletedJobResults()) {
-        return 'Für das Anwenden der Job-Ergebnisse ist eine höhere Berechtigung erforderlich.';
+        return this.uiTranslate('ui-text.manual-coding-completion-view.apply-permission-required');
       }
 
-      return 'Übernehmen Sie die abgeschlossenen Job-Ergebnisse hier direkt in die Antwortdaten.';
+      return this.uiTranslate('ui-text.manual-coding-completion-view.apply-ready-hint');
     }
 
     if (this.hasCompletedJobsBlockedForReview()) {
-      return 'Mindestens ein abgeschlossener Job enthält Markierungen wie "Code-Vergabe unsicher" oder "Neuer Code nötig". Prüfen Sie diese Jobs vor dem Anwenden.';
+      return this.uiTranslate('ui-text.manual-coding-completion-view.review-jobs-hint');
     }
 
     if (this.hasExecutionOpenWork()) {
-      return 'Schließen Sie die offenen Kodierfälle ab. Danach können die Ergebnisse hier übernommen werden.';
+      return this.uiTranslate('ui-text.manual-coding-completion-view.finish-cases-hint');
     }
 
-    return 'Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs, falls Sie gerade einen Job abgeschlossen haben.';
+    return this.uiTranslate('ui-text.manual-coding-completion-view.refresh-jobs-hint');
   }
 
   protected canShowCompletedJobApplyActions(): boolean {
@@ -131,10 +134,10 @@ export class ManualCodingCompletionViewComponent {
     const codedUnits = job.codedUnits ?? 0;
 
     if (totalUnits > 0) {
-      return `${codedUnits}/${totalUnits} Ergebnisse kodiert`;
+      return this.uiTranslate('ui-text.coding-management-manual.coded-results', { codedUnits: codedUnits, totalUnits: totalUnits });
     }
 
-    return 'Kodierergebnisse vorhanden';
+    return this.uiTranslate('ui-text.coding-management-manual.results-available');
   }
 
   protected isApplyingJobResults(jobId: number): boolean {

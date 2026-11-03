@@ -1,5 +1,247 @@
 # Große Angular-Komponenten: Bestand und nächste Schnitte
 
+## Konflikt- und Review-Nachlauf zu PR #1149 (02.11.2026)
+
+Geprüft wurde der PR-Stand `eebf7d1055f5050856c0fc6d685e644ee29ffda0`
+gegen den aktuellen `develop`-Stand
+`52b510ab26666178fb9d46e161a1fa3f000bc1bb` (einschließlich PR #1150).
+Der Review umfasste die 17 ausgelagerten Verantwortungsbereiche,
+Workspace-/Request-Lebensdauern, Replay-Tastatur und Authentisierung,
+HTTP-Fehlergruppierung, Übersetzungen und deren Verbraucher sowie die
+Test- und Qualitätskonfiguration. Ein zusätzlicher Vergleich expandiert
+literale Übersetzungsaufrufe mit dem jeweiligen deutschen Katalog, um
+Verhaltensänderungen von Textauslagerungen unterscheiden zu können.
+
+### Korrekturen aus Integration und Review
+
+- **Mergekonflikte:** Die neue Replay-Routen-/Session-Struktur aus #1150
+  bleibt erhalten; der gemeinsame Token-Prüfpfad verwendet die übersetzte
+  Schließen-Aktion. Die Qualitätskonfiguration führt sowohl Struktur- als
+  auch Katalogprüfungen aus. Beide Risikoreferenzlisten wurden vereinigt,
+  das Detailinventar aus dem integrierten Quellstand neu erzeugt.
+- **Strukturprüfungen:** Der erste integrierte Lint-Lauf meldete 41 Fehler.
+  Veraltete Bestandsgrenzen wurden abgesenkt oder entfernt. Der ausgelagerte
+  Ergebnisfilter und die Importzählung erfüllen durch kleine fachlich
+  zusammenhängende Hilfsfunktionen die Komplexitätsgrenze 20. Vier bereits
+  freigestellte Import-Callbacks behalten exakt ihre bisherigen Messwerte
+  und Grenzen; nur die durch Übersetzungsausdrücke veränderten
+  Quelltextkennungen wurden zugeordnet. Es wurden keine Grenzwerte erhöht.
+- **[P2] Konfigurierte Logo-Beschreibungen wurden übersetzt:** Die neue
+  Übersetzung des gespeicherten Alternativtexts konnte einen Wert wie
+  `error` in eine ganze Kataloggruppe und `home.home-page` in `Startseite`
+  umwandeln. Das betraf Header, Tooltip und das Einstellungsfeld; beim
+  erneuten Speichern konnte der ursprüngliche Text verloren gehen.
+  Zwei native Tests reproduzierten beide Fälle zunächst mit Fehler.
+  Konfigurierte Texte bleiben jetzt unverändert; nur das eingebaute
+  Standardlogo erhält eine lokalisierte UI-Beschreibung. Der DTO-Wert des
+  Standardlogos bleibt Klartext. Die Regression wird zusätzlich im Browser
+  für Alternativtext und Tooltip geprüft.
+
+Reviewurteil nach den Korrekturen: **APPROVE**, hohe Sicherheit für den
+geprüften Umfang. Keine weiteren belastbaren P0-/P1-/P2-Befunde offen.
+Die nachfolgenden Grenzen der technischen Prüfung bleiben bestehen.
+
+### Lokale technische Prüfung
+
+Node 24.22.1, lokale Nx-Installation mit `NX_DAEMON=false NX_NO_CLOUD=true`.
+Frontend- und Backend-Validierungen wurden nicht gleichzeitig ausgeführt.
+Der resultierende Diff gegen `develop` enthält keine Backend-, DTO-,
+Datenbank- oder Paketversionsänderungen.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache --cache=false --coverageReporters=text-summary --coverageReporters=json-summary` | 350 Suiten, 3.800 Tests bestanden; 83,39 % Statements/Zeilen, 81,90 % Branches, 80,88 % Functions. Dieser Gesamtlauf startete vor dem Logo-Nachlauf; dessen abschließenden Stand sichert der folgende gezielte Lauf ab. |
+| `npx nx test frontend --testPathPatterns='sys-admin-settings.component.spec\|app.component.spec\|coding-management.service.spec\|coding-job-result-table.spec\|test-center-import-results.spec' --maxWorkers=2 --skipNxCache --cache=false` | 5 Suiten, 61 Tests bestanden, einschließlich beider zuvor fehlgeschlagenen Logo-Regressionen. |
+| `npx nx run frontend:test-quality-gates` | Alle 78 Prüfungen bestanden, einschließlich Struktur- und Katalogprüfungen. |
+| `npx nx run frontend:zoneless-inventory --args=--update` und `npx nx run frontend:zoneless-approval` | Inventar mit 10.770 Einträgen; 6 Risikobereiche, 7 Mechanismen und Referenzen für 59 korrigierte Befunde geprüft. Keine vollständige Freigabe aller Inventarszenarien. |
+| `npx nx run frontend:zoneless-inventory-test` | Beide Prüfungen bestanden. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,26 kB. |
+| `npx nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Gesamtlauf: 202 von 204 Fällen in 37 Spezifikationen bestanden. Zwei neue Logo-Fälle prüften wegen einer unvollständigen Startfixture das Standardlogo; der abschließende Nachlauf prüft das sichtbare Speichern und erneute Öffnen der Systemeinstellungen. Gezielter Nachlauf mit `--spec=cypress/zoneless/app.cy.ts`: alle 3 Fälle bestanden. Damit sind alle 204 Fälle abgedeckt; kein weiterer Produktcode musste geändert werden. Keine automatischen Retries oder übersprungenen Fälle. |
+| `npx nx run frontend:component-test --browser=electron --skipNxCache` | Alle 37 Fälle in 11 Spezifikationen bestanden, keine Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Fingerprint beim Start des E2E-Gesamtlaufs:
+`eb35bfeea82182a2a5a40879d67da98ab2744a463df3aa076fc40730ae7e06e0`.
+Nach den Komponententests wurde der unveränderte Quellstand erneut für
+Produktion gebaut; abschließender Fingerprint:
+`b8ea8697b2121e0368373c46dd29c1b4f1270913df6f7b60acd2acccc1702acf`.
+Der abschließende Logo-Browser-Smoke-Test bestand mit allen 3 Fällen
+gegen dieses Artefakt; sein Fingerprint blieb nach dem Lauf unverändert.
+Browserprüfungen verwenden kontrollierte API-/Auth-Antworten. Live-Backend,
+Keycloak, Produktionslast, Release, Deployment und fachliche Abnahme sind
+separate Nachweise. Der PR wird mit diesem Nachlauf nicht gemergt; das
+zugehörige Ticket bleibt offen. Remote-CI muss am neuen PR-Head geprüft werden.
+
+## Folgeumbau vom 02.11.2026
+
+Basis ist der live abgerufene Stand `origin/develop` bei
+`a7bf3c6df80aaf69b1604bb06dee45c3ce73b62a`. Alle 17 großen Komponenten
+sind in diesen Schritt einbezogen. Die folgende Tabelle beschreibt die neuen
+Verantwortungsgrenzen; die historischen Prüfungen weiter unten beziehen sich
+weiterhin auf ihre dort genannten Commits.
+
+| Komponente | Neue lokale Verantwortung | Am UI-Besitzer verbleibt |
+| --- | --- | --- |
+| `TestResultsFlatTable` | Daten-Fassade für Seiten, Filteroptionen, Notizen und Häufigkeiten; Einstellungs-Fassade; Aktions-Fassade für Dialoge, Replay und Löschen | Filtereingaben, Debounce, Tabellenbindung und Ereignisse |
+| `CodeSelector` | `ReplayUnitIndex`: Navigation nach Definition, Alias, Bündel, Response und Fall | Codeauswahl, Tastatur/Fokus und Navigationsemission |
+| `CoderTraining` | `training-variable-groups`: Gruppierung und Überschneidungen derselben typisierten Controls | Formularlebensdauer, Auswahl, Speicherung |
+| `CodingJobDefinitionDialog` | `job-variable-filter`: Text-/Verfügbarkeitsfilter mit der bestehenden Fallpolitik | Auswahl, Workload-Vorschau, Formular und Persistenz |
+| `CodingJobDefinitions` | `job-definition-workflow`: unterscheidbare unbekannte/leere Jobanzahlen und Ablaufbeschreibung | Rechte, Definitionsaktionen, Laden und Dialoge |
+| `CodingJobResultDialog` | `coding-job-result-table`: kombinierte Filter und Sortierung von Nullwerten und fehlenden Werten | Datenabruf, Material-Tabelle und Aktionen |
+| `CodingJobs` | `coding-job-summary`: Variablenprojektion und Review-Hinweise einschließlich Cache-Fallback | Joblebenszyklus, Rechte und Aktionen |
+| `CodingManagement` | `coding-response-row`: typisierte Response-zu-Tabellenprojektion | Suche, Paging, Statistik und Coding-Abläufe |
+| `CodingManagementManual` | `manual-completion-readiness`: Vorrang von Übernahme, Bereitschaft, Review und offener Durchführung | vorhandene Ablauf-Fassaden und Ansichtsbindung |
+| `CodingResultsComparison` | `training-comparison-warnings`: Kohorten-/Paarwarnungen ohne UI-Zugriff | Auswahl, Diskussion, Tabellen-/Export-Fassaden |
+| `DoubleCodedReview` | `double-coding-code-options`: gültige Schema-/Allgemeincodes und Fallbacks | Entscheidung, Replay, Persistenz und Dialoge |
+| `Replay` | `replay-keyboard-policy`: Navigation/Codeeingabe unter Fokus-, Auth-, Speicherfehler- und Leserechtsbedingungen | DOM-Fokus, Player, Codeauswahl und Ereignisse |
+| `FilesValidation` | `testlet-exclusion-policy`: unveränderliche normalisierte Ausschlussänderung und Änderungsanzahl | Speicherung, Rollback, Rechte und Rückmeldung |
+| `TestCenterImport` | `test-center-import-results`: Gruppendeltas gegenüber Workspace-Gesamtzahlen und Fehlerdetails | Anmeldung, Importsteuerung, Wiederaufnahme und Polling |
+| `TestFiles` | `FileValidationProgressFacade`: Fortschritt, lokalisierte Schritte, ersetzbares kontextgebundenes Polling | Upload, Dateiliste, Validierungsstart und Ergebnisdialog |
+| `TestResults` | `booklet-result-status`: Bearbeitungszeit, besuchte Aufgaben, Kurzzeit- und Antwortstatus | Personen-/Detailtabelle und bestehende Import-/Export-Fassaden |
+| `VariableAnalysisDialog` (Workspace-Administration) | `variable-analysis-projection`: Fallzahlen, Status und Schema-/Beobachtungszeilen | Filter, Paging, Ergebnisabruf und Export |
+
+Die reine Fach-/Projektionslogik erhält explizite Werte und bei Bedarf eine
+Übersetzungsfunktion. Sie greift nicht auf Elternkomponenten oder globale
+Ansichtszustände zu. Die Fassade der Ergebnistabelle und die
+Validierungsfortschritts-Fassade sind komponentenlokale Provider. Nur lesbare
+Signals und Observable-Ereignisse bilden ihre öffentliche Schnittstelle.
+Die Zeilenzahl ist weiterhin eine Suchhilfe; dieser Schritt behauptet keine
+vollständige Zerlegung sämtlicher UI-Orchestrierung oder eine Grenze von
+1.000 Zeilen für jede Komponente.
+
+### Behobene Lebensdauerfehler
+
+- Ein neuer Filteroptionenabruf beendet seinen Vorgänger. Eine verspätete alte
+  Antwort kann die Optionen eines neueren Abrufs nicht mehr überschreiben.
+- Der erste Workspace-Wechsel beendet die Vorbereitung und das Ergebnisabonnement
+  des Einstellungsdialogs und schließt den Dialog. Auch A → B → A reaktiviert
+  keine alte Antwort oder Speicherentscheidung.
+- Seiten-, Häufigkeits-, Notiz- und Zeilenaktionsanfragen sowie der kleine
+  Personen-Cache sind an den ursprünglichen Workspace gebunden. Dialoge werden
+  beim Kontextende geschlossen.
+- Die Dateivalidierung verwendet `exhaustMap`: Eine langsame Statusanfrage wird
+  nicht durch jeden 300-ms-Takt abgebrochen. Neue Validierung, Workspace-Wechsel
+  und Zerstörung beenden das Polling; niedrigere Fortschrittswerte setzen die
+  Anzeige nicht zurück.
+
+### UI-Texte und Versionsrahmen
+
+Verbliebene statische Beschriftungen, Tooltips, ARIA-Texte und Meldungen liegen
+im deutschen Übersetzungskatalog. Dynamische Texte verwenden Parameter.
+`injectUiTranslator` löst den Dienst erst beim ersten Textabruf auf, gibt
+Übersetzungsereignisse an berechnete Labels weiter und beendet seine Listener
+mit dem Besitzer. Fachliche Protokollwerte (etwa `Vollständig` im
+Filtervertrag), importierte Inhalte und technische IDs bleiben Daten.
+Die Browser- und Komponententests verwenden den wirklichen deutschen Katalog.
+
+Angular bleibt auf der kompatiblen 21er-Linie des geprüften Develop-Stands.
+Dieser Umbau ist kein Angular-22- oder Toolchain-Upgrade. Backend, DTOs und
+Datenbankschema werden nicht geändert.
+
+### Review-Nachlauf: HTTP-Fehlertexte
+
+Der Review hat eine Regression der Übersetzungsumstellung reproduziert:
+Ein lokalisierter Standardhinweis und ein individueller Servertext derselben
+HTTP-Anfrage wurden als ein gemeinsamer Übersetzungsschlüssel behandelt.
+Außerdem konnte ein Servertext wie `error` mit einer Kataloggruppe kollidieren.
+
+`AppHttpError` speichert Meldungsteile deshalb ausdrücklich als
+Übersetzungsschlüssel oder als Servertext. Die Gruppierung kopiert diese Teile
+mit dem Fehlerzustand; Fehleranzeige und Journal übersetzen nur die dafür
+vorgesehenen Teile. Die sichtbaren Meldungen, Diagnoseinformationen und die
+Anzahl betroffener Anfragen bleiben erhalten.
+Drei native Integrationstests reproduzierten die Fehler zuerst und bestehen
+nach der Korrektur: beide Reihenfolgen von Standard-/Servermeldung sowie
+Servertext mit dem Namen einer Kataloggruppe einschließlich Detailanzeige.
+Ein weiterer Journal-Test prüft die unveränderte Wiedergabe dieses Servertexts.
+
+### Schlüsselpflege nach dem Review
+
+Die mit diesem Umbau eingeführten UI-Texte verwenden kurze, kontextbezogene
+englische IDs, zum Beispiel `ui-text.coder-list.load-failed`. 1.541 IDs wurden
+umbenannt; 78 bereits passende IDs bleiben erhalten. Sechs unbenutzte,
+doppelt vorgehaltene Texte für Validierungsschritte wurden entfernt. Die
+verwendeten deutschen Texte und ihre Interpolationsparameter bleiben gleich.
+Der Bereich `coding-freshness-text` ist als verschachteltes JSON-Objekt
+abgelegt; sein Objektname enthält keinen Punkt mehr.
+
+`frontend:test-quality-gates` prüft zusätzlich die Katalogpflege:
+
+- Doppelte JSON-Eigenschaften und mehrdeutige flache/verschachtelte IDs werden
+  abgewiesen. Neue IDs unter `ui-text` verwenden kurze Namen ohne Hashsuffixe.
+- Literale `ui-text`-Referenzen in TypeScript sowie externen und eingebetteten
+  Angular-Templates müssen im Katalog vorhanden sein. Bei direkt angegebenen
+  Parameterobjekten werden fehlende Interpolationsparameter gemeldet.
+- Weitere Anwendungssprachen müssen dieselben IDs und Platzhalter wie der
+  deutsche Katalog enthalten; die Wortreihenfolge darf abweichen. Vor dem
+  Anlegen eines weiteren Sprachkatalogs wird keine zweite Sprache verlangt.
+
+Die Prüfung wertet dynamisch ermittelte IDs und Parameterobjekte nicht aus.
+Diese Fälle bleiben durch gezielte Integrations- und Browsertests abzusichern.
+Die Konventionen stehen in `apps/frontend/AGENTS.md`. ngx-translate,
+`GermanTranslationsTestingModule` und die deutsche Standardsprache bleiben
+erhalten; eine englische Oberfläche ist damit noch nicht eingeführt.
+
+### Technische Prüfung des ursprünglichen Umbaus
+
+Stand `5fc6d8383960800d349958d868a7fcb539c1255c`, lokal im isolierten Worktree
+auf `harden-frontend-workflows` mit Node 24.22.1 geprüft.
+Alle Nx-Aufrufe verwenden die lokale Installation sowie
+`NX_DAEMON=false NX_NO_CLOUD=true`; Validierungen liefen nacheinander.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `nx lint frontend` | Bestanden, keine Warnungen. Die abschließende Klammerung der Logo-Übersetzung zusätzlich mit `--lintFilePatterns=apps/frontend/src/app/app.component.html` geprüft. |
+| `nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | Alle 3.790 Tests in 349 Suiten bestanden. Coverage: 83,73 % Statements/Zeilen, 81,80 % Branches, 81,41 % Functions; alle 60-%-Grenzen bestanden. |
+| `nx run frontend:test-quality-gates` | Alle 56 Prüfungen bestanden. |
+| `nx run frontend:zoneless-inventory-test` | Beide Generierungs-/Konsistenzprüfungen bestanden. |
+| `nx run frontend:zoneless-inventory --args=--update`, danach `nx run frontend:zoneless-approval` | Neu erzeugtes Inventar mit 10.759 Einträgen, 177 Komponenten und Referenzen für 59 korrigierte Befunde geprüft. Risikobezogene Prüfung, keine vollständige Freigabe aller Inventarszenarien. |
+| `nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,60 kB, keine Budgetüberschreitung. |
+| `nx run frontend:component-test --browser=electron --skipNxCache` | Vor dem HTTP-Meldungsnachlauf alle elf Spezifikationen ausgeführt: 36 Fälle bestanden; der Eingabetest der flachen Ergebnistabelle brauchte einen regulären Klick auf das Material-Label vor dem Tippen. Der gezielte Nachlauf mit `--spec=cypress/component/test-results-flat-table.component.cy.ts` bestand anschließend ebenfalls. Insgesamt 37 Fälle nachgeprüft; keine Test-Retries. |
+| `nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Vor dem HTTP-Meldungsnachlauf alle 201 Fälle in 36 Spezifikationen bestanden, 8:32 Minuten reine Spezifikationslaufzeit; keine übersprungenen Fälle oder Test-Retries. Frisch gebautes Produktionsartefakt, einschließlich des übersetzten Logo-Alternativtexts. |
+| Abschließende Browserregression nach HTTP-Meldungsnachlauf | Alle 35 Fälle aus `app.cy.ts`, `file-list.cy.ts`, `oidc-callback.cy.ts` und `zoneless-dialogs.cy.ts` gegen den neuen Produktionsbuild bestanden; keine Test-Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Der Produktionsartefakt-Fingerprint aus
+`node scripts/qa/hash-frontend-artifact.mjs` ist
+`9ce333092672cb491216c0764fc7d249e580e863fd0d9ac62aa6b5ce5f65a73f`.
+Browser-Komponententests und E2E verwenden kontrollierte API-/Auth-Antworten.
+Reale Backend-Persistenz, externe Testcenter, Live-Keycloak und Produktionslast
+sind damit nicht nachgewiesen. Der erste E2E-Start scheiterte vor der
+Testausführung an einem lokalen Nx-Schreibfehler bei fast vollem Datenträger;
+nach Entfernung ausschließlich des neu erzeugten Angular-Caches dieses
+Worktrees startete der Lauf.
+Entfernte CI, Merge, Release, Deployment und fachliche Abnahme stehen separat aus.
+
+### Technische Prüfung der Schlüsselpflege
+
+Nachlauf vom 02.11.2026 mit Node 24.22.1 im isolierten Worktree,
+`NX_DAEMON=false NX_NO_CLOUD=true`; alle Nx-Prüfungen liefen nacheinander.
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `npx nx lint frontend --skipNxCache` | Bestanden, keine Warnungen. Nach der abschließenden MIR/MCI-Benennung zusätzlich mit `--lintFilePatterns=apps/frontend/src/app/coding/components/code-selector/code-selector.component.ts` bestanden. |
+| `npx nx test frontend --configuration=ci --maxWorkers=2 --skipNxCache` | Alle 3.790 Tests in 349 Suiten bestanden. Unveränderte Coverage: 83,73 % Statements/Zeilen, 81,80 % Branches, 81,41 % Functions. |
+| `npx nx test frontend --testPathPatterns=code-selector.component --maxWorkers=2 --skipNxCache` | Alle 51 Fälle nach der abschließenden MIR/MCI-Benennung bestanden. |
+| `npx nx run frontend:test-quality-gates` | Alle 63 Prüfungen bestanden, einschließlich sieben Prüfungen zur Katalogpflege. |
+| `npx nx run frontend:zoneless-inventory --args=--update`, danach `npx nx run frontend:zoneless-approval` und `npx nx run frontend:zoneless-inventory-test` | Inventar mit 10.759 Einträgen aktualisiert; Risikoreferenzen und beide Inventartests bestanden. |
+| `npx nx build frontend --configuration=production --skipNxCache` | Bestanden; initial 1,23 MB, geschätzter Transfer 264,23 kB, keine Budgetüberschreitung. |
+| `npx nx run frontend:e2e --configuration=ci --browser=electron --skipNxCache` | Alle 201 Fälle in 36 Spezifikationen gegen den abschließenden Produktionsbuild bestanden; 8:17 Minuten reine Spezifikationslaufzeit, keine Retries oder übersprungenen Fälle. |
+| `git diff --check` | Bestanden. |
+
+Ein zusätzlicher Vergleich mit dem vorherigen PR-Stand bestätigt, dass an
+1.879 Fundstellen in TypeScript und Templates ausschließlich IDs ersetzt
+wurden. Alle erhaltenen deutschen Katalogwerte stimmen einschließlich
+Leerzeichen und Interpolationsparametern mit dem vorherigen Stand überein.
+Der Fingerprint des neuen Produktionsartefakts ist
+`2cf97beb872d891befc9dc066707851f7e66b2512c2f73836b1a9fd0f1b89319`.
+Die Browserprüfungen nutzen kontrollierte API-/Auth-Antworten. Remote-CI,
+Merge, Release, Deployment und fachliche Abnahme sind separate Nachweise.
+
+---
+
+
 Ausgangspunkt: `develop` nach PR #1089, Commit
 `cdc9f9b6dea0f80c00768157e025f2747aaa017c` (22.10.2026).
 Gezählt werden physische Zeilen einschließlich Kommentaren und Leerzeilen in

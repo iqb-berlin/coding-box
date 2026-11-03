@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Observable, throwError } from 'rxjs';
 import { map, switchMap, take } from 'rxjs/operators';
+import { injectUiTranslator } from '../../utils/ui-translator';
 import { ValidationService } from './validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 
@@ -31,6 +32,8 @@ export interface DeleteTaskResult {
   providedIn: 'root'
 })
 export class ValidationTaskRunnerService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private validationService = inject(ValidationService);
 
   runTask<T = unknown>(
@@ -56,11 +59,11 @@ export class ValidationTaskRunnerService {
         take(1),
         switchMap(finalTask => {
           if (finalTask.status === 'failed') {
-            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+            return throwError(() => new Error(finalTask.error || this.uiTranslate('error.unknown')));
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error('Unbekannter Task-Status'));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(
@@ -85,11 +88,11 @@ export class ValidationTaskRunnerService {
         take(1),
         switchMap(finalTask => {
           if (finalTask.status === 'failed') {
-            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+            return throwError(() => new Error(finalTask.error || this.uiTranslate('error.unknown')));
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error('Unbekannter Task-Status'));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(
@@ -114,11 +117,11 @@ export class ValidationTaskRunnerService {
         take(1),
         switchMap(finalTask => {
           if (finalTask.status === 'failed') {
-            return throwError(() => new Error(finalTask.error || 'Unbekannter Fehler'));
+            return throwError(() => new Error(finalTask.error || this.uiTranslate('error.unknown')));
           }
 
           if (finalTask.status !== 'completed') {
-            return throwError(() => new Error('Unbekannter Task-Status'));
+            return throwError(() => new Error(this.uiTranslate('ui-text.validation-task-runner.unknown-status')));
           }
 
           return this.validationService.getValidationResults(workspaceId, finalTask.id).pipe(

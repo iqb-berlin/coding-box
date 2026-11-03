@@ -6,6 +6,7 @@ import { MatDialog, MatDialogRef, MAT_DIALOG_DATA } from '@angular/material/dial
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
 import { of, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { FilesValidation } from './files-validation-view-model';
 import { FilesValidationDialogComponent } from './files-validation.component';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -77,7 +78,7 @@ describe('FilesValidationComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [FilesValidationDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, FilesValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialog, useValue: { open: jest.fn() } },

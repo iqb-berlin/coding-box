@@ -1,13 +1,9 @@
 <mat-dialog-content class="dialog-content">
   <div class="dialog-header">
-    <h2 class="dialog-title">Test Center Import</h2>
+    <h2 class="dialog-title">{{ 'ui-text.test-center-import.title' | translate }}</h2>
     <p class="dialog-description">
-      @if (data.importType === 'testFiles') { Importieren Sie Testdateien
-      (Aufgaben, Testhefte, Player, Kodierschemata, Testteilnehmer) aus einem
-      Testcenter in diesen Arbeitsbereich. } @else if (data.importType ===
-      'testResults') { Importieren Sie Testergebnisse (Antworten und Logs) aus
-      einem Testcenter in diesen Arbeitsbereich. } @else { Importieren Sie Daten
-      aus einem Testcenter in Ihren Arbeitsbereich. }
+      @if (data.importType === 'testFiles') { {{ 'ui-text.test-center-import.files-description' | translate }} } @else if (data.importType ===
+      'testResults') { {{ 'ui-text.test-center-import.results-description' | translate }} } @else { {{ 'ui-text.test-center-import.description' | translate }} }
     </p>
   </div>
 
@@ -20,17 +16,14 @@
     <div class="user-info">
       <mat-icon>account_circle</mat-icon>
       <h3>
-        Angemeldet in
-        {{
-          this.testCenterInstance()[0]?.label ||
-            loginForm.controls.testCenterIndividual.value
-        }}
+        {{ 'ui-text.test-center-import.logged-in-at' | translate: { value1: (this.testCenterInstance()[0]?.label ||
+            loginForm.controls.testCenterIndividual.value) } }}
       </h3>
     </div>
     <button mat-stroked-button color="primary" (click)="this.logout()"
       [disabled]="isUploadingTestFiles() || isUploadingTestResults() || resultStatusUncertain() || isConfirmingImport()">
       <mat-icon>logout</mat-icon>
-      Abmelden
+      {{ 'home.logout' | translate }}
     </button>
   </div>
   @if (data.importType === 'testFiles' || (data.importType === 'testResults' &&
@@ -52,7 +45,7 @@
   } } @else{
   <div class="error-message">
     <mat-icon>error</mat-icon>
-    <span>Keine Arbeitsbereiche auswählbar</span>
+    <span>{{ 'ui-text.test-center-import.no-workspaces' | translate }}</span>
   </div>
   } }
 </mat-dialog-content>
@@ -66,7 +59,7 @@
     color="primary"
   >
     <mat-icon>cloud_download</mat-icon>
-    Importieren
+    {{ 'ui-text.coding-job-definitions.import' | translate }}
   </button>
   }
   <button

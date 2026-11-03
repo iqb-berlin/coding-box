@@ -34,6 +34,9 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { VariableAnalysisMode, VariableAnalysisCodingVersion, VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import {
+  VariableFrequency, VariableStatusCount, VariableCombo, VariableComboSummary, variableComboKey, variableStatusSummary, variableComboSummary, withVariableComboSummary, createVariableAnalysisRows, summarizeVariableAnalysisResponses
+} from './variable-analysis-projection';
+import {
   VariableAnalysisService,
   JobCancelResult,
   VariableAnalysisResultPageDto,
@@ -47,7 +50,9 @@ import {
   ConfirmDialogComponent,
   ConfirmDialogData
 } from '../../../shared/dialogs/confirm-dialog.component';
-import { getResponseStatusLabel, getResponseStatusMetadata } from '../../../shared/utils/response-status-metadata.util';
+import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
+
+export { VariableFrequency, VariableStatusCount, VariableCombo } from './variable-analysis-projection';
 
 export interface VariableAnalysisData {
   unitId: number;
@@ -119,62 +124,6 @@ export interface VariableAnalysisData {
     totalPages?: number;
   };
   jobs?: VariableAnalysisJobDto[];
-}
-
-export interface VariableFrequency {
-  unitId?: number;
-  unitName?: string;
-  variableid: string;
-  value: string;
-  label?: string;
-  score?: number;
-  code?: number | string;
-  schemaOrder?: number;
-  isFromSchema?: boolean;
-  isSchemaOnly?: boolean;
-  isSchemaSupplemental?: boolean;
-  count: number;
-  validOccurrenceCount?: number;
-  percentage: number;
-  percentageTotal?: number;
-  percentageValid?: number | null;
-  pointBiserial?: number | null;
-  codePbc?: number | null;
-  categoryPbc?: number | null;
-}
-
-export interface VariableStatusCount {
-  status: number | string;
-  count: number;
-  percentage: number;
-}
-
-export interface VariableCombo extends VariableAnalysisOptions {
-  unitId: number;
-  unitName: string;
-  variableId: string;
-  sourceVariableId?: string;
-  variableAlias?: string;
-  selectionSource?: string;
-  sourceType?: string;
-  isDerived?: boolean;
-  hasCodingScheme?: boolean;
-  totalCount?: number;
-  validCount?: number;
-  invalidCount?: number;
-  emptyCount?: number;
-  emptyPercentage?: number;
-  distinctValueCount?: number;
-  statusCounts?: VariableStatusCount[];
-}
-
-interface VariableComboSummary {
-  totalCount: number;
-  validCount: number;
-  invalidCount: number;
-  emptyCount: number;
-  emptyPercentage: number;
-  statusSummary: string;
 }
 
 type VariableAnalysisExportFormat = 'csv' | 'xlsx';
@@ -476,11 +425,8 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         this.serverAnalysisRows.length :
         this.allVariableCombos().length);
     } else if (this.data.responses && this.data.responses.length > 0) {
-      const responsesByVariable: { [key: string]: { [key: string]: number } } =
-        {};
       this.resultAnalysisMode.set('values');
-      const validCountsByVariable = new Map<string, Map<string, number>>();
-      const comboSummaries = new Map<string, VariableCombo>();
+      const { responsesByVariable, validCountsByVariable, comboSummaries } = summarizeVariableAnalysisResponses(this.data.responses);
 
       const variableIds = Array.from(
         new Set(this.data.responses.map(r => r.variableid))
@@ -495,57 +441,6 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         distinctValueCount: 0,
         statusCounts: []
       })));
-
-      this.data.responses.forEach(response => {
-        if (!responsesByVariable[response.variableid]) {
-          responsesByVariable[response.variableid] = {};
-        }
-
-        const value = response.value || '';
-        if (!responsesByVariable[response.variableid][value]) {
-          responsesByVariable[response.variableid][value] = 0;
-        }
-
-        responsesByVariable[response.variableid][value] += 1;
-
-        const comboKey = `0:${response.variableid}`;
-        const summary = comboSummaries.get(comboKey) || {
-          unitId: 0,
-          unitName: 'Unknown',
-          variableId: response.variableid,
-          totalCount: 0,
-          validCount: 0,
-          emptyCount: 0,
-          emptyPercentage: 0,
-          distinctValueCount: 0,
-          statusCounts: []
-        };
-        summary.totalCount = (summary.totalCount || 0) + 1;
-        const trimmedValue = value.trim().toLowerCase();
-        const isEmpty = /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/.test(trimmedValue);
-        const numericStatus = getResponseStatusMetadata(response.status)?.numeric ?? 0;
-        const isValid = !isEmpty && ![0, 1, 2, 4, 7, 9, 10].includes(numericStatus);
-        if (isEmpty) summary.emptyCount = (summary.emptyCount || 0) + 1;
-        if (isValid) {
-          summary.validCount = (summary.validCount || 0) + 1;
-          const validCounts = validCountsByVariable.get(response.variableid) ?? new Map<string, number>();
-          validCounts.set(value, (validCounts.get(value) ?? 0) + 1);
-          validCountsByVariable.set(response.variableid, validCounts);
-        }
-
-        const status = response.status;
-        const statusCounts = summary.statusCounts || [];
-        const existingStatus = statusCounts.find(
-          item => item.status === status
-        );
-        if (existingStatus) {
-          existingStatus.count += 1;
-        } else {
-          statusCounts.push({ status, count: 1, percentage: 0 });
-        }
-        summary.statusCounts = statusCounts;
-        comboSummaries.set(comboKey, summary);
-      });
 
       Object.keys(responsesByVariable).forEach(variableid => {
         const valueMap = responsesByVariable[variableid];
@@ -623,78 +518,17 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.isLoading.set(false);
   }
 
-  getComboKey(combo: { unitId: number; variableId: string }): string {
-    return `${combo.unitId}:${combo.variableId}`;
-  }
+  getComboKey(combo: { unitId: number; variableId: string }): string { return variableComboKey(combo); }
 
-  private withDerivedSummary(combo: VariableCombo): VariableCombo {
-    const frequencies = this.variableFrequencies()[this.getComboKey(combo)] || [];
-    const totalCount =
-      combo.totalCount ??
-      frequencies.reduce((sum, item) => sum + item.count, 0);
-    const emptyCount =
-      combo.emptyCount ??
-      frequencies
-        .filter(item => item.value === '')
-        .reduce((sum, item) => sum + item.count, 0);
-    const validCount = combo.validCount ??
-      Math.max(0, totalCount - emptyCount);
+  private withDerivedSummary(combo: VariableCombo): VariableCombo { return withVariableComboSummary(combo, this.variableFrequencies()); }
 
-    return {
-      ...combo,
-      totalCount,
-      validCount,
-      invalidCount: combo.invalidCount ?? Math.max(0, totalCount - validCount),
-      emptyCount,
-      emptyPercentage:
-        combo.emptyPercentage ??
-        (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0),
-      distinctValueCount: combo.distinctValueCount ?? frequencies.length,
-      statusCounts: combo.statusCounts || []
-    };
-  }
-
-  getComboSummary(combo: VariableCombo): VariableComboSummary {
-    const frequencies = this.variableFrequencies()[this.getComboKey(combo)] || [];
-    const totalCount =
-      combo.totalCount ??
-      frequencies.reduce((sum, item) => sum + item.count, 0);
-    const emptyCount =
-      combo.emptyCount ??
-      frequencies
-        .filter(item => item.value === '')
-        .reduce((sum, item) => sum + item.count, 0);
-    const emptyPercentage =
-      combo.emptyPercentage ??
-      (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0);
-    const validCount = combo.validCount ??
-      Math.max(0, totalCount - emptyCount);
-
-    return {
-      totalCount,
-      validCount,
-      invalidCount: combo.invalidCount ?? Math.max(0, totalCount - validCount),
-      emptyCount,
-      emptyPercentage,
-      statusSummary: this.getStatusSummary(combo.statusCounts || [])
-    };
-  }
+  getComboSummary(combo: VariableCombo): VariableComboSummary { return variableComboSummary(combo, this.variableFrequencies(), this.translate.instant.bind(this.translate)); }
 
   formatPercentage(value: number): string {
     return `${value.toFixed(1)}%`;
   }
 
-  protected getStatusSummary(statusCounts: VariableStatusCount[]): string {
-    if (!statusCounts.length) {
-      return this.translate.instant('variable-analysis.no-status-data');
-    }
-
-    const visibleItems = statusCounts.map(item => {
-      const status = this.getStatusLabel(item.status);
-      return `${status}: ${item.count} (${this.formatPercentage(item.percentage)})`;
-    });
-    return visibleItems.join(', ');
-  }
+  protected getStatusSummary(statusCounts: VariableStatusCount[]): string { return variableStatusSummary(statusCounts, this.translate.instant.bind(this.translate)); }
 
   getStatusLabel(status: number | string): string {
     return getResponseStatusLabel(status);
@@ -893,7 +727,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         if (showError) {
           this.snackBar.open(
             this.translate.instant('variable-analysis.error-loading-jobs'),
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -946,7 +780,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
             `${this.translate.instant('variable-analysis.error-starting-analysis')}${errorMessage ? `: ${errorMessage}` : ''}`,
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 5000 }
           );
           this.isJobsLoading.set(false);
@@ -989,7 +823,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 this.translate.instant(
                   'variable-analysis.error-cancelling-job'
                 ),
-              this.translate.instant('error'),
+              this.translate.instant('error.error_title'),
               { duration: 3000 }
             );
             this.isJobsLoading.set(false);
@@ -999,7 +833,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
           const errorMessage = error?.error?.message || error?.message || '';
           this.snackBar.open(
             `${this.translate.instant('variable-analysis.error-cancelling-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 5000 }
           );
           this.isJobsLoading.set(false);
@@ -1049,7 +883,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                   this.translate.instant(
                     'variable-analysis.error-deleting-job'
                   ),
-                this.translate.instant('error'),
+                this.translate.instant('error.error_title'),
                 { duration: 3000 }
               );
               this.isJobsLoading.set(false);
@@ -1059,7 +893,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             const errorMessage = error?.error?.message || error?.message || '';
             this.snackBar.open(
               `${this.translate.instant('variable-analysis.error-deleting-job')}${errorMessage ? `: ${errorMessage}` : ''}`,
-              this.translate.instant('error'),
+              this.translate.instant('error.error_title'),
               { duration: 5000 }
             );
             this.isJobsLoading.set(false);
@@ -1107,7 +941,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
                 error?.error?.message || error?.message || '';
               this.snackBar.open(
                 `${this.translate.instant('variable-analysis.error-deleting-all-jobs')}${errorMessage ? `: ${errorMessage}` : ''}`,
-                this.translate.instant('error'),
+                this.translate.instant('error.error_title'),
                 { duration: 5000 }
               );
             }
@@ -1172,7 +1006,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
         const errorMessage = error?.error?.message || error?.message || '';
         this.snackBar.open(
           `${this.translate.instant('variable-analysis.export-error')}${errorMessage ? `: ${errorMessage}` : ''}`,
-          this.translate.instant('error'),
+          this.translate.instant('error.error_title'),
           { duration: 5000 }
         );
       }
@@ -1254,7 +1088,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
             this.translate.instant(isOutdated ?
               'variable-analysis.results-outdated' :
               'variable-analysis.error-loading-results'),
-            this.translate.instant('error'),
+            this.translate.instant('error.error_title'),
             { duration: 3000 }
           );
         }
@@ -1330,87 +1164,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
   private createRowsFromCombos(
     combos: VariableCombo[]
-  ): VariableAnalysisTableRowDto[] {
-    return combos.flatMap(combo => {
-      const comboKey = this.getComboKey(combo);
-      const frequencies = this.variableFrequencies()[comboKey] || [];
-      const summary = this.getComboSummary(combo);
-      const distinctValueCount = combo.distinctValueCount ?? frequencies.length;
-      const displayedObservedValueCount = frequencies.filter(
-        item => !item.isSchemaOnly
-      ).length;
-      const hiddenValueCount = Math.max(
-        0,
-        distinctValueCount - displayedObservedValueCount
-      );
-
-      const visibleFrequencies: VariableFrequency[] = frequencies.length > 0 ?
-        frequencies :
-        [{
-          unitId: combo.unitId,
-          unitName: combo.unitName,
-          variableid: combo.variableId,
-          value: '',
-          count: 0,
-          validOccurrenceCount: 0,
-          percentage: 0,
-          percentageTotal: 0,
-          percentageValid: summary.validCount > 0 ? 0 : null,
-          pointBiserial: undefined,
-          codePbc: undefined,
-          categoryPbc: undefined,
-          isSchemaOnly: true
-        }];
-
-      return visibleFrequencies.map(frequency => {
-        const validOccurrenceCount = frequency.validOccurrenceCount ??
-          (frequency.value === '' ? 0 : frequency.count);
-        const percentageTotal = frequency.percentageTotal ??
-          frequency.percentage;
-        const percentageValid = frequency.percentageValid ??
-          (summary.validCount > 0 ?
-            (validOccurrenceCount / summary.validCount) * 100 :
-            null);
-
-        return {
-          unitId: combo.unitId,
-          unitName: combo.unitName,
-          variableId: combo.variableId,
-          sourceVariableId: combo.sourceVariableId,
-          variableAlias: combo.variableAlias,
-          selectionSource: combo.selectionSource,
-          sourceType: combo.sourceType,
-          isDerived: combo.isDerived,
-          hasCodingScheme: combo.hasCodingScheme,
-          value: frequency.value,
-          label: frequency.label,
-          score: frequency.score,
-          code: frequency.code,
-          schemaOrder: frequency.schemaOrder,
-          isFromSchema: frequency.isFromSchema,
-          isSchemaOnly: frequency.isSchemaOnly,
-          isSchemaSupplemental: frequency.isSchemaSupplemental,
-          count: frequency.count,
-          validOccurrenceCount,
-          percentage: percentageTotal,
-          percentageTotal,
-          percentageValid,
-          pointBiserial: frequency.pointBiserial,
-          codePbc: frequency.codePbc,
-          categoryPbc: frequency.categoryPbc,
-          totalCount: summary.totalCount,
-          validCount: summary.validCount,
-          invalidCount: summary.invalidCount,
-          emptyCount: summary.emptyCount,
-          emptyPercentage: summary.emptyPercentage,
-          distinctValueCount,
-          hiddenValueCount,
-          statusCounts: combo.statusCounts,
-          statusSummary: summary.statusSummary
-        };
-      });
-    });
-  }
+  ): VariableAnalysisTableRowDto[] { return createVariableAnalysisRows(combos, this.variableFrequencies(), this.translate.instant.bind(this.translate)); }
 
   private sortRows(
     rows: VariableAnalysisTableRowDto[]

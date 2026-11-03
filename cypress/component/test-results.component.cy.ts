@@ -1,8 +1,9 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
 
 import { TestResultsComponent } from '../../apps/frontend/src/app/ws-admin/components/test-results/test-results.component';
@@ -29,7 +30,7 @@ describe('TestResultsComponent view switching', () => {
     getFlatResponses: TestResultService['getFlatResponses'] = () => of({ data: [], total: 0, page: 1, limit: 100 })
   ) =>
     cy.mount(TestResultsComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         provideHttpClient(),
         provideRouter([]),

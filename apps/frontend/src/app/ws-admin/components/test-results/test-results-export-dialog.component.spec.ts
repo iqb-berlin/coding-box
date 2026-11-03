@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { By } from '@angular/platform-browser';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestResultsExportDialogComponent } from './test-results-export-dialog.component';
 
 describe('TestResultsExportDialogComponent', () => {
@@ -11,7 +12,7 @@ describe('TestResultsExportDialogComponent', () => {
     dialogRef = { close: jest.fn() };
 
     TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         TestResultsExportDialogComponent
       ],
       providers: [

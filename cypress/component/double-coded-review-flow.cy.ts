@@ -1,7 +1,7 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import {
@@ -172,7 +172,7 @@ describe('Double-coded review flow', () => {
     ).as('applyResolutions');
 
     cy.mount(DoubleCodedReviewComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         provideHttpClient(),
         { provide: SERVER_URL, useValue: '/api/' },

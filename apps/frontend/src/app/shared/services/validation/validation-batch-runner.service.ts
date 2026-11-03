@@ -14,6 +14,7 @@ import {
   startWith,
   toArray
 } from 'rxjs/operators';
+import { injectUiTranslator } from '../../utils/ui-translator';
 import { ValidationService } from './validation.service';
 import {
   ValidationTaskStateService,
@@ -33,6 +34,8 @@ export type BatchValidationType =
   providedIn: 'root'
 })
 export class ValidationBatchRunnerService {
+  private readonly uiTranslate = injectUiTranslator();
+
   private validationService = inject(ValidationService);
   private validationTaskStateService = inject(ValidationTaskStateService);
 
@@ -81,7 +84,7 @@ export class ValidationBatchRunnerService {
         map(() => undefined),
         catchError(err => {
           const message =
-            err instanceof Error ? err.message : 'Unbekannter Fehler';
+            err instanceof Error ? err.message : this.uiTranslate('error.unknown');
           this.validationTaskStateService.setBatchState(workspaceId, {
             status: 'failed',
             startedAt:
@@ -158,7 +161,7 @@ export class ValidationBatchRunnerService {
               const result: ValidationResult = {
                 status: 'failed',
                 timestamp: Date.now(),
-                details: { error: finalTask.error || 'Unbekannter Fehler' }
+                details: { error: finalTask.error || this.uiTranslate('error.unknown') }
               };
               this.validationTaskStateService.setValidationResult(
                 workspaceId,

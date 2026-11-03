@@ -1,8 +1,8 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
-import { TranslateModule } from '@ngx-translate/core';
 import { of } from 'rxjs';
 
 import { CodingJobResultDialogComponent } from '../../apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component';
@@ -36,7 +36,7 @@ describe('CodingJobResultDialogComponent review flow', () => {
     });
 
     cy.mount(CodingJobResultDialogComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         provideHttpClient(),
         { provide: SERVER_URL, useValue: '/api/' },

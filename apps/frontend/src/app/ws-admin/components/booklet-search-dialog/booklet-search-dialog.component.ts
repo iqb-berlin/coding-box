@@ -26,6 +26,7 @@ import { Router } from '@angular/router';
 import {
   Subject, debounceTime, distinctUntilChanged, takeUntil
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
@@ -73,6 +74,8 @@ interface BookletSearchResult {
   ]
 })
 export class BookletSearchDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<BookletSearchDialogComponent>>(MatDialogRef);
   data = inject<{ initialSearch?: string }>(MAT_DIALOG_DATA);
   private testResultService = inject(TestResultService);
@@ -156,7 +159,7 @@ export class BookletSearchDialogComponent implements OnInit {
 
   protected viewBookletInfo(booklet: BookletSearchResult): void {
     const loadingSnackBar = this.snackBar.open(
-      'Lade Testheft-Informationen...',
+      this.uiTranslate('test-results-table.loading-booklet'),
       '',
       { duration: 3000 }
     );
@@ -182,8 +185,8 @@ export class BookletSearchDialogComponent implements OnInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden der Testheft-Informationen',
-          'Fehler',
+          this.uiTranslate('test-results-table.booklet-error'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }
@@ -194,9 +197,9 @@ export class BookletSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Booklet löschen',
-        content: `Sind Sie sicher, dass Sie das Booklet "${booklet.bookletName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
+        title: this.uiTranslate('test-results-search.confirm-dialogs.delete-booklet.title'),
+        content: this.uiTranslate('test-results-search.confirm-dialogs.delete-booklet.content', { bookletName: booklet.bookletName }),
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -216,13 +219,13 @@ export class BookletSearchDialogComponent implements OnInit {
               ));
 
               this.snackBar.open(
-                `Booklet "${booklet.bookletName}" wurde erfolgreich gelöscht.`,
+                this.uiTranslate('test-results-search.snackbars.booklet-deleted', { bookletName: booklet.bookletName }),
                 'OK',
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                `Fehler beim Löschen des Booklets: ${response.report.warnings.join(', ')}`,
+                this.uiTranslate('ui-text.booklet-search-dialog.delete-failed', { value1: response.report.warnings.join(', ') }),
                 'OK',
                 { duration: 5000 }
               );
@@ -231,7 +234,7 @@ export class BookletSearchDialogComponent implements OnInit {
           },
           error: () => {
             this.snackBar.open(
-              'Fehler beim Löschen des Booklets. Bitte versuchen Sie es erneut.',
+              this.uiTranslate('test-results-search.snackbars.booklet-delete-general-error'),
               'OK',
               { duration: 5000 }
             );
@@ -250,9 +253,9 @@ export class BookletSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Alle Booklets löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults().length} gefundenen Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
+        title: this.uiTranslate('ui-text.booklet-search-dialog.delete-all-title'),
+        content: this.uiTranslate('ui-text.booklet-search-dialog.delete-all-confirmation', { value1: this.bookletSearchResults().length }),
+        confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -271,7 +274,7 @@ export class BookletSearchDialogComponent implements OnInit {
             // All booklets processed
             this.isLoading.set(false);
             this.snackBar.open(
-              `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
+              this.uiTranslate('test-results-search.snackbars.booklets-deleted', { successCount: successCount, failCount: failCount }),
               'OK',
               { duration: 5000 }
             );

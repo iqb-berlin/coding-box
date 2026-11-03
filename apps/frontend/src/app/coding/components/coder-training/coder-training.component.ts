@@ -23,6 +23,8 @@ import {
 import {
   map, startWith, catchError, merge, of
 } from 'rxjs';
+import { VariableGrouping, groupTrainingVariables, markTrainingVariableOverlaps } from './training-variable-groups';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TrainingParticipantSelectionComponent } from './training-participant-selection.component';
 import { TrainingSampleEditorComponent, TrainingSampleView, TrainingSampleRow } from './training-sample-editor.component';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
@@ -50,13 +52,10 @@ import {
 
 import { CODER_TRAINING_RECOVERY_KEY, CoderTrainingRecoveryDraft, VariableConfig } from './coder-training.models';
 
+export { VariableGrouping } from './training-variable-groups';
+
 export { CODER_TRAINING_RECOVERY_KEY } from './coder-training.models';
 export type { CoderTrainingRecoveryDraft, VariableConfig } from './coder-training.models';
-
-export interface VariableGrouping {
-  manual: { control: TrainingVariableForm; index: number }[];
-  bundles: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] }[];
-}
 
 interface ValidationItem {
   id: 'label' | 'coders' | 'variables' | 'reference-mode' | 'case-counts';
@@ -97,6 +96,8 @@ interface BundleOrderingOverride {
   styleUrls: ['./coder-training.component.scss']
 })
 export class CoderTrainingComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly permissions = inject(CodingPermissionsService);
   readonly trainingClosed = output<void>();
   readonly startTraining = output<{ selectedCoders: Coder[], variableConfigs: VariableConfig[] }>();
@@ -555,7 +556,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     if (!workspaceId) {
-      this.showError('Kein Arbeitsbereich ausgewählt');
+      this.showError(this.uiTranslate('ws-admin.export.errors.no-workspace'));
       this.isLoadingVariables.set(false);
 
       return;
@@ -571,7 +572,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.isLoadingVariables.set(false);
         },
         error: () => {
-          this.showError('Fehler beim Laden der verfügbaren Variablen');
+          this.showError(this.uiTranslate('ui-text.coder-training.variables-load-failed'));
           this.availableVariablesLoaded = true;
           this.availableVariables.set([]);
           this.restoreLoadedTrainingSelections();
@@ -602,15 +603,15 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getDialogTitle(): string {
-    return this.isEditMode ? 'Kodierer-Schulung bearbeiten' : 'Kodierer-Schulung erstellen';
+    return this.isEditMode ? this.uiTranslate('ui-text.coder-training.edit-title') : this.uiTranslate('ui-text.coder-training.create-title');
   }
 
   getPrimaryActionLabel(): string {
     if (this.isLoading()) {
-      return this.isEditMode ? 'Schulung wird aktualisiert...' : 'Kodierungsaufträge werden erstellt...';
+      return this.isEditMode ? this.uiTranslate('ui-text.coder-training.updating') : this.uiTranslate('ui-text.coder-training.creating-jobs');
     }
 
-    return this.isEditMode ? 'Schulung aktualisieren' : 'Kodierungsaufträge erstellen';
+    return this.isEditMode ? this.uiTranslate('coding-management-manual.buttons.refresh-training-aria') : this.uiTranslate('ui-text.coder-training.create-jobs');
   }
 
   getDuplicateTrainingLabelMatches(): CoderTraining[] {
@@ -632,8 +633,8 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     }
 
     const ids = matches.slice(0, 3).map(training => `ID ${training.id}`).join(', ');
-    const suffix = matches.length > 3 ? ` und ${matches.length - 3} weitere` : '';
-    return `Diese Bezeichnung existiert bereits (${ids}${suffix}). Die Schulung kann trotzdem erstellt werden.`;
+    const suffix = matches.length > 3 ? this.uiTranslate('ui-text.coder-training.more-trainings', { value1: matches.length - 3 }) : '';
+    return this.uiTranslate('ui-text.coder-training.duplicate-label-warning', { ids: ids, suffix: suffix });
   }
 
   getTrainingOptionTitle(training: CoderTraining): string {
@@ -641,7 +642,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   }
 
   getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Job', 'Jobs');
+    return getTrainingOptionMeta(this.uiTranslate, training, 'Job', 'Jobs');
   }
 
   isVariableDerived(variable: Pick<Variable, 'unitName' | 'variableId' | 'isDerived'>): boolean {
@@ -681,34 +682,34 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Älteste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
       case 'newest_first':
-        return 'Neueste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.newest-first');
       case 'random':
-        return 'Zufällige Fälle';
+        return this.uiTranslate('ui-text.coder-training.random-cases');
       case 'random_per_testgroup':
-        return 'Zufällig je Testgruppe';
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return 'Zufällige Testgruppen';
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return 'Älteste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+        return this.uiTranslate('ui-text.coder-training.oldest-first-description');
       case 'newest_first':
-        return 'Nimmt pro Variable die neuesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+        return this.uiTranslate('ui-text.coder-training.newest-first-description');
       case 'random':
-        return 'Zieht die gewünschte Anzahl zufällig aus allen verfügbaren Fällen der Variable.';
+        return this.uiTranslate('ui-text.coder-training.random-cases-description');
       case 'random_per_testgroup':
-        return 'Zieht zufällig und verteilt die Auswahl möglichst gleichmäßig über vorhandene Testgruppen.';
+        return this.uiTranslate('ui-text.coder-training.random-per-group-description');
       case 'random_testgroups':
-        return 'Wählt zunächst zufällige Testgruppen und zieht Fälle innerhalb dieser Gruppen.';
+        return this.uiTranslate('ui-text.coder-training.random-groups-description');
       default:
-        return 'Nimmt pro Variable die ältesten verfügbaren Fälle nach Erfassungsreihenfolge.';
+        return this.uiTranslate('ui-text.coder-training.oldest-first-description');
     }
   }
 
@@ -724,7 +725,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const removedCount = this.removeSelectedDerivedVariables();
     if (removedCount > 0) {
-      this.showSuccess(`${removedCount} abgeleitete Variable(n) aus der Auswahl entfernt.`);
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.derived-variables-removed', { removedCount: removedCount }));
     }
   }
 
@@ -905,7 +906,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           this.coders.set(coders);
         },
         error: () => {
-          this.showError('Fehler beim Laden der Kodierer');
+          this.showError(this.uiTranslate('ui-text.coder-list.load-failed'));
         }
       });
   }
@@ -913,18 +914,18 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
   addBundleVariables(bundleId: number, sampleCount?: number | string, caseOrderingMode?: 'continuous' | 'alternating', silent = false): void {
     const bundle = this.availableBundles().find(b => b.id === bundleId);
     if (!bundle) {
-      this.showError('Variablenbündel nicht gefunden');
+      this.showError(this.uiTranslate('ui-text.coder-training.bundle-not-found'));
       return;
     }
 
     if (bundle.variables.length === 0) {
-      this.showError('Das gewählte Variablenbündel enthält keine Variablen');
+      this.showError(this.uiTranslate('ui-text.coder-training.empty-bundle'));
       return;
     }
 
     const sampleCountNum = sampleCount !== undefined ? Number(sampleCount) : undefined;
     if (sampleCountNum !== undefined && (Number.isNaN(sampleCountNum) || sampleCountNum < 1 || sampleCountNum > 1000)) {
-      this.showError('Ungültige Stichprobenanzahl. Muss zwischen 1 und 1000 liegen.');
+      this.showError(this.uiTranslate('ui-text.coder-training.invalid-sample-count'));
       return;
     }
 
@@ -938,7 +939,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     const skippedDerivedCount = bundle.variables.length - variablesToAdd.length;
 
     if (variablesToAdd.length === 0) {
-      this.showError(`Das Variablenbündel "${bundle.name}" enthält nur abgeleitete Variablen. Aktivieren Sie „abgeleitete Variablen einbeziehen“, um es zu verwenden.`);
+      this.showError(this.uiTranslate('ui-text.coder-training.derived-only-bundle', { name: bundle.name }));
       return;
     }
 
@@ -962,11 +963,11 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     if (addedCount > 0 && !silent) {
       const skippedText = skippedDerivedCount > 0 ? ` (${skippedDerivedCount} abgeleitete ausgelassen)` : '';
-      this.showSuccess(`${addedCount} Variable(n) aus Variablenbündel "${bundle.name}" hinzugefügt${skippedText}`);
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.bundle-variables-added', { addedCount: addedCount, name: bundle.name, skippedText: skippedText }));
     }
 
     if (duplicateVariables.length > 0 && !silent) {
-      this.showError(`${duplicateVariables.length} Variable(n) waren bereits hinzugefügt: ${duplicateVariables.join(', ')}`);
+      this.showError(this.uiTranslate('ui-text.coder-training.duplicate-variables', { length: duplicateVariables.length, value2: duplicateVariables.join(', ') }));
     }
 
     this.setAvailableBundleCaseOrderingMode(bundleId, effectiveCaseOrderingMode);
@@ -1089,7 +1090,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     });
 
     this.updateGroupedVariables();
-    this.showSuccess(`Variablenbündel "${bundle.name}" entfernt.`);
+    this.showSuccess(this.uiTranslate('ui-text.coder-training.bundle-removed', { name: bundle.name }));
     this.checkForOverlaps();
   }
 
@@ -1164,17 +1165,17 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   protected getValidationItems(): ValidationItem[] {
     return [
-      { id: 'label', label: 'Schulungs-Bezeichnung ausgefüllt', valid: this.hasTrainingLabel() },
-      { id: 'coders', label: 'Mindestens ein Kodierer ausgewählt', valid: this.hasSelectedCoders() },
-      { id: 'variables', label: 'Mindestens eine Variable ausgewählt', valid: this.hasVariableSelection() },
-      { id: 'reference-mode', label: 'Vergleichsmodus gewählt, wenn Vergleichsschulungen gesetzt sind', valid: this.hasValidReferenceMode() },
-      { id: 'case-counts', label: 'Stichproben pro Variable liegen innerhalb verfügbarer Fälle', valid: this.hasValidCaseCounts() }
+      { id: 'label', label: this.uiTranslate('ui-text.coder-training.label-valid'), valid: this.hasTrainingLabel() },
+      { id: 'coders', label: this.uiTranslate('ui-text.coder-training.coder-selection-valid'), valid: this.hasSelectedCoders() },
+      { id: 'variables', label: this.uiTranslate('ui-text.coder-training.variable-selection-valid'), valid: this.hasVariableSelection() },
+      { id: 'reference-mode', label: this.uiTranslate('ui-text.coder-training.reference-mode-valid'), valid: this.hasValidReferenceMode() },
+      { id: 'case-counts', label: this.uiTranslate('ui-text.coder-training.sample-counts-valid'), valid: this.hasValidCaseCounts() }
     ];
   }
 
   getFirstValidationMessage(): string {
     const firstInvalidItem = this.getValidationItems().find(item => !item.valid);
-    return firstInvalidItem ? firstInvalidItem.label : 'Bitte prüfen Sie die Schulungseinstellungen.';
+    return firstInvalidItem ? firstInvalidItem.label : this.uiTranslate('ui-text.coder-training.invalid-settings');
   }
 
   hasAtLeastOneVariableSelected(): boolean {
@@ -1208,35 +1209,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     return this.variablesFormArray.controls.some(control => control.controls.variableId.value === variableId);
   }
 
-  private checkForOverlaps(): void {
-    const bundleVariables = new Set<string>();
-
-    this.variablesFormArray.controls.forEach(control => {
-      if (control.controls.bundleId.value) {
-        const varId = control.controls.variableId.value;
-        const unitId = control.controls.unitId.value;
-        if (varId && unitId) {
-          bundleVariables.add(`${unitId}::${varId}`);
-        }
-      }
-    });
-
-    this.variablesFormArray.controls.forEach(control => {
-      if (!control.controls.bundleId.value) {
-        const varId = control.controls.variableId.value;
-        const unitId = control.controls.unitId.value;
-        const key = `${unitId}::${varId}`;
-        const isOverlapping = bundleVariables.has(key);
-
-        const currentWarning = control.controls.overlapWarning.value;
-        if (currentWarning !== isOverlapping) {
-          control.get('overlapWarning')?.setValue(isOverlapping);
-        }
-      }
-    });
-
-    this.updateGroupedVariables();
-  }
+  private checkForOverlaps(): void { markTrainingVariableOverlaps(this.variablesFormArray.controls); this.updateGroupedVariables(); }
 
   get selectedBundleArray(): number[] {
     return Array.from(this.selectedBundleIds());
@@ -1244,52 +1217,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
   getBundleName(bundleId: number): string {
     const bundle = this.availableBundles().find(b => b.id === bundleId);
-    return bundle?.name || 'Unbekannt';
+    return bundle?.name || this.uiTranslate('process-overview.status.unknown');
   }
 
   onBundleRemoved(bundleId: number): void {
     this.removeBundle(bundleId);
   }
 
-  getVariablesGroupedByBundle(): VariableGrouping {
-    const manualVariables: { control: TrainingVariableForm; index: number }[] = [];
-    const bundleGroups: { [bundleId: number]: { bundle: VariableBundle; variables: { control: TrainingVariableForm; index: number }[] } } = {};
-
-    this.variablesFormArray.controls.forEach((control, index) => {
-      const bundleId = control.controls.bundleId.value;
-      const bundleName = control.controls.bundleName.value;
-
-      if (bundleId && bundleName) {
-        const bundleModeFromControl = control.controls.bundleCaseOrderingMode.value as 'continuous' | 'alternating' | null;
-        if (!bundleGroups[bundleId]) {
-          const bundle = this.availableBundles().find(b => b.id === bundleId);
-          bundleGroups[bundleId] = {
-            bundle: {
-              id: bundleId,
-              name: bundleName,
-              createdAt: bundle?.createdAt || new Date(),
-              updatedAt: bundle?.updatedAt || new Date(),
-              description: bundle?.description,
-              variables: bundle?.variables || [],
-              caseOrderingMode: bundleModeFromControl || bundle?.caseOrderingMode || this.trainingForm.controls.caseOrderingMode.value || 'continuous'
-            },
-            variables: []
-          };
-        }
-        if (!bundleGroups[bundleId].bundle.caseOrderingMode && bundleModeFromControl) {
-          bundleGroups[bundleId].bundle.caseOrderingMode = bundleModeFromControl;
-        }
-        bundleGroups[bundleId].variables.push({ control: control, index });
-      } else {
-        manualVariables.push({ control: control, index });
-      }
-    });
-
-    return {
-      manual: manualVariables,
-      bundles: Object.values(bundleGroups)
-    };
-  }
+  getVariablesGroupedByBundle(): VariableGrouping { return groupTrainingVariables(this.variablesFormArray.controls, this.availableBundles(), this.trainingForm.controls.caseOrderingMode.value); }
 
   private updateGroupedVariables(): void {
     this._groupedVariables.set(this.getVariablesGroupedByBundle());
@@ -1306,7 +1241,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     if (!this.canEditTraining) return;
     const parsedSampleCount = Number(newSampleCount);
     if (Number.isNaN(parsedSampleCount) || parsedSampleCount < 1 || parsedSampleCount > 1000) {
-      this.showError('Ungültige Stichprobenanzahl. Muss zwischen 1 und 1000 liegen.');
+      this.showError(this.uiTranslate('ui-text.coder-training.invalid-sample-count'));
       return;
     }
 
@@ -1479,7 +1414,7 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
 
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
-      this.showError('Kein Arbeitsbereich ausgewählt');
+      this.showError(this.uiTranslate('ws-admin.export.errors.no-workspace'));
       this.isLoading.set(false);
 
       return;
@@ -1577,9 +1512,9 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
           if (result.message) {
             translatedMessage = this.backendMessageTranslator.translateMessage(result.message);
           } else if (this.isEditMode) {
-            translatedMessage = 'Training erfolgreich aktualisiert';
+            translatedMessage = this.uiTranslate('ui-text.coder-training.update-success');
           } else {
-            translatedMessage = `Erfolgreich ${result.jobsCreated} Kodierungsaufträge für ${selectedCoders.length} Kodierer erstellt`;
+            translatedMessage = this.uiTranslate('ui-text.coder-training.jobs-created', { jobsCreated: result.jobsCreated, length: selectedCoders.length });
           }
 
           this.showSuccess(translatedMessage);
@@ -1589,14 +1524,14 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
         } else {
           const translatedError = result.message ?
             this.backendMessageTranslator.translateMessage(result.message) :
-            'Fehler beim Speichern der Kodierungsaufträge';
+            this.uiTranslate('ui-text.coder-training.save-failed');
           this.showError(translatedError);
         }
       },
       error: () => {
         this.isLoading.set(false);
 
-        this.showError('Fehler beim Speichern der Kodierungsaufträge');
+        this.showError(this.uiTranslate('ui-text.coder-training.save-failed'));
       }
     });
   }
@@ -1683,21 +1618,21 @@ export class CoderTrainingComponent implements OnInit, OnDestroy {
     this.checkForOverlaps();
 
     if (varsAdded > 0 || bundlesAdded > 0) {
-      this.showSuccess(`${varsAdded} Variable(n) und ${bundlesAdded} Bündel hinzugefügt.`);
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.variables-and-bundles-added', { varsAdded: varsAdded, bundlesAdded: bundlesAdded }));
     } else {
-      this.showSuccess('Alle Variablen und Bündel waren bereits vorhanden.');
+      this.showSuccess(this.uiTranslate('ui-text.coder-training.selections-already-present'));
     }
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 3000,
       panelClass: ['success-snackbar']
     });

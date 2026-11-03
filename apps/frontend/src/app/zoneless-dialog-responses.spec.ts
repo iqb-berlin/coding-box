@@ -6,6 +6,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject, of } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../testing/german-translations';
 import { SERVER_URL } from './injection-tokens';
 import { GithubReleasesDialogComponent } from './ws-admin/components/github-releases-dialog/github-releases-dialog.component';
 import { ImpressumDialogComponent } from './shared/dialogs/impressum-dialog.component';
@@ -93,7 +94,7 @@ async function createDialog(c: DialogCase) {
   const providerMock = c.service === WorkspaceBackendService ? ws : {};
   Object.assign(providerMock, { [c.method]: () => response });
   await TestBed.configureTestingModule({
-    imports: [c.component, TranslateModule.forRoot()],
+    imports: [GermanTranslationsTestingModule, c.component, TranslateModule.forRoot()],
     providers: [
       provideZonelessChangeDetection(), provideHttpClient(), provideHttpClientTesting(),
       { provide: SERVER_URL, useValue: '/api/' },
@@ -134,14 +135,14 @@ describe('Dialog server responses with zoneless change detection', () => {
     const expectedTexts: Record<string, string> = {
       impressum: 'Current configured notice',
       'missing-profiles': 'Audit profile',
-      journal: 'journal.no-entries',
+      journal: translateGerman('journal.no-entries'),
       'unit-definition-error': 'Aufgabe UNIT wurde nicht gefunden.',
       'export-options': 'Group Audit'
     };
     if (expectedTexts[c.name]) expect(element.textContent).toContain(expectedTexts[c.name]);
     if (c.name === 'workspace-user-rights') {
       expect(element.querySelector('input:checked')).toBeTruthy();
-      const save = Array.from(element.querySelectorAll('button')).find(button => button.textContent?.includes('save'));
+      const save = Array.from(element.querySelectorAll('button')).find(button => button.textContent?.includes(translateGerman('save')));
       expect(save).toBeDefined();
       expect(save?.disabled).toBe(false);
     }
@@ -154,7 +155,7 @@ describe('Dialog server responses with zoneless change detection', () => {
       await fixture.whenStable();
       const element: HTMLElement = fixture.nativeElement;
       expect(element.querySelector('mat-spinner, mat-progress-spinner')).toBeNull();
-      if (c.name === 'journal') expect(element.textContent).toContain('journal.load-error-title');
+      if (c.name === 'journal') expect(element.textContent).toContain(translateGerman('journal.load-error-title'));
       if (c.name === 'unit-definition-error') expect(element.textContent).toContain('Fehler beim Laden der Aufgabendaten.');
     }
   );

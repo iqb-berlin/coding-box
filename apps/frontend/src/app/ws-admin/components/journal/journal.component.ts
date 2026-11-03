@@ -18,7 +18,7 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 
 import { AppService } from '../../../core/services/app.service';
-import { AppHttpError } from '../../../core/interceptors/app-http-error.class';
+import { AppHttpError, formatAppHttpErrorMessage } from '../../../core/interceptors/app-http-error.class';
 import { JournalFilters, JournalService, JournalEntry } from '../../../core/services/journal.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import {
@@ -213,7 +213,7 @@ export class JournalComponent implements OnInit {
   private setLoadErrorDetails(error: unknown): void {
     if (error instanceof HttpErrorResponse) {
       const httpError = new AppHttpError(error);
-      this.loadErrorMessage.set(httpError.userMessage);
+      this.loadErrorMessage.set(formatAppHttpErrorMessage(httpError, key => this.translateService.instant(key)));
       this.loadErrorRequestId.set(httpError.requestId);
       return;
     }

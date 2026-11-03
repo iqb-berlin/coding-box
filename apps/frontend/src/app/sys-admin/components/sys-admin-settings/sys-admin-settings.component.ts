@@ -81,7 +81,8 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
   private readonly ALLOWED_MIME_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/svg+xml', 'image/webp'];
   constructor() {
     this.isDefaultLogo.set(this.appService.appLogo.data === standardLogo.data);
-    this.logoAltText.set(this.appService.appLogo.alt);
+    this.logoAltText.set(this.appService.appLogo === standardLogo ?
+      this.translateService.instant('home.home-page') : this.appService.appLogo.alt);
     this.backgroundColorValue.set(this.appService.appLogo.bodyBackground || '');
   }
 
@@ -176,7 +177,7 @@ export class SysAdminSettingsComponent implements OnInit, OnDestroy {
         if (response.success) {
           this.appService.appLogo = standardLogo;
           this.isDefaultLogo.set(true);
-          this.logoAltText.set(standardLogo.alt);
+          this.logoAltText.set(this.translateService.instant('home.home-page'));
           this.backgroundColorValue.set(standardLogo.bodyBackground || '');
           this.snackBar.open(this.translateService.instant('sys-admin-settings.logo-restored'), this.translateService.instant('close'), { duration: 3000 });
         } else {

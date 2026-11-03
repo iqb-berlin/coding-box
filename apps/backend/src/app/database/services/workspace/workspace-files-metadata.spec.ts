@@ -1,11 +1,11 @@
 import { NotFoundException } from '@nestjs/common';
-import { WorkspaceFilesService } from './workspace-files.service';
+import { WorkspaceFileQueryService } from './workspace-file-query.service';
 
 describe('Workspace metadata read access', () => {
   const read = (file: unknown) => {
     const repository = { findOne: jest.fn().mockResolvedValue(file) };
-    const service = { fileUploadRepository: repository } as unknown as WorkspaceFilesService;
-    return { repository, result: WorkspaceFilesService.prototype.readMetadataFile.call(service, 12, 5) };
+    const service = { fileUploadRepository: repository } as unknown as WorkspaceFileQueryService;
+    return { repository, result: WorkspaceFileQueryService.prototype.readMetadataFile.call(service, 12, 5) };
   };
 
   it('reads only Resource files in the requested workspace and supports uppercase extensions', async () => {

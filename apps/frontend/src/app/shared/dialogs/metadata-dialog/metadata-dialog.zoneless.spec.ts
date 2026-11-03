@@ -2,6 +2,7 @@ import { MetadataResolver } from '@iqb/metadata-resolver';
 import { TestBed } from '@angular/core/testing';
 import { provideZonelessChangeDetection } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { MetadataDialogComponent } from './metadata-dialog.component';
 
 import { MetadataWebComponentService } from '../../services/metadata-web-component.service';
@@ -10,7 +11,7 @@ describe('Metadata dialog without Zone.js', () => {
   beforeEach(async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
     await TestBed.configureTestingModule({
-      imports: [MetadataDialogComponent],
+      imports: [GermanTranslationsTestingModule, MetadataDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MetadataWebComponentService, useValue: { ensureRegistered: jest.fn() } },

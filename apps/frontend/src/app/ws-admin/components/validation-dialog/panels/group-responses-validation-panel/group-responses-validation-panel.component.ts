@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -11,6 +12,7 @@ import { MatPaginatorModule, PageEvent } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../../../shared/utils/ui-translator';
 import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
@@ -38,7 +40,7 @@ interface GroupResponsesValidationResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-group-responses-validation-panel',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
@@ -127,6 +129,8 @@ interface GroupResponsesValidationResult {
 })
 export class GroupResponsesValidationPanelComponent
 implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private groupResponsesValidationService = inject(GroupResponsesValidationService);
   private snackBar = inject(MatSnackBar);
 
@@ -221,7 +225,7 @@ implements OnInit, OnDestroy {
         },
         error: () => {
           this.isRunning.set(false);
-          this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('coding-management-manual.errors.validation-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -249,7 +253,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isLoadingPage.set(false);
 
-          this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.page-load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -283,15 +287,15 @@ implements OnInit, OnDestroy {
             .filter(groupResponse => !groupResponse.hasResponse);
 
           const csvContent = buildCsv(groupsWithoutResponses, [
-            { header: 'Gruppe', value: row => row.group },
+            { header: this.uiTranslate('test-results-search.search-field.group'), value: row => row.group },
             {
-              header: 'Hat Antwort',
-              value: row => (row.hasResponse ? 'Ja' : 'Nein')
+              header: this.uiTranslate('ui-text.group-responses-validation-panel.has-response'),
+              value: row => (row.hasResponse ? this.uiTranslate('process-overview.values.yes') : this.uiTranslate('process-overview.values.no'))
             }
           ]);
 
           downloadCsvFile('validierung-gruppenantworten.csv', csvContent);
-          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-success'), 'OK', {
             duration: 3000
           });
           this.isExporting.set(false);
@@ -299,7 +303,7 @@ implements OnInit, OnDestroy {
         error: () => {
           this.isExporting.set(false);
 
-          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }

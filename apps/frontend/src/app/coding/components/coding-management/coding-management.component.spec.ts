@@ -13,6 +13,7 @@ import {
   throwError
 } from 'rxjs';
 import { PageEvent } from '@angular/material/paginator';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CodingManagementComponent } from './coding-management.component';
 import { CodingFreshnessPollingFacade } from './services/coding-freshness-polling.facade';
@@ -204,6 +205,7 @@ describe('CodingManagementComponent', () => {
     };
 
     await TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule, TranslateModule.forRoot(), CodingManagementComponent],
       providers: [
         {
           provide: CodingPermissionsService,
@@ -256,11 +258,8 @@ describe('CodingManagementComponent', () => {
           provide: Router,
           useValue: mockRouter
         }
-      ],
-      imports: [
-        TranslateModule.forRoot(),
-        CodingManagementComponent
       ]
+
     }).compileComponents();
 
     const translateService = TestBed.inject(TranslateService);
@@ -301,7 +300,7 @@ describe('CodingManagementComponent', () => {
           'open-manual-review': 'Manuelle Kodierung öffnen'
         }
       }
-    });
+    }, true);
     translateService.use('de');
 
     fixture = TestBed.createComponent(CodingManagementComponent);
@@ -1932,7 +1931,7 @@ describe('CodingManagementComponent', () => {
       expect(mockCodingManagementService.searchResponses).not.toHaveBeenCalled();
       expect(mockDialog.open).not.toHaveBeenCalled();
       expect(mockSnackBar.open).toHaveBeenCalledWith(
-        'coding-management.messages.review-too-many-results',
+        translateGerman('coding-management.messages.review-too-many-results', { count: 5001, max: 5000 }),
         'Schließen',
         { duration: 7000 }
       );

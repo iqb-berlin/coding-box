@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import {
   NEVER, of, Subject, throwError
 } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import {
   ImportComparisonData,
   ImportComparisonDialogComponent
@@ -58,7 +59,7 @@ describe('ImportComparisonDialogComponent', () => {
     }));
 
     await TestBed.configureTestingModule({
-      imports: [ImportComparisonDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, ImportComparisonDialogComponent, TranslateModule.forRoot()],
       providers: [
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: MatDialogRef, useValue: dialogRefMock },

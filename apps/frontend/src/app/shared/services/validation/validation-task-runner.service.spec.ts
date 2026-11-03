@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { ValidationTaskRunnerService } from './validation-task-runner.service';
 import { ValidationService } from './validation.service';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
@@ -18,6 +19,7 @@ describe('ValidationTaskRunnerService', () => {
     } as unknown as jest.Mocked<ValidationService>;
 
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         ValidationTaskRunnerService,
         { provide: ValidationService, useValue: validationServiceMock }

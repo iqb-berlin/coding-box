@@ -16,6 +16,7 @@ import {
   tap,
   throwError
 } from 'rxjs';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { AuthService } from '../../core/services/auth.service';
@@ -33,9 +34,7 @@ import {
   StartCodingFreshnessJobDto
 } from '../../../../../../api-dto/coding/coding-freshness.dto';
 import { AutocodingReadinessDto } from '../../../../../../api-dto/coding/autocoding-readiness.dto';
-import {
-  ResponseMatchingFlag
-} from '../../shared/services/workspace/workspace-settings.service';
+import { ResponseMatchingFlag } from '../../shared/services/workspace/workspace-settings.service';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
 import type { ManualCodingPlanningSnapshot } from './manual-coding-planning-snapshot.model';
 
@@ -207,6 +206,8 @@ export interface CodingStatusOverviewSnapshot {
   providedIn: 'root'
 })
 export class TestPersonCodingService {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
   private authService = inject(AuthService);
@@ -593,7 +594,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<JobStatus | { error: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ error: 'Fehlende Job-ID für Statusabfrage' });
+      return of({ error: this.uiTranslate('ui-text.coding-execution.status-job-id-missing') });
     }
 
     return this.http
@@ -611,7 +612,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: 'Fehlende Job-ID für Abbruch' });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.cancel-job-id-missing') });
     }
 
     return this.http
@@ -620,7 +621,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: `Failed to cancel job ${jobId}` })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.cancel-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -630,7 +631,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: 'Fehlende Job-ID für Löschung' });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.delete-job-id-missing') });
     }
 
     return this.http
@@ -639,7 +640,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: `Failed to delete job ${jobId}` })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.delete-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -959,7 +960,7 @@ export class TestPersonCodingService {
         catchError(() => of({
           totalResponses: 0,
           statusCounts: {},
-          message: 'Failed to start coding freshness job',
+          message: this.uiTranslate('ui-text.test-person-coding.start-freshness-job-failed'),
           unitCount: 0,
           personCount: 0,
           groupNames: []
@@ -973,7 +974,7 @@ export class TestPersonCodingService {
     jobId: string
   ): Observable<{ success: boolean; message: string; jobId?: string }> {
     if (!this.hasJobId(jobId)) {
-      return of({ success: false, message: 'Fehlende Job-ID für Neustart' });
+      return of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.restart-job-id-missing') });
     }
 
     return this.http
@@ -982,7 +983,7 @@ export class TestPersonCodingService {
         { headers: this.authHeader }
       )
       .pipe(
-        catchError(() => of({ success: false, message: `Failed to restart job ${jobId}` })
+        catchError(() => of({ success: false, message: this.uiTranslate('ui-text.test-person-coding.restart-job-failed', { jobId: jobId }) })
         )
       );
   }
@@ -1662,7 +1663,7 @@ export class TestPersonCodingService {
         catchError(() => of({
           success: false,
           updatedCount: 0,
-          message: 'Fehler beim Anwenden der Kodierung'
+          message: this.uiTranslate('ui-text.test-person-coding.apply-coding-failed')
         })
         )
       );
@@ -1697,7 +1698,7 @@ export class TestPersonCodingService {
           aggregatedGroups: 0,
           aggregatedResponses: 0,
           uniqueCodingCases: 0,
-          message: 'Fehler beim Anwenden der Aggregation'
+          message: this.uiTranslate('ui-text.test-person-coding.apply-aggregation-failed')
         })
         )
       );

@@ -12,6 +12,7 @@ import {
 } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideHttpClientTesting } from '@angular/common/http/testing';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { ValidationTaskDto } from '../../../models/validation-task.dto';
 import { ValidationDialogComponent } from './validation-dialog.component';
 import { AppService } from '../../../core/services/app.service';
@@ -154,7 +155,7 @@ describe('ValidationDialogComponent', () => {
     stateServiceMock.hasCompleteValidationResults.mockReturnValue(false);
 
     await TestBed.configureTestingModule({
-      imports: [ValidationDialogComponent],
+      imports: [GermanTranslationsTestingModule, ValidationDialogComponent],
       schemas: [CUSTOM_ELEMENTS_SCHEMA],
       providers: [
         provideHttpClient(),

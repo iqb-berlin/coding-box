@@ -18,6 +18,7 @@ import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { AppService } from '../../../core/services/app.service';
@@ -30,14 +31,14 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Notizen' }}</h1>
       <div class="header-info">
-        <span class="note-count">{{ notes.length }} Notizen</span>
+        <span class="note-count">{{ 'ui-text.note-dialog.count' | translate: { length: (notes.length) } }}</span>
       </div>
     </div>
 
     <div mat-dialog-content>
       <div class="notes-section">
         <div class="section-header">
-          <h2>Notizen</h2>
+          <h2>{{ 'coding.trainings.compare.notes' | translate }}</h2>
         </div>
 
         <div class="notes-container">
@@ -47,7 +48,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
                 <div class="note-header">
                   <span class="note-date">{{ formatDate(note.updatedAt) }}</span>
                   <div class="note-actions">
-                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" matTooltip="Notiz löschen" [attr.aria-label]="'accessibility.actions.delete-note' | translate">
+                    <button mat-icon-button (click)="deleteNote(note.id)" class="note-action-button" [matTooltip]="'accessibility.actions.delete-note' | translate" [attr.aria-label]="'accessibility.actions.delete-note' | translate">
                       <mat-icon>delete</mat-icon>
                     </button>
                   </div>
@@ -60,12 +61,12 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
           </div>
           <div class="add-note-form">
             <mat-form-field appearance="outline" class="note-input">
-              <mat-label>Neue Notiz</mat-label>
-              <textarea matInput [(ngModel)]="newNoteText" placeholder="Notiz eingeben" rows="3"></textarea>
+              <mat-label>{{ 'ui-text.note-dialog.new-note' | translate }}</mat-label>
+              <textarea matInput [(ngModel)]="newNoteText" [placeholder]="'ui-text.note-dialog.placeholder' | translate" rows="3"></textarea>
             </mat-form-field>
             <button mat-raised-button color="primary" (click)="addNote()" class="add-note-button">
               <mat-icon>add</mat-icon>
-              Hinzufügen
+              {{ 'ui-text.note-dialog.add' | translate }}
             </button>
           </div>
         </div>
@@ -73,7 +74,7 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-stroked-button (click)="closeDialog()">Schließen</button>
+      <button mat-stroked-button (click)="closeDialog()">{{ 'deferred-view.close' | translate }}</button>
     </div>
     `,
   styles: [`
@@ -255,6 +256,8 @@ import { CreateUnitNoteDto } from '../../../../../../../api-dto/unit-notes/creat
   standalone: true
 })
 export class NoteDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
 
   dialogRef = inject<MatDialogRef<NoteDialogComponent>>(MatDialogRef);
@@ -297,8 +300,8 @@ export class NoteDialogComponent implements OnInit {
   protected addNote(): void {
     if (!this.newNoteText.trim()) {
       this.snackBar.open(
-        'Bitte geben Sie einen Notiz-Text ein',
-        'Fehler',
+        this.uiTranslate('ui-text.note-dialog.text-required'),
+        this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
         { duration: 3000 }
       );
       return;
@@ -319,15 +322,15 @@ export class NoteDialogComponent implements OnInit {
         this.cdr.markForCheck();
 
         this.snackBar.open(
-          'Notiz erfolgreich hinzugefügt',
+          this.uiTranslate('ui-text.note-dialog.add-success'),
           'Erfolg',
           { duration: 3000 }
         );
       },
       error: () => {
         this.snackBar.open(
-          'Fehler beim Hinzufügen der Notiz',
-          'Fehler',
+          this.uiTranslate('ui-text.note-dialog.add-failed'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }
@@ -349,22 +352,22 @@ export class NoteDialogComponent implements OnInit {
           this.cdr.markForCheck();
 
           this.snackBar.open(
-            'Notiz erfolgreich gelöscht',
+            this.uiTranslate('ui-text.note-dialog.delete-success'),
             'Erfolg',
             { duration: 3000 }
           );
         } else {
           this.snackBar.open(
-            'Fehler beim Löschen der Notiz',
-            'Fehler',
+            this.uiTranslate('ui-text.note-dialog.delete-failed'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }
       },
       error: () => {
         this.snackBar.open(
-          'Fehler beim Löschen der Notiz',
-          'Fehler',
+          this.uiTranslate('ui-text.note-dialog.delete-failed'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }

@@ -582,7 +582,7 @@ describe('VariableAnalysisDialogComponent', () => {
         error: { code: 'VARIABLE_ANALYSIS_OUTDATED' }
       })));
       component.viewJobResults(1);
-      expect(mockSnackBar.open).toHaveBeenLastCalledWith('variable-analysis.results-outdated', 'error', { duration: 3000 });
+      expect(mockSnackBar.open).toHaveBeenLastCalledWith('variable-analysis.results-outdated', 'error.error_title', { duration: 3000 });
       expect(component.analysisRows()).toEqual([]);
       expect(component.canExportAnalysisResults()).toBe(false);
     });

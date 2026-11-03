@@ -16,6 +16,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { finalize } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import {
   CohensKappaCalculationLevel,
   CohensKappaScope,
@@ -61,6 +62,8 @@ export interface CohensKappaStatisticsDialogData {
   ]
 })
 export class CohensKappaStatisticsComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected dialogRef = inject<MatDialogRef<CohensKappaStatisticsComponent>>(MatDialogRef, { optional: true });
   dialogData = inject<CohensKappaStatisticsDialogData | null>(MAT_DIALOG_DATA, { optional: true });
 
@@ -136,7 +139,7 @@ export class CohensKappaStatisticsComponent implements OnInit {
   }
 
   protected getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, 'Kodierer', 'Kodierer');
+    return getTrainingOptionMeta(this.uiTranslate, training, this.uiTranslate('ws-admin.export-options.coders'), this.uiTranslate('ws-admin.export-options.coders'));
   }
 
   onCoderTrainingSelectionChange(): void {

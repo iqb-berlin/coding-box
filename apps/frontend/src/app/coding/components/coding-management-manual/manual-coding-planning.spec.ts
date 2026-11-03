@@ -1,3 +1,4 @@
+import { translateGerman } from '../../../../testing/german-translations';
 import { ManualCodingPlanning, ManualCodingPlanningState } from './manual-coding-planning';
 
 const state = (changes: Partial<ManualCodingPlanningState> = {}): ManualCodingPlanningState => ({
@@ -42,18 +43,18 @@ describe('manual coding planning decisions', () => {
     [{ isCompletionComplete: true }, 'complete'],
     [{ isPlanningReady: true }, 'progress-unavailable']
   ] as Array<[Partial<ManualCodingPlanningState>, string]>)('preserves planning priority for %p', (changes, expected) => {
-    expect(new ManualCodingPlanning(state(changes)).getPlanningStatusState()).toBe(expected);
+    expect(new ManualCodingPlanning(state(changes), translateGerman).getPlanningStatusState()).toBe(expected);
   });
 
   it('keeps coverage conflicts visually stronger than missing manual codes', () => {
-    const planning = new ManualCodingPlanning(state({ hasManualCodeAvailabilityWarnings: true, hasVariableCoverageConflicts: true }));
+    const planning = new ManualCodingPlanning(state({ hasManualCodeAvailabilityWarnings: true, hasVariableCoverageConflicts: true }), translateGerman);
     expect(planning.getPlanningStatusClass()).toBe('status-warning');
     expect(planning.getPlanningNextStepTargetSection()).toBe('manual-planning');
   });
 
   it('routes completion guidance for a user without apply rights to execution', () => {
     const input = Object.freeze(state({ isCompletionComplete: true, canShowManualCompletionTab: false }));
-    const planning = new ManualCodingPlanning(input);
+    const planning = new ManualCodingPlanning(input, translateGerman);
     expect(planning.getPlanningNextStepTargetTab()).toBe('execution');
     expect(input.canShowManualCompletionTab).toBe(false);
   });

@@ -1,7 +1,7 @@
 import { CommonModule } from '@angular/common';
 import { HttpErrorResponse } from '@angular/common/http';
 import {
-  Component, DestroyRef, OnChanges, OnDestroy, OnInit, SimpleChanges, inject, signal, input, output, ChangeDetectionStrategy
+  Component, DestroyRef, OnChanges, OnInit, SimpleChanges, inject, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { FormsModule } from '@angular/forms';
@@ -15,173 +15,23 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { MatDialog } from '@angular/material/dialog';
 import { MatAutocompleteModule } from '@angular/material/autocomplete';
 import { MatSelectModule } from '@angular/material/select';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import {
-  Observable,
-  Subject,
-  Subscription,
-  debounceTime,
-  of,
-  shareReplay,
-  finalize,
-  tap
-} from 'rxjs';
-import { FileService } from '../../../shared/services/file/file.service';
-import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
-import { CodingStatisticsService } from '../../../coding/services/coding-statistics.service';
-import { ResponseService } from '../../../shared/services/response/response.service';
+import { Subject, switchMap, timer } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
-import {
-  FlatResponseFilterOptionsResponse,
-  FlatResponseFrequencyItem,
-  BookletLogsForUnitResponse,
-  FlatResponseFrequencyRequestCombo,
-  FlatResponseFrequenciesResponse,
-  LogAnomalySummary,
-  TestResultService
-} from '../../../shared/services/test-result/test-result.service';
-import {
-  ConfirmDialogComponent,
-  ConfirmDialogData
-} from '../../../shared/dialogs/confirm-dialog.component';
-import { BookletInfoDialogComponent } from '../booklet-info-dialog/booklet-info-dialog.component';
-import { UnitInfoDialogComponent } from '../unit-info-dialog/unit-info-dialog.component';
-import { LogDialogComponent } from '../booklet-log-dialog/log-dialog.component';
-import { UnitLogsDialogComponent } from '../unit-logs-dialog/unit-logs-dialog.component';
-import { NoteDialogComponent } from '../note-dialog/note-dialog.component';
-import { UnitNoteDto } from '../../../../../../../api-dto/unit-notes/unit-note.dto';
-import {
-  TestResultsFlatTableSettingsDialogComponent,
-  TestResultsFlatTableSettingsDialogResult
-} from './test-results-flat-table-settings-dialog.component';
+import { TestResultService, LogAnomalySummary } from '../../../shared/services/test-result/test-result.service';
 import { hasInvalidPostgresRegexFilter } from '../../../shared/utils/regex-filter.util';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
+import {
+  FlatResponseRow, FlatResponseFilters, FlatTableMediaFilter, RegexFlatResponseFilterField,
+  REGEX_FLAT_RESPONSE_FILTER_FIELDS, SPECIFIC_LOG_MEDIA_FILTERS
+} from './test-results-flat-table.models';
+import { TestResultsFlatTableDataFacade } from './test-results-flat-table-data.facade';
+import { TestResultsFlatTableSettingsFacade } from './test-results-flat-table-settings.facade';
+import { TestResultsFlatTableActionsFacade } from './test-results-flat-table-actions.facade';
 
-interface FlatResponseRow {
-  bookletId: number;
-  responseId: number;
-  unitId: number;
-  personId: number;
-  code: string;
-  group: string;
-  login: string;
-  booklet: string;
-  unit: string;
-  response: string;
-  responseStatus: string;
-  responseValue: string;
-  tags: string[];
-  logAnomalies?: LogAnomalySummary[];
-}
-
-export interface FlatResponseFilters {
-  code: string;
-  group: string;
-  login: string;
-  booklet: string;
-  unit: string;
-  response: string;
-  responseStatus: string;
-  responseValue: string;
-  tags: string;
-  geogebra: boolean;
-  audioLow: boolean;
-  nonEmptyResponse: boolean;
-  sessionFilter: boolean;
-  shortProcessing: boolean;
-  longLoading: boolean;
-  logAnomalies: string;
-}
-
-interface BookletLog {
-  id: number;
-  bookletid: number;
-  ts: string;
-  parameter: string;
-  key: string;
-}
-
-interface BookletSession {
-  id: number;
-  browser: string;
-  os: string;
-  screen: string;
-  ts: string;
-}
-
-interface UnitLog {
-  id: number;
-  unitid: number;
-  ts: string;
-  key: string;
-  parameter: string;
-}
-
-interface UnitFromPersonTestResults {
-  id: number;
-  bookletid: number;
-  name: string;
-  alias: string | null;
-  logs?: UnitLog[];
-}
-
-interface BookletFromPersonTestResults {
-  id: number;
-  name: string;
-  logs: BookletLog[];
-  sessions?: BookletSession[];
-  units: UnitFromPersonTestResults[];
-}
-
-type FlatTableMediaFilter =
-  | 'geogebra'
-  | 'audioLow'
-  | 'nonEmptyResponse'
-  | 'sessionFilter'
-  | 'shortProcessing'
-  | 'longLoading'
-  | 'processingDuration'
-  | 'unitProgressComplete'
-  | 'logAny'
-  | 'logCritical'
-  | 'logTechnical'
-  | 'logIncomplete'
-  | 'logConnectionLost'
-  | 'logTimer'
-  | 'logFocus'
-  | 'logDebug'
-  | 'logReloads';
-
-type RegexFlatResponseFilterField =
-  | 'code'
-  | 'group'
-  | 'login'
-  | 'booklet'
-  | 'unit'
-  | 'response';
-
-const REGEX_FLAT_RESPONSE_FILTER_FIELDS: RegexFlatResponseFilterField[] = [
-  'code',
-  'group',
-  'login',
-  'booklet',
-  'unit',
-  'response'
-];
-
-const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
-  'logCritical',
-  'logTechnical',
-  'logIncomplete',
-  'logConnectionLost',
-  'logTimer',
-  'logFocus',
-  'logDebug',
-  'logReloads'
-];
+export { FlatResponseFilters } from './test-results-flat-table.models';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -203,64 +53,40 @@ const SPECIFIC_LOG_MEDIA_FILTERS: FlatTableMediaFilter[] = [
     MatSelectModule,
     TranslateModule
   ],
+  providers: [TestResultsFlatTableDataFacade, TestResultsFlatTableSettingsFacade, TestResultsFlatTableActionsFacade],
   templateUrl: './test-results-flat-table.component.html',
   styleUrls: ['./test-results-flat-table.component.scss']
 })
-export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestroy {
+export class TestResultsFlatTableComponent implements OnInit, OnChanges {
   private readonly destroyRef = inject(DestroyRef);
 
-  private fileService = inject(FileService);
-  private unitNoteService = inject(UnitNoteService);
-  private statisticsService = inject(CodingStatisticsService);
-  private responseService = inject(ResponseService);
   private appService = inject(AppService);
+
   private testResultService = inject(TestResultService);
+
   private snackBar = inject(MatSnackBar);
-  private dialog = inject(MatDialog);
+
   private translateService = inject(TranslateService);
+  private readonly data = inject(TestResultsFlatTableDataFacade);
+  private readonly settings = inject(TestResultsFlatTableSettingsFacade);
+  private readonly actions = inject(TestResultsFlatTableActionsFacade);
 
-  private readonly AUDIO_LOW_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-audio-low-threshold';
-
-  private readonly SHORT_PROCESSING_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-short-processing-threshold-ms';
-
-  private readonly LONG_LOADING_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-long-loading-threshold-ms';
-
-  private readonly FOCUS_LOST_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-focus-lost-threshold-ms';
-
-  private readonly SESSION_SPAN_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-session-span-threshold-ms';
-
-  private readonly REPEATED_START_THRESHOLD_STORAGE_KEY =
-    'coding-box-test-results-repeated-start-threshold';
-
-  private readonly PROCESSING_DURATION_MIN_STORAGE_KEY =
-    'coding-box-test-results-processing-duration-min';
-
-  private readonly PROCESSING_DURATION_MAX_STORAGE_KEY =
-    'coding-box-test-results-processing-duration-max';
-
-  private readonly SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY =
-    'coding-box-test-results-session-browsers-allowlist';
-
-  private readonly SESSION_OS_ALLOWLIST_STORAGE_KEY =
-    'coding-box-test-results-session-os-allowlist';
-
-  private readonly SESSION_SCREENS_ALLOWLIST_STORAGE_KEY =
-    'coding-box-test-results-session-screens-allowlist';
-
-  private readonly unitIdsWithNotes = signal(new Set<number>());
-
-  private personTestResultsCache = new Map<
-    number,
-    Observable<BookletFromPersonTestResults[]>
-  >();
-
-  private personTestResultsCacheOrder: number[] = [];
-  private readonly PERSON_TEST_RESULTS_CACHE_MAX = 5;
+  readonly flatData = this.data.rows;
+  readonly flatFilterOptions = this.data.options;
+  readonly isLoadingFrequencies = this.data.loadingFrequencies;
+  protected readonly flatTotalRecords = this.data.total;
+  protected readonly isLoadingFlat = this.data.loading;
+  readonly audioLowThreshold = computed(() => this.settings.value().audioLowThreshold);
+  readonly shortProcessingThresholdMs = computed(() => this.settings.value().shortProcessingThresholdMs);
+  readonly longLoadingThresholdMs = computed(() => this.settings.value().longLoadingThresholdMs);
+  readonly focusLostThresholdMs = computed(() => this.settings.value().focusLostThresholdMs);
+  readonly sessionSpanThresholdMs = computed(() => this.settings.value().sessionSpanThresholdMs);
+  readonly repeatedStartThreshold = computed(() => this.settings.value().repeatedStartThreshold);
+  readonly processingDurationMin = computed(() => this.settings.value().processingDurationMin);
+  readonly processingDurationMax = computed(() => this.settings.value().processingDurationMax);
+  readonly sessionBrowsersAllowlist = computed(() => this.settings.value().sessionBrowsersAllowlist);
+  readonly sessionOsAllowlist = computed(() => this.settings.value().sessionOsAllowlist);
+  readonly sessionScreensAllowlist = computed(() => this.settings.value().sessionScreensAllowlist);
 
   private readonly baseFlatDisplayedColumns: string[] = [
     'code',
@@ -277,22 +103,16 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   ];
 
   readonly flatDisplayedColumns = signal<string[]>([...this.baseFlatDisplayedColumns]);
+
   readonly showLogAnomaliesInTable = signal(false);
+
   private logAnomalyTableSettingLoaded = false;
+
   private tableInitialized = false;
-  private flatResponsesRequestSequence = 0;
 
-  readonly isLoadingFrequencies = signal<boolean>(false);
-  private readonly frequenciesByComboKey = signal(new Map<
-    string,
-    { total: number; values: FlatResponseFrequencyItem[] }
-  >());
-
-  readonly flatData = signal<FlatResponseRow[]>([]);
-  protected readonly flatTotalRecords = signal<number>(0);
   protected readonly flatPageSize = signal<number>(100);
+
   protected readonly flatPageIndex = signal<number>(0);
-  protected readonly isLoadingFlat = signal<boolean>(false);
 
   readonly flatFilters = signal<FlatResponseFilters>(this.createDefaultFlatFilters());
 
@@ -300,202 +120,56 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
 
   readonly processingDurationEnabled = signal<boolean>(false);
 
-  readonly processingDurationsFilters = signal<string[]>([]);
   readonly unitProgressFilters = signal<string[]>([]);
 
-  readonly audioLowThreshold = signal<number>(0.9);
-
-  readonly shortProcessingThresholdMs = signal<number>(60000);
-
-  readonly longLoadingThresholdMs = signal<number>(5000);
-
-  readonly focusLostThresholdMs = signal<number>(300000);
-
-  readonly sessionSpanThresholdMs = signal<number>(24 * 60 * 60 * 1000);
-
-  readonly repeatedStartThreshold = signal<number>(2);
-
-  readonly processingDurationMin = signal<string>('00:00');
-  readonly processingDurationMax = signal<string>('99:59');
-
-  readonly sessionBrowsersAllowlist = signal<string>('');
-  readonly sessionOsAllowlist = signal<string>('');
-  readonly sessionScreensAllowlist = signal<string>('');
-
-  readonly flatFilterOptions = signal<FlatResponseFilterOptionsResponse>({
-    codes: [],
-    groups: [],
-    logins: [],
-    booklets: [],
-    units: [],
-    responses: [],
-    responseStatuses: [],
-    tags: [],
-    processingDurations: [],
-    unitProgresses: [],
-    sessionBrowsers: [],
-    sessionOs: [],
-    sessionScreens: [],
-    sessionIds: []
-  });
-
-  private flatSearchSubject = new Subject<void>();
-  private flatSearchSubscription: Subscription;
-  private flatResponsesSubscription?: Subscription;
-  private notesPresenceSubscription?: Subscription;
-  private workspaceCacheInvalidatedSubscription: Subscription;
-  private readonly FLAT_FILTER_DEBOUNCE_TIME = 400;
   private readonly backendInvalidRegexFields =
     new Set<RegexFlatResponseFilterField>();
-
-  private refreshFilterOptionsTimeoutIds: number[] = [];
 
   private suppressNextFlatFilterChange = false;
 
   readonly initialFilters = input<Partial<FlatResponseFilters> | null>(null);
+
   readonly showWorkspaceLogAnomalies = input(false);
+
   readonly forceShowLogAnomalies = input(false);
+
   readonly enableRegexSearch = input(false);
+
   readonly responseDeleted = output<void>();
+  private readonly flatSearchSubject = new Subject<void>();
 
   constructor() {
-    try {
-      const raw = localStorage.getItem(this.AUDIO_LOW_THRESHOLD_STORAGE_KEY);
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.audioLowThreshold.set(parsed);
+    this.flatSearchSubject.pipe(
+      switchMap(() => timer(400).pipe(takeUntilWorkspaceChanged(this.appService))),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => {
+      if (!this.hasInvalidRegexFilters()) this.fetchFlatResponses(0, this.flatPageSize());
+    });
+    this.data.errors$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(error => this.showFlatResponseLoadError(error));
+    this.settings.changed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.onFlatFilterChanged());
+    this.actions.deleted$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.data.invalidateCaches();
+      this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
+      this.responseDeleted.emit();
+    });
+    this.testResultService.workspaceCacheInvalidated$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaceId => {
+      if (!workspaceId || workspaceId !== this.appService.selectedWorkspaceId) return;
+      this.data.invalidateCaches();
+      this.data.loadOptions(true);
+      this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
+    });
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.backendInvalidRegexFields.clear();
+      this.flatFilters.set(this.createDefaultFlatFilters());
+      this.processingDurationEnabled.set(false);
+      this.unitProgressFilters.set([]);
+      this.syncMediaFiltersFromFlatFilters();
+      this.flatPageIndex.set(0);
+      if (this.tableInitialized) {
+        this.fetchFlatResponseFilterOptions();
+        this.fetchFlatResponses(0, this.flatPageSize());
       }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(
-        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY
-      );
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.shortProcessingThresholdMs.set(parsed);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(this.LONG_LOADING_THRESHOLD_STORAGE_KEY);
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.longLoadingThresholdMs.set(parsed);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(this.FOCUS_LOST_THRESHOLD_STORAGE_KEY);
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.focusLostThresholdMs.set(parsed);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(this.SESSION_SPAN_THRESHOLD_STORAGE_KEY);
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.sessionSpanThresholdMs.set(parsed);
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(this.REPEATED_START_THRESHOLD_STORAGE_KEY);
-      const parsed = raw != null ? Number(raw) : NaN;
-      if (Number.isFinite(parsed)) {
-        this.repeatedStartThreshold.set(Math.max(2, Math.round(parsed)));
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const rawMin = localStorage.getItem(
-        this.PROCESSING_DURATION_MIN_STORAGE_KEY
-      );
-      if (rawMin != null && String(rawMin).trim()) {
-        this.processingDurationMin.set(String(rawMin));
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const rawMax = localStorage.getItem(
-        this.PROCESSING_DURATION_MAX_STORAGE_KEY
-      );
-      if (rawMax != null && String(rawMax).trim()) {
-        this.processingDurationMax.set(String(rawMax));
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(
-        this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY
-      );
-      if (raw != null) {
-        this.sessionBrowsersAllowlist.set(String(raw));
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(this.SESSION_OS_ALLOWLIST_STORAGE_KEY);
-      if (raw != null) {
-        this.sessionOsAllowlist.set(String(raw));
-      }
-    } catch {
-      // ignore
-    }
-
-    try {
-      const raw = localStorage.getItem(
-        this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY
-      );
-      if (raw != null) {
-        this.sessionScreensAllowlist.set(String(raw));
-      }
-    } catch {
-      // ignore
-    }
-
-    this.flatSearchSubscription = this.flatSearchSubject
-      .pipe(debounceTime(this.FLAT_FILTER_DEBOUNCE_TIME))
-      .subscribe(() => {
-        if (!this.hasInvalidRegexFilters()) {
-          this.fetchFlatResponses(0, this.flatPageSize());
-        }
-      });
-
-    this.workspaceCacheInvalidatedSubscription =
-      this.testResultService.workspaceCacheInvalidated$.subscribe(
-        workspaceId => {
-          if (!this.appService.selectedWorkspaceId) {
-            return;
-          }
-          if (workspaceId !== this.appService.selectedWorkspaceId) {
-            return;
-          }
-          this.refreshFlatResponseFilterOptionsWithRetry();
-          this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
-        }
-      );
-
+    });
     this.syncMediaFiltersFromFlatFilters();
   }
 
@@ -528,7 +202,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
         ...(this.initialFilters() || {})
       });
       this.processingDurationEnabled.set(false);
-      this.processingDurationsFilters.set([]);
       this.unitProgressFilters.set([]);
       this.flatPageIndex.set(0);
       this.syncMediaFiltersFromFlatFilters();
@@ -695,124 +368,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .join(',');
   }
 
-  private loadFrequenciesForCurrentPage(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    const combosToFetchMap = new Map<
-      string,
-      FlatResponseFrequencyRequestCombo
-    >();
-    (this.flatData() || []).forEach(r => {
-      const variableId = String(r.response || '').trim();
-      const unitKey = String(r.unit || '').trim();
-      const value = String(r.responseValue ?? '');
-      if (!unitKey || !variableId) {
-        return;
-      }
-
-      const key = `${encodeURIComponent(unitKey)}:${encodeURIComponent(
-        variableId
-      )}`;
-      const cached = this.frequenciesByComboKey().get(key);
-      const alreadyHave =
-        !!cached &&
-        Array.isArray(cached.values) &&
-        cached.values.some(v => String(v.value ?? '') === value);
-      if (alreadyHave) {
-        return;
-      }
-
-      const existingReq = combosToFetchMap.get(key);
-      if (existingReq) {
-        if (!existingReq.values.includes(value)) {
-          existingReq.values.push(value);
-        }
-      } else {
-        combosToFetchMap.set(key, { unitKey, variableId, values: [value] });
-      }
-    });
-
-    const combosToFetch = Array.from(combosToFetchMap.values());
-    if (combosToFetch.length === 0) {
-      return;
-    }
-
-    this.isLoadingFrequencies.set(true);
-    const batchSize = 25;
-    const batches: FlatResponseFrequencyRequestCombo[][] = [];
-    for (let i = 0; i < combosToFetch.length; i += batchSize) {
-      batches.push(combosToFetch.slice(i, i + batchSize));
-    }
-
-    let completedBatches = 0;
-    batches.forEach(batch => {
-      this.testResultService
-        .getFlatResponseFrequencies(this.appService.selectedWorkspaceId, batch).pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: (resp: FlatResponseFrequenciesResponse) => {
-            this.frequenciesByComboKey.update(current => {
-              const next = new Map(current);
-              Object.entries(resp || {}).forEach(([key, incoming]) => {
-                const existing = next.get(key);
-                if (!existing) {
-                  next.set(key, incoming);
-                  return;
-                }
-
-                const mergedValues = new Map<string, FlatResponseFrequencyItem>();
-                (existing.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-                );
-                (incoming.values || []).forEach(v => mergedValues.set(String(v.value ?? ''), v)
-                );
-
-                next.set(key, {
-                  total: incoming.total ?? existing.total,
-                  values: Array.from(mergedValues.values())
-                });
-              });
-              return next;
-            });
-            completedBatches += 1;
-            if (completedBatches === batches.length) {
-              this.isLoadingFrequencies.set(false);
-            }
-          },
-          error: () => {
-            completedBatches += 1;
-            if (completedBatches === batches.length) {
-              this.isLoadingFrequencies.set(false);
-            }
-          }
-        });
-    });
-  }
-
-  getFrequencySummary(row: FlatResponseRow): string {
-    const comboKey = `${encodeURIComponent(
-      String(row.unit || '').trim()
-    )}:${encodeURIComponent(String(row.response || '').trim())}`;
-    const entry = this.frequenciesByComboKey().get(comboKey);
-    if (!entry || !Array.isArray(entry.values)) {
-      return '';
-    }
-
-    const fmtP = (p: number) => {
-      const clamped = Math.max(0, Math.min(1, Number(p || 0)));
-      const s = clamped.toFixed(3);
-      return s.startsWith('0') ? s.slice(1) : s;
-    };
-
-    const value = String(row.responseValue ?? '');
-    const match = entry.values.find(v => String(v.value ?? '') === value);
-    if (!match) {
-      return '';
-    }
-
-    return `p=${fmtP(match.p)} (n=${match.count || 0})`;
-  }
-
   protected onFlatFilterOptionSelected(): void {
     this.suppressNextFlatFilterChange = true;
     this.flatPageIndex.set(0);
@@ -913,304 +468,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  openBookletInfoFromFlatRow(row: FlatResponseRow): void {
-    if (!this.appService.selectedWorkspaceId || !row.booklet) {
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
-    const normalizedBookletId = String(row.booklet).toUpperCase();
-
-    const loadingSnackBar = this.snackBar.open(
-      this.translateService.instant('test-results-table.loading-booklet'),
-      '',
-      { duration: 3000 }
-    );
-
-    this.fileService
-      .getBookletInfo(workspaceId, normalizedBookletId)
-      .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
-      .subscribe({
-        next: bookletInfo => {
-          if (this.appService.selectedWorkspaceId !== workspaceId) return;
-          loadingSnackBar.dismiss();
-
-          this.dialog.open(BookletInfoDialogComponent, {
-            width: 'min(96vw, 1400px)',
-            maxWidth: '96vw',
-            height: '92vh',
-            maxHeight: '92vh',
-            data: {
-              bookletInfo,
-              bookletId: normalizedBookletId
-            }
-          });
-        },
-        error: () => {
-          if (this.appService.selectedWorkspaceId !== workspaceId) return;
-          loadingSnackBar.dismiss();
-          this.snackBar.open(
-            this.translateService.instant('test-results-table.booklet-error'),
-            this.translateService.instant('error'),
-            { duration: 3000 }
-          );
-        }
-      });
-  }
-
-  openUnitInfoFromFlatRow(row: FlatResponseRow): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    this.getPersonTestResults(row.personId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: booklets => {
-        if (this.appService.selectedWorkspaceId !== workspaceId) return;
-        const booklet = (booklets || []).find(b => b.name === row.booklet);
-        if (!booklet) {
-          this.snackBar.open(this.translateService.instant('test-results-table.booklet-not-found'), this.translateService.instant('common.info'), {
-            duration: 3000
-          });
-          return;
-        }
-
-        const unit = (booklet.units || []).find(u => u.id === row.unitId);
-        const unitFileIdRaw = unit?.name || '';
-        const unitFileId = String(unitFileIdRaw).trim().toUpperCase();
-        if (!unitFileId) {
-          this.snackBar.open(this.translateService.instant('test-results-table.unit-not-found'), this.translateService.instant('common.info'), {
-            duration: 3000
-          });
-          return;
-        }
-
-        const loadingSnackBar = this.snackBar.open(
-          this.translateService.instant('test-results-table.loading-unit'),
-          '',
-          { duration: 3000 }
-        );
-
-        this.fileService
-          .getUnitInfo(workspaceId, unitFileId)
-          .pipe(takeUntilDestroyed(this.destroyRef), finalize(() => loadingSnackBar.dismiss()))
-          .subscribe({
-            next: unitInfo => {
-              if (this.appService.selectedWorkspaceId !== workspaceId) return;
-              loadingSnackBar.dismiss();
-
-              this.dialog.open(UnitInfoDialogComponent, {
-                width: 'min(96vw, 1400px)',
-                maxWidth: '96vw',
-                height: '92vh',
-                maxHeight: '92vh',
-                data: {
-                  unitInfo,
-                  unitId: unitFileId
-                }
-              });
-            },
-            error: () => {
-              if (this.appService.selectedWorkspaceId !== workspaceId) return;
-              loadingSnackBar.dismiss();
-              this.snackBar.open(
-                this.translateService.instant('test-results-table.unit-error'),
-                this.translateService.instant('error'),
-                { duration: 3000 }
-              );
-            }
-          });
-      },
-      error: () => {
-        if (this.appService.selectedWorkspaceId !== workspaceId) return;
-        this.snackBar.open(
-          this.translateService.instant('test-results-table.unit-error'),
-          this.translateService.instant('error'),
-          { duration: 3000 }
-        );
-      }
-    });
-  }
-
-  protected openBookletLogsFromFlatRow(row: FlatResponseRow): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    this.testResultService
-      .getBookletLogsForUnit(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: (result: BookletLogsForUnitResponse | null) => {
-          if (!result || !result.logs || result.logs.length === 0) {
-            this.snackBar.open(
-              this.translateService.instant('test-results-table.no-booklet-logs'),
-              this.translateService.instant('common.info'),
-              { duration: 3000 }
-            );
-            return;
-          }
-
-          this.dialog.open(LogDialogComponent, {
-            width: '700px',
-            data: {
-              logs: result.logs,
-              sessions: result.sessions,
-              units: (result.units || []).map((u: BookletLogsForUnitResponse['units'][number]) => ({
-                ...u,
-                results: []
-              }))
-            }
-          });
-        },
-        error: () => {
-          this.snackBar.open(this.translateService.instant('test-results-table.booklet-logs-error'), this.translateService.instant('error'), {
-            duration: 3000
-          });
-        }
-      });
-  }
-
-  protected openNotesFromFlatRow(row: FlatResponseRow): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    const loadingSnackBar = this.snackBar.open(this.translateService.instant('test-results-table.loading-notes'), '', {
-      duration: 3000
-    });
-
-    this.unitNoteService
-      .getUnitNotes(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: notes => {
-          loadingSnackBar.dismiss();
-
-          this.dialog.open(NoteDialogComponent, {
-            width: '600px',
-            data: {
-              unitId: row.unitId,
-              notes: (notes || []) as UnitNoteDto[],
-              title: this.translateService.instant('test-results-table.notes-title', { unit: row.unit || row.unitId })
-            }
-          });
-        },
-        error: () => {
-          loadingSnackBar.dismiss();
-          this.snackBar.open(this.translateService.instant('test-results-table.notes-error'), this.translateService.instant('error'), {
-            duration: 3000
-          });
-        }
-      });
-  }
-
-  protected openUnitLogsFromFlatRow(row: FlatResponseRow): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    this.testResultService
-      .getUnitLogs(this.appService.selectedWorkspaceId, row.unitId).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: logs => {
-          if (!logs || logs.length === 0) {
-            this.snackBar.open(
-              this.translateService.instant('test-results-table.no-unit-logs'),
-              this.translateService.instant('common.info'),
-              { duration: 3000 }
-            );
-            return;
-          }
-
-          this.dialog.open(UnitLogsDialogComponent, {
-            width: '700px',
-            data: {
-              logs,
-              title: this.translateService.instant('test-results-table.logs-title', { unit: row.unit || row.unitId })
-            }
-          });
-        },
-        error: () => {
-          this.snackBar.open(this.translateService.instant('test-results-table.unit-logs-error'), this.translateService.instant('error'), {
-            duration: 3000
-          });
-        }
-      });
-  }
-
-  ngOnDestroy(): void {
-    this.flatSearchSubscription.unsubscribe();
-    this.flatResponsesSubscription?.unsubscribe();
-    this.cancelNotesPresenceRequest();
-    this.workspaceCacheInvalidatedSubscription.unsubscribe();
-    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
-    );
-    this.refreshFilterOptionsTimeoutIds = [];
-  }
-
-  private refreshFlatResponseFilterOptionsWithRetry(): void {
-    this.fetchFlatResponseFilterOptions();
-
-    this.refreshFilterOptionsTimeoutIds.forEach(id => window.clearTimeout(id)
-    );
-    this.refreshFilterOptionsTimeoutIds = [
-      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 1000),
-      window.setTimeout(() => this.fetchFlatResponseFilterOptions(), 3000)
-    ];
-  }
-
-  private getPersonTestResults(
-    personId: number
-  ): Observable<BookletFromPersonTestResults[]> {
-    if (!this.appService.selectedWorkspaceId) {
-      return of([]);
-    }
-
-    if (this.personTestResultsCache.has(personId)) {
-      return this.personTestResultsCache.get(personId)!;
-    }
-
-    const req$ = (
-      this.testResultService.getPersonTestResults(
-        this.appService.selectedWorkspaceId,
-        personId
-      ) as unknown as Observable<BookletFromPersonTestResults[]>
-    ).pipe(
-      tap({
-        error: () => {
-          this.personTestResultsCache.delete(personId);
-        }
-      }),
-      shareReplay(1)
-    );
-
-    this.personTestResultsCache.set(personId, req$);
-    this.personTestResultsCacheOrder = this.personTestResultsCacheOrder.filter(
-      id => id !== personId
-    );
-    this.personTestResultsCacheOrder.push(personId);
-    if (
-      this.personTestResultsCacheOrder.length >
-      this.PERSON_TEST_RESULTS_CACHE_MAX
-    ) {
-      const evictId = this.personTestResultsCacheOrder.shift();
-      if (evictId !== undefined) {
-        this.personTestResultsCache.delete(evictId);
-      }
-    }
-    return req$;
-  }
-
   onFlatFilterChanged(): void {
     if (this.suppressNextFlatFilterChange) {
       this.suppressNextFlatFilterChange = false;
       return;
     }
     this.backendInvalidRegexFields.clear();
-    this.flatResponsesRequestSequence += 1;
-    this.flatResponsesSubscription?.unsubscribe();
-    this.flatResponsesSubscription = undefined;
-    this.cancelNotesPresenceRequest();
-    this.isLoadingFlat.set(false);
+    this.data.cancelPage();
     this.flatPageIndex.set(0);
     this.flatSearchSubject.next();
   }
@@ -1221,239 +485,11 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     this.syncMediaFiltersFromFlatFilters();
 
     this.processingDurationEnabled.set(false);
-    this.processingDurationsFilters.set([]);
     this.unitProgressFilters.set([]);
 
     this.flatPageIndex.set(0);
     this.fetchFlatResponses(0, this.flatPageSize());
     this.fetchFlatResponseFilterOptions();
-  }
-
-  onAudioLowThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
-        String(this.audioLowThreshold())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  onShortProcessingThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
-        String(this.shortProcessingThresholdMs())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  onLongLoadingThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
-        String(this.longLoadingThresholdMs())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  onFocusLostThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
-        String(this.focusLostThresholdMs())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  onSessionSpanThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
-        String(this.sessionSpanThresholdMs())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  onRepeatedStartThresholdChanged(): void {
-    try {
-      localStorage.setItem(
-        this.REPEATED_START_THRESHOLD_STORAGE_KEY,
-        String(this.repeatedStartThreshold())
-      );
-    } catch {
-      // ignore
-    }
-    this.onFlatFilterChanged();
-  }
-
-  protected openFlatSettings(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {}).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(opts => {
-        const currentBrowsers = this.sessionBrowsersAllowlist()
-          .split(',')
-          .map(v => v.trim())
-          .filter(Boolean);
-        const currentOs = this.sessionOsAllowlist()
-          .split(',')
-          .map(v => v.trim())
-          .filter(Boolean);
-        const currentScreens = this.sessionScreensAllowlist()
-          .split(',')
-          .map(v => v.trim())
-          .filter(Boolean);
-
-        const ref = this.dialog.open<
-          TestResultsFlatTableSettingsDialogComponent,
-          {
-            audioLowThreshold: number;
-            shortProcessingThresholdMs: number;
-            longLoadingThresholdMs: number;
-            focusLostThresholdMs: number;
-            sessionSpanThresholdMs: number;
-            repeatedStartThreshold: number;
-            processingDurationMin: string;
-            processingDurationMax: string;
-            sessionBrowsersAllowlist: string[];
-            sessionOsAllowlist: string[];
-            sessionScreensAllowlist: string[];
-            availableSessionBrowsers: string[];
-            availableSessionOs: string[];
-            availableSessionScreens: string[];
-          },
-        TestResultsFlatTableSettingsDialogResult | undefined
-        >(TestResultsFlatTableSettingsDialogComponent, {
-          width: '720px',
-          maxWidth: '95vw',
-          height: '560px',
-          maxHeight: '90vh',
-          data: {
-            audioLowThreshold: this.audioLowThreshold(),
-            shortProcessingThresholdMs: this.shortProcessingThresholdMs(),
-            longLoadingThresholdMs: this.longLoadingThresholdMs(),
-            focusLostThresholdMs: this.focusLostThresholdMs(),
-            sessionSpanThresholdMs: this.sessionSpanThresholdMs(),
-            repeatedStartThreshold: this.repeatedStartThreshold(),
-            processingDurationMin: this.processingDurationMin(),
-            processingDurationMax: this.processingDurationMax(),
-            sessionBrowsersAllowlist:
-              currentBrowsers.length > 0 ? currentBrowsers : [],
-            sessionOsAllowlist: currentOs.length > 0 ? currentOs : [],
-            sessionScreensAllowlist:
-              currentScreens.length > 0 ? currentScreens : [],
-            availableSessionBrowsers: opts.sessionBrowsers || [],
-            availableSessionOs: opts.sessionOs || [],
-            availableSessionScreens: opts.sessionScreens || []
-          }
-        });
-
-        ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
-          if (!result) {
-            return;
-          }
-          this.audioLowThreshold.set(result.audioLowThreshold);
-
-          this.shortProcessingThresholdMs.set(result.shortProcessingThresholdMs);
-          this.longLoadingThresholdMs.set(result.longLoadingThresholdMs);
-          this.focusLostThresholdMs.set(result.focusLostThresholdMs);
-          this.sessionSpanThresholdMs.set(result.sessionSpanThresholdMs);
-          this.repeatedStartThreshold.set(result.repeatedStartThreshold);
-
-          this.processingDurationMin.set(String(result.processingDurationMin ?? ''));
-          this.processingDurationMax.set(String(result.processingDurationMax ?? ''));
-          this.sessionBrowsersAllowlist.set(Array.isArray(result.sessionBrowsersAllowlist) ?
-            result.sessionBrowsersAllowlist.join(',') :
-            '');
-          this.sessionOsAllowlist.set(Array.isArray(result.sessionOsAllowlist) ?
-            result.sessionOsAllowlist.join(',') :
-            '');
-          this.sessionScreensAllowlist.set(Array.isArray(result.sessionScreensAllowlist) ?
-            result.sessionScreensAllowlist.join(',') :
-            '');
-
-          try {
-            localStorage.setItem(
-              this.AUDIO_LOW_THRESHOLD_STORAGE_KEY,
-              String(this.audioLowThreshold())
-            );
-            localStorage.setItem(
-              this.SHORT_PROCESSING_THRESHOLD_STORAGE_KEY,
-              String(this.shortProcessingThresholdMs())
-            );
-            localStorage.setItem(
-              this.LONG_LOADING_THRESHOLD_STORAGE_KEY,
-              String(this.longLoadingThresholdMs())
-            );
-            localStorage.setItem(
-              this.FOCUS_LOST_THRESHOLD_STORAGE_KEY,
-              String(this.focusLostThresholdMs())
-            );
-            localStorage.setItem(
-              this.SESSION_SPAN_THRESHOLD_STORAGE_KEY,
-              String(this.sessionSpanThresholdMs())
-            );
-            localStorage.setItem(
-              this.REPEATED_START_THRESHOLD_STORAGE_KEY,
-              String(this.repeatedStartThreshold())
-            );
-            localStorage.setItem(
-              this.PROCESSING_DURATION_MIN_STORAGE_KEY,
-              String(this.processingDurationMin())
-            );
-            localStorage.setItem(
-              this.PROCESSING_DURATION_MAX_STORAGE_KEY,
-              String(this.processingDurationMax())
-            );
-            localStorage.setItem(
-              this.SESSION_BROWSERS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionBrowsersAllowlist())
-            );
-            localStorage.setItem(
-              this.SESSION_OS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionOsAllowlist())
-            );
-            localStorage.setItem(
-              this.SESSION_SCREENS_ALLOWLIST_STORAGE_KEY,
-              String(this.sessionScreensAllowlist())
-            );
-          } catch {
-            // ignore
-          }
-
-          this.onFlatFilterChanged();
-        });
-      });
-  }
-
-  private fetchFlatResponseFilterOptions(): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    this.testResultService
-      .getFlatResponseFilterOptions(this.appService.selectedWorkspaceId, {}).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe(opts => {
-        this.flatFilterOptions.set(opts);
-      });
   }
 
   private updateLogAnomalyTableVisibility(): boolean {
@@ -1491,109 +527,61 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   }
 
   private fetchFlatResponses(page: number, limit: number): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-    if (!this.logAnomalyTableSettingLoaded) {
-      return;
-    }
+    if (!this.appService.selectedWorkspaceId || !this.logAnomalyTableSettingLoaded) return;
     if (this.hasInvalidRegexFilters()) {
-      this.isLoadingFlat.set(false);
+      this.data.cancelPage();
       return;
     }
     const validPage = Math.max(0, page);
-    this.flatResponsesRequestSequence += 1;
-    const requestSequence = this.flatResponsesRequestSequence;
-    this.cancelNotesPresenceRequest();
-    this.isLoadingFlat.set(true);
-
     const sessionFilterActive = this.flatFilters().sessionFilter;
-    this.flatResponsesSubscription?.unsubscribe();
-    this.flatResponsesSubscription = this.testResultService
-      .getFlatResponses(this.appService.selectedWorkspaceId, {
-        page: validPage + 1,
-        limit,
-        code: this.flatFilters().code,
-        group: this.flatFilters().group,
-        login: this.flatFilters().login,
-        booklet: this.flatFilters().booklet,
-        unit: this.flatFilters().unit,
-        response: this.flatFilters().response,
-        responseStatus: this.flatFilters().responseStatus,
-        responseValue: this.flatFilters().responseValue,
-        tags: this.flatFilters().tags,
-        regexSearch: this.enableRegexSearch(),
-        geogebra: this.flatFilters().geogebra ? 'true' : '',
-        audioLow: this.flatFilters().audioLow ? 'true' : '',
-        hasValue: this.flatFilters().nonEmptyResponse ? 'true' : '',
-        audioLowThreshold: this.flatFilters().audioLow ?
-          String(this.audioLowThreshold()) :
-          '',
-        shortProcessing: this.flatFilters().shortProcessing ? 'true' : '',
-        shortProcessingThresholdMs: this.flatFilters().shortProcessing ?
-          String(this.shortProcessingThresholdMs()) :
-          '',
-        longLoading: this.flatFilters().longLoading ? 'true' : '',
-        longLoadingThresholdMs: String(this.longLoadingThresholdMs()),
-        focusLostThresholdMs: String(this.focusLostThresholdMs()),
-        sessionSpanThresholdMs: String(this.sessionSpanThresholdMs()),
-        repeatedStartThreshold: String(this.repeatedStartThreshold()),
-        processingDurations: '',
-        processingDurationMin: this.processingDurationEnabled() ?
-          String(this.processingDurationMin()) :
-          '',
-        processingDurationMax: this.processingDurationEnabled() ?
-          String(this.processingDurationMax()) :
-          '',
-        unitProgress: (this.unitProgressFilters() || []).join(','),
-        sessionBrowsers: sessionFilterActive ?
-          this.parseCsv(this.sessionBrowsersAllowlist()) :
-          '',
-        sessionOs: sessionFilterActive ?
-          this.parseCsv(this.sessionOsAllowlist()) :
-          '',
-        sessionScreens: sessionFilterActive ?
-          this.parseCsv(this.sessionScreensAllowlist()) :
-          '',
-        logAnomalies: this.flatFilters().logAnomalies,
-        includeLogAnomalies: this.showLogAnomaliesInTable() ? 'true' : ''
-      }, {
-        suppressGlobalHttpError: true
-      })
-      .subscribe({
-        next: resp => {
-          if (requestSequence !== this.flatResponsesRequestSequence) {
-            return;
-          }
-          this.isLoadingFlat.set(false);
-          this.flatTotalRecords.set(resp.total);
-          this.flatData.set((resp.data || []).map(r => ({
-            bookletId: r.bookletId,
-            responseId: r.responseId,
-            unitId: r.unitId,
-            personId: r.personId,
-            code: r.code,
-            group: r.group,
-            login: r.login,
-            booklet: r.booklet,
-            unit: r.unit,
-            response: r.response,
-            responseStatus: r.responseStatus,
-            responseValue: r.responseValue,
-            tags: Array.isArray(r.tags) ? r.tags : [],
-            logAnomalies: Array.isArray(r.logAnomalies) ? r.logAnomalies : []
-          })));
-
-          this.loadFrequenciesForCurrentPage();
-          this.loadNotesPresenceForCurrentPage();
-        },
-        error: (error: HttpErrorResponse) => {
-          if (requestSequence === this.flatResponsesRequestSequence) {
-            this.isLoadingFlat.set(false);
-            this.showFlatResponseLoadError(error);
-          }
-        }
-      });
+    this.data.loadPage({
+      page: validPage + 1,
+      limit,
+      code: this.flatFilters().code,
+      group: this.flatFilters().group,
+      login: this.flatFilters().login,
+      booklet: this.flatFilters().booklet,
+      unit: this.flatFilters().unit,
+      response: this.flatFilters().response,
+      responseStatus: this.flatFilters().responseStatus,
+      responseValue: this.flatFilters().responseValue,
+      tags: this.flatFilters().tags,
+      regexSearch: this.enableRegexSearch(),
+      geogebra: this.flatFilters().geogebra ? 'true' : '',
+      audioLow: this.flatFilters().audioLow ? 'true' : '',
+      hasValue: this.flatFilters().nonEmptyResponse ? 'true' : '',
+      audioLowThreshold: this.flatFilters().audioLow ?
+        String(this.audioLowThreshold()) :
+        '',
+      shortProcessing: this.flatFilters().shortProcessing ? 'true' : '',
+      shortProcessingThresholdMs: this.flatFilters().shortProcessing ?
+        String(this.shortProcessingThresholdMs()) :
+        '',
+      longLoading: this.flatFilters().longLoading ? 'true' : '',
+      longLoadingThresholdMs: String(this.longLoadingThresholdMs()),
+      focusLostThresholdMs: String(this.focusLostThresholdMs()),
+      sessionSpanThresholdMs: String(this.sessionSpanThresholdMs()),
+      repeatedStartThreshold: String(this.repeatedStartThreshold()),
+      processingDurations: '',
+      processingDurationMin: this.processingDurationEnabled() ?
+        String(this.processingDurationMin()) :
+        '',
+      processingDurationMax: this.processingDurationEnabled() ?
+        String(this.processingDurationMax()) :
+        '',
+      unitProgress: (this.unitProgressFilters() || []).join(','),
+      sessionBrowsers: sessionFilterActive ?
+        this.parseCsv(this.sessionBrowsersAllowlist()) :
+        '',
+      sessionOs: sessionFilterActive ?
+        this.parseCsv(this.sessionOsAllowlist()) :
+        '',
+      sessionScreens: sessionFilterActive ?
+        this.parseCsv(this.sessionScreensAllowlist()) :
+        '',
+      logAnomalies: this.flatFilters().logAnomalies,
+      includeLogAnomalies: this.showLogAnomaliesInTable() ? 'true' : ''
+    });
   }
 
   private showFlatResponseLoadError(error: HttpErrorResponse): void {
@@ -1640,10 +628,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
     );
   }
 
-  protected hasNotesForRow(row: FlatResponseRow): boolean {
-    return this.unitIdsWithNotes().has(row.unitId);
-  }
-
   protected hasLogAnomaliesForRow(row: FlatResponseRow): boolean {
     return (row.logAnomalies || []).length > 0;
   }
@@ -1688,127 +672,6 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
       .join('\n');
   }
 
-  private cancelNotesPresenceRequest(): void {
-    this.notesPresenceSubscription?.unsubscribe();
-    this.notesPresenceSubscription = undefined;
-  }
-
-  private loadNotesPresenceForCurrentPage(): void {
-    this.cancelNotesPresenceRequest();
-    this.unitIdsWithNotes.set(new Set<number>());
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      return;
-    }
-
-    const unitIds = Array.from(
-      new Set((this.flatData() || []).map(r => r.unitId).filter(id => !!id))
-    );
-    if (unitIds.length === 0) {
-      return;
-    }
-
-    this.notesPresenceSubscription = this.unitNoteService
-      .getNotesForMultipleUnits(workspaceId, unitIds).pipe(
-        takeUntilWorkspaceChanged(this.appService, workspaceId),
-        takeUntilDestroyed(this.destroyRef)
-      )
-      .subscribe({
-        next: notesByUnitId => {
-          const nextSet = new Set<number>();
-          Object.entries(notesByUnitId || {}).forEach(([unitId, notes]) => {
-            if (Array.isArray(notes) && notes.length > 0) {
-              nextSet.add(Number(unitId));
-            }
-          });
-          this.unitIdsWithNotes.set(nextSet);
-        },
-        error: () => {
-          this.unitIdsWithNotes.set(new Set<number>());
-        }
-      });
-  }
-
-  protected replayFromFlatRow(row: FlatResponseRow): void {
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
-
-    const loadingSnackBar = this.snackBar.open(this.translateService.instant('test-results-table.loading-replay'), '', {
-      duration: 3000
-    });
-
-    this.statisticsService
-      .getReplayUrl(this.appService.selectedWorkspaceId, row.responseId).pipe(takeUntilDestroyed(this.destroyRef))
-      .subscribe({
-        next: result => {
-          loadingSnackBar.dismiss();
-          if (result && result.replayUrl) {
-            window.open(result.replayUrl, '_blank');
-          } else {
-            this.snackBar.open(
-              this.translateService.instant('test-results-table.replay-url-error'),
-              this.translateService.instant('error'),
-              { duration: 3000 }
-            );
-          }
-        },
-        error: () => {
-          loadingSnackBar.dismiss();
-          this.snackBar.open(
-            this.translateService.instant('test-results-table.replay-error'),
-            this.translateService.instant('error'),
-            { duration: 3000 }
-          );
-        }
-      });
-  }
-
-  protected deleteFromFlatRow(row: FlatResponseRow): void {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: <ConfirmDialogData>{
-        title: this.translateService.instant('test-results-table.delete-title'),
-        content: this.translateService.instant('test-results-table.delete-confirmation', { response: row.response }),
-        confirmButtonLabel: this.translateService.instant('common.delete'),
-        showCancel: true
-      }
-    });
-
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(confirmed => {
-      if (confirmed) {
-        this.responseService
-          .deleteResponse(this.appService.selectedWorkspaceId, row.responseId).pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: result => {
-              if (result.success) {
-                this.snackBar.open(
-                  this.translateService.instant('test-results-table.delete-success', { response: row.response }),
-                  this.translateService.instant('test-results-table.success'),
-                  { duration: 3000 }
-                );
-                this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
-                this.responseDeleted.emit();
-              } else {
-                this.snackBar.open(
-                  this.translateService.instant('test-results-table.delete-warning', { warnings: result.report.warnings.join(', ') }),
-                  this.translateService.instant('error'),
-                  { duration: 3000 }
-                );
-              }
-            },
-            error: () => {
-              this.snackBar.open(
-                this.translateService.instant('test-results-table.delete-error'),
-                this.translateService.instant('error'),
-                { duration: 3000 }
-              );
-            }
-          });
-      }
-    });
-  }
-
   protected trackByTag(index: number, item: string): string {
     return `${item}@@${index}`;
   }
@@ -1820,4 +683,26 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges, OnDestr
   protected setFlatFiltersField<K extends keyof FlatResponseFilters>(key: K, value: FlatResponseFilters[K]): void {
     this.flatFilters.update(current => (current ? { ...current, [key]: value } : current));
   }
+
+  private fetchFlatResponseFilterOptions(): void { this.data.loadOptions(); }
+
+  protected openFlatSettings(): void { this.settings.open(); }
+
+  getFrequencySummary(row: FlatResponseRow): string { return this.data.frequencySummary(row); }
+
+  protected hasNotesForRow(row: FlatResponseRow): boolean { return this.data.noteIds().has(row.unitId); }
+
+  openBookletInfoFromFlatRow(row: FlatResponseRow): void { this.actions.openBookletInfoFromFlatRow(row); }
+
+  openUnitInfoFromFlatRow(row: FlatResponseRow): void { this.actions.openUnitInfoFromFlatRow(row); }
+
+  protected openBookletLogsFromFlatRow(row: FlatResponseRow): void { this.actions.openBookletLogsFromFlatRow(row); }
+
+  protected openNotesFromFlatRow(row: FlatResponseRow): void { this.actions.openNotesFromFlatRow(row); }
+
+  protected openUnitLogsFromFlatRow(row: FlatResponseRow): void { this.actions.openUnitLogsFromFlatRow(row); }
+
+  protected replayFromFlatRow(row: FlatResponseRow): void { this.actions.replayFromFlatRow(row); }
+
+  protected deleteFromFlatRow(row: FlatResponseRow): void { this.actions.deleteFromFlatRow(row); }
 }

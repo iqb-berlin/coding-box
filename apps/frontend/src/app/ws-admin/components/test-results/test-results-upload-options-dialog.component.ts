@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -30,7 +31,7 @@ export type TestResultsUploadOptionsDialogResult = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-upload-options-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatButtonModule,

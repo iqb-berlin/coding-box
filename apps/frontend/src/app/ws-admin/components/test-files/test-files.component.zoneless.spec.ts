@@ -6,6 +6,7 @@ import { ActivatedRoute } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatDialog } from '@angular/material/dialog';
 import { of, Subject, ObservedValueOf } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestFilesComponent } from './test-files.component';
 import { environment } from '../../../../environments/environment';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -55,7 +56,7 @@ describe('File validation without Zone', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [TestFilesComponent, HttpClientModule, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, TestFilesComponent, HttpClientModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: ValidationService, useValue: validation },

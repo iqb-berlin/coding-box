@@ -17,6 +17,7 @@ import { MatExpansionModule } from '@angular/material/expansion';
 import { TranslateModule } from '@ngx-translate/core';
 import { A11yModule } from '@angular/cdk/a11y';
 import { firstValueFrom } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { VariableBundle, Variable } from '../../models/coding-job.model';
 import { Coder } from '../../models/coder.model';
 import { DistributedCodingService } from '../../services/distributed-coding.service';
@@ -139,6 +140,8 @@ interface DistributionMatrixRow {
   ]
 })
 export class CodingJobBulkCreationDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<CodingJobBulkCreationDialogComponent>>(MatDialogRef);
   protected data = inject<BulkCreationData>(MAT_DIALOG_DATA);
 
@@ -577,8 +580,8 @@ export class CodingJobBulkCreationDialogComponent {
       const uniqueCases = this.getUniqueCaseTotal();
       if (uniqueCases > this.data.maxCodingCases) {
         this.snackBar.open(
-          `Die Zahl der eindeutigen Kodierfälle (${uniqueCases}) überschreitet das Maximum von ${this.data.maxCodingCases}.`,
-          'Schließen',
+          this.uiTranslate('ui-text.coding-job-bulk-creation-dialog.case-limit-exceeded', { uniqueCases: uniqueCases, maxCodingCases: this.data.maxCodingCases }),
+          this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
         return;

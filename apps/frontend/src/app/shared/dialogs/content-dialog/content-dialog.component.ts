@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA, MatDialogRef, MatDialogTitle, MatDialogContent, MatDialogActions
@@ -19,7 +20,7 @@ export interface DialogData {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-content-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,
@@ -42,9 +43,9 @@ export interface DialogData {
     </mat-dialog-content>
     <mat-divider></mat-divider>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="close()">Schließen</button>
+      <button mat-button (click)="close()">{{ 'deferred-view.close' | translate }}</button>
       @if (data.showDeleteButton) {
-        <button mat-button color="warn" (click)="close(true)">Aus Datenbank löschen</button>
+        <button mat-button color="warn" (click)="close(true)">{{ 'ui-text.content-dialog.delete-from-database' | translate }}</button>
       }
     </mat-dialog-actions>
   `,

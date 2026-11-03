@@ -1,0 +1,1730 @@
+{
+  "schemaVersion": 2,
+  "files": {
+    "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts": {
+      "file": {
+        "max-lines": 1302
+      },
+      "functions": {
+        "class ContentPoolIntegrationService#1/method uploadWorkspaceFilesToAcp#1": {
+          "complexity": 27,
+          "max-lines-per-function": 180
+        }
+      }
+    },
+    "apps/backend/src/app/admin/database/database-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class DatabaseExportService#1/method exportToSqliteFile#1": {
+          "max-depth": 5,
+          "max-lines-per-function": 147
+        },
+        "class DatabaseExportService#1/method exportWorkspaceToSqliteFile#1": {
+          "complexity": 25,
+          "max-depth": 5,
+          "max-lines-per-function": 169
+        },
+        "class DatabaseExportService#1/method getWorkspaceExportTables#1": {
+          "max-lines-per-function": 219
+        }
+      }
+    },
+    "apps/backend/src/app/admin/system-notifications/system-notification.service.ts": {
+      "file": {},
+      "functions": {
+        "class SystemNotificationService#1/method normalizeAndValidate#1": {
+          "complexity": 22
+        }
+      }
+    },
+    "apps/backend/src/app/admin/variable-analysis/variable-analysis.controller.ts": {
+      "file": {},
+      "functions": {
+        "class VariableAnalysisController#1/method getAnalysisResultsPage#1": {
+          "max-lines-per-function": 109
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/journal.controller.ts": {
+      "file": {},
+      "functions": {
+        "class JournalController#1/method getJournalEntries#1": {
+          "max-lines-per-function": 153
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coder-training.controller.ts": {
+      "file": {
+        "max-lines": 1172
+      },
+      "functions": {
+        "class WorkspaceCoderTrainingController#1/method getTrainingCohensKappa#1": {
+          "max-lines-per-function": 110
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-analysis.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceCodingAnalysisController#1/method getCodingIncompleteVariables#1": {
+          "max-lines-per-function": 110
+        },
+        "class WorkspaceCodingAnalysisController#1/method getResponseAnalysis#1": {
+          "max-lines-per-function": 146
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-export.controller.ts": {
+      "file": {
+        "max-lines": 1785
+      },
+      "functions": {
+        "class WorkspaceCodingExportController#1/method cancelExportJob#1": {
+          "max-lines-per-function": 101
+        },
+        "class WorkspaceCodingExportController#1/method exportCodingResultsAggregated#1": {
+          "max-lines-per-function": 128
+        },
+        "class WorkspaceCodingExportController#1/method exportCodingResultsByVariable#1": {
+          "max-lines-per-function": 125
+        },
+        "class WorkspaceCodingExportController#1/method getCodingResultsByVersion#1": {
+          "max-lines-per-function": 117
+        },
+        "class WorkspaceCodingExportController#1/method getCodingResultsByVersionAsExcel#1": {
+          "max-lines-per-function": 123
+        },
+        "class WorkspaceCodingExportController#1/method getExportJobStatus#1": {
+          "max-lines-per-function": 103
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-job-definition.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceCodingJobDefinitionController#1/method previewCodingJobFromDefinition#1": {
+          "max-lines-per-function": 152
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-results.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceCodingResultsController#1/method bulkApplyCodingResults#1": {
+          "max-lines-per-function": 104
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-review.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceCodingReviewController#1/method applyDoubleCodedResolutions#1": {
+          "max-lines-per-function": 110
+        },
+        "class WorkspaceCodingReviewController#1/method getDoubleCodedVariablesForReview#1": {
+          "max-lines-per-function": 264
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding-statistics.controller.ts": {
+      "file": {
+        "max-lines": 1894
+      },
+      "functions": {
+        "class WorkspaceCodingStatisticsController#1/method calculateDistribution#1": {
+          "max-lines-per-function": 103
+        },
+        "class WorkspaceCodingStatisticsController#1/method createDistributedCodingJobs#1": {
+          "max-lines-per-function": 121
+        },
+        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaStatisticsAsCsv#1": {
+          "max-lines-per-function": 107
+        },
+        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaStatisticsAsXlsx#1": {
+          "max-lines-per-function": 124
+        },
+        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaSummaryAsCsv#1": {
+          "max-lines-per-function": 107
+        },
+        "class WorkspaceCodingStatisticsController#1/method getAppliedResultsOverview#1": {
+          "max-lines-per-function": 119
+        },
+        "class WorkspaceCodingStatisticsController#1/method getCaseCoverageOverview#1": {
+          "max-lines-per-function": 106
+        },
+        "class WorkspaceCodingStatisticsController#1/method getCohensKappaStatistics#1": {
+          "max-lines-per-function": 193
+        },
+        "class WorkspaceCodingStatisticsController#1/method getVariableCoverageOverview#1": {
+          "max-lines-per-function": 178
+        },
+        "class WorkspaceCodingStatisticsController#1/method getWorkspaceCohensKappaSummary#1": {
+          "max-lines-per-function": 154
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-coding.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceCodingController#1/method getResponsesByStatus#1": {
+          "max-lines-per-function": 108
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-files.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceFilesController#1/method downloadWorkspaceFilesAsZip#1": {
+          "max-lines-per-function": 114
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-test-center.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceTestCenterController#1/method importWorkspaceFiles#1": {
+          "max-lines-per-function": 177
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-test-results-analysis.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceTestResultsAnalysisController#1/method findFlatResponseFilterOptions#1": {
+          "complexity": 29,
+          "max-lines-per-function": 128
+        },
+        "class WorkspaceTestResultsAnalysisController#1/method findFlatResponses#1": {
+          "max-lines-per-function": 109
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-test-results-import.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceTestResultsImportController#1/method addTestResults#1": {
+          "max-lines-per-function": 180
+        },
+        "class WorkspaceTestResultsImportController#1/method completeChunkedUpload#1": {
+          "max-lines-per-function": 119
+        }
+      }
+    },
+    "apps/backend/src/app/admin/workspace/workspace-test-results-response.controller.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceTestResultsResponseController#1/method searchResponses#1": {
+          "max-lines-per-function": 125
+        }
+      }
+    },
+    "apps/backend/src/app/auth/auth.controller.ts": {
+      "file": {},
+      "functions": {
+        "class AuthController#1/method callback#1": {
+          "complexity": 33,
+          "max-lines-per-function": 105
+        }
+      }
+    },
+    "apps/backend/src/app/auth/workspace-token.strategy.ts": {
+      "file": {},
+      "functions": {
+        "class WorkspaceTokenStrategy#1/method validate#1": {
+          "complexity": 23
+        }
+      }
+    },
+    "apps/backend/src/app/cache/response-cache-scheduler.service.ts": {
+      "file": {},
+      "functions": {
+        "class ResponseCacheSchedulerService#1/method processWorkspace#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/autocoder-output-shadow.util.ts": {
+      "file": {},
+      "functions": {
+        "function createAutocoderOutputShadows#1": {
+          "max-lines-per-function": 102
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/codebook-generation.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodebookGenerationService#1/method generateCodebook#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-comparison-query.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingComparisonQueryService#1/method getWithinTrainingComparisonRowsForResponseIds#1": {
+          "complexity": 33,
+          "max-lines-per-function": 172
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-comparison.service.ts": {
+      "file": {
+        "max-lines": 965
+      },
+      "functions": {
+        "class CoderTrainingComparisonService#1/method getTrainingCodingComparison#1": {
+          "max-depth": 5,
+          "max-lines-per-function": 156
+        },
+        "class CoderTrainingComparisonService#1/method getWithinTrainingCodingComparison#1": {
+          "complexity": 23,
+          "max-lines-per-function": 236
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-discussion.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingDiscussionService#1/method saveDiscussionResult#1": {
+          "max-lines-per-function": 104
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-freshness.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingFreshnessService#1/method getWithinTrainingComparisonFreshness#1": {
+          "max-lines-per-function": 139
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-kappa.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingKappaService#1/method transformToCoderPairs#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-mutation.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingMutationService#1/method createCoderTrainingJobs#1": {
+          "max-lines-per-function": 251
+        },
+        "class CoderTrainingMutationService#1/method createCoderTrainingJobs#1/anonymous:d87b855378e5e0c3#1": {
+          "complexity": 48,
+          "max-depth": 5,
+          "max-lines-per-function": 220
+        },
+        "class CoderTrainingMutationService#1/method updateCoderTraining#1": {
+          "max-lines-per-function": 365
+        },
+        "class CoderTrainingMutationService#1/method updateCoderTraining#1/anonymous:af2f9d15f411cf77#1": {
+          "complexity": 77,
+          "max-depth": 6,
+          "max-lines-per-function": 339
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-results-apply.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingResultsApplyService#1/method applyTrainingDiscussionResultsInPool#1": {
+          "max-lines-per-function": 182
+        },
+        "class CoderTrainingResultsApplyService#1/method buildApplyContext#1": {
+          "max-lines-per-function": 101
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-sampling.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingSamplingService#1/method sampleResponses#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coder-training-selection.service.ts": {
+      "file": {},
+      "functions": {
+        "class CoderTrainingSelectionService#1/method generateCoderTrainingPackages#1": {
+          "complexity": 34,
+          "max-depth": 7,
+          "max-lines-per-function": 216
+        },
+        "class CoderTrainingSelectionService#1/method generateCoderTrainingPackages#1/anonymous:3402cdd88792f492#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-aggregated-columns-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAggregatedColumnsExportService#1/method exportAggregatedNewColumnPerCoder#1": {
+          "complexity": 81,
+          "max-lines-per-function": 367
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-aggregated-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAggregatedExportService#1/method exportCodingResultsAggregated#1": {
+          "complexity": 73,
+          "max-depth": 5,
+          "max-lines-per-function": 401
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-aggregated-rows-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAggregatedRowsExportService#1/method exportAggregatedNewRowPerVariable#1": {
+          "complexity": 92,
+          "max-depth": 5,
+          "max-lines-per-function": 395
+        },
+        "class CodingAggregatedRowsExportService#1/method exportAggregatedNewRowPerVariable#1/anonymous:e6219d941f002821#1": {
+          "complexity": 24
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-aggregation-peer.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAggregationPeerService#1/method findCompletedPeers#1": {
+          "max-lines-per-function": 162
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-analysis.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAnalysisService#1/method analyzeBatch#1": {
+          "complexity": 42
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-coder-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingCoderExportService#1/method exportCodingResultsByCoder#1": {
+          "complexity": 75,
+          "max-depth": 6,
+          "max-lines-per-function": 348
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-compact-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingCompactExportService#1/method generateCodingResultsByVariableCompactCsv#1": {
+          "complexity": 35,
+          "max-lines-per-function": 197
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-detailed-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingDetailedExportService#1/method exportCodingResultsDetailed#1": {
+          "complexity": 92,
+          "max-depth": 6,
+          "max-lines-per-function": 408
+        },
+        "class CodingDetailedExportService#1/method exportCodingResultsDetailed#1/function flushManagerRowIfNeeded#1": {
+          "complexity": 24
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-freshness-query.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingFreshnessQueryService#1/method getUnitIdsByCodingSchemeRefs#1": {
+          "max-lines-per-function": 116
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-freshness.service.ts": {
+      "file": {
+        "max-lines": 870
+      },
+      "functions": {
+        "class CodingFreshnessService#1/method markUnitsStaleAfterCodingSchemeChange#1": {
+          "max-lines-per-function": 110
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-item-builder.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingItemBuilderService#1/method buildCodingItemWithVersionRow#1": {
+          "complexity": 62
+        },
+        "class CodingItemBuilderService#1/method buildCodingItemWithVersions#1": {
+          "complexity": 36
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-item-matrix-export.service.ts": {
+      "file": {
+        "max-lines": 908
+      },
+      "functions": {
+        "class CodingItemMatrixExportService#1/method resolveRows#1": {
+          "max-depth": 5,
+          "max-lines-per-function": 108
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-distribution-planner.ts": {
+      "file": {},
+      "functions": {
+        "class CodingJobDistributionPlanner#1/method planBalancedDoubleCodingPairQuotas#1": {
+          "max-lines-per-function": 107
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-distribution.service.ts": {
+      "file": {
+        "max-lines": 2194
+      },
+      "functions": {
+        "class CodingJobDistributionService#1/method buildDistributionPlan#1": {
+          "complexity": 22,
+          "max-lines-per-function": 453
+        },
+        "class CodingJobDistributionService#1/method refreshDistributedCodingJobs#1": {
+          "max-lines-per-function": 105
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-mutation.service.ts": {
+      "file": {
+        "max-lines": 1112
+      },
+      "functions": {
+        "class CodingJobMutationService#1/method createCodingJob#1": {
+          "max-lines-per-function": 108
+        },
+        "class CodingJobMutationService#1/method createCodingJobWithUnitSubsetInManager#1": {
+          "max-lines-per-function": 104
+        },
+        "class CodingJobMutationService#1/method updateCodingJob#1": {
+          "max-lines-per-function": 161
+        },
+        "class CodingJobMutationService#1/method updateCodingJob#1/anonymous:7d8daa593fb8400c#1": {
+          "complexity": 34,
+          "max-lines-per-function": 153
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-operations.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingJobOperationsService#1/method bulkApplyCodingResults#1": {
+          "max-lines-per-function": 144
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-query.service.ts": {
+      "file": {
+        "max-lines": 1178
+      },
+      "functions": {
+        "class CodingJobQueryService#1/method getCodingJobIssueSummariesByJobIds#1": {
+          "max-lines-per-function": 145
+        },
+        "class CodingJobQueryService#1/method getCodingJobs#1": {
+          "complexity": 22,
+          "max-lines-per-function": 201
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-replay.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingJobReplayService#1/method buildCodingJobNavigationUnits#1": {
+          "max-lines-per-function": 128
+        },
+        "class CodingJobReplayService#1/method getCodingJobBundleContextsForUnits#1": {
+          "max-lines-per-function": 164
+        },
+        "class CodingJobReplayService#1/method getCodingJobBundleVariableStatus#1": {
+          "complexity": 23
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-responses.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingJobResponsesService#1/method getSlimResponsesForCodingJob#1": {
+          "max-lines-per-function": 122
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-job-scheme.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingJobSchemeService#1/method validateProgressSelectedCode#1": {
+          "complexity": 30
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-list-query.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingListQueryService#1/method getCodingList#1": {
+          "max-lines-per-function": 192
+        },
+        "class CodingListQueryService#1/method getCodingList#1/anonymous:1f179eb368d90c74#1": {
+          "complexity": 24
+        },
+        "class CodingListQueryService#1/method getCodingListVariables#1": {
+          "max-lines-per-function": 122
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts": {
+      "file": {
+        "max-lines": 1537
+      },
+      "functions": {
+        "class CodingListStreamService#1/method getCodingListAsExcel#1": {
+          "complexity": 26,
+          "max-depth": 5,
+          "max-lines-per-function": 122
+        },
+        "class CodingListStreamService#1/method getCodingListCsvStream#1": {
+          "max-lines-per-function": 109
+        },
+        "class CodingListStreamService#1/method getCodingListCsvStream#1/anonymous:dbcef9d16a51eac2#1": {
+          "complexity": 30,
+          "max-depth": 5
+        },
+        "class CodingListStreamService#1/method getCodingResultsByVersionAsExcel#1": {
+          "complexity": 25,
+          "max-lines-per-function": 150
+        },
+        "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1": {
+          "max-lines-per-function": 136
+        },
+        "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1/anonymous:82241e3fa72e5245#1": {
+          "max-depth": 5,
+          "max-lines-per-function": 108
+        },
+        "class CodingListStreamService#1/method processJsonExport#1": {
+          "complexity": 25,
+          "max-depth": 5
+        },
+        "class CodingListStreamService#1/method writeCodingListExcelToFile#1": {
+          "complexity": 27,
+          "max-depth": 5,
+          "max-lines-per-function": 124
+        },
+        "class CodingListStreamService#1/method writeCodingResultsByVersionExcelToFile#1": {
+          "complexity": 26,
+          "max-lines-per-function": 152
+        },
+        "class CodingListStreamService#1/method writeCodingResultsByVersionGeoGebraZipToStream#1": {
+          "complexity": 28,
+          "max-depth": 6,
+          "max-lines-per-function": 196
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-process.service.ts": {
+      "file": {
+        "max-lines": 2546
+      },
+      "functions": {
+        "class CodingProcessService#1/method codeAutocoderResponses#1": {
+          "max-lines-per-function": 162
+        },
+        "class CodingProcessService#1/method codeAutocoderResponses#1/anonymous:ea19593328e51dfe#1": {
+          "complexity": 32
+        },
+        "class CodingProcessService#1/method getCompleteDerivedTuple#1": {
+          "complexity": 21
+        },
+        "class CodingProcessService#1/method processAndCodeResponses#1": {
+          "complexity": 67,
+          "max-depth": 5,
+          "max-lines-per-function": 351
+        },
+        "class CodingProcessService#1/method processAndCodeResponses#1/anonymous:d7e78c5373b31530#1": {
+          "complexity": 25
+        },
+        "class CodingProcessService#1/method processTestPersonsBatchInternal#1": {
+          "complexity": 62,
+          "max-lines-per-function": 329
+        },
+        "class CodingProcessService#1/method recalculateCompleteDerivedResults#1": {
+          "max-lines-per-function": 204
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-progress.service.ts": {
+      "file": {
+        "max-lines": 1591
+      },
+      "functions": {
+        "class CodingProgressService#1/method getVariableCoverageOverview#1": {
+          "max-lines-per-function": 320
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-readiness.service.ts": {
+      "file": {
+        "max-lines": 1048
+      },
+      "functions": {}
+    },
+    "apps/backend/src/app/database/services/coding/coding-response-filter.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingResponseFilterService#1/method createBatchQueryBuilder#1": {
+          "complexity": 25,
+          "max-lines-per-function": 173
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-results-export.service.ts": {
+      "file": {
+        "max-lines": 1811
+      },
+      "functions": {
+        "class CodingResultsExportService#1/method exportAggregatedNewColumnPerCoder#1": {
+          "complexity": 98,
+          "max-lines-per-function": 253
+        },
+        "class CodingResultsExportService#1/method exportAggregatedNewRowPerVariable#1": {
+          "complexity": 106,
+          "max-depth": 5,
+          "max-lines-per-function": 262
+        },
+        "class CodingResultsExportService#1/method exportCodingResultsAggregated#1": {
+          "complexity": 109,
+          "max-depth": 5,
+          "max-lines-per-function": 254
+        },
+        "class CodingResultsExportService#1/method exportCodingResultsByCoder#1": {
+          "complexity": 69,
+          "max-depth": 7,
+          "max-lines-per-function": 199
+        },
+        "class CodingResultsExportService#1/method exportCodingResultsByVariable#1": {
+          "complexity": 102,
+          "max-depth": 7,
+          "max-lines-per-function": 265
+        },
+        "class CodingResultsExportService#1/method exportCodingResultsDetailed#1": {
+          "complexity": 77,
+          "max-depth": 6,
+          "max-lines-per-function": 174
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-results.service.ts": {
+      "file": {
+        "max-lines": 899
+      },
+      "functions": {
+        "class CodingResultsService#1/method applyCodingResultsInPool#1": {
+          "complexity": 53,
+          "max-depth": 8,
+          "max-lines-per-function": 473
+        },
+        "class CodingResultsService#1/method applyEmptyResponseCodingLocked#1": {
+          "max-lines-per-function": 118
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-statistics.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingStatisticsService#1/method getCodingStatistics#1": {
+          "max-lines-per-function": 127
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-times-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingTimesExportService#1/method exportCodingTimesReport#1": {
+          "complexity": 53,
+          "max-depth": 5,
+          "max-lines-per-function": 205
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-timing-report-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingTimingReportExportService#1/method exportCodingTimesReport#1": {
+          "complexity": 56,
+          "max-depth": 5,
+          "max-lines-per-function": 233
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-validation.service.ts": {
+      "file": {
+        "max-lines": 1766
+      },
+      "functions": {
+        "class CodingValidationService#1/method computeVariableCaseInfo#1": {
+          "max-lines-per-function": 126
+        },
+        "class CodingValidationService#1/method fetchManualCodingScopeFromDb#1": {
+          "max-lines-per-function": 251
+        },
+        "class CodingValidationService#1/method getCodingIncompleteVariables#1": {
+          "complexity": 26,
+          "max-lines-per-function": 110
+        },
+        "class CodingValidationService#1/method validateCodingCompleteness#1": {
+          "max-lines-per-function": 178
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-variable-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingVariableExportService#1/method exportCodingResultsByVariable#1": {
+          "complexity": 82,
+          "max-depth": 6,
+          "max-lines-per-function": 319
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/coding-version.service.ts": {
+      "file": {},
+      "functions": {
+        "class CodingVersionService#1/method resetCodingVersion#1": {
+          "complexity": 27,
+          "max-lines-per-function": 191
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/cohens-kappa-statistics.service.ts": {
+      "file": {},
+      "functions": {
+        "class CohensKappaStatisticsService#1/method buildStatistics#1": {
+          "max-lines-per-function": 215
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/double-coding-review-decision.service.ts": {
+      "file": {
+        "max-lines": 1231
+      },
+      "functions": {
+        "class DoubleCodingReviewDecisionService#1/method applyDoubleCodedResolutions#1": {
+          "max-lines-per-function": 112
+        },
+        "class DoubleCodingReviewDecisionService#1/method applyResolutionToAggregationSiblings#1": {
+          "max-lines-per-function": 126
+        },
+        "class DoubleCodingReviewDecisionService#1/method reconcileAppliedAggregationResolutions#1": {
+          "max-lines-per-function": 108
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/double-coding-review-query.service.ts": {
+      "file": {
+        "max-lines": 1527
+      },
+      "functions": {
+        "class DoubleCodingReviewQueryService#1/method getCodedVariablesForKappa#1": {
+          "complexity": 31,
+          "max-lines-per-function": 237
+        },
+        "class DoubleCodingReviewQueryService#1/method getDoubleCodedReviewData#1": {
+          "complexity": 102,
+          "max-lines-per-function": 447
+        },
+        "class DoubleCodingReviewQueryService#1/method getWorkspaceCohensKappaSummary#1": {
+          "complexity": 39,
+          "max-depth": 6,
+          "max-lines-per-function": 213
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/external-coding-import.service.ts": {
+      "file": {
+        "max-lines": 1132
+      },
+      "functions": {
+        "class ExternalCodingImportService#1/method detectFormat#1": {
+          "complexity": 27
+        },
+        "class ExternalCodingImportService#1/method importExternalCodingInPool#1": {
+          "complexity": 68,
+          "max-depth": 7,
+          "max-lines-per-function": 358
+        },
+        "class ExternalCodingImportService#1/method importExternalCodingInPool#1/anonymous:c948ca4f671e6049#1": {
+          "complexity": 25
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/item-dataset-cell-resolver.ts": {
+      "file": {},
+      "functions": {
+        "class ItemDatasetCellResolver#1/method resolveDerivedState#1": {
+          "complexity": 27,
+          "max-lines-per-function": 153
+        },
+        "class ItemDatasetCellResolver#1/method resolveIncrementally#1": {
+          "complexity": 25,
+          "max-lines-per-function": 111
+        },
+        "class ItemDatasetCellResolver#1/method resolveInitialCell#1": {
+          "complexity": 26
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/item-dataset-metadata.service.ts": {
+      "file": {},
+      "functions": {
+        "class ItemDatasetMetadataService#1/method buildColumns#1": {
+          "max-lines-per-function": 131
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/missings-profiles.service.ts": {
+      "file": {},
+      "functions": {
+        "class MissingsProfilesService#1/method getResolvedMissingsProfileForExport#1": {
+          "max-lines-per-function": 101
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/psychometric-analysis-engine.ts": {
+      "file": {},
+      "functions": {
+        "class PsychometricAnalysisEngine#1/method analyzeResponses#1": {
+          "max-lines-per-function": 165
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/psychometric-export-writer.service.ts": {
+      "file": {},
+      "functions": {
+        "class PsychometricExportWriter#1/method writeCsv#1": {
+          "max-lines-per-function": 118
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/coding/psychometric-metadata-resolver.service.ts": {
+      "file": {},
+      "functions": {
+        "class PsychometricMetadataResolver#1/method buildItemMapping#1": {
+          "max-lines-per-function": 257
+        },
+        "class PsychometricMetadataResolver#1/method buildItemMapping#1/anonymous:a1049a6cf221771f#1": {
+          "max-lines-per-function": 208
+        },
+        "class PsychometricMetadataResolver#1/method buildItemMapping#1/anonymous:a1049a6cf221771f#1/anonymous:2726a13d5504314f#1": {
+          "max-lines-per-function": 131
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/jobs/job-definition.service.ts": {
+      "file": {
+        "max-lines": 2127
+      },
+      "functions": {
+        "class JobDefinitionService#1/method attachCreatedJobsCounts#1": {
+          "max-lines-per-function": 128
+        },
+        "class JobDefinitionService#1/method checkVariableConflicts#1": {
+          "max-lines-per-function": 137
+        },
+        "class JobDefinitionService#1/method collectExistingJobBoundChanges#1": {
+          "complexity": 22
+        },
+        "class JobDefinitionService#1/method prepareJobDefinitionUpdate#1": {
+          "complexity": 29,
+          "max-lines-per-function": 136
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
+      "file": {
+        "max-lines": 1064
+      },
+      "functions": {
+        "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
+          "max-lines-per-function": 114
+        },
+        "class PersonPersistenceService#1/method processPersonBooklets#1": {
+          "complexity": 30,
+          "max-depth": 9,
+          "max-lines-per-function": 128
+        },
+        "class PersonPersistenceService#1/method processPersonLogs#1": {
+          "complexity": 21,
+          "max-depth": 5,
+          "max-lines-per-function": 165
+        },
+        "class PersonPersistenceService#1/method saveSubformResponsesForUnit#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/response-management.service.ts": {
+      "file": {},
+      "functions": {
+        "class ResponseManagementService#1/method resolveDuplicateResponses#1": {
+          "max-lines-per-function": 129
+        },
+        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1": {
+          "max-lines-per-function": 113
+        },
+        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1/anonymous:2653e2fc49fa5649#1": {
+          "complexity": 25
+        },
+        "class ResponseManagementService#1/method updateResponsesInDatabase#1": {
+          "max-lines-per-function": 266
+        },
+        "class ResponseManagementService#1/method updateResponsesInDatabase#1/anonymous:3c9d860236452a15#1": {
+          "complexity": 36,
+          "max-lines-per-function": 112
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-anomalies.service.ts": {
+      "file": {
+        "max-lines": 1238
+      },
+      "functions": {
+        "class TestResultsAnomaliesService#1/method findLogAnomaliesForBookletBatch#1": {
+          "max-lines-per-function": 425
+        },
+        "class TestResultsAnomaliesService#1/method findLogAnomaliesForBookletBatch#1/anonymous:17c488826f714fe7#1": {
+          "complexity": 41,
+          "max-lines-per-function": 281
+        },
+        "class TestResultsAnomaliesService#1/method getLogAnomalyDetails#1": {
+          "max-lines-per-function": 103
+        },
+        "class TestResultsAnomaliesService#1/method getLogAnomalySql#1": {
+          "max-lines-per-function": 267
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-deletion-query.service.ts": {
+      "file": {
+        "max-lines": 832
+      },
+      "functions": {
+        "class TestResultsDeletionQueryService#1/method resolveDeleteTargets#1": {
+          "max-lines-per-function": 135
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-export.service.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsExportService#1/method exportTestLogsToStream#1": {
+          "complexity": 26,
+          "max-lines-per-function": 294
+        },
+        "class TestResultsExportService#1/method exportTestResultsToStream#1": {
+          "max-lines-per-function": 249
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-filter-options.service.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
+          "complexity": 56,
+          "max-lines-per-function": 476
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-frequencies.service.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsFrequenciesService#1/method findFlatResponseFrequencies#1": {
+          "max-lines-per-function": 169
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-mutation.service.ts": {
+      "file": {
+        "max-lines": 882
+      },
+      "functions": {
+        "class TestResultsMutationService#1/method deleteTestResultResponsesByRequestLocked#1": {
+          "max-lines-per-function": 101
+        },
+        "class TestResultsMutationService#1/method deleteTestResultsByRequestLocked#1": {
+          "max-lines-per-function": 109
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-query.service.ts": {
+      "file": {
+        "max-lines": 1142
+      },
+      "functions": {
+        "class TestResultsQueryService#1/method findBookletLogsByUnitId#1": {
+          "max-lines-per-function": 118
+        },
+        "class TestResultsQueryService#1/method findPersonTestResults#1": {
+          "max-lines-per-function": 216
+        },
+        "class TestResultsQueryService#1/method findUnitsByName#1": {
+          "max-lines-per-function": 127
+        },
+        "class TestResultsQueryService#1/method getWorkspaceTestResultsOverview#1": {
+          "max-lines-per-function": 162
+        },
+        "class TestResultsQueryService#1/method quickSearchTestResults#1": {
+          "max-lines-per-function": 247
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-replay.service.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsReplayService#1/method findUnitResponse#1": {
+          "max-lines-per-function": 184
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/test-results-search.service.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsSearchService#1/method searchResponses#1": {
+          "max-lines-per-function": 332
+        },
+        "class TestResultsSearchService#1/method searchResponses#1/function runSearch#1": {
+          "complexity": 39,
+          "max-lines-per-function": 253
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/testcenter.service.ts": {
+      "file": {
+        "max-lines": 1456
+      },
+      "functions": {
+        "class TestcenterService#1/method executeWorkspaceImport#1": {
+          "complexity": 33,
+          "max-lines-per-function": 186
+        },
+        "class TestcenterService#1/method importFiles#1": {
+          "complexity": 41,
+          "max-lines-per-function": 257
+        },
+        "class TestcenterService#1/method importResponses#1": {
+          "max-lines-per-function": 115
+        },
+        "class TestcenterService#1/method importResponses#1/anonymous:48014e85ffd4804d#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
+      "file": {
+        "max-lines": 968
+      },
+      "functions": {
+        "class UploadResultsService#1/method buildImportSummary#1": {
+          "complexity": 22
+        },
+        "class UploadResultsService#1/method filterImportedPersons#1": {
+          "complexity": 25
+        },
+        "class UploadResultsService#1/method processUpload#1": {
+          "complexity": 21,
+          "max-depth": 5,
+          "max-lines-per-function": 410
+        },
+        "class UploadResultsService#1/method processUpload#1/anonymous:17c848eb0f2cddb2#1": {
+          "max-lines-per-function": 130
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/variable-analysis-replay.service.ts": {
+      "file": {},
+      "functions": {
+        "class VariableAnalysisReplayService#1/method getVariableAnalysis#1": {
+          "max-lines-per-function": 283
+        },
+        "class VariableAnalysisReplayService#1/method getVariableAnalysis#1/function runAnalysis#1": {
+          "complexity": 51,
+          "max-lines-per-function": 250
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/test-results/variable-analysis.service.ts": {
+      "file": {
+        "max-lines": 1383
+      },
+      "functions": {}
+    },
+    "apps/backend/src/app/database/services/validation/export-validation-results.service.ts": {
+      "file": {},
+      "functions": {
+        "class ExportValidationResultsService#1/method exportValidationResultsAsExcel#1": {
+          "complexity": 25,
+          "max-lines-per-function": 129
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/validation/validation-task.service.ts": {
+      "file": {},
+      "functions": {
+        "class ValidationTaskService#1/method processValidationTask#1": {
+          "complexity": 53,
+          "max-lines-per-function": 217
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/validation/workspace-response-validation.service.ts": {
+      "file": {
+        "max-lines": 1504
+      },
+      "functions": {
+        "class WorkspaceResponseValidationService#1/method deleteAllInvalidResponsesUnlocked#1": {
+          "max-depth": 5
+        },
+        "class WorkspaceResponseValidationService#1/method validateDuplicateResponses#1": {
+          "complexity": 36,
+          "max-lines-per-function": 192
+        },
+        "class WorkspaceResponseValidationService#1/method validateResponseStatus#1": {
+          "complexity": 25,
+          "max-lines-per-function": 169
+        },
+        "class WorkspaceResponseValidationService#1/method validateVariables#1": {
+          "complexity": 44,
+          "max-depth": 5,
+          "max-lines-per-function": 281
+        },
+        "class WorkspaceResponseValidationService#1/method validateVariableTypes#1": {
+          "complexity": 51,
+          "max-depth": 6,
+          "max-lines-per-function": 289
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/validation/workspace-test-files-validation.service.ts": {
+      "file": {
+        "max-lines": 1845
+      },
+      "functions": {
+        "class WorkspaceTestFilesValidationService#1/method getUnusedTestFilesFromValidationGraph#1": {
+          "max-lines-per-function": 108
+        },
+        "class WorkspaceTestFilesValidationService#1/method processTestTakerWithCache#1": {
+          "complexity": 43,
+          "max-lines-per-function": 359
+        },
+        "class WorkspaceTestFilesValidationService#1/method validateTestFiles#1": {
+          "complexity": 25,
+          "max-depth": 6,
+          "max-lines-per-function": 324
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/workspace/booklet-info.service.ts": {
+      "file": {},
+      "functions": {
+        "class BookletInfoService#1/method extractRestrictionsFromElement#1": {
+          "complexity": 41
+        },
+        "class BookletInfoService#1/method parseBookletXml#1": {
+          "complexity": 32
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/workspace/resource-package.service.ts": {
+      "file": {
+        "max-lines": 861
+      },
+      "functions": {}
+    },
+    "apps/backend/src/app/database/services/workspace/unit-info.service.ts": {
+      "file": {},
+      "functions": {
+        "class UnitInfoService#1/method parseUnitXml#1": {
+          "complexity": 58,
+          "max-lines-per-function": 233
+        }
+      }
+    },
+    "apps/backend/src/app/database/services/workspace/workspace-file-metadata.service.ts": {
+      "file": {
+        "max-lines": 1369
+      },
+      "functions": {
+        "class WorkspaceFileMetadataService#1/method getUnitVariableDetails#1": {
+          "complexity": 96,
+          "max-depth": 8,
+          "max-lines-per-function": 397
+        },
+        "class WorkspaceFileMetadataService#1/method getVariableInfoForScheme#1": {
+          "complexity": 21,
+          "max-depth": 6
+        },
+        "class WorkspaceFileMetadataService#1/method refreshUnitVariableCacheInternal#1": {
+          "complexity": 95,
+          "max-depth": 9,
+          "max-lines-per-function": 421
+        }
+      }
+    },
+    "apps/backend/src/app/http/request-validation.ts": {
+      "file": {},
+      "functions": {
+        "class RequestValidationPipe#1/method transform#1": {
+          "complexity": 24
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/autocoder-run.service.ts": {
+      "file": {},
+      "functions": {
+        "class AutocoderRunService#1/method run#1": {
+          "complexity": 23,
+          "max-lines-per-function": 167
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/job-queue.service.ts": {
+      "file": {
+        "max-lines": 1266
+      },
+      "functions": {
+        "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
+          "max-depth": 5
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/processors/coding-analysis.processor.ts": {
+      "file": {},
+      "functions": {
+        "class CodingAnalysisProcessor#1/method analyzeBatch#1": {
+          "complexity": 40
+        },
+        "class CodingAnalysisProcessor#1/method computeResponseAnalysis#1": {
+          "max-lines-per-function": 151
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/processors/export-job.processor.ts": {
+      "file": {
+        "max-lines": 826
+      },
+      "functions": {
+        "class ExportJobProcessor#1/method processWorkspaceJob#1": {
+          "complexity": 113,
+          "max-lines-per-function": 493
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/processors/variable-analysis-schema.util.ts": {
+      "file": {},
+      "functions": {
+        "function resolveSchemaValue#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/backend/src/app/job-queue/processors/variable-analysis.processor.ts": {
+      "file": {
+        "max-lines": 1257
+      },
+      "functions": {
+        "class VariableAnalysisProcessor#1/method processWorkspaceJob#1": {
+          "max-lines-per-function": 197
+        },
+        "class VariableAnalysisProcessor#1/method recalculateMultipleVariableFrequencies#1": {
+          "max-lines-per-function": 129
+        }
+      }
+    },
+    "apps/backend/src/app/utils/voud/extractVariableLocation.ts": {
+      "file": {},
+      "functions": {
+        "function collectIdsWithKeyedPaths#1": {
+          "complexity": 23
+        }
+      }
+    },
+    "apps/backend/src/app/wsg-admin/coding-job/coding-job.controller.ts": {
+      "file": {
+        "max-lines": 1461
+      },
+      "functions": {
+        "class WsgCodingJobController#1/method getCodingJobReplaySession#1": {
+          "max-lines-per-function": 185
+        },
+        "class WsgCodingJobController#1/method getCodingJobs#1": {
+          "max-lines-per-function": 177
+        },
+        "class WsgCodingJobController#1/method getCodingJobUnits#1": {
+          "max-lines-per-function": 106
+        }
+      }
+    },
+    "apps/frontend/src/app/coding-management/coding-variables-dialog/coding-variables-dialog.component.ts": {
+      "file": {},
+      "functions": {
+        "class CodingVariablesDialogComponent#1/method setupFilter#1/anonymous:331007c6059e7c84#1": {
+          "complexity": 22
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/code-selector/code-selector.component.ts": {
+      "file": {
+        "max-lines": 908
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/coder-training/coder-training.component.ts": {
+      "file": {
+        "max-lines": 1417
+      },
+      "functions": {
+        "class CoderTrainingComponent#1/method onStartTraining#1": {
+          "max-lines-per-function": 130
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component.ts": {
+      "file": {
+        "max-lines": 1288
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-form.ts": {
+      "file": {},
+      "functions": {
+        "function createCodingJobForm#1": {
+          "complexity": 35
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-job-definition-dialog/job-definition-recovery.ts": {
+      "file": {},
+      "functions": {
+        "function hasRecoverableDefinitionState#1": {
+          "complexity": 28
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.component.ts": {
+      "file": {
+        "max-lines": 1018
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component.ts": {
+      "file": {
+        "max-lines": 827
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/coding-jobs/coding-jobs.component.ts": {
+      "file": {
+        "max-lines": 1570
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/coding-management-manual/coding-import-file.ts": {
+      "file": {},
+      "functions": {
+        "function buildFormatDialogData#1": {
+          "max-lines-per-function": 102
+        },
+        "function detectFormatFromHeaders#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.ts": {
+      "file": {
+        "max-lines": 1452
+      },
+      "functions": {
+        "class CodingManagementManualComponent#1/method loadManualTabData#1": {
+          "complexity": 25
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-import.facade.ts": {
+      "file": {},
+      "functions": {
+        "class ManualCodingImportFacade#1/method importFile#1": {
+          "max-lines-per-function": 129
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-planning.ts": {
+      "file": {},
+      "functions": {
+        "class ManualCodingPlanning#1/method getPlanningNextStepDescription#1": {
+          "complexity": 23
+        },
+        "class ManualCodingPlanning#1/method getPlanningStatusDescription#1": {
+          "complexity": 40
+        },
+        "class ManualCodingPlanning#1/method getPlanningStatusState#1": {
+          "complexity": 30
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-management/coding-management.component.ts": {
+      "file": {
+        "max-lines": 1416
+      },
+      "functions": {
+        "class CodingManagementComponent#1/method fetchResponsesByStatus#1/function next#1/anonymous:9e93dd2ca83edb03#1": {
+          "complexity": 28
+        },
+        "class CodingManagementComponent#1/method ngOnInit#1": {
+          "max-lines-per-function": 154
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.ts": {
+      "file": {
+        "max-lines": 1402
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.ts": {
+      "file": {
+        "max-lines": 1194
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
+      "file": {
+        "max-lines": 1242
+      },
+      "functions": {
+        "class CodingJobBackendService#1/method mapApiCodingJob#1": {
+          "complexity": 48
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/services/coding-management.service.ts": {
+      "file": {
+        "max-lines": 828
+      },
+      "functions": {
+        "class CodingManagementService#1/method statisticsDiffer#1": {
+          "complexity": 23
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/services/double-coded-review-api.service.ts": {
+      "file": {},
+      "functions": {
+        "class DoubleCodedReviewApiService#1/method getDoubleCodedVariablesForReview#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/frontend/src/app/coding/services/test-person-coding.service.ts": {
+      "file": {
+        "max-lines": 1605
+      },
+      "functions": {
+        "class TestPersonCodingService#1/method importExternalCodingWithProgress#1": {
+          "complexity": 24,
+          "max-depth": 7
+        }
+      }
+    },
+    "apps/frontend/src/app/core/interceptors/auth.interceptor.ts": {
+      "file": {},
+      "functions": {
+        "function authInterceptor : HttpInterceptorFn#1": {
+          "max-lines-per-function": 105
+        },
+        "function authInterceptor : HttpInterceptorFn#1/anonymous:f6c33ebbbbbf99e5#1/function error#1": {
+          "complexity": 32
+        }
+      }
+    },
+    "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
+      "file": {
+        "max-lines": 1398
+      },
+      "functions": {
+        "class ReplayComponent#1/method applyUnitChanged#1": {
+          "complexity": 21
+        },
+        "class ReplayComponent#1/method onKeyDown#1": {
+          "complexity": 31
+        }
+      }
+    },
+    "apps/frontend/src/app/replay/components/unit-player/unit-player.component.ts": {
+      "file": {},
+      "functions": {
+        "class UnitPlayerComponent#1/method subscribeForMessages#1": {
+          "max-lines-per-function": 121
+        },
+        "class UnitPlayerComponent#1/method subscribeForMessages#1/anonymous:5ff7268ca0f42ee6#1": {
+          "complexity": 41,
+          "max-lines-per-function": 117
+        }
+      }
+    },
+    "apps/frontend/src/app/replay/services/replay-coding.service.ts": {
+      "file": {
+        "max-lines": 1139
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/replay/utils/dom-utils.ts": {
+      "file": {},
+      "functions": {
+        "function highlightAspectSectionWithAnchor#1": {
+          "max-depth": 6
+        }
+      }
+    },
+    "apps/frontend/src/app/shared/services/response/response.service.ts": {
+      "file": {},
+      "functions": {
+        "class ResponseService#1/method searchResponses#1": {
+          "complexity": 21,
+          "max-lines-per-function": 115
+        }
+      }
+    },
+    "apps/frontend/src/app/shared/services/test-result/test-result.service.ts": {
+      "file": {
+        "max-lines": 842
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/ws-admin/components/export/export.component.ts": {
+      "file": {},
+      "functions": {
+        "class ExportComponent#1/get isExportDisabled#1": {
+          "complexity": 22
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts": {
+      "file": {
+        "max-lines": 1305
+      },
+      "functions": {
+        "class FilesValidationDialogComponent#1/method openMetadataFile#1": {
+          "complexity": 23,
+          "max-lines-per-function": 104
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.ts": {
+      "file": {
+        "max-lines": 959
+      },
+      "functions": {
+        "class TestCenterImportComponent#1/method continueTestResultsImport#1": {
+          "complexity": 22
+        },
+        "class TestCenterImportComponent#1/method performImport#1": {
+          "max-lines-per-function": 163
+        },
+        "class TestCenterImportComponent#1/method performImport#1/function next#1": {
+          "complexity": 27,
+          "max-lines-per-function": 107
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
+      "file": {
+        "max-lines": 1371
+      },
+      "functions": {
+        "class TestFilesComponent#1/method handleValidationResponse#1": {
+          "max-lines-per-function": 136
+        },
+        "class TestFilesComponent#1/method testCenterImport#1/anonymous:b3dad425dc702101#1": {
+          "complexity": 24
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-results-search/test-results-search.component.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsSearchComponent#1/method createTableFilters#1": {
+          "complexity": 26
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsFlatTableComponent#1/method syncMediaFiltersFromFlatFilters#1": {
+          "complexity": 21
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-results/test-results-import.facade.ts": {
+      "file": {},
+      "functions": {
+        "class TestResultsImportFacade#1/method testCenterImport#1": {
+          "max-lines-per-function": 278
+        },
+        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:58ef6a101d5649a5#1": {
+          "max-lines-per-function": 164
+        },
+        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:58ef6a101d5649a5#1/anonymous:287c1341b49ea3fc#1": {
+          "complexity": 25,
+          "max-lines-per-function": 138
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.ts": {
+      "file": {
+        "max-lines": 1241
+      },
+      "functions": {}
+    },
+    "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.ts": {
+      "file": {
+        "max-lines": 1172
+      },
+      "functions": {
+        "class VariableAnalysisDialogComponent#1/method analyzeVariables#1": {
+          "max-lines-per-function": 137
+        }
+      }
+    },
+    "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.ts": {
+      "file": {
+        "max-lines": 959
+      },
+      "functions": {
+        "class TestResultsUploadStateService#1/method finishBatch#1": {
+          "max-lines-per-function": 159
+        },
+        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1": {
+          "max-lines-per-function": 141
+        },
+        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1/anonymous:91b09bc27fe02d6a#1": {
+          "complexity": 22
+        }
+      }
+    }
+  }
+}

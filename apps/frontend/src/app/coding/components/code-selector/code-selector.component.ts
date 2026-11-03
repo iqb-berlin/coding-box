@@ -15,6 +15,8 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { IndexedReplayUnit, ReplayUnitIndex, sameBundleCase } from './replay-unit-index';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { activateOnKeyboard } from '../../../shared/utils/keyboard-activation.util';
 import {
   BundleContext,
@@ -57,11 +59,6 @@ interface BundleVariableNavigationItem {
   progress: { coded: number; total: number; percentage: number };
 }
 
-interface IndexedReplayUnit {
-  unit: UnitsReplayUnit;
-  index: number;
-}
-
 @Component({
   selector: 'coding-box-code-selector',
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -75,6 +72,10 @@ interface IndexedReplayUnit {
   }
 })
 export class CodeSelectorComponent implements OnChanges {
+  private readonly uiTranslate = injectUiTranslator();
+
+  private readonly unitIndex = new ReplayUnitIndex();
+
   protected readonly onActionKeydown = activateOnKeyboard;
 
   private readonly injector = inject(Injector);
@@ -156,18 +157,18 @@ export class CodeSelectorComponent implements OnChanges {
   ]);
 
   private readonly safeHtmlCache = new Map<string, SafeHtml>();
-  private indexedUnitsSource: UnitsReplayUnit[] | null = null;
+
   private readonly indexedUnitsByVariable =
-    new Map<string, IndexedReplayUnit[]>();
+    this.unitIndex.byVariable;
 
   private readonly indexedUnitsByDefinitionVariable =
-    new Map<string, IndexedReplayUnit[]>();
+    this.unitIndex.byDefinitionVariable;
 
   private readonly indexedUnitsByBundle =
-    new Map<number, IndexedReplayUnit[]>();
+    this.unitIndex.byBundle;
 
   private readonly indexedUnitsByResponseId =
-    new Map<number, IndexedReplayUnit>();
+    this.unitIndex.byResponseId;
 
   onDocumentClick(event: MouseEvent): void {
     if (
@@ -246,12 +247,12 @@ export class CodeSelectorComponent implements OnChanges {
         },
         {
           id: -3,
-          label: `(mir) ${this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer')}`,
+          label: this.uiTranslate('ui-text.code-selector.mir-label', { value1: this.translateService.instant('code-selector.coding-issue-options.invalid-joke-answer') }),
           type: 'codingIssueOption'
         },
         {
           id: -4,
-          label: `(mci) ${this.translateService.instant('code-selector.coding-issue-options.technical-problems')} `,
+          label: this.uiTranslate('ui-text.code-selector.mci-label', { value1: this.translateService.instant('code-selector.coding-issue-options.technical-problems') }),
           type: 'codingIssueOption'
         },
         {
@@ -808,7 +809,7 @@ export class CodeSelectorComponent implements OnChanges {
           result.push({
             key,
             type: 'variable',
-            label: `${unitName} / ${unit.variableId}`,
+            label: this.uiTranslate('ui-text.code-selector.variable-location', { unitName: unitName, variableId: unit.variableId }),
             variableId: unit.variableId,
             unitName
           });
@@ -880,7 +881,7 @@ export class CodeSelectorComponent implements OnChanges {
 
       return {
         key,
-        label: `${unitName} / ${variable.variableId}`,
+        label: this.uiTranslate('ui-text.code-selector.variable-location', { unitName: unitName, variableId: variable.variableId }),
         variableId: variable.variableId,
         unitName,
         targetUnit,
@@ -925,17 +926,7 @@ export class CodeSelectorComponent implements OnChanges {
     unit: UnitsReplayUnit,
     currentUnit: UnitsReplayUnit | undefined,
     context: BundleContext
-  ): boolean {
-    if (unit.bundleContext?.caseKey && context.caseKey) {
-      return unit.bundleContext.caseKey === context.caseKey;
-    }
-
-    if (currentUnit?.testPerson || unit.testPerson) {
-      return unit.testPerson === currentUnit?.testPerson;
-    }
-
-    return unit === currentUnit;
-  }
+  ): boolean { return sameBundleCase(unit, currentUnit, context); }
 
   protected get activeBundleVariableNavigationItem(): BundleVariableNavigationItem | null {
     return this.bundleVariableNavigationItems.find(item => item.active) || null;
@@ -1064,68 +1055,10 @@ export class CodeSelectorComponent implements OnChanges {
     return `bundle:${bundleId}`;
   }
 
-  private ensureUnitIndexes(): void {
-    const units = this.unitsData()?.units || null;
-    if (units === this.indexedUnitsSource) {
-      return;
-    }
-
-    this.indexedUnitsSource = units;
-    this.indexedUnitsByVariable.clear();
-    this.indexedUnitsByDefinitionVariable.clear();
-    this.indexedUnitsByBundle.clear();
-    this.indexedUnitsByResponseId.clear();
-    if (!units) {
-      return;
-    }
-
-    units.forEach((unit, index) => {
-      const entry = { unit, index };
-      this.indexedUnitsByResponseId.set(unit.id, entry);
-
-      if (unit.variableId) {
-        const variableKey = `${unit.alias || unit.name}::${unit.variableId}`;
-        this.addIndexedUnit(
-          this.indexedUnitsByVariable,
-          variableKey,
-          entry
-        );
-        this.addIndexedUnit(
-          this.indexedUnitsByDefinitionVariable,
-          `${unit.name.toUpperCase()}::${unit.variableId}`,
-          entry
-        );
-      }
-      if (unit.variableBundleId !== null &&
-        unit.variableBundleId !== undefined) {
-        this.addIndexedUnit(
-          this.indexedUnitsByBundle,
-          unit.variableBundleId,
-          entry
-        );
-      }
-    });
-  }
+  private ensureUnitIndexes(): void { this.unitIndex.update(this.unitsData()?.units || null); }
 
   private getIndexedUnitsForDefinitionVariable(
     unitName: string,
     variableId: string
-  ): IndexedReplayUnit[] {
-    return this.indexedUnitsByDefinitionVariable.get(
-      `${unitName.toUpperCase()}::${variableId}`
-    ) || [];
-  }
-
-  private addIndexedUnit<TKey>(
-    index: Map<TKey, IndexedReplayUnit[]>,
-    key: TKey,
-    entry: IndexedReplayUnit
-  ): void {
-    const indexedUnits = index.get(key);
-    if (indexedUnits) {
-      indexedUnits.push(entry);
-    } else {
-      index.set(key, [entry]);
-    }
-  }
+  ): IndexedReplayUnit[] { return this.unitIndex.forDefinitionVariable(unitName, variableId); }
 }

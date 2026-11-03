@@ -15,6 +15,7 @@ import {
   of,
   tap
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -30,6 +31,8 @@ interface AggregationThresholdChange {
 /** Local matching options and their persisted representation. */
 @Injectable()
 export class ManualCodingSettingsFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private readonly appService = inject(AppService);
   private readonly testPersonCodingService = inject(TestPersonCodingService);
@@ -120,7 +123,7 @@ export class ManualCodingSettingsFacade {
             this.thresholdSavedSubject.next();
           }),
           catchError(() => {
-            if (this.isCurrentThresholdChange(change)) this.showError('Fehler beim Speichern der Aggregationseinstellungen');
+            if (this.isCurrentThresholdChange(change)) this.showError(this.uiTranslate('ui-text.manual-coding-settings.aggregation-save-failed'));
             return EMPTY;
           }),
           finalize(() => {
@@ -313,14 +316,14 @@ export class ManualCodingSettingsFacade {
   }
 
   private showError(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['error-snackbar']
     });
   }
 
   private showSuccess(message: string): void {
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['success-snackbar']
     });

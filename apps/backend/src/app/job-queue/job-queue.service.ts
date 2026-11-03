@@ -139,15 +139,7 @@ export interface VariableAnalysisJobData extends VariableAnalysisOptions {
   cacheKey?: string;
 }
 
-export interface VariableAnalysisJobResult {
-  cacheKey: string;
-  workspaceId: number;
-  total: number;
-  storage: 'chunked';
-  variableComboChunks: number;
-  frequencyChunks: number;
-  storedAt: string;
-}
+export type VariableAnalysisJobResult = VariableAnalysisResultCacheManifest & { cacheKey: string };
 
 export interface VariableAnalysisResultCacheManifest {
   storage: 'chunked';

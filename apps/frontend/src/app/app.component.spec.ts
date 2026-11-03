@@ -7,6 +7,7 @@ import {
   Observable, Subject, of, throwError
 } from 'rxjs';
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
+import { GermanTranslationsTestingModule } from '../testing/german-translations';
 import { AppComponent } from './app.component';
 import { AppService } from './core/services/app.service';
 import { AuthService } from './core/services/auth.service';
@@ -109,7 +110,7 @@ describe('AppComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [AppComponent],
+      imports: [GermanTranslationsTestingModule, AppComponent],
       providers: [
         { provide: AppService, useValue: appService },
         { provide: MatSnackBar, useValue: { dismiss: jest.fn(), open: jest.fn() } },

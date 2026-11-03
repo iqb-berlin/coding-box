@@ -1,7 +1,7 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">Kodiervariablen</h2>
+  <h2 class="dialog-title">{{ 'coding-management.buttons.coding-variables' | translate }}</h2>
   <p class="dialog-explanation">
-    Diese Tabelle zeigt alle Kodiervariablen aus den Aufgaben des Arbeitsbereiches.
+    {{ 'ui-text.coding-variables-dialog.description' | translate }}
   </p>
   <mat-divider></mat-divider>
 
@@ -10,27 +10,27 @@
     <div class="filter-container">
       <div class="filter-row">
         <mat-form-field class="filter-field">
-          <mat-label>Aufgaben Filter</mat-label>
-          <input matInput [(ngModel)]="unitNameFilter" placeholder="Filter nach Aufgabe" (input)="applyFilter()">
+          <mat-label>{{ 'ui-text.coding-variables-dialog.unit-filter' | translate }}</mat-label>
+          <input matInput [(ngModel)]="unitNameFilter" [placeholder]="'ui-text.coding-variables-dialog.unit-filter-placeholder' | translate" (input)="applyFilter()">
           @if (unitNameFilter()) {
-            <button matSuffix mat-icon-button aria-label="Clear" (click)="unitNameFilter.set(''); applyFilter()">
+            <button matSuffix mat-icon-button [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate" (click)="unitNameFilter.set(''); applyFilter()">
               <mat-icon>close</mat-icon>
             </button>
           }
         </mat-form-field>
 
         <mat-form-field class="filter-field">
-          <mat-label>Variablen Filter</mat-label>
-          <input matInput [(ngModel)]="variableIdFilter" placeholder="Filter nach Variablen" (input)="applyFilter()">
+          <mat-label>{{ 'ui-text.coding-variables-dialog.variable-filter' | translate }}</mat-label>
+          <input matInput [(ngModel)]="variableIdFilter" [placeholder]="'ui-text.coding-variables-dialog.variable-filter-placeholder' | translate" (input)="applyFilter()">
           @if (variableIdFilter()) {
-            <button matSuffix mat-icon-button aria-label="Clear" (click)="variableIdFilter.set(''); applyFilter()">
+            <button matSuffix mat-icon-button [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate" (click)="variableIdFilter.set(''); applyFilter()">
               <mat-icon>close</mat-icon>
             </button>
           }
         </mat-form-field>
 
         <mat-form-field class="filter-field">
-          <mat-label>Typ Filter</mat-label>
+          <mat-label>{{ 'ui-text.coding-variables-dialog.type-filter' | translate }}</mat-label>
           <mat-select [(ngModel)]="selectedTypes" multiple (selectionChange)="applyFilter()">
             @for (type of availableTypes; track type) {
               <mat-option [value]="type">
@@ -52,28 +52,28 @@
 
       <div class="filter-row">
         <mat-checkbox [(ngModel)]="hasCodingSchemeFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
-          Nur mit Kodierungsschema
+          {{ 'ui-text.coding-variables-dialog.with-schema' | translate }}
         </mat-checkbox>
 
         <mat-checkbox [(ngModel)]="hasCodesFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
-          Nur mit Codes
+          {{ 'ui-text.coding-variables-dialog.with-codes' | translate }}
         </mat-checkbox>
 
         <mat-checkbox [(ngModel)]="isManualOnlyFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
-          Nur mit manueller Kodierung
+          {{ 'ui-text.coding-variables-dialog.manual-coding-only' | translate }}
         </mat-checkbox>
 
         <mat-checkbox [(ngModel)]="isClosedCodingFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
-          Nur mit geschlossener Kodierung
+          {{ 'ui-text.coding-variables-dialog.closed-coding-only' | translate }}
         </mat-checkbox>
 
         <mat-checkbox [(ngModel)]="isDerivedFilter" (change)="applyFilter()" class="coding-scheme-checkbox">
-          Nur abgeleitete Variablen
+          {{ 'ui-text.coding-variables-dialog.derived-only' | translate }}
         </mat-checkbox>
 
         <button mat-raised-button (click)="clearFilters()">
           <mat-icon>clear</mat-icon>
-          Filter zurücksetzen
+          {{ 'coding.trainings.compare.reset-filters' | translate }}
         </button>
       </div>
     </div>
@@ -81,7 +81,7 @@
     @if (isLoading()) {
       <div class="loading-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p class="loading-text">Lade Kodiervariablen...</p>
+        <p class="loading-text">{{ 'ui-text.coding-variables-dialog.loading' | translate }}</p>
       </div>
     }
 
@@ -91,9 +91,9 @@
 
           <!-- Unit Name Column -->
           <ng-container matColumnDef="unitName">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Unit-Name</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coding-variables-dialog.unit-name' | translate }}</th>
             <td mat-cell *matCellDef="let element">
-              <a class="unit-link" (click)="openUnitInfo(element.unitId)" matTooltip="Unit-Informationen anzeigen"
+              <a class="unit-link" (click)="openUnitInfo(element.unitId)" [matTooltip]="'ui-text.coding-variables-dialog.show-unit-info' | translate"
                 role="button"
                 tabindex="0"
                 (keydown.enter)="onActionKeydown($event)"
@@ -105,11 +105,11 @@
 
           <!-- Variable ID Column -->
           <ng-container matColumnDef="variableId">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Variable</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'export-toast.item-matrix-diagnostics.variable' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               @if (element.variableAlias && element.variableAlias !== element.variableId) {
                 <div class="variable-alias">{{ element.variableAlias }}</div>
-                <div class="variable-id">ID: {{ element.variableId }}</div>
+                <div class="variable-id">{{ 'ui-text.coding-variables-dialog.id' | translate: { variableId: (element.variableId) } }}</div>
               } @else {
                 <div class="variable-alias">{{ element.variableId }}</div>
               }
@@ -124,7 +124,7 @@
 
           <!-- Variable Type Column -->
           <ng-container matColumnDef="variableType">
-            <th mat-header-cell *matHeaderCellDef mat-sort-header>Typ</th>
+            <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'process-overview.filters.type' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               <mat-chip-set>
                 <mat-chip [class]="getTypeClass(element.variableType)">
@@ -136,11 +136,11 @@
 
           <!-- Replay Anchor Column -->
           <ng-container matColumnDef="replayAnchor">
-            <th mat-header-cell *matHeaderCellDef>Replay-Anchor</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'ui-text.coding-variables-dialog.replay-anchor' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               <div class="replay-anchor-cell">
                 <mat-form-field class="replay-anchor-field" subscriptSizing="dynamic">
-                  <mat-label>Anchor</mat-label>
+                  <mat-label>{{ 'ui-text.coding-variables-dialog.anchor' | translate }}</mat-label>
                   <input matInput
                     [ngModel]="element.replayAnchor()"
                     (ngModelChange)="element.replayAnchor.set($event)"
@@ -152,13 +152,13 @@
                   color="primary"
                   [disabled]="element.isSavingReplayAnchor() || !hasReplayAnchorChanges(element)"
                   (click)="saveReplayAnchor(element)"
-                  matTooltip="Replay-Anchor speichern" [attr.aria-label]="'accessibility.actions.save-replay-anchor' | translate">
+                  [matTooltip]="'accessibility.actions.save-replay-anchor' | translate" [attr.aria-label]="'accessibility.actions.save-replay-anchor' | translate">
                   <mat-icon>save</mat-icon>
                 </button>
                 <button mat-icon-button
                   [disabled]="element.isSavingReplayAnchor() || !element.savedReplayAnchor()"
                   (click)="clearReplayAnchor(element)"
-                  matTooltip="Replay-Anchor zurücksetzen" [attr.aria-label]="'accessibility.actions.clear-replay-anchor' | translate">
+                  [matTooltip]="'accessibility.actions.clear-replay-anchor' | translate" [attr.aria-label]="'accessibility.actions.clear-replay-anchor' | translate">
                   <mat-icon>restart_alt</mat-icon>
                 </button>
               </div>
@@ -167,19 +167,19 @@
 
           <!-- Actions Column -->
           <ng-container matColumnDef="actions">
-            <th mat-header-cell *matHeaderCellDef>Aktionen</th>
+            <th mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</th>
             <td mat-cell *matCellDef="let element">
               <div class="action-buttons">
                 <button mat-icon-button
                   (click)="openUnitInfo(element.unitId)"
-                  matTooltip="Unit-Definition anzeigen"
+                  [matTooltip]="'accessibility.actions.open-unit-info' | translate"
                   color="primary" [attr.aria-label]="'accessibility.actions.open-unit-info' | translate">
                   <mat-icon>info</mat-icon>
                 </button>
                 @if (element.hasCodingScheme && element.codingSchemeRef) {
                   <button mat-icon-button
                     (click)="openCodingScheme(element.codingSchemeRef)"
-                    matTooltip="Kodierungsschema öffnen"
+                    [matTooltip]="'accessibility.actions.open-coding-scheme' | translate"
                     color="primary" [attr.aria-label]="'accessibility.actions.open-coding-scheme' | translate">
                     <mat-icon>edit_note</mat-icon>
                   </button>
@@ -197,22 +197,22 @@
     @if (!isLoading() && !hasVariables) {
       <div class="empty-state">
         <mat-icon class="empty-icon">list_alt</mat-icon>
-        <h3>Keine Kodiervariablen gefunden</h3>
-        <p class="empty-text">Es wurden keine Kodiervariablen im Workspace gefunden.</p>
+        <h3>{{ 'ui-text.coding-variables-dialog.empty-title' | translate }}</h3>
+        <p class="empty-text">{{ 'ui-text.coding-variables-dialog.empty-description' | translate }}</p>
       </div>
     }
 
     @if (!isLoading() && hasVariables && !hasFilteredVariables) {
       <div class="empty-state">
         <mat-icon class="empty-icon">filter_alt_off</mat-icon>
-        <h3>Keine Treffer</h3>
+        <h3>{{ 'ui-text.coding-variables-dialog.no-matches-title' | translate }}</h3>
         <p class="empty-text">
-          Es passen keine Kodiervariablen zu den aktuellen Filtern.
+          {{ 'ui-text.coding-variables-dialog.no-matches-description' | translate }}
         </p>
         @if (hasActiveFilters()) {
           <button mat-raised-button (click)="clearFilters()">
             <mat-icon>clear</mat-icon>
-            Filter zurücksetzen
+            {{ 'coding.trainings.compare.reset-filters' | translate }}
           </button>
         }
       </div>
@@ -220,6 +220,6 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-raised-button color="primary" (click)="close()">Schließen</button>
+    <button mat-raised-button color="primary" (click)="close()">{{ 'deferred-view.close' | translate }}</button>
   </div>
 </div>

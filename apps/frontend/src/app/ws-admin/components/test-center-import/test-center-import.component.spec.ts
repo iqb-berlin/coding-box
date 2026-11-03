@@ -11,6 +11,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatIconModule } from '@angular/material/icon';
 import { ReactiveFormsModule } from '@angular/forms';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { TestCenterGroupsStepComponent } from './test-center-groups-step.component';
 import { TestCenterOptionsStepComponent } from './test-center-options-step.component';
 import { TestCenterLoginStepComponent } from './test-center-login-step.component';
@@ -65,7 +66,7 @@ describe('TestCenterImportComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         TranslateModule.forRoot(),
         MatDialogModule,
         MatIconModule,

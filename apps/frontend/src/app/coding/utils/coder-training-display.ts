@@ -1,3 +1,4 @@
+import { UiTranslator } from '../../shared/utils/ui-translator';
 import { CoderTraining } from '../models/coder-training.model';
 
 export function normalizeTrainingLabel(label: string | null | undefined): string {
@@ -20,10 +21,10 @@ export function getDuplicateTrainingLabelMatches(
   ));
 }
 
-export function getTrainingCreatedAtLabel(training: Pick<CoderTraining, 'created_at'>): string {
+export function getTrainingCreatedAtLabel(translate: UiTranslator, training: Pick<CoderTraining, 'created_at'>): string {
   const date = training.created_at ? new Date(training.created_at) : null;
   if (!date || Number.isNaN(date.getTime())) {
-    return 'Datum unbekannt';
+    return translate('ui-text.coder-training-display.unknown-date');
   }
 
   return new Intl.DateTimeFormat('de-DE', {
@@ -47,10 +48,10 @@ export function getTrainingOptionTitle(training: Pick<CoderTraining, 'id' | 'lab
   return `${training.label} · ID ${training.id}`;
 }
 
-export function getTrainingOptionMeta(
+export function getTrainingOptionMeta(translate: UiTranslator,
   training: Pick<CoderTraining, 'created_at' | 'jobsCount'>,
   singular = 'Job',
   plural = 'Jobs'
 ): string {
-  return `${getTrainingCreatedAtLabel(training)} · ${getTrainingJobsLabel(training, singular, plural)}`;
+  return `${getTrainingCreatedAtLabel(translate, training)} · ${getTrainingJobsLabel(training, singular, plural)}`;
 }

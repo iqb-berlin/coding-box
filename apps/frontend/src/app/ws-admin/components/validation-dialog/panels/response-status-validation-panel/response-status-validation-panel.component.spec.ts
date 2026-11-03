@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../../../testing/german-translations';
 import { ResponseStatusValidationService } from '../../../../services/validation';
 import { ResponseStatusValidationPanelComponent } from './response-status-validation-panel.component';
 
@@ -39,6 +40,7 @@ describe('ResponseStatusValidationPanelComponent', () => {
     };
     snackBar = { open: jest.fn() };
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: ResponseStatusValidationService, useValue: service },
         { provide: MatSnackBar, useValue: snackBar }

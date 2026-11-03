@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -16,6 +17,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import {
@@ -41,7 +43,7 @@ export interface ContentPoolImportDialogResult {
   templateUrl: './content-pool-import-dialog.component.html',
   styleUrls: ['./content-pool-import-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -54,6 +56,8 @@ export interface ContentPoolImportDialogResult {
   ]
 })
 export class ContentPoolImportDialogComponent implements OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly data = inject<ContentPoolImportDialogData>(MAT_DIALOG_DATA);
 
   private readonly destroyRef = inject(DestroyRef);
@@ -101,19 +105,19 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
           this.hasLoadedAcps.set(true);
           this.acps.set(response.acps || []);
           if (this.acps().length === 0) {
-            this.errorMessage.set('Keine ACPs gefunden oder kein Zugriff vorhanden.');
+            this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.no-packages'));
           }
         },
         error: error => {
           this.isLoadingAcps.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, 'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.packages-load-failed')));
         }
       });
   }
 
   protected importAcp(): void {
     if (!this.selectedAcpId()) {
-      this.errorMessage.set('Bitte ein ACP auswählen.');
+      this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.package-required'));
       return;
     }
 
@@ -123,7 +127,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       jobId: '',
       status: 'pending',
       phase: 'queued',
-      message: 'Import wird vorbereitet...',
+      message: this.uiTranslate('ui-text.content-pool-import-dialog.preparing-import'),
       processedFiles: 0,
       totalFiles: 0,
       progress: 0,
@@ -143,7 +147,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
           if (progress.status === 'failed') {
             this.isImporting.set(false);
             this.errorMessage.set(progress.error ||
-    'ACP konnte nicht importiert werden.');
+    this.uiTranslate('ui-text.content-pool-import-dialog.import-failed'));
             return;
           }
 
@@ -158,7 +162,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
         },
         error: error => {
           this.isImporting.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, 'ACP konnte nicht importiert werden.'));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.import-failed')));
         }
       });
   }
@@ -188,7 +192,7 @@ export class ContentPoolImportDialogComponent implements OnDestroy {
       const currentFile = importProgressSnapshot.currentFileName ?
         `: ${importProgressSnapshot.currentFileName}` :
         '';
-      return `Datei ${importProgressSnapshot.processedFiles} von ${importProgressSnapshot.totalFiles}${currentFile}`;
+      return this.uiTranslate('ui-text.content-pool-import-dialog.file-progress', { processedFiles: importProgressSnapshot.processedFiles, totalFiles: importProgressSnapshot.totalFiles, currentFile: currentFile });
     }
 
     return importProgressSnapshot.message;

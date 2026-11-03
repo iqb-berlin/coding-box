@@ -30,7 +30,7 @@
 
       <!-- Test Person Column -->
       <ng-container matColumnDef="testPerson">
-        <th mat-header-cell *matHeaderCellDef mat-sort-header>Testperson</th>
+        <th mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.coding-job-result-dialog.person' | translate }}</th>
         <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
           {{ element.testPerson }}
         </td>
@@ -49,7 +49,7 @@
       <!-- Coding Issue Column -->
       <ng-container matColumnDef="codingIssue">
         <th mat-header-cell *matHeaderCellDef mat-sort-header>
-          Kodierungshinweis
+          {{ 'ui-text.coding-job-result-dialog.coding-issue' | translate }}
         </th>
         <td mat-cell *matCellDef="let element" (click)="onRowClicked(element)" class="clickable-row">
           {{ element.codingIssue || '-' }}

@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, OnDestroy, signal, computed, input, output, viewChild, effect, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -10,6 +11,7 @@ import { MatTableModule, MatTableDataSource } from '@angular/material/table';
 import { MatPaginator, MatPaginatorModule } from '@angular/material/paginator';
 import { MatIconModule } from '@angular/material/icon';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../../../shared/utils/ui-translator';
 import {
   ValidationPanelHeaderComponent,
   ValidationStatus,
@@ -32,7 +34,7 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-takers-validation-panel',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
@@ -119,6 +121,8 @@ import { buildCsv, downloadCsvFile } from '../../shared/validation-export.util';
   ]
 })
 export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private testTakersValidationService = inject(TestTakersValidationService);
 
   readonly paginator = viewChild(MatPaginator);
@@ -228,7 +232,7 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
 
     this.isExporting.set(true);
     const csvContent = buildCsv(resultSnapshot.missingPersons || [], [
-      { header: 'Gruppe', value: row => row.group },
+      { header: this.uiTranslate('test-results-search.search-field.group'), value: row => row.group },
       { header: 'Login', value: row => row.login },
       { header: 'Code', value: row => row.code },
       { header: 'Grund', value: row => row.reason }

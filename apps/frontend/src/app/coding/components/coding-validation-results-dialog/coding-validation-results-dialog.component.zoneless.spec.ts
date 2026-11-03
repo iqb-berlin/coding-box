@@ -4,6 +4,7 @@ import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { CodingValidationResultsDialogComponent } from './coding-validation-results-dialog.component';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
@@ -40,7 +41,7 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
 
   const button = (translationKey: string): HTMLButtonElement => {
     const buttons = Array.from((fixture.nativeElement as HTMLElement).querySelectorAll('button'));
-    return buttons.find(element => element.textContent?.includes(translationKey))!;
+    return buttons.find(element => element.textContent?.includes(translateGerman(`coding-validation-results.${translationKey}`)))!;
   };
 
   const idle = async (): Promise<void> => {
@@ -60,7 +61,7 @@ describe('CodingValidationResultsDialogComponent without ZoneJS', () => {
       downloadValidationResultsAsExcel: jest.fn(() => downloadResponse)
     };
     await TestBed.configureTestingModule({
-      imports: [CodingValidationResultsDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, CodingValidationResultsDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { validationResults: page(1), validationCacheKey: 'cache-1', expectedCombinations: [] } },

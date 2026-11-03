@@ -16,19 +16,19 @@
             <div class="item-header">
                 <div class="item-info">
                     <span class="index-badge">#{{ i + 1 }}</span>
-                    <span class="info-pill code"><strong>Code:</strong> {{ getResolvedCode(item.response) }}</span>
-                    <span class="info-pill status"><strong>Status:</strong> {{ getResolvedStatus(item.response)
+                    <span class="info-pill code"><strong>{{ 'coding.trainings.compare.code-label' | translate }}</strong> {{ getResolvedCode(item.response) }}</span>
+                    <span class="info-pill status"><strong>{{ 'error.details_status' | translate }}</strong> {{ getResolvedStatus(item.response)
                         }}</span>
-                    <span class="info-pill login"><strong>Login:</strong> {{ item.response.login_name }}</span>
+                    <span class="info-pill login"><strong>{{ 'ui-text.review-list-dialog.login' | translate }}</strong> {{ item.response.login_name }}</span>
                     @if (item.response.person_code || item.response.login_code) {
-                    <span class="info-pill person-code"><strong>Pers-Code:</strong> {{ item.response.person_code ||
+                    <span class="info-pill person-code"><strong>{{ 'ui-text.review-list-dialog.person-code' | translate }}</strong> {{ item.response.person_code ||
                         item.response.login_code }}</span>
                     }
                     @if (item.response.person_group || item.response.login_group) {
-                    <span class="info-pill person-group"><strong>Gruppe:</strong> {{ item.response.person_group ||
+                    <span class="info-pill person-group"><strong>{{ 'ui-text.review-list-dialog.group' | translate }}</strong> {{ item.response.person_group ||
                         item.response.login_group }}</span>
                     }
-                    <span class="info-pill unit"><strong>Unit:</strong> {{ item.response.unitname }}</span>
+                    <span class="info-pill unit"><strong>{{ 'ui-text.review-list-dialog.unit' | translate }}</strong> {{ item.response.unitname }}</span>
                 </div>
             </div>
 

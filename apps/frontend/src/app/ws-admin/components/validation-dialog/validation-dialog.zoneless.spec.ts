@@ -6,6 +6,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import * as csvExport from './shared/validation-export.util';
 import {
   VariablesValidationPanelComponent, VariableTypesValidationPanelComponent, ResponseStatusValidationPanelComponent, GroupResponsesValidationPanelComponent, DuplicateResponsesValidationPanelComponent
@@ -32,7 +33,7 @@ describe('Validation panels inside their real parent dialog', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ValidationDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, ValidationDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideHttpClient(), provideHttpClientTesting(), provideZonelessChangeDetection(),
         { provide: AppService, useValue: { selectedWorkspaceId: 5 } },

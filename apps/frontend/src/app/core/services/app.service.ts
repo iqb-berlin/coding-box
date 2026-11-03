@@ -21,7 +21,7 @@ import { AuthErrorCode } from '../../../../../../api-dto/auth-error-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
-  BACKEND_CONNECTIVITY_ERROR_MESSAGE,
+  BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY,
   isBackendConnectivityStatus
 } from '../interceptors/app-http-error.class';
 import { LogoService } from './logo.service';
@@ -422,7 +422,10 @@ export class AppService {
       const updatedError: AppHttpError = Object.assign(
         Object.create(Object.getPrototypeOf(alikeError)),
         alikeError,
-        { affectedRequests: [...(alikeError.affectedRequests || [])] }
+        {
+          affectedRequests: [...(alikeError.affectedRequests || [])],
+          userMessageParts: [...(alikeError.userMessageParts || [])]
+        }
       );
       this.normalizeError(updatedError);
       updatedError.requestCount = (updatedError.requestCount || 1) + 1;
@@ -430,6 +433,7 @@ export class AppService {
       if (!updatedError.isBackendConnectivityError && !updatedError.message.includes(error.message)) {
         updatedError.message += `; ${error.message}`;
         updatedError.userMessage = updatedError.message;
+        updatedError.userMessageParts.push(...error.userMessageParts);
       }
       this.errorMessages = this.errorMessages.map(current => (current === alikeError ? updatedError : current));
       return;
@@ -622,12 +626,16 @@ export class AppService {
     error.requestCount = error.requestCount || 1;
     error.affectedRequests = error.affectedRequests || [];
     error.userMessage = error.userMessage || error.message;
+    if (!error.userMessageParts?.length) {
+      error.userMessageParts = [{ text: error.userMessage || '' }];
+    }
     error.technicalMessage = error.technicalMessage || '';
     error.isBackendConnectivityError = isBackendConnectivityStatus(error.status);
 
     if (error.isBackendConnectivityError) {
-      error.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
-      error.userMessage = BACKEND_CONNECTIVITY_ERROR_MESSAGE;
+      error.message = BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY;
+      error.userMessage = BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY;
+      error.userMessageParts = [{ key: BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY }];
     }
   }
 

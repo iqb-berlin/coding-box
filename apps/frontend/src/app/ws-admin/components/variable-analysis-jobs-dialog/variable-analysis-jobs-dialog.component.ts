@@ -18,6 +18,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { FormsModule } from '@angular/forms';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
 import { VariableAnalysisService, JobCancelResult } from '../../../shared/services/response/variable-analysis.service';
 
@@ -48,6 +49,8 @@ export interface VariableAnalysisJobsDialogData {
   ]
 })
 export class VariableAnalysisJobsDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<VariableAnalysisJobsDialogComponent>>(MatDialogRef);
   data = inject<VariableAnalysisJobsDialogData>(MAT_DIALOG_DATA);
   private variableAnalysisService = inject(VariableAnalysisService);
@@ -79,8 +82,8 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Laden der Analyse-Aufträge',
-            'Fehler',
+            this.uiTranslate('variable-analysis.error-loading-jobs'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
           this.isLoading.set(false);
@@ -95,15 +98,15 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
         next: (result: JobCancelResult) => {
           if (result.success) {
             this.snackBar.open(
-              result.message || 'Analyse-Auftrag erfolgreich abgebrochen',
+              result.message || this.uiTranslate('variable-analysis.job-cancelled'),
               'OK',
               { duration: 3000 }
             );
             this.refreshJobs();
           } else {
             this.snackBar.open(
-              result.message || 'Fehler beim Abbrechen des Analyse-Auftrags',
-              'Fehler',
+              result.message || this.uiTranslate('variable-analysis.error-cancelling-job'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 3000 }
             );
             this.isLoading.set(false);
@@ -111,8 +114,8 @@ export class VariableAnalysisJobsDialogComponent implements OnInit {
         },
         error: () => {
           this.snackBar.open(
-            'Fehler beim Abbrechen des Analyse-Auftrags',
-            'Fehler',
+            this.uiTranslate('variable-analysis.error-cancelling-job'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
           this.isLoading.set(false);
