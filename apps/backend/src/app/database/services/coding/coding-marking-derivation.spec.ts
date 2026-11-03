@@ -1,5 +1,10 @@
 import { CodingScheme, VariableCodingData } from '@iqbspecs/coding-scheme';
-import { CodingProcessService } from './coding-process.service';
+import { AutocoderEngineService } from './autocoder-engine.service';
+import { AutocoderDerivedService } from './autocoder-derived.service';
+import { AutocoderSchemeService } from './autocoder-scheme.service';
+import { AutocoderResponseService } from './autocoder-response.service';
+
+import { Unit } from '../../entities/unit.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 
 const createResponse = (id: number, variableid: string, extra: Partial<ResponseEntity> = {}): ResponseEntity => ({
@@ -72,13 +77,11 @@ describe('marking derivation through the backend run-2 calculation', () => {
   ])('preserves the schema outcome and v2 inputs (%j)', async (
     automaticResidual, sourceCode, sourceStatus, reachedStatus, expectedStatus, expectedScore
   ) => {
-    const service = Object.create(CodingProcessService.prototype) as {
-      logger: { log: jest.Mock; warn: jest.Mock };
-      validateCodingSchemeForUnit: jest.Mock;
-      processAndCodeResponses: (...args: unknown[]) => Promise<{ allCodedResponses: Record<string, unknown>[] }>;
-    };
-    service.logger = { log: jest.fn(), warn: jest.fn() };
-    service.validateCodingSchemeForUnit = jest.fn().mockResolvedValue(undefined);
+    const engine = new AutocoderEngineService();
+    const schemes = {
+      validateCodingSchemeForUnit: jest.fn().mockResolvedValue(undefined)
+    } as unknown as AutocoderSchemeService;
+    const service = new AutocoderResponseService(engine, new AutocoderDerivedService(engine), schemes);
     const rows = [
       createResponse(1, '03a', {
         value: '[]',
@@ -100,14 +103,15 @@ describe('marking derivation through the backend run-2 calculation', () => {
       })
     ];
     const before = JSON.stringify(rows);
-    const result = await service.processAndCodeResponses(24,
-      [{ id: 1, name: 'TEST', alias: 'TEST' }],
-      new Map([[1, rows]]),
-      new Map([[1, 'TEST.VOCS']]),
-      new Map([['TEST.VOCS', createScheme(automaticResidual as boolean)]]),
-      rows,
-      { totalResponses: 0, statusCounts: {} },
-      2);
+    const result = await service.processAndCodeResponses({
+      workspaceId: 24,
+      units: [{ id: 1, name: 'TEST', alias: 'TEST' } as Unit],
+      unitToResponsesMap: new Map([[1, rows]]),
+      unitToCodingSchemeRefMap: new Map([[1, 'TEST.VOCS']]),
+      fileIdToCodingSchemeMap: new Map([['TEST.VOCS', createScheme(automaticResidual as boolean)]]),
+      statistics: { totalResponses: 0, statusCounts: {} },
+      autoCoderRun: 2
+    });
 
     expect(result.allCodedResponses).toEqual(expect.arrayContaining([
       expect.objectContaining({
