@@ -9,7 +9,8 @@ import { In, Repository } from 'typeorm';
 import {
   Queue, JobsOptions, Job, JobType
 } from 'bullmq';
-import { requireJobId, withQueueJobId } from './job-queue.util';
+import { ContentPoolJobData, ContentPoolJobResult, validateContentPoolJobData } from '../admin/content-pool/content-pool-job';
+import { requireJobId, withQueueJobId, jobMatchesWorkspace } from './job-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
@@ -273,8 +274,18 @@ export class JobQueueService {
     @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
     @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
-    private readonly validationTaskRepository: Repository<ValidationTask>
+    private readonly validationTaskRepository: Repository<ValidationTask>,
+    @InjectQueue('content-pool') private readonly contentPoolQueue: Queue<ContentPoolJobData, ContentPoolJobResult>
   ) { }
+
+  async addContentPoolJob(data: ContentPoolJobData): Promise<Job<ContentPoolJobData, ContentPoolJobResult>> {
+    return this.contentPoolQueue.add(data.operation, validateContentPoolJobData(data), withQueueJobId({
+      // External writes are not safe to retry automatically after a provider error.
+      attempts: 1,
+      removeOnComplete: { age: 1800, count: 1000 },
+      removeOnFail: { age: 86400, count: 1000 }
+    }));
+  }
 
   private getQueue(name: string): Queue | undefined {
     return this.getAllQueues().get(name);
@@ -293,33 +304,22 @@ export class JobQueueService {
       ['response-analysis', this.responseAnalysisQueue],
       ['variable-analysis', this.variableAnalysisQueue],
       ['external-coding-import', this.externalCodingImportQueue],
-      ['database-export', this.databaseExportQueue]
+      ['database-export', this.databaseExportQueue],
+      ['content-pool', this.contentPoolQueue]
     ]);
   }
 
-  private jobMatchesWorkspace(
-    job: Pick<Job, 'data'> | null | undefined,
-    workspaceId: number
-  ): boolean {
-    const jobWorkspaceId = Number(
-      (job?.data as { workspaceId?: unknown } | undefined)?.workspaceId
-    );
-    const requestedWorkspaceId = Number(workspaceId);
-    return Number.isSafeInteger(requestedWorkspaceId) && requestedWorkspaceId > 0 &&
-      Number.isSafeInteger(jobWorkspaceId) && jobWorkspaceId === requestedWorkspaceId;
-  }
-
-  async getWorkspaceJob<T = Record<string, unknown>>(
+  async getWorkspaceJob<T = Record<string, unknown>, R = Job['returnvalue']>(
     workspaceId: number,
     queueName: string,
     jobId: string
-  ): Promise<Job<T> | null> {
+  ): Promise<Job<T, R> | null> {
     if (!Number.isSafeInteger(workspaceId) || workspaceId < 1) return null;
     const queue = this.getQueue(queueName);
     if (!queue) return null;
     const job = await queue.getJob(jobId);
     if (!job || !await this.jobBelongsToWorkspace(queueName, job, workspaceId)) return null;
-    return job as Job<T>;
+    return job as Job<T, R>;
   }
 
   async getJobForWorkspaceDeletionCleanup(queueName: string, jobId: string): Promise<Job | undefined> {
@@ -463,7 +463,7 @@ export class JobQueueService {
       return tasks.some(task => Number(task.workspace_id) === Number(workspaceId));
     }
 
-    return this.jobMatchesWorkspace(job, workspaceId);
+    return jobMatchesWorkspace(job, workspaceId);
   }
 
   private async cancelKnownJob(queueName: string, job: Job): Promise<boolean> {
@@ -554,7 +554,7 @@ export class JobQueueService {
             matchedJobs = existingJobs.filter(j => Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
             );
           } else {
-            matchedJobs = existingJobs.filter(j => this.jobMatchesWorkspace(j, workspaceId));
+            matchedJobs = existingJobs.filter(j => jobMatchesWorkspace(j, workspaceId));
           }
 
           const mappedPromises = matchedJobs.map(async job => {
@@ -694,7 +694,7 @@ export class JobQueueService {
       return jobs.find(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);
     }
 
-    return jobs.find(j => this.jobMatchesWorkspace(j, workspaceId));
+    return jobs.find(j => jobMatchesWorkspace(j, workspaceId));
   }
 
   async assertNoDependencyConflicts(
@@ -869,7 +869,7 @@ export class JobQueueService {
       'delayed'
     ]);
     this.logger.log(`Found ${jobs.length} jobs in total`);
-    return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
+    return jobs.filter(job => jobMatchesWorkspace(job, workspaceId));
   }
 
   async cancelTestPersonCodingJob(jobId: string, workspaceId: number): Promise<boolean> {
@@ -965,7 +965,7 @@ export class JobQueueService {
       'delayed'
     ]);
     this.logger.log(`Found ${jobs.length} export jobs in total`);
-    return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
+    return jobs.filter(job => jobMatchesWorkspace(job, workspaceId));
   }
 
   createExportJobCancellationSignal(jobId: string): AbortSignal {
@@ -1197,7 +1197,7 @@ export class JobQueueService {
       'delayed'
     ]);
     return (
-      jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null
+      jobs.find(job => jobMatchesWorkspace(job, workspaceId)) || null
     );
   }
 
@@ -1235,7 +1235,7 @@ export class JobQueueService {
       'prioritized',
       'delayed'
     ]);
-    return jobs.filter(job => this.jobMatchesWorkspace(job, workspaceId));
+    return jobs.filter(job => jobMatchesWorkspace(job, workspaceId));
   }
 
   async deleteVariableAnalysisJob(jobId: string, workspaceId: number): Promise<boolean> {
@@ -1327,7 +1327,7 @@ export class JobQueueService {
       'delayed'
     ]);
     return (
-      jobs.find(job => this.jobMatchesWorkspace(job, workspaceId)) || null
+      jobs.find(job => jobMatchesWorkspace(job, workspaceId)) || null
     );
   }
 

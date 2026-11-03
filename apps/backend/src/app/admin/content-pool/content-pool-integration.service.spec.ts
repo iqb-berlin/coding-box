@@ -1,7 +1,7 @@
 import {
   BadRequestException,
   ForbiddenException,
-  InternalServerErrorException,
+  BadGatewayException,
   NotFoundException
 } from '@nestjs/common';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
@@ -96,7 +96,8 @@ function createService(
     settingRepository as unknown as CtorParams[0],
     {} as unknown as CtorParams[1],
     httpService as unknown as CtorParams[2],
-    workspaceFilesService as unknown as CtorParams[3]
+    workspaceFilesService as unknown as CtorParams[3],
+    {} as never
   );
 }
 
@@ -219,12 +220,12 @@ describe('ContentPoolIntegrationService settings', () => {
     expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
       1,
       'http://content-pool.test/api/server/capabilities',
-      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+      expect.objectContaining({ headers: { 'X-Server-Token': 'cp_unsaved_token' }, timeout: 60000, maxRedirects: 0 })
     );
     expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
       2,
       'http://content-pool.test/api/server/acp',
-      { headers: { 'X-Server-Token': 'cp_unsaved_token' } }
+      expect.objectContaining({ headers: { 'X-Server-Token': 'cp_unsaved_token' }, timeout: 60000, maxRedirects: 0 })
     );
     expect(httpService.axiosRef.get).toHaveBeenCalledTimes(2);
     expect(httpService.axiosRef.post).not.toHaveBeenCalled();
@@ -347,7 +348,7 @@ describe('ContentPoolIntegrationService settings', () => {
 
     await expect(service.testConnection({
       baseUrl: 'http://content-pool.test'
-    })).rejects.toThrow(InternalServerErrorException);
+    })).rejects.toThrow(BadGatewayException);
   });
 
   it('should explain fallback scope probe server errors from the Content Pool', async () => {
@@ -397,12 +398,12 @@ describe('ContentPoolIntegrationService settings', () => {
     expect(httpService.axiosRef.get).toHaveBeenNthCalledWith(
       3,
       'http://content-pool.test/api/server/acp/00000000-0000-4000-8000-000000000000/files',
-      { headers: { 'X-Server-Token': 'cp_test_token' } }
+      expect.objectContaining({ headers: { 'X-Server-Token': 'cp_test_token' }, timeout: 60000, maxRedirects: 0 })
     );
     expect(httpService.axiosRef.post).toHaveBeenCalledWith(
       'http://content-pool.test/api/server/acp/00000000-0000-4000-8000-000000000000/files/upload?conflictStrategy=reject',
       null,
-      { headers: { 'X-Server-Token': 'cp_test_token' } }
+      expect.objectContaining({ headers: { 'X-Server-Token': 'cp_test_token' }, timeout: 60000, maxRedirects: 0 })
     );
   });
 });
@@ -426,7 +427,7 @@ describe('ContentPoolIntegrationService.listAccessibleAcps', () => {
     });
     expect(httpService.axiosRef.get).toHaveBeenCalledWith(
       'http://content-pool.test/api/server/acp',
-      { headers: { 'X-Server-Token': 'cp_test_token' } }
+      expect.objectContaining({ headers: { 'X-Server-Token': 'cp_test_token' }, timeout: 60000, maxRedirects: 0 })
     );
   });
 });
@@ -514,11 +515,29 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
 });
 
 describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
+  it('does not send an upload when the bounded database lookup refuses its file body', async () => {
+    const httpService = createHttpServiceMock();
+    const files = {
+      find: jest.fn().mockResolvedValue([{ id: 11, filename: 'scheme.vocs', workspace_id: 123 }]),
+      findOne: jest.fn().mockResolvedValue(null)
+    };
+    const service = new ContentPoolIntegrationService(
+      createEnabledSettings() as never, files as never, httpService as never, {} as never, {} as never
+    );
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({ data: [{ id: 'acp-1' }] })
+      .mockResolvedValueOnce({ data: [{ id: 'target', originalName: 'scheme.vocs' }] });
+    await expect(service.uploadWorkspaceFilesToAcp({ workspaceId: 123, acpId: 'acp-1', fileIds: [11] }))
+      .resolves.toMatchObject({ replaced: 0, failed: 1, failedFiles: [{ fileId: 11, filename: 'scheme.vocs', reason: 'Content-Pool file is unavailable or too large' }] });
+    expect(httpService.axiosRef.post).not.toHaveBeenCalled();
+  });
+
   it('should replace matching coding schemes through the server API and report skipped files', async () => {
     const httpService = createHttpServiceMock();
     const workspaceFilesService = createWorkspaceFilesServiceMock();
     const settingRepository = createEnabledSettings();
     const fileUploadRepository = {
+      findOne: jest.fn().mockResolvedValue({ data: Buffer.from('{}').toString('base64') }),
       find: jest.fn().mockResolvedValue([
         {
           id: 11,
@@ -538,7 +557,8 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       settingRepository as never,
       fileUploadRepository as never,
       httpService as never,
-      workspaceFilesService as unknown as WorkspaceFilesService
+      workspaceFilesService as unknown as WorkspaceFilesService,
+      {} as never
     );
 
     httpService.axiosRef.get
@@ -577,12 +597,16 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       versionNumber: 7,
       changelog: 'manual changelog'
     });
+    expect(fileUploadRepository.find).toHaveBeenCalledWith(expect.objectContaining({ select: ['id', 'filename', 'workspace_id'] }));
+    expect(fileUploadRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      select: ['data'], where: expect.objectContaining({ id: 11, workspace_id: 123, data: expect.anything() })
+    }));
     expect(httpService.axiosRef.post).toHaveBeenCalledWith(
       'http://content-pool.test/api/server/acp/acp-1/coding-schemes/replace',
       expect.anything(),
       expect.objectContaining({
         headers: expect.objectContaining({ 'X-Server-Token': 'cp_test_token' }),
-        maxBodyLength: Infinity
+        maxBodyLength: 201 * 1024 * 1024
       })
     );
     expect(reportProgress).toHaveBeenCalledWith(expect.objectContaining({

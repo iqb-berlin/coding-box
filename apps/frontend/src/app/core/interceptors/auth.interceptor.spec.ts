@@ -297,6 +297,22 @@ describe('authInterceptor', () => {
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
+  it('keeps the application session when Testcenter credentials are rejected', async () => {
+    http.post('/api/tc_authentication', {
+      username: 'testcenter-user', password: 'invalid', server: '1', url: ''
+    }).subscribe({ error: () => undefined });
+    await Promise.resolve();
+
+    const request = httpMock.expectOne('/api/tc_authentication');
+    expect(request.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
+    request.flush({ message: 'Invalid Testcenter credentials' }, {
+      status: 422, statusText: 'Unprocessable Entity'
+    });
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.setBackendUnavailable).not.toHaveBeenCalled();
+  });
+
   it.each([500, 504, 999])('leaves a locally handled HTTP %s failure to the requesting view', async status => {
     const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
 

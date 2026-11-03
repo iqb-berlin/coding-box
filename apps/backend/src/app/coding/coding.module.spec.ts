@@ -143,7 +143,7 @@ async function createApplication(): Promise<TestingModule> {
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',
-    'response-analysis', 'variable-analysis', 'external-coding-import', 'database-export'
+    'response-analysis', 'variable-analysis', 'external-coding-import', 'database-export', 'content-pool'
   ];
   queues.forEach(name => builder.overrideProvider(getQueueToken(name)).useValue({}));
 

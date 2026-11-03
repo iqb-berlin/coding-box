@@ -242,3 +242,43 @@ interactive OIDC login, a real user's browser, or a production deployment.
 
 
 [Recorded local runtime proof](qa/backend-hardening-live-2026-10-19.json).
+
+## Testcenter and Content-Pool integrations
+
+`POST /api/tc_authentication` requires the application's bearer token and uses the
+shared Redis authentication rate limit. Testcenter destinations are restricted to
+the exact HTTPS base URLs `iqb-testcenter.de` and `iqb-testcenter1.de` through
+`iqb-testcenter10.de`. Set `TESTCENTER_ALLOWED_URLS` to a comma-separated list of
+additional exact base URLs, including any installation path, for example
+`https://testcenter.example/tci`. Private addresses and HTTP installations require
+explicit entries too. This policy also applies to subsequent imports/downloads.
+Redirects are disabled so credentials cannot be forwarded to another destination;
+configure the final URL. `NODE_EXTRA_CA_CERTS` remains available for private CAs.
+During authentication, a numbered `server` selection takes precedence over a
+retained custom `url`; a custom login URL is used only when `server` is empty.
+
+Invalid Testcenter credentials return HTTP 422; HTTP 401 is reserved for invalid
+application authentication so a provider login failure does not expire the
+Coding-Box session. Denied access returns 403, invalid requests 400, timeouts 504,
+connectivity/TLS failures 503, and invalid upstream responses 502.
+Provider payloads and credentials are not exposed in error messages.
+
+Content-Pool requests have a 60-second deadline, a 50-MiB per-file response limit,
+a 200-MiB total transfer limit and a maximum of 1,000 files per operation.
+Queued input payloads are limited to 1 MiB before they are written to Redis. Downloads
+share one aggregate budget. Uploads load only file metadata initially and check an
+encoded size ceiling in PostgreSQL before reading each file body. Redirects are
+disabled for the application token as well.
+
+The asynchronous Content-Pool start routes enqueue named `import-acp`/`upload-files`
+jobs on the `content-pool` BullMQ queue. Progress and results live in Redis across
+API replicas and worker restarts; the response shapes and polling routes are
+preserved. Every progress lookup checks both the workspace and operation type,
+returning 404 for mismatches. Workers use the shared workspace lifecycle lock.
+Terminal status reads reload job fields after observing completion or failure, so
+results and failure details include concurrent worker updates.
+Completed jobs are retained for 30 minutes, failed jobs for one day, each capped at
+1,000 retained jobs. Provider failures are not automatically retried because remote
+writes may already have happened; BullMQ's stalled-job recovery still uses
+at-least-once execution. Deploy a `content-pool` processor when using an explicit
+`JOB_QUEUE_PROCESSORS` allowlist. It is included in the default API processor set.
