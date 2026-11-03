@@ -93,6 +93,42 @@ test('feature builds do not require an image published by an earlier pipeline', 
   assert.ok(job.before_script.some(command => command.includes('apt-get install') && command.includes(' git')));
 });
 
+test('feature pipelines pull job and service images without the Dependency Proxy', () => {
+  const env = { ...config.variables, ...featurePush, ...workflowRule(featurePush).variables };
+  assert.equal(env.DOCKER_HUB_PROXY, '');
+  assert.equal(env.DOCKER_IMAGE, 'docker:28');
+  assert.equal(env.DOCKER_SERVICE, 'docker:28-dind');
+  assert.equal(env.TRAEFIK_BASE_IMAGE, 'traefik:v2.11');
+  assert.equal(env.TRIVY_IMAGE, 'aquasec/trivy:latest');
+  const expand = value => value.replace(/\$\{(\w+)\}/g, (_, name) => expand(env[name] || ''));
+  for (const name of ['build-app', 'install-dependencies', 'test-backend',
+    'test-backend-integration', 'test-backend-container', 'test-replay-live',
+    'test-auth-live', 'test-workflows-live', 'lint-app', 'audit-app']) {
+    const job = resolve(name);
+    assert.ok(selected(name, env), name);
+    const images = [job.image || config.image, ...(job.services || []).map(service => service.name || service)];
+    for (const image of images) {
+      const expanded = expand(typeof image === 'string' ? image : image.name);
+      assert.ok(expanded, `${name}: missing image`);
+      assert.doesNotMatch(expanded, /dependency_proxy/,
+        `${name}: image still depends on the proxy`);
+    }
+  }
+});
+
+test('develop, main and tag pipelines retain their existing registry configuration', () => {
+  for (const values of [
+    { CI_COMMIT_BRANCH: 'develop' },
+    { CI_COMMIT_BRANCH: 'main' },
+    { CI_COMMIT_BRANCH: '', CI_COMMIT_TAG: '2.0.0-rc.1' },
+    { CI_COMMIT_BRANCH: '', CI_COMMIT_TAG: '2.0.0' }
+  ]) {
+    const env = { ...featurePush, ...values };
+    assert.ok(pipelineSelected(env));
+    assert.equal(workflowRule(env).variables, undefined);
+  }
+});
+
 test('all live browser jobs install a Docker client and bound daemon readiness', () => {
   for (const name of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
     const setup = resolve(name).before_script.join('\n');
