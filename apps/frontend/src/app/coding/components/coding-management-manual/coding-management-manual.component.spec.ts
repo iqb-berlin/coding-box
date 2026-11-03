@@ -9,6 +9,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   EMPTY, Observable, of, Subject, throwError
 } from 'rxjs';
+import { ManualCodingExportWorkflowFacade } from './manual-coding-export-workflow.facade';
 import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingRefreshWorkflowFacade } from './manual-coding-refresh-workflow.facade';
@@ -120,6 +121,7 @@ describe('CodingManagementManualComponent', () => {
 
   beforeEach(async () => {
     pendingStatistics.clear();
+    const dialogMock = { open: jest.fn().mockReturnValue({ afterClosed: () => of(undefined) }) };
     await TestBed.configureTestingModule({
       providers: [
         {
@@ -136,7 +138,7 @@ describe('CodingManagementManualComponent', () => {
         },
         {
           provide: MatDialog,
-          useValue: { open: jest.fn().mockReturnValue({ afterClosed: () => of(undefined) }) }
+          useValue: dialogMock
         },
         {
           provide: CoderService,
@@ -165,6 +167,8 @@ describe('CodingManagementManualComponent', () => {
         provideHttpClientTesting()
       ],
       imports: [GermanTranslationsTestingModule, CodingManagementManualComponent, TranslateModule.forRoot()]
+    }).overrideComponent(CodingManagementManualComponent, {
+      add: { providers: [{ provide: MatDialog, useValue: dialogMock }] }
     }).compileComponents();
 
     const translateService = TestBed.inject(TranslateService);
@@ -2858,7 +2862,7 @@ describe('CodingManagementManualComponent', () => {
       dialog: typeof dialog;
       appService: { selectedWorkspaceId: number };
     };
-    componentInternals.dialog = dialog;
+    Object.assign(TestBed.inject(MatDialog), dialog);
     componentInternals.appService.selectedWorkspaceId = 5;
     jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
       {
@@ -2902,7 +2906,7 @@ describe('CodingManagementManualComponent', () => {
         updateAuthData(authData: unknown): void;
       };
     };
-    componentInternals.dialog = dialog;
+    Object.assign(TestBed.inject(MatDialog), dialog);
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.appService.updateAuthData({ userId: 9 });
     jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
@@ -2950,14 +2954,6 @@ describe('CodingManagementManualComponent', () => {
       estimateJob: jest.Mock;
     };
     const componentInternals = component as unknown as {
-      startManualCodingExport: (
-        context: 'training' | 'execution',
-        result: {
-          exportType: 'aggregated';
-          doubleCodingMethod?: 'most-frequent' | 'new-column-per-coder' | 'new-row-per-variable';
-          jobDefinitionIds: number[];
-        }
-      ) => void;
       appService: {
         selectedWorkspaceId: number;
         updateAuthData(authData: unknown): void;
@@ -2984,7 +2980,7 @@ describe('CodingManagementManualComponent', () => {
         downloadFilePrefix: 'manual-review-new-row-per-variable'
       }
     ].forEach(({ method }) => {
-      componentInternals.startManualCodingExport('execution', {
+      fixture.debugElement.injector.get(ManualCodingExportWorkflowFacade).start('execution', {
         exportType: 'aggregated',
         doubleCodingMethod: method,
         jobDefinitionIds: [11]
@@ -3041,20 +3037,12 @@ describe('CodingManagementManualComponent', () => {
     const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      startManualCodingExport: (
-        context: 'training' | 'execution',
-        result: {
-          exportType: 'aggregated';
-          doubleCodingMethod: 'new-row-per-variable';
-          jobDefinitionIds: number[];
-        }
-      ) => void;
       appService: {
         selectedWorkspaceId: number;
         updateAuthData(authData: unknown): void;
       };
     };
-    componentInternals.dialog = dialog;
+    Object.assign(TestBed.inject(MatDialog), dialog);
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.appService.updateAuthData({ userId: 9 });
     exportJobService.estimateJob.mockReturnValue(of({
@@ -3066,7 +3054,7 @@ describe('CodingManagementManualComponent', () => {
     dialog.open.mockReturnValue({ afterClosed: () => of(false) });
     exportJobService.startJob.mockClear();
 
-    componentInternals.startManualCodingExport('execution', {
+    fixture.debugElement.injector.get(ManualCodingExportWorkflowFacade).start('execution', {
       exportType: 'aggregated',
       doubleCodingMethod: 'new-row-per-variable',
       jobDefinitionIds: [11]
@@ -3091,20 +3079,12 @@ describe('CodingManagementManualComponent', () => {
     const dialog = TestBed.inject(MatDialog) as unknown as { open: jest.Mock };
     const componentInternals = component as unknown as {
       dialog: typeof dialog;
-      startManualCodingExport: (
-        context: 'training' | 'execution',
-        result: {
-          exportType: 'aggregated';
-          doubleCodingMethod: 'new-row-per-variable';
-          jobDefinitionIds: number[];
-        }
-      ) => void;
       appService: {
         selectedWorkspaceId: number;
         updateAuthData(authData: unknown): void;
       };
     };
-    componentInternals.dialog = dialog;
+    Object.assign(TestBed.inject(MatDialog), dialog);
     componentInternals.appService.selectedWorkspaceId = 5;
     componentInternals.appService.updateAuthData({ userId: 9 });
     exportJobService.estimateJob.mockReturnValue(of({
@@ -3116,7 +3096,7 @@ describe('CodingManagementManualComponent', () => {
     dialog.open.mockReturnValue({ afterClosed: () => of('compact') });
     exportJobService.startJob.mockClear();
 
-    componentInternals.startManualCodingExport('execution', {
+    fixture.debugElement.injector.get(ManualCodingExportWorkflowFacade).start('execution', {
       exportType: 'aggregated',
       doubleCodingMethod: 'new-row-per-variable',
       jobDefinitionIds: [11]
@@ -3142,14 +3122,6 @@ describe('CodingManagementManualComponent', () => {
       open: jest.Mock;
     };
     const componentInternals = component as unknown as {
-      startManualCodingExport: (
-        context: 'training' | 'execution',
-        result: {
-          exportType: 'detailed';
-          includeReplayUrl: true;
-          jobDefinitionIds: number[];
-        }
-      ) => void;
       appService: {
         selectedWorkspaceId: number;
         updateAuthData(authData: unknown): void;
@@ -3161,7 +3133,7 @@ describe('CodingManagementManualComponent', () => {
       throwError(() => createReplayAuthTokenError())
     );
 
-    componentInternals.startManualCodingExport('execution', {
+    fixture.debugElement.injector.get(ManualCodingExportWorkflowFacade).start('execution', {
       exportType: 'detailed',
       includeReplayUrl: true,
       jobDefinitionIds: [11]
@@ -3180,7 +3152,7 @@ describe('CodingManagementManualComponent', () => {
         selectedWorkspaceId: number;
       };
     };
-    componentInternals.dialog = dialog;
+    Object.assign(TestBed.inject(MatDialog), dialog);
     componentInternals.appService.selectedWorkspaceId = 5;
     jest.spyOn(fixture.debugElement.injector.get(ManualCodingExportScopeFacade), 'getDefinitions').mockReturnValue([
       {

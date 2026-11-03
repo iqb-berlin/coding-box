@@ -65,7 +65,8 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/manual-completion-readiness.spec.ts",
         "apps/frontend/src/app/coding/components/coding-management/coding-response-row.spec.ts",
         "apps/frontend/src/app/coding/components/coding-results-comparison/training-comparison-warnings.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-projection.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-projection.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export-workflow.facade.spec.ts"
       ]
     },
     {
@@ -263,7 +264,8 @@
         "apps/frontend/src/app/coding/components/coding-management-manual/coding-import-lazy.spec.ts",
         "apps/frontend/src/app/ws-admin/components/files-validation-result/testlet-exclusion-policy.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import-results.spec.ts",
-        "apps/frontend/src/app/ws-admin/components/test-files/file-validation-progress.facade.spec.ts"
+        "apps/frontend/src/app/ws-admin/components/test-files/file-validation-progress.facade.spec.ts",
+        "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-export-workflow.facade.spec.ts"
       ]
     },
     {
@@ -318,7 +320,10 @@
         "apps/frontend/src/app/shared/services/database-export.service.spec.ts",
         "cypress/e2e/database-exports.cy.ts",
         "apps/frontend/src/app/shared/utils/ui-translator.spec.ts",
-        "apps/frontend/src/testing/german-translations.spec.ts"
+        "apps/frontend/src/testing/german-translations.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/ws-settings/ws-settings.component.spec.ts",
+        "apps/frontend/src/app/shared/services/workspace/workspace-settings.service.spec.ts",
+        "cypress/zoneless/workspace-settings.cy.ts"
       ]
     }
   ],
@@ -351,9 +356,10 @@
         "management",
         "files-exports-metadata",
         "jobs",
-        "results-validation"
+        "results-validation",
+        "administration"
       ],
-      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes. Der Variablenfilter verwirft ältere Zeilen und Scope-Summen auch im Browser. Der dialoglokale TrainingReliabilityFacade-SignalStore ersetzt Leseanfragen und unterdrückt Export-Doppelstarts; Facade- und Komponententests prüfen Fehler/Retry und abgeleitete Kennzahlen, der Browser den Trainingsvergleich gegen das Produktionsartefakt. Die Teilansichtsgrenzen prüfen gemeinsame Formularcontrols und Workload-Snapshots; Projektionen der Vergleichszeilen erhalten die Eingabefelder und den Fokus beim Tippen. Die flache Ergebnistabelle ersetzt Filteroptionen-, Seiten- und Einstellungsanfragen vor dem Folgeabruf; Tests geben alte Antworten nach dem neueren Ergebnis frei."
+      "evidence": "Vertauschte Listen-/Statistikantworten, Such- und Seitenwechsel sowie beide Abschlussreihenfolgen unabhängiger Anfragen. Native OnPush-Tests verwerfen überholte Unit-/Booklet-Suchen und Analyse-Auftragsrefreshes. Der Variablenfilter verwirft ältere Zeilen und Scope-Summen auch im Browser. Der dialoglokale TrainingReliabilityFacade-SignalStore ersetzt Leseanfragen und unterdrückt Export-Doppelstarts; Facade- und Komponententests prüfen Fehler/Retry und abgeleitete Kennzahlen, der Browser den Trainingsvergleich gegen das Produktionsartefakt. Die Teilansichtsgrenzen prüfen gemeinsame Formularcontrols und Workload-Snapshots; Projektionen der Vergleichszeilen erhalten die Eingabefelder und den Fokus beim Tippen. Die flache Ergebnistabelle ersetzt Filteroptionen-, Seiten- und Einstellungsanfragen vor dem Folgeabruf; Tests geben alte Antworten nach dem neueren Ergebnis frei. Workspace-Einstellungen serialisieren Schreibaufträge und setzen nur den neuesten betroffenen Eingabewert auf den letzten bestätigten Wert zurück. Regressionen prüfen ältere Fehler, mehrere fehlgeschlagene Aufträge, numerische Eingaben, mehrteilige Auswertungs-Presets und verspätete Initialwerte. Der Browser prüft Mehrfachumschalten während einer zurückgehaltenen Fehlerantwort sowie erneutes Laden des gespeicherten Wertes."
     },
     {
       "id": "lifecycle",
@@ -365,7 +371,7 @@
         "jobs",
         "coding-replay"
       ],
-      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung. Der dialoglokale Reliabilitäts-SignalStore ist nativ auf Injector-Isolation, nur lesbare Signals und Ereignisse, Workspace-Rundwechsel und Zerstörung geprüft. Die Vergleichskomponente verwirft Diskussionsabschlüsse nach Schulung A-B-A und beendet ausstehende Tabellen-/Speicherabonnements beim ersten Workspace-Wechsel. Die Schrittansichten des Testcenter-Imports verwenden denselben Ablaufbesitzer für Optionen, Gruppenauswahl und unklaren Ergebnisstatus. Einstellungen und Zeilenaktionen der flachen Ergebnistabelle sind zusätzlich auf Workspace A-B-A, Dialogschließung, Cache-Erneuerung und verspätete Löschbestätigung geprüft."
+      "evidence": "Schließen, DestroyRef und Workspace-Wechsel; verspätete Antworten erzeugen keine Folgeansichten. Browserregressionen schließen Schulungsdialoge während ausstehender Antworten und verlassen Workspaces während Bulk-Vorschau oder Bestätigung; keine alte Jobanlage. Chart.js-Tests prüfen die Freigabe von Chart-Instanzen und Media-Query-Listenern; der Browser öffnet den Statistikdialog erneut. Globale Uploads und Exportregistrierungen überleben ihre auslösende Ansicht im ursprünglichen Workspace; ein Browserfall hält die Upload-Abschlussantwort bis nach Navigation zurück. Die Schema-Speicheraktion bleibt nach Dialogschließung bis zur Snackbar-Aktion oder ihrem Verschwinden aktiv. Dauerhafte Lade-Snackbars enden bei Dialogzerstörung. Der dialoglokale Reliabilitäts-SignalStore ist nativ auf Injector-Isolation, nur lesbare Signals und Ereignisse, Workspace-Rundwechsel und Zerstörung geprüft. Die Vergleichskomponente verwirft Diskussionsabschlüsse nach Schulung A-B-A und beendet ausstehende Tabellen-/Speicherabonnements beim ersten Workspace-Wechsel. Die Schrittansichten des Testcenter-Imports verwenden denselben Ablaufbesitzer für Optionen, Gruppenauswahl und unklaren Ergebnisstatus. Einstellungen und Zeilenaktionen der flachen Ergebnistabelle sind zusätzlich auf Workspace A-B-A, Dialogschließung, Cache-Erneuerung und verspätete Löschbestätigung geprüft. Die Exportsteuerung schließt Auswahl und Arbeitsblattwarnung bei Kontextende; der beim Öffnen erfasste Definitionsumfang bleibt erhalten. Einstellungs-Reads brechen den HTTP-Abruf nach Abmeldung des letzten Verbrauchers ab; Workspace-Rundwechsel und Zerstörung verwerfen wartende Speicheraufträge."
     },
     {
       "id": "timers-promises",

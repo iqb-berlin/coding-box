@@ -22,6 +22,45 @@ of the returned DTO objects.
 - Cancel workspace-bound requests on the first workspace change, including an
   A-to-B-to-A round trip, and on destruction of their owning view.
 
+## Workspace settings writes
+
+`WorkspaceSettingsSaveFacade` is local to the settings page. It serializes all
+setting writes, including evaluation-mode presets that update several values.
+Inputs remain optimistic. Each field tracks its latest intent and last confirmed
+value, so an older failure cannot revert a newer input. Numeric drafts have their
+own revision: editing during a save preserves the draft even when it returns to
+the submitted value. Initial reads update the rollback value without replacing
+an edited draft. Evaluation-mode rollback values use the loaded server mode
+independently of the optimistic input and the order of initial responses.
+Automatic-refresh inputs stay disabled until evaluation-mode writes settle,
+including queued presets. A failed latest write
+restores the last accepted value; later commands still run. Delayed initial reads
+cannot overwrite pending or successfully saved inputs. The first workspace
+change discards queued commands and cancels the active subscription, including
+an A-to-B-to-A transition. View destruction ends the queue as well.
+
+`WorkspaceSettingsService` composes parsed reads with `map` and `catchError`.
+Consumers share in-flight reads; removing the last subscriber cancels the HTTP
+request. Successful reads retain the existing ten-second value cache. Writes
+continue to invalidate that cache.
+
+## Dialog workflow ownership
+
+`ManualCodingExportWorkflowFacade` owns export selection, definition/training
+scope snapshots, worksheet-limit confirmation and startup feedback. Its dialogs
+close on workspace change or view destruction. The existing export facade and
+root export service retain estimation and background-job ownership.
+
+`CodingJobMutationsFacade` owns single/bulk delete confirmations and result
+application. It publishes completed mutations to the job list, which retains
+selection, filters and pagination. Its subscriptions and loading feedback end
+with the original view/context. Result application still notifies the existing
+global statistics consumers.
+
+The two page components still have remaining size exceptions. The structure
+baseline is tightened for the extracted responsibilities; new facades use the
+standard limits without additional exceptions.
+
 ## SignalStore pilot
 
 `TrainingReliabilityFacade` is a dialog-local NgRx SignalStore using

@@ -79,7 +79,8 @@
               <mat-label>{{ 'ws-settings.validity-days' | translate }}</mat-label>
               <input
                 matInput
-                [(ngModel)]="replayUrlExportTokenDurationDays"
+                [ngModel]="replayUrlExportTokenDurationDays()"
+                (ngModelChange)="settingsSave.edit(replayUrlExportTokenDurationDays, $event)"
                 type="number"
                 [min]="minTokenDurationDays"
                 [max]="maxTokenDurationDays()"
@@ -115,7 +116,8 @@
               <mat-label>{{ 'ws-settings.validity-minutes' | translate }}</mat-label>
               <input
                 matInput
-                [(ngModel)]="authSessionIdleTimeoutMinutes"
+                [ngModel]="authSessionIdleTimeoutMinutes()"
+                (ngModelChange)="settingsSave.edit(authSessionIdleTimeoutMinutes, $event)"
                 type="number"
                 [min]="minAuthSessionIdleTimeoutMinutes"
                 [max]="maxAuthSessionIdleTimeoutMinutes"
@@ -210,7 +212,7 @@
           <div class="setting-control">
             <mat-slide-toggle
               [checked]="autoFetchCodingStatistics()"
-              [disabled]="evaluationMode()"
+              [disabled]="evaluationMode() || isSavingEvaluationMode()"
               (change)="toggleAutoFetchCodingStatistics($event)">
               {{autoFetchCodingStatistics() ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
             </mat-slide-toggle>
@@ -224,7 +226,7 @@
           <div class="setting-control">
             <mat-slide-toggle
               [checked]="autoRefreshManualCodingJobs()"
-              [disabled]="evaluationMode()"
+              [disabled]="evaluationMode() || isSavingEvaluationMode()"
               (change)="toggleAutoRefreshManualCodingJobs($event)">
               {{autoRefreshManualCodingJobs() ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
             </mat-slide-toggle>
