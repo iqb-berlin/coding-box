@@ -1,6 +1,7 @@
 import {
   Entity, Column, ManyToOne, JoinColumn, PrimaryColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
 
@@ -19,5 +20,5 @@ export class UnitLastState {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'unitid' })
-  unit: Unit;
+  unit: Relation<Unit>;
 }

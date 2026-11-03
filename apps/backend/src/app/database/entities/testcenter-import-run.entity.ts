@@ -1,6 +1,7 @@
 import {
   Column, Entity, JoinColumn, ManyToOne, PrimaryColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import type { ImportWorkspaceFilesProgressDto } from '../../../../../../api-dto/files/import-workspace-progress.dto';
 import Workspace from './workspace.entity';
 
@@ -17,5 +18,5 @@ export class TestcenterImportRun {
 
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace!: Workspace;
+  workspace!: Relation<Workspace>;
 }

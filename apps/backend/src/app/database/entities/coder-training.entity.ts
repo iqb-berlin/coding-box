@@ -8,6 +8,7 @@ import {
   OneToMany,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
@@ -17,7 +18,7 @@ import { CoderTrainingCoder } from './coder-training-coder.entity';
 import { CoderTrainingVariable } from './coder-training-variable.entity';
 // eslint-disable-next-line import/no-cycle
 import { CoderTrainingBundle } from './coder-training-bundle.entity';
-import { CaseOrderingMode } from './job-definition.entity';
+import type { CaseOrderingMode } from './job-definition.entity';
 
 export type CaseSelectionMode =
   | 'oldest_first'
@@ -37,7 +38,7 @@ export type ReferenceMode = 'same' | 'different';
 export class CoderTraining {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;
