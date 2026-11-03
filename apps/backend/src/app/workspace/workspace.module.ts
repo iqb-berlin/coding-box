@@ -2,6 +2,15 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { WorkspaceFileQueryService } from '../database/services/workspace/workspace-file-query.service';
+import { WorkspaceFileFreshnessService } from '../database/services/workspace/workspace-file-freshness.service';
+import { WorkspaceFileCacheService } from '../database/services/workspace/workspace-file-cache.service';
+import { WorkspaceFileMutationService } from '../database/services/workspace/workspace-file-mutation.service';
+import { WorkspaceTestcenterFileImportService } from '../database/services/workspace/workspace-testcenter-file-import.service';
+import { WorkspaceXmlFileUploadService } from '../database/services/workspace/workspace-xml-file-upload.service';
+import { WorkspaceResourceFileUploadService } from '../database/services/workspace/workspace-resource-file-upload.service';
+import { WorkspaceFileUploadService } from '../database/services/workspace/workspace-file-upload.service';
+import { WorkspaceTestTakersValidationService } from '../database/services/workspace/workspace-test-takers-validation.service';
 import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
 import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
 import { TestResultsQueryService } from '../database/services/test-results/test-results-query.service';
@@ -139,6 +148,16 @@ import { CodingModule } from '../coding/coding.module';
     WorkspaceDeletionService,
     WorkspaceCoreService,
     WorkspaceFilesService,
+    WorkspaceFileQueryService,
+    WorkspaceFileFreshnessService,
+    WorkspaceFileCacheService,
+    WorkspaceFileMutationService,
+    WorkspaceTestcenterFileImportService,
+    WorkspaceXmlFileUploadService,
+    WorkspaceResourceFileUploadService,
+    WorkspaceFileUploadService,
+    WorkspaceTestTakersValidationService,
+
     WorkspaceXmlSchemaValidationService,
     WorkspaceFileStorageService,
     WorkspaceFileParsingService,
