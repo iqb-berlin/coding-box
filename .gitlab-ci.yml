@@ -38,11 +38,9 @@ workflow:
         $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA &&
         $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA == $CI_COMMIT_SHA
       when: never
-    # PR validation must also run when the group Dependency Proxy is unavailable.
-    # Use public upstream images for canonical feature runs and external PRs;
-    # the GitHub project bot also lacks group-level Dependency Proxy access.
-    - if: ($CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")) ||
-        ($CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "develop" && $CI_COMMIT_BRANCH != "main" && $CI_PIPELINE_SOURCE != "external_pull_request_event")
+    # The GitHub project bot cannot pull from the group-level Dependency Proxy.
+    # Use the same public upstream images without granting it group access.
+    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")
       variables:
         DOCKER_HUB_PROXY: ""
         DOCKER_IMAGE: docker:28

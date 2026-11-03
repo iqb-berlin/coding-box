@@ -93,26 +93,50 @@ test('feature builds do not require an image published by an earlier pipeline', 
   assert.ok(job.before_script.some(command => command.includes('apt-get install') && command.includes(' git')));
 });
 
-test('feature pipelines pull job and service images without the Dependency Proxy', () => {
-  const env = { ...config.variables, ...featurePush, ...workflowRule(featurePush).variables };
-  assert.equal(env.DOCKER_HUB_PROXY, '');
-  assert.equal(env.DOCKER_IMAGE, 'docker:28');
-  assert.equal(env.DOCKER_SERVICE, 'docker:28-dind');
-  assert.equal(env.TRAEFIK_BASE_IMAGE, 'traefik:v2.11');
-  assert.equal(env.TRIVY_IMAGE, 'aquasec/trivy:latest');
-  const expand = value => value.replace(/\$\{(\w+)\}/g, (_, name) => expand(env[name] || ''));
-  for (const name of ['build-app', 'install-dependencies', 'test-backend',
-    'test-backend-integration', 'test-backend-container', 'test-replay-live',
-    'test-auth-live', 'test-workflows-live', 'lint-app', 'audit-app']) {
-    const job = resolve(name);
-    assert.ok(selected(name, env), name);
-    const images = [job.image || config.image, ...(job.services || []).map(service => service.name || service)];
-    for (const image of images) {
-      const expanded = expand(typeof image === 'string' ? image : image.name);
-      assert.ok(expanded, `${name}: missing image`);
-      assert.doesNotMatch(expanded, /dependency_proxy/,
-        `${name}: image still depends on the proxy`);
+test('feature pipelines retain the shared Dependency Proxy for job and service images', () => {
+  const prefix = 'registry.example/iqb/dependency_proxy/containers/';
+  for (const source of ['push', 'web', 'schedule']) {
+    const feature = { ...featurePush, CI_PIPELINE_SOURCE: source };
+    assert.equal(workflowRule(feature).variables, undefined, source);
+    const env = { ...config.variables, ...feature,
+      CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX: prefix.slice(0, -1) };
+    const expand = value => value.replace(/\$\{(\w+)\}/g, (_, name) => expand(env[name] || ''));
+    assert.equal(expand(env.DOCKER_HUB_PROXY), prefix);
+    assert.equal(expand(env.DOCKER_IMAGE), `${prefix}docker:28`);
+    assert.equal(expand(env.DOCKER_SERVICE), `${prefix}docker:28-dind`);
+    assert.equal(expand(env.TRAEFIK_BASE_IMAGE), `${prefix}traefik:v2.11`);
+    assert.equal(expand(env.TRIVY_IMAGE), `${prefix}aquasec/trivy:latest`);
+    for (const name of ['build-app', 'install-dependencies', 'test-backend',
+      'test-backend-integration', 'test-backend-container', 'test-replay-live',
+      'test-auth-live', 'test-workflows-live', 'lint-app', 'audit-app']) {
+      const job = resolve(name);
+      assert.ok(selected(name, env), name);
+      // Cypress browser images already use Docker Hub directly; their DinD
+      // services must still use the group's shared proxy.
+      const image = job.image || config.image;
+      const proxiedImages = [
+        ...(image === '${CYPRESS_IMAGE}' ? [] : [image]),
+        ...(job.services || []).map(service => service.name || service)
+      ];
+      for (const reference of proxiedImages) {
+        const expanded = expand(typeof reference === 'string' ? reference : reference.name);
+        assert.ok(expanded.startsWith(prefix), `${source}: ${name} bypasses the shared proxy`);
+      }
     }
+  }
+});
+
+test('proxy-dependent build and verification jobs retry runner failures only once', () => {
+  for (const name of ['install-dependencies', 'build-cicd-base-image', 'build-db-image',
+    'build-liquibase-image', 'build-app', 'test-backend-container', 'test-db',
+    'test-backend', 'test-backend-integration', 'test-frontend',
+    'test-replay-live', 'test-auth-live', 'test-workflows-live', 'lint-app', 'audit-app']) {
+    assert.deepEqual(resolve(name).retry, { max: 1, when: 'runner_system_failure' }, name);
+  }
+  assert.equal(config.default?.retry, undefined);
+  assert.equal(resolve('test-browser').retry, undefined);
+  for (const name of publishers) {
+    assert.equal(resolve(name).retry, undefined, `${name}: publication must not inherit verification retries`);
   }
 });
 
