@@ -4,7 +4,10 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
-import { catchError, firstValueFrom } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
+import { ConfigService } from '@nestjs/config';
+import { resolveTestcenterBaseUrl } from './testcenter-target';
+import { testcenterAuthenticationError, testcenterAuthenticationResponse } from './testcenter-auth-error';
 import { getErrorMessage } from '../../../utils/error.util';
 import { Person, Response, Log } from '../shared';
 
@@ -80,7 +83,8 @@ export class TestcenterService {
     @Optional()
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
-    private readonly codingAnalysisService?: CodingAnalysisService
+    private readonly codingAnalysisService?: CodingAnalysisService,
+    @Optional() private readonly configService?: ConfigService
   ) {}
 
   persons: Person[] = [];
@@ -91,10 +95,7 @@ export class TestcenterService {
     server: string;
     url: string;
   }): Promise<Record<string, unknown>> {
-    const endpoint =
-      credentials.url && !credentials.server ?
-        `${credentials.url}/api/session/admin` :
-        `https://iqb-testcenter${credentials.server}.de/api/session/admin`;
+    const endpoint = `${this.testcenterBaseUrl(credentials.server, credentials.server ? '' : credentials.url)}/api/session/admin`;
 
     try {
       const { data } = await firstValueFrom(
@@ -107,22 +108,14 @@ export class TestcenterService {
             },
             {
               httpsAgent: agent,
-              timeout: TESTCENTER_REQUEST_TIMEOUT_MS
+              timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+              maxRedirects: 0
             }
           )
-          .pipe(
-            catchError(error => {
-              throw new Error(
-                `Authentication failed: ${error?.message || error}`
-              );
-            })
-          )
       );
-      return data;
+      return testcenterAuthenticationResponse(data);
     } catch (error) {
-      throw new Error(
-        `Authentication error: ${getErrorMessage(error) || 'Unknown error'}`
-      );
+      throw testcenterAuthenticationError(error);
     }
   }
 
@@ -149,12 +142,11 @@ export class TestcenterService {
       });
 
       const response = await this.httpService.axiosRef.get<TestGroupsInfoDto[]>(
-        url ?
-          `${url}/api/workspace/${tc_workspace}/results` :
-          `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/results`,
+        `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/results`,
         {
           httpsAgent: agent,
           timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+          maxRedirects: 0,
           headers: headersRequest
         }
       );
@@ -377,19 +369,14 @@ export class TestcenterService {
 
           for (const chunk of chunks) {
             await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-responses');
-            const endpoint = url ?
-              `${url}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
-                ','
-              )}` :
-              `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(
-                ','
-              )}`;
+            const endpoint = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
 
             let rawResponses: Response[] = [];
             try {
               const response = await this.httpService.axiosRef.get<Response[]>(endpoint, {
                 httpsAgent: agent,
                 timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+                maxRedirects: 0,
                 headers: headersRequest
               });
               if (!Array.isArray(response.data)) {
@@ -454,7 +441,6 @@ export class TestcenterService {
 
             await this.updateResultImportPhase(workspace_id, importRunId, 'saving-responses');
             const mutationSummary = this.createMutationSummary();
-            let responseImportMutatedData = false;
             try {
               for (const personBatch of personBatches) {
                 const batchSummary = await this.personService.processPersonBooklets(
@@ -463,14 +449,7 @@ export class TestcenterService {
                 this.mergeMutationSummary(mutationSummary, batchSummary);
               }
             } finally {
-              responseImportMutatedData = this.responseImportMutatedTestResults(mutationSummary);
-              try {
-                await this.updateCodingFreshnessAfterResponseImport(Number(workspace_id), mutationSummary, issues);
-              } finally {
-                if (responseImportMutatedData) {
-                  await this.invalidateCodingCachesAfterResponsesImport(Number(workspace_id), issues);
-                }
-              }
+              await this.finalizeResponseImport(Number(workspace_id), mutationSummary, issues);
             }
           }
 
@@ -502,13 +481,7 @@ export class TestcenterService {
 
     for (const chunk of logsChunks) {
       await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-logs');
-      const logsUrl = url ?
-        `${url}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(
-          ','
-        )}` :
-        `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(
-          ','
-        )}`;
+      const logsUrl = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
 
       try {
         const { data: logData } = await this.httpService.axiosRef.get<Log[]>(
@@ -516,6 +489,7 @@ export class TestcenterService {
           {
             httpsAgent: agent,
             timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+            maxRedirects: 0,
             headers: headersRequest
           }
         );
@@ -759,9 +733,7 @@ export class TestcenterService {
     uploadResult: TestFilesUploadResultDto;
   }> {
     const headersRequest = this.createHeaders(authToken);
-    const filesEndpoint = url ?
-      `${url}/api/workspace/${tc_workspace}/files` :
-      `https://iqb-testcenter${server}.de/api/workspace/${tc_workspace}/files`;
+    const filesEndpoint = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/files`;
 
     try {
       const { data: files } =
@@ -770,6 +742,7 @@ export class TestcenterService {
           {
             httpsAgent: agent,
             timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+            maxRedirects: 0,
             headers: headersRequest
           }
         );
@@ -1550,6 +1523,7 @@ export class TestcenterService {
       const response = await this.httpService.axiosRef.get<File>(requestUrl, {
         httpsAgent: agent,
         timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
+        maxRedirects: 0,
         headers: headersRequest
       });
 
@@ -1566,14 +1540,25 @@ export class TestcenterService {
     }
   }
 
+  private async finalizeResponseImport(workspaceId: number, summary: TestResultsMutationSummary, issues: TestResultsUploadIssueDto[]): Promise<void> {
+    const mutated = this.responseImportMutatedTestResults(summary);
+    try {
+      await this.updateCodingFreshnessAfterResponseImport(workspaceId, summary, issues);
+    } finally {
+      if (mutated) await this.invalidateCodingCachesAfterResponsesImport(workspaceId, issues);
+    }
+  }
+
+  private testcenterBaseUrl(server: string, url?: string): string {
+    return resolveTestcenterBaseUrl(server, url, this.configService?.get<string>('TESTCENTER_ALLOWED_URLS'));
+  }
+
   private buildFileRequestUrl(
     file: File,
     server: string,
     tcWorkspace: string,
     url?: string
   ): string {
-    return url ?
-      `${url}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}` :
-      `https://iqb-testcenter${server}.de/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
+    return `${this.testcenterBaseUrl(server, url)}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
   }
 }

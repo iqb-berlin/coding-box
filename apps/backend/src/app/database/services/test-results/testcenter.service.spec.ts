@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { createMock, DeepMocked } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { DataSource, Repository } from 'typeorm';
 import * as https from 'https';
@@ -33,9 +34,11 @@ describe('TestCenterService', () => {
   let codingFreshnessService: DeepMocked<CodingFreshnessService>;
   let codingAnalysisService: DeepMocked<CodingAnalysisService>;
   let connection: DataSource;
+  let targetConfig: ConfigService;
   let importRunRepository: DeepMocked<Repository<TestcenterImportRun>>;
 
   beforeEach(async () => {
+    targetConfig = new ConfigService({ TESTCENTER_ALLOWED_URLS: 'https://custom.testcenter.de' });
     const runs = new Map<string, TestcenterImportRun>();
     const runKey = (run: { workspace_id?: number; import_run_id?: string }) => `${run.workspace_id}:${run.import_run_id}`;
     importRunRepository = createMock<Repository<TestcenterImportRun>>({
@@ -56,6 +59,7 @@ describe('TestCenterService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         TestcenterService,
+        { provide: ConfigService, useValue: targetConfig },
         {
           provide: HttpService,
           useValue: {
@@ -171,7 +175,7 @@ describe('TestCenterService', () => {
         setTimeout(() => reject(new Error('Testcenter request timed out')), config.timeout);
       }));
       let settled = false;
-      const outcome = service.getTestgroups('123', 'tc', 'demo', '', 'token', 'timeout-run')
+      const outcome = service.getTestgroups('123', 'tc', '1', '', 'token', 'timeout-run')
         .catch(error => { settled = true; return error; });
 
       await jest.advanceTimersByTimeAsync(119999);
@@ -219,7 +223,8 @@ describe('TestCenterService', () => {
         server: '',
         url: `https://127.0.0.1:${(server.address() as AddressInfo).port}`
       };
-      await expect(service.authenticate(credentials)).rejects.toThrow(/self.signed certificate/i);
+      targetConfig.set('TESTCENTER_ALLOWED_URLS', credentials.url);
+      await expect(service.authenticate(credentials)).rejects.toMatchObject({ status: 503, cause: expect.objectContaining({ message: expect.stringMatching(/self.signed certificate/i) }) });
       expect(requests).toBe(0);
       expect(agent!.options.rejectUnauthorized).toBe(true);
 
@@ -228,7 +233,7 @@ describe('TestCenterService', () => {
       expect(requests).toBe(1);
 
       agent!.options.servername = 'different-testcenter.example';
-      await expect(service.authenticate(credentials)).rejects.toThrow(/does not match certificate/i);
+      await expect(service.authenticate(credentials)).rejects.toMatchObject({ status: 503, cause: expect.objectContaining({ message: expect.stringMatching(/does not match certificate/i) }) });
       expect(requests).toBe(1);
     } finally {
       if (agent) {
@@ -250,7 +255,7 @@ describe('TestCenterService', () => {
       const mockCredentials = {
         username: 'admin',
         password: 'secret',
-        server: 'demo',
+        server: '1',
         url: ''
       };
 
@@ -289,13 +294,27 @@ describe('TestCenterService', () => {
         expect(result).toEqual(mockResponse.data);
       });
 
+      it.each(['https://custom.testcenter.de', 'https://unapproved.test', 'invalid retained URL'])(
+        'uses the selected numbered server instead of a retained custom URL: %s', async url => {
+          httpService.put.mockReturnValue(of({ data: { token: 'numbered-server-token' } }) as never);
+
+          await expect(service.authenticate({ ...mockCredentials, url })).resolves.toEqual({ token: 'numbered-server-token' });
+
+          expect(httpService.put).toHaveBeenCalledWith(
+            'https://iqb-testcenter1.de/api/session/admin',
+            { name: mockCredentials.username, password: mockCredentials.password },
+            expect.objectContaining({ maxRedirects: 0 })
+          );
+        }
+      );
+
       it('should throw error on authentication failure', async () => {
         httpService.put.mockReturnValue(
           throwError(() => new Error('Invalid credentials')) as never
         );
 
         await expect(service.authenticate(mockCredentials)).rejects.toThrow(
-          'Authentication error'
+          'Testcenter authentication is unavailable'
         );
       });
     });
@@ -328,7 +347,7 @@ describe('TestCenterService', () => {
         const result = await service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
-          'demo',
+          '1',
           '',
           mockAuthToken
         );
@@ -363,7 +382,7 @@ describe('TestCenterService', () => {
         const result = await service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
-          'demo',
+          '1',
           '',
           mockAuthToken
         );
@@ -398,7 +417,7 @@ describe('TestCenterService', () => {
         const result = await service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
-          'demo',
+          '1',
           '',
           mockAuthToken,
           'run-1'
@@ -425,7 +444,7 @@ describe('TestCenterService', () => {
         await expect(service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
-          'demo',
+          '1',
           '',
           mockAuthToken
         )).rejects.toThrow('Failed to retrieve test groups from Testcenter');
@@ -439,7 +458,7 @@ describe('TestCenterService', () => {
         await expect(service.getTestgroups(
           mockWorkspaceId,
           mockTcWorkspace,
-          'demo',
+          '1',
           '',
           mockAuthToken
         )).rejects.toThrow('Unexpected Testcenter response');
@@ -493,7 +512,7 @@ describe('TestCenterService', () => {
         const result = await service.importWorkspaceFiles(
           '123',
           'ws-456',
-          'demo',
+          '1',
           '',
           'test-token',
           {
@@ -787,7 +806,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         mockImportOptions,
@@ -876,7 +895,7 @@ describe('TestCenterService', () => {
       await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         mockImportOptions,
@@ -944,7 +963,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         mockImportOptions,
@@ -1061,7 +1080,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         importOptions,
@@ -1155,7 +1174,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         importOptions,
@@ -1252,7 +1271,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         importOptions,
@@ -1286,7 +1305,7 @@ describe('TestCenterService', () => {
       const result = await service.importWorkspaceFiles(
         '123',
         'ws-456',
-        'demo',
+        '1',
         '',
         'token',
         importOptions,

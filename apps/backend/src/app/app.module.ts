@@ -4,6 +4,7 @@ import { HttpModule } from '@nestjs/axios';
 import { validateEnvironment } from './config/environment.validation';
 import { AppController } from './app.controller';
 import { AuthModule } from './auth/auth.module';
+import { AuthRateLimitModule } from './auth/auth-rate-limit.module';
 import { DatabaseModule } from './database/database.module';
 import { UserModule } from './user/user.module';
 import { CodingModule } from './coding/coding.module';
@@ -25,6 +26,7 @@ import { RuntimeConfigModule } from './config/runtime-config.module';
     }),
     RuntimeConfigModule,
     AuthModule,
+    AuthRateLimitModule,
     DatabaseModule,
     UserModule,
     CodingModule,

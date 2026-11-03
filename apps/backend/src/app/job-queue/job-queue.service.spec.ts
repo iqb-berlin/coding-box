@@ -36,7 +36,7 @@ describe('JobQueueService', () => {
   let service: JobQueueService;
 
   beforeEach(() => {
-    queues = Array.from({ length: 12 }, () => createQueue());
+    queues = Array.from({ length: 13 }, () => createQueue());
     validationTaskRepository = {
       find: jest.fn().mockResolvedValue([{ id: 7, workspace_id: 1 }])
     };
@@ -53,7 +53,8 @@ describe('JobQueueService', () => {
       queues[9] as never,
       queues[10] as never,
       queues[11] as never,
-      validationTaskRepository as never
+      validationTaskRepository as never,
+      queues[12] as never
     );
   });
 
@@ -425,6 +426,7 @@ describe('JobQueueService', () => {
     expect(workspaceJobs.map(job => job.queueName).sort()).toEqual([
       'codebook-generation',
       'coding-statistics',
+      'content-pool',
       'data-export',
       'database-export',
       'external-coding-import',

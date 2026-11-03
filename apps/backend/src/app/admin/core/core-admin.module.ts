@@ -27,7 +27,7 @@ import { DatabaseExportService } from '../database/database-export.service';
 import { Setting } from '../../database/entities/setting.entity';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ContentPoolSettingsController } from '../content-pool/content-pool-settings.controller';
-import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
+import { ContentPoolModule } from '../content-pool/content-pool.module';
 import { LegalNoticeController } from '../legal-notice/legal-notice.controller';
 import { LegalNoticeService } from '../legal-notice/legal-notice.service';
 import { getEnabledProcessorNames } from '../../job-queue/job-queue-processor-selection';
@@ -55,6 +55,7 @@ export function getEnabledCoreAdminProcessors(
 @Module({
   imports: [
     DatabaseModule,
+    ContentPoolModule,
     UserModule,
     WorkspaceModule,
     AuthModule,
@@ -89,7 +90,6 @@ export function getEnabledCoreAdminProcessors(
     LogoUploadInterceptor,
     DatabaseExportService,
     ...getEnabledCoreAdminProcessors(),
-    ContentPoolIntegrationService,
     LegalNoticeService,
     SystemNotificationService
   ]

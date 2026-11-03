@@ -3,12 +3,12 @@
   "files": {
     "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts": {
       "file": {
-        "max-lines": 1302
+        "max-lines": 1181
       },
       "functions": {
         "class ContentPoolIntegrationService#1/method uploadWorkspaceFilesToAcp#1": {
-          "complexity": 27,
-          "max-lines-per-function": 180
+          "complexity": 23,
+          "max-lines-per-function": 176
         }
       }
     },
@@ -1114,7 +1114,7 @@
     },
     "apps/backend/src/app/database/services/test-results/testcenter.service.ts": {
       "file": {
-        "max-lines": 1456
+        "max-lines": 1439
       },
       "functions": {
         "class TestcenterService#1/method executeWorkspaceImport#1": {
@@ -1122,14 +1122,11 @@
           "max-lines-per-function": 186
         },
         "class TestcenterService#1/method importFiles#1": {
-          "complexity": 41,
-          "max-lines-per-function": 257
+          "complexity": 40,
+          "max-lines-per-function": 256
         },
         "class TestcenterService#1/method importResponses#1": {
-          "max-lines-per-function": 115
-        },
-        "class TestcenterService#1/method importResponses#1/anonymous:48014e85ffd4804d#1": {
-          "max-depth": 5
+          "max-lines-per-function": 102
         }
       }
     },
@@ -1303,7 +1300,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1273
+        "max-lines": 1272
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
