@@ -1,135 +1,33 @@
-# You can override the included template(s) by including variable overrides
-# SAST customization: https://docs.gitlab.com/ee/user/application_security/sast/#customizing-the-sast-settings
-# Secret Detection customization: https://docs.gitlab.com/ee/user/application_security/secret_detection/#customizing-settings
-# Dependency Scanning customization: https://docs.gitlab.com/ee/user/application_security/dependency_scanning/#customizing-the-dependency-scanning-settings
-# Container Scanning customization: https://docs.gitlab.com/ee/user/application_security/container_scanning/#customizing-the-container-scanning-settings
-# Note that environment variables can be set in several places
-# See https://docs.gitlab.com/ee/ci/variables/#cicd-variable-precedence
-
-stages:
-  - ".pre"
-  - build
-  - test
-  - test-db
-  - test-units
-  - test-replay
-  - lint
-  - audit
-  - scan-dependencies
-  - build-images
-  - scan-images
-  - publish-images
-
-image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
-
+# Isolated diagnostic branch. Never merge this configuration into product branches.
 workflow:
   rules:
-    # Feature-branch push pipelines include the complete develop-PR job set.
-    # Suppress only the matching same-repository GitHub PR event; keep main PRs
-    # and incomplete/foreign PR metadata on their existing validation path.
-    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event" &&
-        $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME == $CI_COMMIT_BRANCH &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME != "develop" &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME != "main" &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY == $CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA &&
-        $CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA == $CI_COMMIT_SHA
-      when: never
-    # PR validation must also run when the group Dependency Proxy is unavailable.
-    # Use public upstream images for canonical feature runs and external PRs;
-    # the GitHub project bot also lacks group-level Dependency Proxy access.
-    - if: ($CI_PIPELINE_SOURCE == "external_pull_request_event" && ($CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "develop" || $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main")) ||
-        ($CI_COMMIT_BRANCH && $CI_COMMIT_BRANCH != "develop" && $CI_COMMIT_BRANCH != "main" && $CI_PIPELINE_SOURCE != "external_pull_request_event")
-      variables:
-        DOCKER_HUB_PROXY: ""
-        DOCKER_IMAGE: docker:28
-        DOCKER_SERVICE: docker:28-dind
-        TRAEFIK_BASE_IMAGE: traefik:v2.11
-        TRIVY_IMAGE: aquasec/trivy:latest
-    - when: always
-
-variables:
-  REGISTRY: "${CI_REGISTRY}"
-  REGISTRY_USER: "${CI_REGISTRY_USER}"
-  REGISTRY_PASSWORD: "${CI_REGISTRY_PASSWORD}"
-  REGISTRY_PROJECT: "/${CI_PROJECT_PATH}/"
-  DOCKER_HUB_PROXY: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/"
-  # Match package.json/.nvmrc and retain Python/compiler tools for native modules.
-  BASE_IMAGE: node:24.22.1-bookworm
-  CICD_BASE_IMAGE: "${BASE_IMAGE}-git"
-  CYPRESS_IMAGE: cypress/browsers:node-24.22.1-chrome-156.0.8078.73-1-ff-159.0-edge-156.0.4314.50-1
-  CYPRESS_CACHE_FOLDER: "${CI_PROJECT_DIR}/cache/Cypress"
-  # Cold Electron verification can exceed 30 seconds on the shared runner.
-  CYPRESS_VERIFY_TIMEOUT: "120000"
-  E2E_BASE_IMAGE: "${CYPRESS_IMAGE}-docker"
-  DOCKER_HOST: tcp://docker:2375
-  DOCKER_DAEMON_OPTIONS: "--mtu=${DOCKER_SERVICE_MTU}"
-  DOCKER_IMAGE: ${DOCKER_HUB_PROXY}docker:28
-  DOCKER_SERVICE: ${DOCKER_HUB_PROXY}docker:28-dind
-  DOCKER_SERVICE_MTU: 1392
-  DOCKER_TLS_CERTDIR: ''
-  TRAEFIK_BASE_IMAGE: ${DOCKER_HUB_PROXY}traefik:v2.11
-  TRIVY_IMAGE: ${DOCKER_HUB_PROXY}aquasec/trivy:latest
-  PRERELEASE_SCRIPT_REGEX: ^(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))(-((alpha|beta|rc)((\.)?([1-9][0-9]*))?))$
-  PRERELEASE_RULES_REGEX: /^(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))\.(0|([1-9][0-9]*))(-((alpha|beta|rc)((\.)?([1-9][0-9]*))?))$/
-  RELEASE_SCRIPT_REGEX: ^((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))$
-  RELEASE_RULES_REGEX: /^((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))\.((0|([1-9][0-9]*)))$/
-
-include:
-  - local: ".gitlab-ci/*.gitlab-ci.yml"
-  #- template: Jobs/Dependency-Scanning.gitlab-ci.yml        # commits
-  - template: Jobs/Dependency-Scanning.latest.gitlab-ci.yml # pull requests
-
-check-config:
-  stage: ".pre"
-  interruptible: true
-  allow_failure: true
-  rules:
-    - if: $CI_PIPELINE_SOURCE == "external_pull_request_event"
-    - if: $CI_COMMIT_BRANCH
-    - if: $CI_COMMIT_TAG
-  script:
-    - echo ${CI_PIPELINE_SOURCE}
-    - echo ${CI_REGISTRY}
-    - echo ${CI_REGISTRY_IMAGE}
-    - echo ${CI_DEPENDENCY_PROXY_SERVER}
-    - echo ${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}
-    - echo ${CI_DEPENDENCY_PROXY_DIRECT_GROUP_IMAGE_PREFIX}
-    - echo ${CI_PROJECT_PATH}
-    - echo ${CI_DEFAULT_BRANCH}
-    - echo ${CI_COMMIT_BRANCH}
-    - echo ${CI_COMMIT_TAG}
-    - echo ${CI_COMMIT_BEFORE_SHA}
-    - echo ${CI_COMMIT_SHA}
-    - echo ${CI_COMMIT_SHORT_SHA}
-    - echo ${CI_COMMIT_REF_NAME}
-    - echo ${CI_COMMIT_REF_SLUG}
-    - echo ${CI_COMMIT_REF_PROTECTED}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_IID}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_NAME}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_SOURCE_BRANCH_SHA}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME}
-    - echo ${CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_SHA}
-    - echo ${CI_MERGE_REQUEST_IID}
-    - echo ${CI_MERGE_REQUEST_LABELS}
-    - echo ${CI_MERGE_REQUEST_EVENT_TYPE}
-    - echo ${CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}
-    - echo ${CI_MERGE_REQUEST_SOURCE_BRANCH_SHA}
-    - echo ${CI_MERGE_REQUEST_TARGET_BRANCH_NAME}
-    - echo ${CI_MERGE_REQUEST_TARGET_BRANCH_SHA}
-
-gemnasium-dependency_scanning:
-  stage: scan-dependencies
-  interruptible: true
-  allow_failure: true
-  rules:
-    - if: $CI_EXTERNAL_PULL_REQUEST_TARGET_BRANCH_NAME == "main"
-    # Retain the former develop-PR scan in the canonical feature-branch run.
-    - !reference [ .default_rules, rules ]
+    - if: '$CI_COMMIT_BRANCH == "verify-runner-docker-hub-access-2026-11-03"'
     - when: never
-  needs: []
+
+stages:
+  - diagnostics
+
+verify-docker-hub-access:
+  stage: diagnostics
+  image: node:24.22.1-bookworm
+  parallel: 2
+  timeout: 5m
+  variables:
+    DOCKER_HOST: tcp://docker:2375
+    DOCKER_TLS_CERTDIR: ''
+    GIT_DEPTH: '1'
+  services:
+    - name: docker:28-dind
+      alias: docker
+      variables:
+        HEALTHCHECK_TCP_PORT: '2375'
+      entrypoint: ['sh', '-c', 'dockerd-entrypoint.sh --mtu=1392']
+  script:
+    - node --check scripts/qa/runner-docker-hub-proof.mjs
+    - RUNNER_HUB_PROBE_SELF_TEST=1 node scripts/qa/runner-docker-hub-proof.mjs
+    - node scripts/qa/runner-docker-hub-proof.mjs
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - tmp/runner-docker-hub-proof.json
