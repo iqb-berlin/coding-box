@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, DestroyRef, inject, OnInit, OnDestroy, signal, computed, input, output, ChangeDetectionStrategy
 } from '@angular/core';
@@ -10,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { PageEvent } from '@angular/material/paginator';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../../../shared/utils/ui-translator';
 import { ValidationTaskDto } from '../../../../../models/validation-task.dto';
 import {
   ValidationPanelHeaderComponent,
@@ -41,7 +43,7 @@ interface VariablesValidationResult {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-variables-validation-panel',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatExpansionModule,
     MatButtonModule,
     MatProgressSpinnerModule,
@@ -121,6 +123,8 @@ interface VariablesValidationResult {
   ]
 })
 export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private variableValidationService = inject(VariableValidationService);
   private snackBar = inject(MatSnackBar);
 
@@ -149,18 +153,20 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
   protected readonly isExporting = signal(false);
   protected readonly activeTask = signal<ValidationTaskDto | null>(null);
 
-  protected tableColumns: ValidationTableColumn[] = [
+  private readonly localizedTableColumns = computed<ValidationTableColumn[]>(() => ([
     {
       key: 'select',
-      label: 'Auswählen',
+      label: this.uiTranslate('coding.select'),
       type: 'checkbox',
       width: '80px'
     },
-    { key: 'fileName', label: 'Dateiname', type: 'link' },
-    { key: 'variableId', label: 'Variablen-ID' },
-    { key: 'value', label: 'Wert' },
-    { key: 'errorReason', label: 'Fehlergrund' }
-  ];
+    { key: 'fileName', label: this.uiTranslate('file-upload.filename'), type: 'link' },
+    { key: 'variableId', label: this.uiTranslate('coding-management.filters.variable-id') },
+    { key: 'value', label: this.uiTranslate('coding.value') },
+    { key: 'errorReason', label: this.uiTranslate('ui-text.response-status-validation-panel.error-reason') }
+  ]));
+
+  protected get tableColumns(): ValidationTableColumn[] { return this.localizedTableColumns(); }
 
   private subscription?: Subscription;
   private stateSubscription?: Subscription;
@@ -241,7 +247,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         },
         error: () => {
           this.isRunning.set(false);
-          this.snackBar.open('Fehler bei der Validierung', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('coding-management-manual.errors.validation-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -272,7 +278,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         error: () => {
           this.isLoadingPage.set(false);
 
-          this.snackBar.open('Fehler beim Laden der Seite', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.page-load-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -316,7 +322,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
           this.isDeletingResponses.set(false);
 
           this.selectedResponses.set(new Set());
-          this.snackBar.open('Ausgewählte Antworten wurden gelöscht', 'OK', {
+          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.selected-deleted'), 'OK', {
             duration: 3000
           });
           this.onValidate(); // Refresh results
@@ -324,7 +330,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         error: () => {
           this.isDeletingResponses.set(false);
 
-          this.snackBar.open('Fehler beim Löschen', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.delete-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }
@@ -342,7 +348,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         this.isDeletingResponses.set(false);
 
         this.selectedResponses.set(new Set());
-        this.snackBar.open('Alle ungültigen Antworten wurden gelöscht', 'OK', {
+        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.all-deleted'), 'OK', {
           duration: 3000
         });
         this.onValidate(); // Refresh results
@@ -350,7 +356,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
       error: () => {
         this.isDeletingResponses.set(false);
 
-        this.snackBar.open('Fehler beim Löschen', 'Schließen', {
+        this.snackBar.open(this.uiTranslate('ui-text.response-status-validation-panel.delete-failed'), this.uiTranslate('deferred-view.close'), {
           duration: 5000
         });
       }
@@ -370,14 +376,14 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         next: result => {
           const csvContent = buildCsv(result.data, [
             { header: 'Dateiname', value: row => row.fileName },
-            { header: 'Variablen-ID', value: row => row.variableId },
+            { header: this.uiTranslate('coding-management.filters.variable-id'), value: row => row.variableId },
             { header: 'Wert', value: row => row.value },
             { header: 'Response-ID', value: row => row.responseId ?? '' },
             { header: 'Fehlergrund', value: row => row.errorReason ?? '' }
           ]);
 
-          downloadCsvFile('validierung-variablen.csv', csvContent);
-          this.snackBar.open('CSV-Export erfolgreich erstellt', 'OK', {
+          downloadCsvFile(this.uiTranslate('ui-text.variables-validation-panel.csv-filename'), csvContent);
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-success'), 'OK', {
             duration: 3000
           });
           this.isExporting.set(false);
@@ -385,7 +391,7 @@ export class VariablesValidationPanelComponent implements OnInit, OnDestroy {
         error: () => {
           this.isExporting.set(false);
 
-          this.snackBar.open('Fehler beim CSV-Export', 'Schließen', {
+          this.snackBar.open(this.uiTranslate('ui-text.duplicate-responses-validation-panel.export-failed'), this.uiTranslate('deferred-view.close'), {
             duration: 5000
           });
         }

@@ -13,6 +13,7 @@ import {
 } from '@angular/material/paginator';
 import { MatSelectModule } from '@angular/material/select';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import type {
   ItemDatasetMappingIssueDto,
   ItemDatasetMappingWarningDto
@@ -77,6 +78,8 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
   styleUrls: ['./item-dataset-mapping-diagnostics-dialog.component.scss']
 })
 export class ItemDatasetMappingDiagnosticsDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly data = inject<ItemDatasetMappingDiagnosticsDialogData>(MAT_DIALOG_DATA);
   private dialogRef = inject<MatDialogRef<ItemDatasetMappingDiagnosticsDialogComponent>>(MatDialogRef);
   private translateService = inject(TranslateService);
@@ -196,7 +199,7 @@ export class ItemDatasetMappingDiagnosticsDialogComponent {
   }
 
   getDownloadFileName(date = new Date()): string {
-    const kind = this.isWarning ? 'warnungen' : 'fehler';
+    const kind = this.isWarning ? 'warnungen' : this.uiTranslate('ui-text.item-dataset-mapping-diagnostics-dialog.error-count');
     const datePart = [
       date.getFullYear(),
       String(date.getMonth() + 1).padStart(2, '0'),

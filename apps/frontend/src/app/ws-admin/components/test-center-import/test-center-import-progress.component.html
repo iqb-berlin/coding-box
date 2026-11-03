@@ -4,16 +4,13 @@
         <mat-spinner diameter="40"></mat-spinner>
         @if (view().loadingGroups) {
         <p class="loading-text">
-          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+          {{ 'ui-text.test-center-import-progress.loading-groups' | translate }}
         </p>
         <div class="test-groups-load-progress">
           <p class="loading-subtext">{{ view().groupsMessage }}</p>
           @if ((view().groupsProgress?.totalGroups || 0) > 0) {
           <p class="loading-subtext">
-            Testgruppen verarbeitet:
-            {{ view().groupsProgress?.processedGroups || 0 }} /
-            {{ view().groupsProgress?.totalGroups || 0 }}
-            ({{ view().groupsPercent }}%)
+            {{ 'ui-text.test-center-import-progress.processed-groups' | translate: { value1: (view().groupsProgress?.processedGroups || 0), value2: (view().groupsProgress?.totalGroups || 0), value3: (view().groupsPercent) } }}
           </p>
           <mat-progress-bar
             mode="determinate"
@@ -24,21 +21,20 @@
           }
           @if (view().groupsElapsedSeconds > 2) {
           <p class="loading-subtext">
-            Laufzeit: {{ view().groupsElapsedText }}
+            {{ 'ui-text.test-center-import-progress.elapsed-time' | translate: { value1: (view().groupsElapsedText) } }}
           </p>
           }
         </div>
         } @if (view().uploadingResults) {
         <p class="loading-text">
-          Verfügbare Testgruppen im Arbeitsbereich werden abgerufen...
+          {{ 'ui-text.test-center-import-progress.loading-groups' | translate }}
         </p>
         } @if (view().uploadingFiles) {
-        <p class="loading-text">Testdateien werden hochgeladen...</p>
+        <p class="loading-text">{{ 'ui-text.test-center-import-progress.uploading-files' | translate }}</p>
         @if (view().total > 0) {
         <div class="upload-progress">
           <p class="loading-subtext">
-            Uploads abgeschlossen: {{ view().completed }} /
-            {{ view().total }}
+            {{ 'ui-text.test-center-import-progress.uploads-complete' | translate: { value1: (view().completed), value2: (view().total) } }}
           </p>
           <mat-progress-bar
             mode="determinate"
@@ -51,13 +47,12 @@
           @for (option of view().options; track option.optionKey) {
           <div class="option-progress-item">
             <div class="option-progress-title">
-              {{ view().optionLabels[option.optionKey] }}:
-              {{ option.uploaded }} / {{ option.planned }} hochgeladen
+              {{ 'ui-text.test-center-import-progress.uploaded' | translate: { value1: (view().optionLabels[option.optionKey]), uploaded: (option.uploaded), planned: (option.planned) } }}
             </div>
             <div class="option-progress-meta">
-              Verarbeitet: {{ option.processed }} / {{ option.planned }}
+              {{ 'ui-text.test-center-import-progress.processed' | translate: { processed: (option.processed), planned: (option.planned) } }}
               @if (option.currentFile) {
-              <span class="current-file">Aktuelle Datei: {{ option.currentFile }}</span>
+              <span class="current-file">{{ 'ui-text.test-center-import-progress.current-file' | translate: { currentFile: (option.currentFile) } }}</span>
               }
             </div>
           </div>
@@ -65,7 +60,7 @@
         </div>
         } @if (view().progress?.currentFile) {
         <p class="loading-subtext">
-          Aktuell wird verarbeitet: {{ view().progress?.currentFile }}
+          {{ 'ui-text.test-center-import-progress.processing-file' | translate: { value1: (view().progress?.currentFile) } }}
         </p>
         }
         }
@@ -82,17 +77,16 @@
       @if (view().total > 0) {
       <div class="upload-progress">
         <p class="loading-subtext">
-          Uploads abgeschlossen: {{ view().completed }} /
-          {{ view().total }}
+          {{ 'ui-text.test-center-import-progress.uploads-complete' | translate: { value1: (view().completed), value2: (view().total) } }}
         </p>
         <mat-progress-bar
           mode="determinate"
           [value]="view().uploadPercent"
         ></mat-progress-bar>
       </div>
-      <p class="loading-subtext">Fortschritt: {{ view().uploadPercent }}%</p>
+      <p class="loading-subtext">{{ 'ui-text.test-center-import-progress.progress' | translate: { value1: (view().uploadPercent) } }}</p>
       } @else if (view().importPercent > 0) {
-      <p class="loading-subtext">Fortschritt: {{ view().importPercent }}%</p>
+      <p class="loading-subtext">{{ 'ui-text.test-center-import-progress.progress' | translate: { value1: (view().importPercent) } }}</p>
       }
     </div>
     } @if (!view().uploadingResults) {

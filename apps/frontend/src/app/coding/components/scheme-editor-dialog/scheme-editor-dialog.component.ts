@@ -15,6 +15,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { selectSchemerFile } from '../../utils/coding-scheme-reference';
 import { UnitCodingSchemeRefDto } from '../../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
@@ -124,6 +125,8 @@ export interface SchemeEditorDialogData {
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<SchemeEditorDialogComponent>>(MatDialogRef);
   protected data = inject<SchemeEditorDialogData>(MAT_DIALOG_DATA);
   private snackBar = inject(MatSnackBar);
@@ -265,7 +268,7 @@ export class SchemeEditorDialogComponent implements OnInit {
         data: {
           title: this.translate.instant('coding.schemer.unsaved-changes-title'),
           content: this.translate.instant('coding.schemer.unsaved-changes-content'),
-          confirmButtonLabel: 'Ja',
+          confirmButtonLabel: this.uiTranslate('process-overview.values.yes'),
           showCancel: true
         }
       });

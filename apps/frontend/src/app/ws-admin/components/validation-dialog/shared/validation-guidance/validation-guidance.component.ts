@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, input, ChangeDetectionStrategy
 } from '@angular/core';
@@ -11,7 +12,7 @@ import { MatIconModule } from '@angular/material/icon';
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-validation-guidance',
   standalone: true,
-  imports: [MatIconModule],
+  imports: [TranslateModule, MatIconModule],
   template: `
     <div class="validation-details">
       @if (description()) {
@@ -22,13 +23,13 @@ import { MatIconModule } from '@angular/material/icon';
         @if (whyText()) {
           <div class="info-banner">
             <mat-icon>help</mat-icon>
-            <span><strong>Warum ist das wichtig?</strong> {{ whyText() }}</span>
+            <span><strong>{{ 'ui-text.validation-guidance.purpose' | translate }}</strong> {{ whyText() }}</span>
           </div>
         }
         @if (fixHint()) {
           <div class="info-banner">
             <mat-icon>build</mat-icon>
-            <span><strong>So beheben Sie es:</strong> {{ fixHint() }}</span>
+            <span><strong>{{ 'ui-text.validation-guidance.remediation' | translate }}</strong> {{ fixHint() }}</span>
           </div>
         }
       </div>

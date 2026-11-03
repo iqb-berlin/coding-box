@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, signal, ChangeDetectionStrategy, DestroyRef, inject
 } from '@angular/core';
@@ -30,7 +31,7 @@ interface VariableOption {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-response-cleanup-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatButtonModule,
     MatDialogModule,

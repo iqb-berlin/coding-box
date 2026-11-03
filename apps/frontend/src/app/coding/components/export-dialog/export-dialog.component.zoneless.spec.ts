@@ -5,6 +5,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import * as ExcelJS from 'exceljs';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { ExportDialogComponent } from './export-dialog.component';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ValidationStateService } from '../../services/validation-state.service';
@@ -38,7 +39,7 @@ describe('Export dialog validation without ZoneJS', () => {
 
   const button = (key: string): HTMLButtonElement => Array.from(
     (fixture.nativeElement as HTMLElement).querySelectorAll('button')
-  ).find(element => element.textContent?.includes(key))!;
+  ).find(element => element.textContent?.includes(translateGerman(`export-dialog.validation.${key}`)))!;
 
   async function selectFile(file: File): Promise<void> {
     const fileInput = fixture.nativeElement.querySelector('input[type="file"]') as HTMLInputElement;
@@ -70,7 +71,7 @@ describe('Export dialog validation without ZoneJS', () => {
     download = new Subject<Blob>();
     validateCodingCompleteness = jest.fn().mockReturnValue(response);
     await TestBed.configureTestingModule({
-      imports: [ExportDialogComponent, MatSnackBarModule, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, ExportDialogComponent, MatSnackBarModule, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MatDialogRef, useValue: { close: () => closing.next(), beforeClosed: () => closing } },

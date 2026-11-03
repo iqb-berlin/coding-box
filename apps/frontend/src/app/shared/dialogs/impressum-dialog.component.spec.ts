@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { of, throwError } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { ImpressumDialogComponent } from './impressum-dialog.component';
 import { SystemSettingsService } from '../../core/services/system-settings.service';
 
@@ -18,7 +19,7 @@ describe('ImpressumDialogComponent', () => {
     consoleWarnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     await TestBed.configureTestingModule({
-      imports: [ImpressumDialogComponent],
+      imports: [GermanTranslationsTestingModule, ImpressumDialogComponent],
       providers: [
         { provide: SystemSettingsService, useValue: systemSettingsService }
       ]

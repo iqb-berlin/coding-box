@@ -2,7 +2,7 @@ import {
   ChangeDetectionStrategy, Component, inject, input, output
 } from '@angular/core';
 import { DecimalPipe } from '@angular/common';
-import { TranslateService } from '@ngx-translate/core';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatIconModule } from '@angular/material/icon';
@@ -18,7 +18,7 @@ import { getResponseStatusTooltipKey } from '../../../shared/utils/response-stat
   changeDetection: ChangeDetectionStrategy.OnPush,
   templateUrl: './test-results-overview.component.html',
   styleUrl: './test-results-overview.component.scss',
-  imports: [DecimalPipe, MatDividerModule, MatProgressSpinnerModule, MatIconModule, MatButtonModule, MatTooltipModule]
+  imports: [TranslateModule, DecimalPipe, MatDividerModule, MatProgressSpinnerModule, MatIconModule, MatButtonModule, MatTooltipModule]
 })
 export class TestResultsOverviewComponent {
   private readonly translateService = inject(TranslateService);
@@ -65,7 +65,7 @@ export class TestResultsOverviewComponent {
       return status;
     }
 
-    const descriptionPart = info.description ? `: ${info.description}` : '';
+    const descriptionPart = info.descriptionKey ? `: ${this.translateService.instant(info.descriptionKey)}` : '';
     return `${status}${descriptionPart}`;
   }
 }

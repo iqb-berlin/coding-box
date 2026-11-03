@@ -5,6 +5,7 @@ import { MAT_DIALOG_DEFAULT_OPTIONS, MatDialog, MatDialogConfig } from '@angular
 import { MAT_TABS_CONFIG } from '@angular/material/tabs';
 import { TranslateModule } from '@ngx-translate/core';
 import { firstValueFrom } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../testing/german-translations';
 import { BookletInfoDialogComponent } from './booklet-info-dialog/booklet-info-dialog.component';
 import { UnitInfoDialogComponent } from './unit-info-dialog/unit-info-dialog.component';
 
@@ -57,7 +58,7 @@ describe.each(variants)('$name information dialog without Zone', variant => {
   beforeEach(async () => {
     copy = jest.fn().mockReturnValue(true);
     await TestBed.configureTestingModule({
-      imports: [DialogHost, BookletInfoDialogComponent, UnitInfoDialogComponent, TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule, DialogHost, BookletInfoDialogComponent, UnitInfoDialogComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
         { provide: Clipboard, useValue: { copy } },
@@ -103,7 +104,7 @@ describe.each(variants)('$name information dialog without Zone', variant => {
 
   it('updates the embedded copy confirmation after the timer', async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
-    const button = element().querySelector<HTMLButtonElement>('[aria-label="xml-viewer.copy-xml"]')!;
+    const button = element().querySelector<HTMLButtonElement>(`[aria-label="${translateGerman('xml-viewer.copy-xml')}"]`)!;
     button.click();
     await host.whenStable();
     expect(button.textContent).toContain('done');
@@ -132,9 +133,9 @@ describe.each(variants)('$name information dialog without Zone', variant => {
   });
 
   it.each(['header', 'footer'])('closes through the %s action and reopens without stale copy state', async position => {
-    element().querySelector<HTMLButtonElement>('[aria-label="xml-viewer.copy-xml"]')!.click();
+    element().querySelector<HTMLButtonElement>(`[aria-label="${translateGerman('xml-viewer.copy-xml')}"]`)!.click();
     await host.whenStable();
-    expect(element().querySelector('[aria-label="xml-viewer.copy-xml"]')?.textContent).toContain('done');
+    expect(element().querySelector(`[aria-label="${translateGerman('xml-viewer.copy-xml')}"]`)?.textContent).toContain('done');
     const button = position === 'header' ? element().querySelector<HTMLButtonElement>('.close-button')! :
       Array.from(element().querySelectorAll('button')).find(item => item.textContent?.trim() === 'Schließen')!;
     const closed = firstValueFrom(dialogs.openDialogs[0].afterClosed());
@@ -144,6 +145,6 @@ describe.each(variants)('$name information dialog without Zone', variant => {
     expect(document.querySelector(variant.selector)).toBeNull();
     dialogs.open(variant.component as Type<unknown>, { data: variant.data });
     await host.whenStable();
-    expect(element().querySelector('[aria-label="xml-viewer.copy-xml"]')?.textContent).toContain('content_copy');
+    expect(element().querySelector(`[aria-label="${translateGerman('xml-viewer.copy-xml')}"]`)?.textContent).toContain('content_copy');
   });
 });

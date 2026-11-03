@@ -32,7 +32,7 @@
         @if (!hasValidReferenceMode()) {
           <div class="reference-mode-error">
             <mat-icon>error_outline</mat-icon>
-            <span>Bitte wählen Sie den Vergleichsmodus für die ausgewählten Vergleichsschulungen.</span>
+            <span>{{ 'ui-text.training-participant-selection.reference-mode-required' | translate }}</span>
           </div>
         }
       </div>
@@ -44,12 +44,12 @@
     <div class="section">
       <div class="section-header">
         <h3 class="section-subtitle">
-          Kodierer-Auswahl
-          <span class="selection-count">({{selected().size}} ausgewählt)</span>
+          {{ 'ui-text.training-participant-selection.select-coders' | translate }}
+          <span class="selection-count">{{ 'ui-text.training-participant-selection.selected-count' | translate: { value1: (selected().size) } }}</span>
         </h3>
         <div class="header-actions">
-          <button mat-button type="button" [disabled]="!editable()" (click)="selectAll.emit()" class="action-link">Alle auswählen</button>
-          <button mat-button type="button" [disabled]="!editable()" (click)="clearSelection.emit()" class="action-link">Alle abwählen</button>
+          <button mat-button type="button" [disabled]="!editable()" (click)="selectAll.emit()" class="action-link">{{ 'manual-coding-export.select-all' | translate }}</button>
+          <button mat-button type="button" [disabled]="!editable()" (click)="clearSelection.emit()" class="action-link">{{ 'manual-coding-export.deselect-all' | translate }}</button>
         </div>
       </div>
 
@@ -83,7 +83,7 @@
       @if (coders().length === 0) {
         <div class="no-coders-message">
           <mat-icon>group_off</mat-icon>
-          <p>Keine Kodierer verfügbar</p>
+          <p>{{ 'coding-job-definition-dialog.empty-states.no-coders' | translate }}</p>
         </div>
       }
     </div>

@@ -1,5 +1,5 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule } from '@ngx-translate/core';
 import {
   NEVER, Observable, of, Subject
 } from 'rxjs';
@@ -12,7 +12,7 @@ describe('External coding import permissions', () => {
   function mountPreview(level: number, isAdmin = false, roleResponse?: Observable<Array<{ id: number; accessLevel: number }>>) {
     const start = cy.stub().as('startImport').returns(NEVER);
     return cy.mount(ImportComparisonDialogComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: MAT_DIALOG_DATA,
           useValue: { message: 'preview', processedRows: 1, updatedRows: 1, errors: [], affectedRows: [], isPreview: true,

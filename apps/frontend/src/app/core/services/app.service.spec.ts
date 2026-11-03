@@ -11,7 +11,7 @@ import { AuthDataDto } from '../../../../../../api-dto/auth-data-dto';
 import { CreateUserDto } from '../../../../../../api-dto/user/create-user-dto';
 import {
   AppHttpError,
-  BACKEND_CONNECTIVITY_ERROR_MESSAGE
+  BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY
 } from '../interceptors/app-http-error.class';
 import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../interceptors/http-error-context';
 import { SessionRecoveryService } from './session-recovery.service';
@@ -670,7 +670,7 @@ describe('AppService', () => {
       } as AppHttpError);
 
       expect(service.errorMessages).toHaveLength(1);
-      expect(service.errorMessages[0].message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE);
+      expect(service.errorMessages[0].message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY);
       expect(service.errorMessages[0].requestCount).toBe(3);
       expect(service.errorMessages[0].affectedRequests).toHaveLength(3);
     });

@@ -21,6 +21,7 @@ import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { MatTableModule } from '@angular/material/table';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { AppService } from '../../../core/services/app.service';
@@ -50,6 +51,8 @@ import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/co
   ]
 })
 export class EditMissingsProfilesDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<EditMissingsProfilesDialogComponent>>(MatDialogRef);
   data = inject<{
     workspaceId: number;
@@ -286,8 +289,8 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
 
     missings.push({
       id: `missing-${Date.now()}`,
-      label: 'New Missing',
-      description: 'Description',
+      label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.new-missing'),
+      description: this.uiTranslate('ui-text.edit-missings-profiles-dialog.description'),
       code: this.getNextNegativeMissingCode(missings),
       score: 0
     });
@@ -393,14 +396,14 @@ export class EditMissingsProfilesDialogComponent implements OnInit {
     return [
       {
         id: 'mir',
-        label: 'missing invalid response',
+        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.invalid-response'),
         description: '',
         code: -98,
         score: 0
       },
       {
         id: 'mci',
-        label: 'missing coding impossible',
+        label: this.uiTranslate('ui-text.edit-missings-profiles-dialog.coding-impossible'),
         description: '',
         code: -97,
         score: null

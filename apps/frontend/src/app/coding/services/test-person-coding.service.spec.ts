@@ -8,6 +8,7 @@ import {
   withInterceptorsFromDi
 } from '@angular/common/http';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import {
   TestPersonCodingService,
   CodingStatistics,
@@ -72,6 +73,7 @@ describe('TestPersonCodingService', () => {
     };
 
     TestBed.configureTestingModule({
+      imports: [GermanTranslationsTestingModule],
       providers: [
         provideHttpClient(withInterceptorsFromDi()),
         provideHttpClientTesting(),

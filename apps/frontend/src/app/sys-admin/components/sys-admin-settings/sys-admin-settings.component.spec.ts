@@ -116,6 +116,19 @@ describe('SysAdminSettingsComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it.each(['error', 'home.home-page'])('preserves a configured logo description that matches the catalog ID %s', async alt => {
+    fixture.destroy();
+    TestBed.inject(AppService).appLogo = { ...standardLogo, data: 'custom-logo.png', alt };
+    fixture = TestBed.createComponent(SysAdminSettingsComponent);
+    component = fixture.componentInstance;
+    fixture.detectChanges();
+    expect(component.logoAltText()).toBe(alt);
+    await fixture.whenStable();
+
+    const input = fixture.nativeElement.querySelector('.logo-alt-text-container input') as HTMLInputElement;
+    expect(input.value).toBe(alt);
+  });
+
   it('renders content-pool settings after a delayed response without another UI event', async () => {
     const settings = new Subject<{
       enabled: boolean;

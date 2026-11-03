@@ -5,7 +5,7 @@
 
 <div mat-dialog-content class="delete-dialog-content">
   <section class="warning-panel">
-    <div class="target-label">Betroffener Bereich</div>
+    <div class="target-label">{{ 'ui-text.test-results-delete-preview-dialog.scope' | translate }}</div>
     <div class="target-value">{{ preview.label }}</div>
     <p>{{ warningText }}</p>
   </section>
@@ -30,26 +30,26 @@
   <section class="response-cleanup-section">
     <div class="response-cleanup-grid">
       <div>
-        <div class="detail-label">Zeitfenster</div>
+        <div class="detail-label">{{ 'ui-text.test-results-delete-preview-dialog.time-range' | translate }}</div>
         <div class="detail-value">{{ responseCleanupTimeText }}</div>
       </div>
       <div>
-        <div class="detail-label">Variablen</div>
+        <div class="detail-label">{{ 'coding.my-coding-jobs.job-variables' | translate }}</div>
         <div class="detail-value">{{ responseCleanupVariableText }}</div>
       </div>
       <div>
-        <div class="detail-label">Subforms</div>
+        <div class="detail-label">{{ 'ui-text.test-results-delete-preview-dialog.subforms' | translate }}</div>
         <div class="detail-value">{{ responseCleanupSubformText }}</div>
       </div>
       <div>
-        <div class="detail-label">Ohne Zeitstempel</div>
+        <div class="detail-label">{{ 'ui-text.test-results-delete-preview-dialog.without-timestamp' | translate }}</div>
         <div class="detail-value">{{ responseCleanupUnknownTimestampResponses }}</div>
       </div>
     </div>
 
     @if (responseCleanupSamples.length > 0) {
     <div class="response-samples">
-      <div class="detail-label">Beispiele</div>
+      <div class="detail-label">{{ 'ui-text.test-results-delete-preview-dialog.examples' | translate }}</div>
       <div class="response-sample-list">
         @for (sample of responseCleanupSamples; track sample.responseId) {
         <div class="response-sample">
@@ -70,7 +70,7 @@
     <div class="coding-impact-header">
       <mat-icon>rule</mat-icon>
       <div>
-        <div class="coding-impact-title">Auswirkungen auf Kodierung</div>
+        <div class="coding-impact-title">{{ 'ui-text.test-results-delete-preview-dialog.coding-impact' | translate }}</div>
         <p>{{ codingImpactText }}</p>
       </div>
     </div>
@@ -106,7 +106,7 @@
 
     @if (preview.bookletNames.length > 0) {
     <div class="detail-block">
-      <div class="detail-label">Testhefte</div>
+      <div class="detail-label">{{ 'ui-text.files-validation.booklets' | translate }}</div>
       <div class="chip-row">
         @for (bookletName of visibleBooklets; track bookletName) {
         <span class="chip">{{ bookletName }}</span>
@@ -120,7 +120,7 @@
 
     @if (preview.unitNames.length > 0) {
     <div class="detail-block">
-      <div class="detail-label">Aufgaben</div>
+      <div class="detail-label">{{ 'coding.jobs.table.units' | translate }}</div>
       <div class="chip-row">
         @for (unitName of visibleUnits; track unitName) {
         <span class="chip">{{ unitName }}</span>
@@ -157,7 +157,7 @@
 </div>
 
 <div mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="cancel()">Abbrechen</button>
+  <button mat-button type="button" (click)="cancel()">{{ 'cancel' | translate }}</button>
   <button
     mat-flat-button
     color="warn"

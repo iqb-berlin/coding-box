@@ -17,6 +17,8 @@ import {
 import { jwtDecode, JwtPayload } from 'jwt-decode';
 import { MatSnackBar, MatSnackBarRef, TextOnlySnackBar } from '@angular/material/snack-bar';
 import { HttpErrorResponse } from '@angular/common/http';
+import { replayKeyboardAction } from './replay-keyboard-policy';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { UnitPlayerComponent } from '../unit-player/unit-player.component';
 import { FileService } from '../../../shared/services/file/file.service';
 import {
@@ -97,6 +99,8 @@ interface PendingReplayNotesCommit {
   styleUrl: './replay.component.scss'
 })
 export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
 
   private fileService = inject(FileService);
@@ -499,7 +503,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.setIsLoaded();
     const messages = this.getErrorMessages();
     const message = validation.errorType === 'token_expired' ? messages.tokenExpired : messages.tokenInvalid;
-    this.openErrorSnackBar(message, 'Schließen');
+    this.openErrorSnackBar(message, this.uiTranslate('deferred-view.close'));
     this.storeErrorInStatistics(message);
     return false;
   }
@@ -695,18 +699,18 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private getErrorMessages(): ErrorMessages {
     return {
-      QueryError: 'Kein Authorisierungs-Token angegeben',
-      ParamsError: 'Ungültige Anzahl an Parametern in der URL vorhanden',
-      401: 'Authentisierungs-Token ist ungültig',
-      UnitIdError: 'Unbekannte Unit-ID',
-      TestPersonError: 'Ungültige ID für Testperson',
-      PlayerError: 'Ungültiger Player-Name',
-      ResponsesError: `Fehler beim Laden der Antworten für Aufgabe "${this.unitId()}" von Testperson "${this.testPerson()}"`,
-      notInList: `Keine valide Seite mit der ID "${this.page() || ''}" gefunden`,
-      notCurrent: `Seite mit der ID "${this.page() || ''}" kann nicht ausgewählt werden`,
-      tokenExpired: 'Das Authentisierungs-Token ist abgelaufen',
-      tokenInvalid: 'Das Authentisierungs-Token ist ungültig',
-      unknown: `Unbekannter Fehler für Aufgabe "${this.unitId() || ''}" von Testperson "${this.testPerson() || ''}"`
+      QueryError: this.uiTranslate('ui-text.replay.token-missing'),
+      ParamsError: this.uiTranslate('ui-text.replay.invalid-url-parameters'),
+      401: this.uiTranslate('ui-text.replay.invalid-auth-token'),
+      UnitIdError: this.uiTranslate('ui-text.replay.unknown-unit'),
+      TestPersonError: this.uiTranslate('ui-text.replay.invalid-person'),
+      PlayerError: this.uiTranslate('ui-text.replay.invalid-player'),
+      ResponsesError: this.uiTranslate('ui-text.replay.responses-load-failed', { value1: this.unitId(), value2: this.testPerson() }),
+      notInList: this.uiTranslate('ui-text.replay.page-not-found', { value1: this.page() || '' }),
+      notCurrent: this.uiTranslate('ui-text.replay.page-unavailable', { value1: this.page() || '' }),
+      tokenExpired: this.uiTranslate('ui-text.replay.token-expired'),
+      tokenInvalid: this.uiTranslate('ui-text.replay.token-invalid'),
+      unknown: this.uiTranslate('ui-text.replay.unknown-unit-error', { value1: this.unitId() || '', value2: this.testPerson() || '' })
     };
   }
 
@@ -725,7 +729,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     // The interceptor owns session and permission feedback for these responses.
     if (error.status !== 401 && error.status !== 403) {
-      this.openErrorSnackBar(message, 'Schließen');
+      this.openErrorSnackBar(message, this.uiTranslate('deferred-view.close'));
     }
     this.storeErrorInStatistics(message);
     this.resetUnitData();
@@ -971,7 +975,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
     if (pageError) {
       const errorMessage = this.getErrorMessages()[pageError];
-      this.openPageErrorSnackBar(errorMessage, 'Schließen');
+      this.openPageErrorSnackBar(errorMessage, this.uiTranslate('deferred-view.close'));
       this.storeErrorInStatistics(errorMessage);
     } else if (this.pageErrorSnackbarRef) {
       this.pageErrorSnackBar.dismiss();
@@ -1165,7 +1169,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       }, '*');
 
       this.errorSnackBar.open(
-        'Code an Vergleichsliste gesendet',
+        this.uiTranslate('ui-text.replay.code-sent-to-comparison'),
         'Ok',
         { duration: 2000 }
       );
@@ -1411,91 +1415,44 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onKeyDown(event: Event): void {
-    const unitsDataValue = this.unitsData();
-
     const keyboardEvent = event as KeyboardEvent;
-
-    // Ignore if user is typing in an input/textarea
-    const activeElement = document.activeElement as HTMLElement;
-    if (activeElement && (activeElement.tagName === 'INPUT' || activeElement.tagName === 'TEXTAREA')) {
-      if (keyboardEvent.key === 'Enter') {
-        activeElement.blur();
-        keyboardEvent.preventDefault();
-      }
-      return;
+    const activeElement = document.activeElement as HTMLElement | null;
+    const inputFocused = !!activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName);
+    const units = this.unitsData();
+    const currentUnit = units?.units[units.currentUnitIndex];
+    const variableId = currentUnit?.variableId || this.codingService.currentVariableId;
+    const navigationKey = ['Enter', 'ArrowRight'].includes(keyboardEvent.key);
+    const authenticationBlocked = this.isCodingInteractionBlockedByReAuthentication();
+    const codingMode = this.isCodingMode() && !!units;
+    const hasSelection = !inputFocused && !authenticationBlocked && codingMode && !!units && navigationKey &&
+      !this.codingService.hasSaveError && (keyboardEvent.key !== 'Enter' || !!variableId) &&
+      this.codingService.selectedCodes.has(this.codingService.generateCompositeKey(
+        this.testPerson(), currentUnit?.name || this.unitId(), variableId
+      ));
+    const action = replayKeyboardAction({
+      key: keyboardEvent.key,
+      inputFocused,
+      authenticationBlocked,
+      codingMode,
+      currentIndex: units?.currentUnitIndex ?? 0,
+      unitCount: units?.units.length ?? 0,
+      hasNavigationVariable: !!variableId,
+      hasEditableVariable: !!this.codingService.currentVariableId,
+      hasSelection,
+      saveFailed: this.codingService.hasSaveError,
+      readOnly: this.isCodingReadOnly()
+    });
+    if (action.preventDefault) keyboardEvent.preventDefault();
+    if (action.blurInput) activeElement?.blur();
+    if (action.targetIndex !== undefined && units?.units[action.targetIndex]) {
+      this.handleUnitChanged(units.units[action.targetIndex]);
     }
-
-    if (this.isCodingInteractionBlockedByReAuthentication() &&
-      ['Enter', 'ArrowRight', 'ArrowLeft'].includes(keyboardEvent.key)) {
-      keyboardEvent.preventDefault();
-      return;
-    }
-
-    if (this.isCodingMode() && unitsDataValue) {
-      const currentIndex = unitsDataValue.currentUnitIndex;
-      const currentUnit = unitsDataValue.units[currentIndex];
-      const currentUnitName = currentUnit?.name || this.unitId();
-      const currentVariableId = currentUnit?.variableId || this.codingService.currentVariableId;
-
-      // Check for Enter key - navigate to next unit (existing functionality)
-      if (keyboardEvent.key === 'Enter' && currentVariableId) {
-        if (this.codingService.hasSaveError) {
-          keyboardEvent.preventDefault();
-          return;
-        }
-        const compositeKey = this.codingService.generateCompositeKey(this.testPerson(), currentUnitName, currentVariableId);
-        const hasSelection = this.codingService.selectedCodes.has(compositeKey);
-
-        if (hasSelection) {
-          keyboardEvent.preventDefault();
-          const nextIndex = currentIndex + 1;
-          if (nextIndex >= 0 && nextIndex < unitsDataValue.units.length) {
-            this.handleUnitChanged(unitsDataValue.units[nextIndex]);
-          }
-        }
-      } else if (keyboardEvent.key === 'ArrowRight') {
-        keyboardEvent.preventDefault();
-        if (this.codingService.hasSaveError) {
-          return;
-        }
-        const compositeKey = this.codingService.generateCompositeKey(this.testPerson(), currentUnitName, currentVariableId);
-        const hasSelection = this.codingService.selectedCodes.has(compositeKey);
-
-        if (hasSelection || this.isCodingReadOnly()) {
-          const nextIndex = currentIndex + 1;
-          if (nextIndex >= 0 && nextIndex < unitsDataValue.units.length) {
-            this.handleUnitChanged(unitsDataValue.units[nextIndex]);
-          }
-        }
-      } else if (keyboardEvent.key === 'ArrowLeft' && currentIndex > 0) {
-        keyboardEvent.preventDefault();
-        const prevIndex = currentIndex - 1;
-        if (prevIndex >= 0) {
-          this.handleUnitChanged(unitsDataValue.units[prevIndex]);
-        }
-      } else if (
-        ['0', '1', '2', '3', '4', '5', '6', '7', '8', '9'].includes(keyboardEvent.key) &&
-        this.codingService.currentVariableId &&
-        !this.isCodingReadOnly()
-      ) {
-        keyboardEvent.preventDefault();
-        const codeId = parseInt(keyboardEvent.key, 10);
-        if (this.codingService.codingScheme) {
-          const variableCoding = findVariableCodingByPublicId(
-            this.codingService.codingScheme,
-            this.codingService.currentVariableId
-          );
-          if (variableCoding) {
-            const code = variableCoding.codes.find(c => c.id === codeId && hasManualInstruction(c));
-            if (code) {
-              this.onCodeSelected({
-                variableId: this.codingService.currentVariableId,
-                code: code
-              });
-              this.codeSelectorComponent()?.scrollToCode(codeId);
-            }
-          }
-        }
+    if (action.codeId !== undefined && this.codingService.codingScheme) {
+      const variableCoding = findVariableCodingByPublicId(this.codingService.codingScheme, this.codingService.currentVariableId);
+      const code = variableCoding?.codes.find(item => item.id === action.codeId && hasManualInstruction(item));
+      if (code) {
+        this.onCodeSelected({ variableId: this.codingService.currentVariableId, code });
+        this.codeSelectorComponent()?.scrollToCode(action.codeId);
       }
     }
   }

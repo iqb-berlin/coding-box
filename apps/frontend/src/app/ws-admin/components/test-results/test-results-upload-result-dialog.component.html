@@ -28,7 +28,7 @@
     }
     @if (result.overviewPending) {
     <div class="section warning-section">
-      <div class="section-title">Übersicht wird aktualisiert</div>
+      <div class="section-title">{{ 'ui-text.test-results-upload-result-dialog.refreshing-overview' | translate }}</div>
       <div class="warning-text">
         {{ result.overviewMessage || 'Die aktualisierten Datenbankzahlen konnten noch nicht zuverlässig geladen werden.' }}
       </div>
@@ -36,10 +36,9 @@
     }
     @if (result.importedLogs) {
     <div class="section log-import-note-section">
-      <div class="section-title">Hinweis zum Log-Import</div>
+      <div class="section-title">{{ 'ui-text.test-results-upload-result-dialog.log-import-title' | translate }}</div>
       <div class="note-text">
-        Logs werden nur bestehenden Testpersonen, Testheften und Aufgaben zugeordnet. Wenn die passenden
-        Testergebnisse fehlen, legt der Import sie nicht automatisch an.
+        {{ 'ui-text.test-results-upload-result-dialog.log-import-hint' | translate }}
       </div>
     </div>
     }
@@ -66,55 +65,54 @@
     }
     @if (result.importSummary) {
     <div class="section import-summary-section">
-      <div class="section-title">Import-Zusammenfassung</div>
+      <div class="section-title">{{ 'ui-text.test-results-upload-result-dialog.summary' | translate }}</div>
       <div class="kv">
-        <div class="k">Gelesene Datei-Zeilen</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.parsed-rows' | translate }}</div>
         <div class="v">{{ result.importSummary.totalRows | number:'1.0-0' }}</div>
         @if (result.importSummary.responseRows !== undefined) {
-        <div class="k">Antwort-Zeilen in der Datei</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.response-rows' | translate }}</div>
         <div class="v">{{ result.importSummary.responseRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.savedResponses !== undefined) {
-        <div class="k">Antwortwerte gespeichert</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.saved-response-values' | translate }}</div>
         <div class="v">{{ result.importSummary.savedResponses | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedExistingUnits !== undefined) {
-        <div class="k">Vorhandene Units übersprungen</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.skipped-existing-units' | translate }}</div>
         <div class="v">{{ result.importSummary.skippedExistingUnits | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedExistingResponses !== undefined) {
-        <div class="k">Antwortwerte wegen bestehender Daten nicht gemerged</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.unmerged-response-values' | translate }}</div>
         <div class="v">{{ result.importSummary.skippedExistingResponses | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.deletedResponses !== undefined) {
-        <div class="k">Antwortwerte ersetzt/gelöscht</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.replaced-response-values' | translate }}</div>
         <div class="v">{{ result.importSummary.deletedResponses | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.bookletLogRows !== undefined) {
-        <div class="k">Testheft-Log-Zeilen in der Datei</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.booklet-log-rows' | translate }}</div>
         <div class="v">{{ result.importSummary.bookletLogRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.unitLogRows !== undefined) {
-        <div class="k">Aufgaben-Log-Zeilen in der Datei</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.unit-log-rows' | translate }}</div>
         <div class="v">{{ result.importSummary.unitLogRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.savedLogs !== undefined) {
-        <div class="k">Logs gespeichert</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.saved-log-count' | translate }}</div>
         <div class="v">{{ result.importSummary.savedLogs | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedRows !== undefined) {
-        <div class="k">Zeilen übersprungen</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.skipped-rows' | translate }}</div>
         <div class="v">{{ result.importSummary.skippedRows | number:'1.0-0' }}</div>
         }
         @if (result.importSummary.skippedLogs !== undefined) {
-        <div class="k">Logs übersprungen</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.skipped-log-count' | translate }}</div>
         <div class="v">{{ result.importSummary.skippedLogs | number:'1.0-0' }}</div>
         }
       </div>
       @if (responseRowsNeedExplanation) {
       <div class="summary-note">
-        Antwort-Zeilen und Antwortwerte zählen unterschiedliche Dinge: Eine Antwort-Zeile kann mehrere
-        Antwortwerte enthalten.
+        {{ 'ui-text.test-results-upload-result-dialog.response-count-hint' | translate }}
       </div>
       }
       @if (responseImportModeSummary) {
@@ -133,24 +131,23 @@
     }
     @if (result.importedResponses && !result.overviewPending) {
     <div class="section db-changes-section">
-      <div class="section-title">Erkannte Daten und Arbeitsbereich</div>
+      <div class="section-title">{{ 'ui-text.test-results-upload-result-dialog.import-and-workspace' | translate }}</div>
       <div class="db-change-note">
-        Aus Import zeigt die eindeutigen Werte, die in der Datei erkannt wurden. Vorher und Nachher zeigen
-        den Gesamtbestand im Arbeitsbereich. Delta zeigt die Veränderung durch diesen Import.
+        {{ 'ui-text.test-results-upload-result-dialog.import-workspace-hint' | translate }}
       </div>
       <table class="db-changes-table">
         <thead>
           <tr>
-            <th class="col-metric">Metrik</th>
-            <th class="col-number">Aus Import</th>
-            <th class="col-number">Vorher</th>
-            <th class="col-number">Nachher</th>
-            <th class="col-number">Delta</th>
+            <th class="col-metric">{{ 'ui-text.test-results-upload-result-dialog.metric' | translate }}</th>
+            <th class="col-number">{{ 'ui-text.test-results-upload-result-dialog.imported' | translate }}</th>
+            <th class="col-number">{{ 'ui-text.test-results-upload-result-dialog.before' | translate }}</th>
+            <th class="col-number">{{ 'ui-text.test-results-upload-result-dialog.after' | translate }}</th>
+            <th class="col-number">{{ 'ui-text.test-results-upload-result-dialog.delta' | translate }}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td class="row-label">Testpersonen</td>
+            <td class="row-label">{{ 'ws-admin.test-persons' | translate }}</td>
             <td class="num">{{ result.expected.testPersons | number:'1.0-0' }}</td>
             <td class="num">{{ result.before.testPersons | number:'1.0-0' }}</td>
             <td class="num">{{ result.after.testPersons | number:'1.0-0' }}</td>
@@ -160,7 +157,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Testgruppen</td>
+            <td class="row-label">{{ 'ws-admin.test-groups' | translate }}</td>
             <td class="num">{{ result.expected.testGroups | number:'1.0-0' }}</td>
             <td class="num">{{ result.before.testGroups | number:'1.0-0' }}</td>
             <td class="num">{{ result.after.testGroups | number:'1.0-0' }}</td>
@@ -170,7 +167,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Testhefte (eindeutig)</td>
+            <td class="row-label">{{ 'ui-text.test-results-upload-result-dialog.distinct-booklets' | translate }}</td>
             <td class="num">{{ result.expected.uniqueBooklets | number:'1.0-0' }}</td>
             <td class="num">{{ result.before.uniqueBooklets | number:'1.0-0' }}</td>
             <td class="num">{{ result.after.uniqueBooklets | number:'1.0-0' }}</td>
@@ -180,7 +177,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Aufgaben-IDs (eindeutig)</td>
+            <td class="row-label">{{ 'ui-text.test-results-upload-result-dialog.distinct-units' | translate }}</td>
             <td class="num">{{ result.expected.uniqueUnits | number:'1.0-0' }}</td>
             <td class="num">{{ result.before.uniqueUnits | number:'1.0-0' }}</td>
             <td class="num">{{ result.after.uniqueUnits | number:'1.0-0' }}</td>
@@ -190,7 +187,7 @@
             </td>
           </tr>
           <tr>
-            <td class="row-label">Antwortwerte (eindeutig)</td>
+            <td class="row-label">{{ 'ui-text.test-results-upload-result-dialog.distinct-responses' | translate }}</td>
             <td class="num">{{ result.expected.uniqueResponses | number:'1.0-0' }}</td>
             <td class="num">{{ result.before.uniqueResponses | number:'1.0-0' }}</td>
             <td class="num">{{ result.after.uniqueResponses | number:'1.0-0' }}</td>
@@ -203,7 +200,7 @@
       </table>
       @if (hasZeroDelta) {
       <div class="no-change-note">
-        Import abgeschlossen. Die Übersicht wurde geladen; es wurden keine neuen Datenbankeinträge angelegt.
+        {{ 'ui-text.test-results-upload-result-dialog.no-new-records' | translate }}
       </div>
       }
     </div>
@@ -211,20 +208,19 @@
 
     @if (result.importedLogs && result.logMetrics) {
     <div class="section log-coverage-section">
-      <div class="section-title">Log-Abdeckung im Arbeitsbereich nach Import</div>
+      <div class="section-title">{{ 'ui-text.test-results-upload-result-dialog.log-coverage' | translate }}</div>
       <div class="db-change-note">
-        Bei Aufgaben zählt hier jedes Testheft-Aufgaben-Paar. Diese Zahl kann höher sein als die eindeutigen
-        Aufgaben-IDs im Import.
+        {{ 'ui-text.test-results-upload-result-dialog.unit-occurrence-hint' | translate }}
       </div>
       <div class="kv">
-        <div class="k">Testhefte mit Logs</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.booklets-with-logs' | translate }}</div>
         <div class="v">{{ result.logMetrics.bookletsWithLogs | number:'1.0-0' }} / {{ result.logMetrics.totalBooklets | number:'1.0-0' }}</div>
-        <div class="k">Aufgaben-Vorkommen mit Logs</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.units-with-logs' | translate }}</div>
         <div class="v">{{ result.logMetrics.unitsWithLogs | number:'1.0-0' }} / {{ result.logMetrics.totalUnits | number:'1.0-0' }}</div>
-        <div class="k">Abdeckung (Testhefte)</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.booklet-coverage' | translate }}</div>
         <div class="v">{{ (result.logMetrics.totalBooklets > 0 ? (result.logMetrics.bookletsWithLogs /
           result.logMetrics.totalBooklets * 100) : 0) | number:'1.0-1' }}%</div>
-        <div class="k">Abdeckung (Aufgaben)</div>
+        <div class="k">{{ 'ui-text.test-results-upload-result-dialog.unit-coverage' | translate }}</div>
         <div class="v">{{ (result.logMetrics.totalUnits > 0 ? (result.logMetrics.unitsWithLogs /
           result.logMetrics.totalUnits * 100) : 0) | number:'1.0-1' }}%</div>
       </div>
@@ -239,21 +235,21 @@
         <div class="filter-row">
           <div class="toggle-group">
             <button mat-stroked-button [class.active]="detailView === 'booklets'" (click)="detailView = 'booklets'"
-              class="left-toggle">Booklets</button>
+              class="left-toggle">{{ 'ui-text.test-results-upload-result-dialog.booklets' | translate }}</button>
             <button mat-stroked-button [class.active]="detailView === 'units'" (click)="detailView = 'units'"
-              class="right-toggle">Units</button>
+              class="right-toggle">{{ 'process-overview.details.unitCount' | translate }}</button>
           </div>
           <mat-form-field appearance="outline" class="detail-status-filter">
-            <mat-label>Log-Status</mat-label>
+            <mat-label>{{ 'ui-text.test-results-upload-result-dialog.log-status' | translate }}</mat-label>
             <mat-select [(ngModel)]="detailStatusFilter" [disabled]="!hasAnyLogDetails">
-              <mat-option value="all">Alle</mat-option>
-              <mat-option value="withLogs">Mit Logs</mat-option>
-              <mat-option value="withoutLogs">Ohne Logs</mat-option>
+              <mat-option value="all">{{ 'coding.trainings.compare.all' | translate }}</mat-option>
+              <mat-option value="withLogs">{{ 'ui-text.test-results-upload-result-dialog.with-logs' | translate }}</mat-option>
+              <mat-option value="withoutLogs">{{ 'ui-text.test-results-upload-result-dialog.without-logs' | translate }}</mat-option>
             </mat-select>
           </mat-form-field>
           <mat-form-field appearance="outline" class="search-field">
-            <mat-label>Suche</mat-label>
-            <input matInput [(ngModel)]="detailFilterText" placeholder="Name..." />
+            <mat-label>{{ 'coding.trainings.compare.search-label' | translate }}</mat-label>
+            <input matInput [(ngModel)]="detailFilterText" [placeholder]="'ui-text.test-results-upload-result-dialog.name' | translate" />
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
         </div>
@@ -312,10 +308,10 @@
     </mat-tab>
     }
     @if (result.importedResponses) {
-    <mat-tab label="Status ({{ statusCounts.length }})">
+    <mat-tab [label]="'ui-text.test-results-upload-result-dialog.status' | translate: { length: (statusCounts.length) }">
       <div class="tab-pad">
         @if (statusCounts.length === 0) {
-        <div class="empty">Keine Status-Informationen vorhanden.</div>
+        <div class="empty">{{ 'ui-text.test-results-upload-result-dialog.no-status' | translate }}</div>
         } @else {
         <div class="status-grid">
           @for (s of statusCounts; track s.status) {
@@ -330,33 +326,33 @@
     </mat-tab>
     }
 
-    <mat-tab label="Probleme ({{ issues.length }})">
+    <mat-tab [label]="'ui-text.test-files-upload-result-dialog.issues-tab' | translate: { length: (issues.length) }">
       <div class="tab-pad">
         @if (issues.length > 0) {
         <div class="issue-filters">
           <mat-form-field appearance="outline">
-            <mat-label>Suche</mat-label>
-            <input matInput [(ngModel)]="filterText" placeholder="error, warning, Datei, Zeile..." />
+            <mat-label>{{ 'coding.trainings.compare.search-label' | translate }}</mat-label>
+            <input matInput [(ngModel)]="filterText" [placeholder]="'ui-text.test-results-upload-result-dialog.issue-filter-placeholder' | translate" />
             <mat-icon matSuffix>search</mat-icon>
           </mat-form-field>
 
           <mat-form-field appearance="outline">
-            <mat-label>Kategorie</mat-label>
+            <mat-label>{{ 'ui-text.test-results-upload-result-dialog.category' | translate }}</mat-label>
             <mat-select [(ngModel)]="selectedCategory">
-              <mat-option [value]="null">Alle Kategorien</mat-option>
-              <mat-option value="log_format">Log-Format ungültig</mat-option>
-              <mat-option value="unit_not_found">Aufgabe nicht gefunden</mat-option>
-              <mat-option value="invalid_unit">Ungültige Aufgabe</mat-option>
-              <mat-option value="laststate">Letzter Status Fehler</mat-option>
-              <mat-option value="missing_booklet">Testheft fehlt</mat-option>
-              <mat-option value="missing_status">Status fehlt</mat-option>
-              <mat-option value="invalid_status">Status ungültig</mat-option>
-              <mat-option value="csv_columns">CSV-Spalten fehlen</mat-option>
-              <mat-option value="missing_identity">Zuordnung unvollständig</mat-option>
-              <mat-option value="timestamp">Zeitstempel auffällig</mat-option>
-              <mat-option value="missing_booklet_log">Booklet-Log fehlt</mat-option>
-              <mat-option value="no_logs_saved">Keine Logs gespeichert</mat-option>
-              <mat-option value="other">Sonstiges</mat-option>
+              <mat-option [value]="null">{{ 'ui-text.test-results-upload-result-dialog.all-categories' | translate }}</mat-option>
+              <mat-option value="log_format">{{ 'ui-text.test-results-upload-result-dialog.invalid-log-format' | translate }}</mat-option>
+              <mat-option value="unit_not_found">{{ 'test-results-table.unit-not-found' | translate }}</mat-option>
+              <mat-option value="invalid_unit">{{ 'ui-text.test-results-upload-result-dialog.invalid-unit' | translate }}</mat-option>
+              <mat-option value="laststate">{{ 'ui-text.test-results-upload-result-dialog.last-status-error' | translate }}</mat-option>
+              <mat-option value="missing_booklet">{{ 'ui-text.test-results-upload-result-dialog.missing-booklet' | translate }}</mat-option>
+              <mat-option value="missing_status">{{ 'ui-text.test-results-upload-result-dialog.missing-status' | translate }}</mat-option>
+              <mat-option value="invalid_status">{{ 'ui-text.test-results-upload-result-dialog.invalid-status' | translate }}</mat-option>
+              <mat-option value="csv_columns">{{ 'ui-text.test-results-upload-result-dialog.missing-csv-columns' | translate }}</mat-option>
+              <mat-option value="missing_identity">{{ 'ui-text.test-results-upload-result-dialog.incomplete-mapping' | translate }}</mat-option>
+              <mat-option value="timestamp">{{ 'ui-text.test-results-upload-result-dialog.suspicious-timestamp' | translate }}</mat-option>
+              <mat-option value="missing_booklet_log">{{ 'ui-text.test-results-upload-result-dialog.missing-booklet-log' | translate }}</mat-option>
+              <mat-option value="no_logs_saved">{{ 'ui-text.test-results-upload-result-dialog.no-saved-logs' | translate }}</mat-option>
+              <mat-option value="other">{{ 'ui-text.test-results-upload-result-dialog.other-category' | translate }}</mat-option>
             </mat-select>
           </mat-form-field>
 
@@ -394,8 +390,8 @@
                 <span class="msg">{{ i.message }}</span>
               </div>
               <div class="issue-meta">
-                @if (i.fileName) { <span>Datei: {{ i.fileName }}</span> }
-                @if (i.rowIndex !== null && i.rowIndex !== undefined) { <span>Zeile: {{ i.rowIndex }}</span> }
+                @if (i.fileName) { <span>{{ 'ui-text.test-files-upload-result-dialog.file' | translate: { fileName: (i.fileName) } }}</span> }
+                @if (i.rowIndex !== null && i.rowIndex !== undefined) { <span>{{ 'ui-text.test-files-upload-result-dialog.line' | translate: { rowIndex: (i.rowIndex) } }}</span> }
               </div>
             </div>
           </div>
@@ -407,5 +403,5 @@
 </div>
 
 <div mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="close()">Schließen</button>
+  <button mat-button type="button" (click)="close()">{{ 'deferred-view.close' | translate }}</button>
 </div>

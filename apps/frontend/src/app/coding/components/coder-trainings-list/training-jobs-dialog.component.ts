@@ -6,6 +6,7 @@ import { MatButtonModule } from '@angular/material/button';
 import { MatTableModule } from '@angular/material/table';
 import { MatIconModule } from '@angular/material/icon';
 import { MatChipsModule } from '@angular/material/chips';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CaseSelectionMode, CoderTraining } from '../../models/coder-training.model';
 
 interface CodingJob {
@@ -48,12 +49,12 @@ interface DialogData {
           <p><strong>{{ 'coding.trainings.table.created' | translate }}:</strong> {{ formatDate(data.training.created_at) }}</p>
           <p><strong>{{ 'coding.trainings.table.jobs' | translate }}:</strong> {{ data.jobs.length }}</p>
           <p>
-            <strong>Fallauswahl:</strong>
+            <strong>{{ 'ui-text.coder-training.case-selection' | translate }}</strong>
             {{ getCaseSelectionModeLabel(data.training.case_selection_mode) }}
             <span class="info-subline">{{ getCaseSelectionModeDescription(data.training.case_selection_mode) }}</span>
           </p>
           <p>
-            <strong>Reihenfolge:</strong>
+            <strong>{{ 'ui-text.coder-training.case-ordering' | translate }}</strong>
             {{ getCaseOrderingModeLabel(data.training.case_ordering_mode) }}
           </p>
         </div>
@@ -202,6 +203,8 @@ interface DialogData {
   `]
 })
 export class TrainingJobsDialogComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject(MatDialogRef<TrainingJobsDialogComponent>);
   protected data: DialogData = inject(MAT_DIALOG_DATA);
 
@@ -236,9 +239,9 @@ export class TrainingJobsDialogComponent {
       case 'active':
         return 'Aktiv';
       case 'completed':
-        return 'Abgeschlossen';
+        return this.uiTranslate('status-completed');
       case 'pending':
-        return 'Ausstehend';
+        return this.uiTranslate('status-pending');
       case 'paused':
         return 'Pausiert';
       default:
@@ -249,34 +252,34 @@ export class TrainingJobsDialogComponent {
   protected getCaseSelectionModeLabel(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Älteste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
       case 'newest_first':
-        return 'Neueste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.newest-first');
       case 'random':
-        return 'Zufällige Fälle';
+        return this.uiTranslate('ui-text.coder-training.random-cases');
       case 'random_per_testgroup':
-        return 'Zufällig je Testgruppe';
+        return this.uiTranslate('ui-text.coder-training.random-per-group');
       case 'random_testgroups':
-        return 'Zufällige Testgruppen';
+        return this.uiTranslate('ui-text.coder-training.random-groups');
       default:
-        return 'Älteste Fälle zuerst';
+        return this.uiTranslate('ui-text.coder-training.oldest-first');
     }
   }
 
   protected getCaseSelectionModeDescription(mode?: CaseSelectionMode | null): string {
     switch (mode || 'oldest_first') {
       case 'oldest_first':
-        return 'Nimmt pro Variable die ältesten verfügbaren Fälle.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.oldest-first-description');
       case 'newest_first':
-        return 'Nimmt pro Variable die neuesten verfügbaren Fälle.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.newest-first-description');
       case 'random':
-        return 'Zieht zufällig aus allen verfügbaren Fällen.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-cases-description');
       case 'random_per_testgroup':
-        return 'Verteilt die Auswahl möglichst gleichmäßig über Testgruppen.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-per-group-description');
       case 'random_testgroups':
-        return 'Wählt zufällige Testgruppen und zieht Fälle innerhalb dieser Gruppen.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.random-groups-description');
       default:
-        return 'Nimmt pro Variable die ältesten verfügbaren Fälle.';
+        return this.uiTranslate('ui-text.training-jobs-dialog.oldest-first-description');
     }
   }
 

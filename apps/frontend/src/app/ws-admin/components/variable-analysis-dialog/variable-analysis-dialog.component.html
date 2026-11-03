@@ -85,7 +85,7 @@
               placeholder="{{ 'variable-analysis.search-placeholder' | translate }}">
             <mat-icon matSuffix>search</mat-icon>
             @if (searchText()) {
-            <button mat-icon-button matSuffix (click)="clearSearch()" aria-label="Clear">
+            <button mat-icon-button matSuffix (click)="clearSearch()" [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate">
               <mat-icon>close</mat-icon>
             </button>
             }
@@ -383,7 +383,7 @@
                 <!-- Error indicator for failed jobs -->
                 @if (job.status === 'failed') {
                 <button mat-icon-button color="accent"
-                  matTooltip="{{ 'error' | translate }}: {{ job.error || ('unknown' | translate) }}" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
+                  matTooltip="{{ 'error.error_title' | translate }}: {{ job.error || ('unknown' | translate) }}" [attr.aria-label]="'accessibility.actions.show-error-details' | translate">
                   <mat-icon>error</mat-icon>
                 </button>
                 }

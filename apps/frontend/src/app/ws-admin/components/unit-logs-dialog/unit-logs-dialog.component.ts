@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnInit, inject, ChangeDetectionStrategy
 } from '@angular/core';
@@ -16,12 +17,12 @@ import { MatButton } from '@angular/material/button';
   selector: 'coding-box-unit-logs-dialog',
   template: `
     <div class="dialog-header">
-      <h1 mat-dialog-title>Unit Logs</h1>
+      <h1 mat-dialog-title>{{ 'ui-text.unit-logs-dialog.title' | translate }}</h1>
       <div class="header-info">
-        <span class="log-count">{{ data.logs.length }} Einträge</span>
+        <span class="log-count">{{ 'ui-text.log-dialog.entry-count' | translate: { length: (data.logs.length) } }}</span>
         @if (processingDuration) {
         <span class="processing-duration">
-          <span class="duration-label">Bearbeitungsdauer:</span>
+          <span class="duration-label">{{ 'ui-text.log-dialog.processing-duration' | translate }}</span>
           <span class="duration-value">{{ processingDuration }}</span>
         </span>
         }
@@ -36,7 +37,7 @@ import { MatButton } from '@angular/material/button';
           <div class="search-box">
             <input
               type="text"
-              placeholder="Suchen..."
+              [placeholder]="'ui-text.training-sample-editor.search' | translate"
               (input)="filterLogs($event)"
             />
           </div>
@@ -59,7 +60,7 @@ import { MatButton } from '@angular/material/button';
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-stroked-button (click)="closeDialog()">Schließen</button>
+      <button mat-stroked-button (click)="closeDialog()">{{ 'deferred-view.close' | translate }}</button>
     </div>
   `,
   styles: [
@@ -222,7 +223,7 @@ import { MatButton } from '@angular/material/button';
     `
   ],
 
-  imports: [
+  imports: [TranslateModule,
     MatListItem,
     MatList,
     MatDialogContent,

@@ -1437,13 +1437,13 @@
     },
     "apps/frontend/src/app/coding/components/code-selector/code-selector.component.ts": {
       "file": {
-        "max-lines": 971
+        "max-lines": 908
       },
       "functions": {}
     },
     "apps/frontend/src/app/coding/components/coder-training/coder-training.component.ts": {
       "file": {
-        "max-lines": 1476
+        "max-lines": 1417
       },
       "functions": {
         "class CoderTrainingComponent#1/method onStartTraining#1": {
@@ -1453,7 +1453,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-job-definition-dialog/coding-job-definition-dialog.component.ts": {
       "file": {
-        "max-lines": 1324
+        "max-lines": 1288
       },
       "functions": {}
     },
@@ -1475,23 +1475,19 @@
     },
     "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.component.ts": {
       "file": {
-        "max-lines": 1084
+        "max-lines": 1018
       },
       "functions": {}
     },
     "apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component.ts": {
       "file": {
-        "max-lines": 898
+        "max-lines": 827
       },
-      "functions": {
-        "class CodingJobResultDialogComponent#1/method createFilterPredicate#1/anonymous:aafa70cb82ca0805#1": {
-          "complexity": 21
-        }
-      }
+      "functions": {}
     },
     "apps/frontend/src/app/coding/components/coding-jobs/coding-jobs.component.ts": {
       "file": {
-        "max-lines": 1628
+        "max-lines": 1570
       },
       "functions": {}
     },
@@ -1508,7 +1504,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.ts": {
       "file": {
-        "max-lines": 1460
+        "max-lines": 1452
       },
       "functions": {
         "class CodingManagementManualComponent#1/method loadManualTabData#1": {
@@ -1540,7 +1536,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-management/coding-management.component.ts": {
       "file": {
-        "max-lines": 1444
+        "max-lines": 1416
       },
       "functions": {
         "class CodingManagementComponent#1/method fetchResponsesByStatus#1/function next#1/anonymous:9e93dd2ca83edb03#1": {
@@ -1553,13 +1549,13 @@
     },
     "apps/frontend/src/app/coding/components/coding-results-comparison/coding-results-comparison.component.ts": {
       "file": {
-        "max-lines": 1452
+        "max-lines": 1402
       },
       "functions": {}
     },
     "apps/frontend/src/app/coding/components/double-coded-review/double-coded-review.component.ts": {
       "file": {
-        "max-lines": 1247
+        "max-lines": 1194
       },
       "functions": {}
     },
@@ -1615,15 +1611,14 @@
     },
     "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
       "file": {
-        "max-lines": 1433
+        "max-lines": 1398
       },
       "functions": {
         "class ReplayComponent#1/method applyUnitChanged#1": {
           "complexity": 21
         },
         "class ReplayComponent#1/method onKeyDown#1": {
-          "complexity": 35,
-          "max-depth": 5
+          "complexity": 31
         }
       }
     },
@@ -1678,7 +1673,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/files-validation-result/files-validation.component.ts": {
       "file": {
-        "max-lines": 1330
+        "max-lines": 1305
       },
       "functions": {
         "class FilesValidationDialogComponent#1/method openMetadataFile#1": {
@@ -1689,13 +1684,10 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.ts": {
       "file": {
-        "max-lines": 980
+        "max-lines": 959
       },
       "functions": {
         "class TestCenterImportComponent#1/method continueTestResultsImport#1": {
-          "complexity": 22
-        },
-        "class TestCenterImportComponent#1/method mergeImportResults#1": {
           "complexity": 22
         },
         "class TestCenterImportComponent#1/method performImport#1": {
@@ -1709,7 +1701,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
       "file": {
-        "max-lines": 1412
+        "max-lines": 1371
       },
       "functions": {
         "class TestFilesComponent#1/method handleValidationResponse#1": {
@@ -1729,23 +1721,8 @@
       }
     },
     "apps/frontend/src/app/ws-admin/components/test-results/test-results-flat-table.component.ts": {
-      "file": {
-        "max-lines": 1628
-      },
+      "file": {},
       "functions": {
-        "class TestResultsFlatTableComponent#1/constructor constructor#1": {
-          "complexity": 31,
-          "max-lines-per-function": 116
-        },
-        "class TestResultsFlatTableComponent#1/method fetchFlatResponses#1": {
-          "max-lines-per-function": 103
-        },
-        "class TestResultsFlatTableComponent#1/method openFlatSettings#1": {
-          "max-lines-per-function": 134
-        },
-        "class TestResultsFlatTableComponent#1/method openFlatSettings#1/anonymous:ca9332d13f324446#1": {
-          "max-lines-per-function": 127
-        },
         "class TestResultsFlatTableComponent#1/method syncMediaFiltersFromFlatFilters#1": {
           "complexity": 21
         }
@@ -1757,10 +1734,10 @@
         "class TestResultsImportFacade#1/method testCenterImport#1": {
           "max-lines-per-function": 278
         },
-        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:916dfc1a8d19ecee#1": {
+        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:58ef6a101d5649a5#1": {
           "max-lines-per-function": 164
         },
-        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:916dfc1a8d19ecee#1/anonymous:5bd89a79a1f29962#1": {
+        "class TestResultsImportFacade#1/method testCenterImport#1/anonymous:58ef6a101d5649a5#1/anonymous:287c1341b49ea3fc#1": {
           "complexity": 25,
           "max-lines-per-function": 138
         }
@@ -1768,13 +1745,13 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.ts": {
       "file": {
-        "max-lines": 1321
+        "max-lines": 1241
       },
       "functions": {}
     },
     "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.ts": {
       "file": {
-        "max-lines": 1374
+        "max-lines": 1188
       },
       "functions": {
         "class VariableAnalysisDialogComponent#1/method analyzeVariables#1": {
@@ -1784,16 +1761,16 @@
     },
     "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.ts": {
       "file": {
-        "max-lines": 960
+        "max-lines": 959
       },
       "functions": {
         "class TestResultsUploadStateService#1/method finishBatch#1": {
           "max-lines-per-function": 159
         },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:091c0617f697c36d#1": {
+        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1": {
           "max-lines-per-function": 141
         },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:091c0617f697c36d#1/anonymous:5f96d45442d58eca#1": {
+        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1/anonymous:91b09bc27fe02d6a#1": {
           "complexity": 22
         }
       }

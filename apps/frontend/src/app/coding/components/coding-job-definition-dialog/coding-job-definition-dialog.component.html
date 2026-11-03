@@ -208,14 +208,14 @@
           [bundles]="selectedVariableBundles.selected" [coderCount]="selectedCoders.selected.length" />
 
         <mat-tab-group>
-          <mat-tab label="Kodierer">
+          <mat-tab [label]="'ws-admin.export-options.coders' | translate">
             <coding-box-job-coder-capacity [coders]="availableCoders()" [selected]="selectedCoders.selected"
               [loading]="isLoadingAvailableCoders()" [readOnly]="isReadOnly" [mode]="data.mode"
               (coderToggled)="selectedCoders.toggle($event)" (toggleAll)="masterCoderToggle()"
               (capacityChanged)="updateCoderCapacityPercent($event.coder, $event.value)" />
           </mat-tab>
 
-          <mat-tab label="Einzelne Variablen">
+          <mat-tab [label]="'ui-text.coding-job-definition-dialog.individual-variables' | translate">
             <coding-box-job-variable-selection [rows]="variableSelectionRows()" [filters]="variableSelectionFilters()"
               [totalVariables]="variables().length" [selectedCount]="selectedVariableValues().length"
               [allSelected]="isAllSelected()" [loading]="isLoadingVariableAnalysis()" [readOnly]="isReadOnly"
@@ -225,7 +225,7 @@
               (variableToggled)="selectedVariables().toggle($event)"
               (deriveErrorChanged)="setDeriveErrorIncluded($event.variable, $event.included)" />
           </mat-tab>
-          <mat-tab label="Variablenbündel">
+          <mat-tab [label]="'coding-management-manual.titles.variable-bundles' | translate">
             <coding-box-job-bundle-selection [rows]="bundleSelectionRows()" [filter]="bundleNameFilter()"
               [totalBundles]="variableBundles().length" [selectedCount]="selectedVariableBundles.selected.length"
               [loading]="isLoadingBundles()" [readOnly]="isReadOnly" [mode]="data.mode"
@@ -240,18 +240,18 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-button (click)="onCancel()" [disabled]="isSaving()">{{ isReadOnly ? 'Schließen' : 'Abbrechen' }}</button>
+    <button mat-button (click)="onCancel()" [disabled]="isSaving()">{{ isReadOnly ? ('deferred-view.close' | translate) : ('cancel' | translate) }}</button>
 
     @if (data.mode === 'definition' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()"
       [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)">
-      {{ data.isEdit ? 'Definition speichern' : 'Definition erstellen' }}
+      {{ data.isEdit ? ('coding-job-definition-dialog.job-definition.save' | translate) : ('coding-job-definition-dialog.job-definition.create-btn' | translate) }}
     </button>
     @if (!data.isEdit) {
     <button mat-stroked-button color="primary" (click)="onSubmitForReview()"
       [disabled]="isSaving() || codingJobForm.invalid || selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)">
       <mat-icon>send</mat-icon>
-      Zur Prüfung einreichen
+      {{ 'coding-job-definition-dialog.job-definition.submit-for-review' | translate }}
     </button>
     }
     }
@@ -259,7 +259,7 @@
     @if (data.mode === 'job' && !isReadOnly) {
     <button mat-raised-button color="primary" (click)="onSubmit()"
       [disabled]="isSaving() || codingJobForm.invalid || (!data.isEdit && (selectedCoders.selected.length === 0 || (selectedVariableValues().length === 0 && selectedVariableBundles.selected.length === 0)))">
-      {{ data.isEdit ? 'Job speichern' : 'Job erstellen' }}
+      {{ data.isEdit ? ('coding-job-definition-dialog.job.save' | translate) : ('coding-job-definition-dialog.job.create-btn' | translate) }}
     </button>
     }
   </div>

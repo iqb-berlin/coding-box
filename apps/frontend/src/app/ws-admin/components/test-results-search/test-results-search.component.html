@@ -3,18 +3,18 @@
 
   <div mat-dialog-content>
     <mat-form-field appearance="outline" class="quick-search-field">
-      <mat-label>Schnellsuche</mat-label>
+      <mat-label>{{ 'ui-text.test-results.quick-search' | translate }}</mat-label>
       <input
         matInput
         [(ngModel)]="searchText"
         (ngModelChange)="onSearchChange()"
-        placeholder="Code, Login, Testheft, Aufgabe, Variable oder Antwortwert"
+        [placeholder]="'ui-text.test-results-search.search-placeholder' | translate"
         autocomplete="off"
       />
       <mat-icon matSuffix>search</mat-icon>
     </mat-form-field>
 
-    <div class="type-filter-bar" aria-label="Suchbereiche">
+    <div class="type-filter-bar" [attr.aria-label]="'ui-text.test-results-search.search-scopes' | translate">
       @for (option of typeOptions; track option.kind) {
       <button
         mat-stroked-button
@@ -35,17 +35,17 @@
       @if (isLoading) {
       <div class="state-container">
         <mat-spinner diameter="40"></mat-spinner>
-        <p>Suche läuft...</p>
+        <p>{{ 'test-results-search.loading' | translate }}</p>
       </div>
       } @else if (searchText.trim().length < MIN_SEARCH_LENGTH) {
       <div class="state-container">
         <mat-icon>manage_search</mat-icon>
-        <p>Geben Sie mindestens {{ MIN_SEARCH_LENGTH }} Zeichen ein.</p>
+        <p>{{ 'ui-text.test-results-search.minimum-search-length' | translate: { MIN_SEARCH_LENGTH: (MIN_SEARCH_LENGTH) } }}</p>
       </div>
       } @else if (hasSearched && getVisibleCount() === 0) {
       <div class="state-container">
         <mat-icon>search_off</mat-icon>
-        <p>Keine Treffer gefunden.</p>
+        <p>{{ 'ui-text.test-results-search.no-matches' | translate }}</p>
       </div>
       } @else {
       @for (option of typeOptions; track option.kind) {
@@ -57,8 +57,7 @@
             <span>{{ option.label }}</span>
           </div>
           <span>
-            {{ getVisibleResults(option.kind).length }} von
-            {{ getTotal(option.kind) }}
+            {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
           </span>
         </div>
 
@@ -80,8 +79,8 @@
                 mat-icon-button
                 type="button"
                 (click)="openInTable(item)"
-                matTooltip="In Tabelle anzeigen"
-                aria-label="In Tabelle anzeigen"
+                [matTooltip]="'ui-text.test-results.show-in-table' | translate"
+                [attr.aria-label]="'ui-text.test-results.show-in-table' | translate"
               >
                 <mat-icon>table_chart</mat-icon>
               </button>
@@ -89,8 +88,8 @@
                 mat-icon-button
                 type="button"
                 (click)="openInBrowser(item)"
-                matTooltip="Im Ergebnisbrowser öffnen"
-                aria-label="Im Ergebnisbrowser öffnen"
+                [matTooltip]="'ui-text.test-results-search.open-browser' | translate"
+                [attr.aria-label]="'ui-text.test-results-search.open-browser' | translate"
               >
                 <mat-icon>account_tree</mat-icon>
               </button>
@@ -99,8 +98,8 @@
                 mat-icon-button
                 type="button"
                 (click)="replay(item)"
-                matTooltip="Replay starten"
-                aria-label="Replay starten"
+                [matTooltip]="'ui-text.test-results-search.start-replay' | translate"
+                [attr.aria-label]="'ui-text.test-results-search.start-replay' | translate"
               >
                 <mat-icon>play_arrow</mat-icon>
               </button>
@@ -117,6 +116,6 @@
   </div>
 
   <div mat-dialog-actions align="end">
-    <button mat-button type="button" (click)="close()">Schließen</button>
+    <button mat-button type="button" (click)="close()">{{ 'deferred-view.close' | translate }}</button>
   </div>
 </div>

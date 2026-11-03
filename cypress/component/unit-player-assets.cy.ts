@@ -1,6 +1,6 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { ComponentFixture } from '@angular/core/testing';
 import { Component, signal } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
 import { Subject } from 'rxjs';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
 import { FileService } from '../../apps/frontend/src/app/shared/services/file/file.service';
@@ -95,7 +95,7 @@ describe('zoneless replay embedded assets', () => {
 
   function mountUnit(mode = ''): void {
     cy.then(() => cy.mount(ReplayAssetsHost, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         { provide: AppService, useValue: { postMessage$: messages } },
         { provide: FileService, useValue: { getDirectDownloadLink: () => '/api/packages/' } }

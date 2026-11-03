@@ -9,6 +9,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatSelectModule } from '@angular/material/select';
 import { MatRadioModule } from '@angular/material/radio';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CoderTrainingForm, hasValidTrainingReferenceMode } from './coder-training-form';
 import { Coder } from '../../models/coder.model';
 import { CoderTraining } from '../../models/coder-training.model';
@@ -22,6 +23,8 @@ import { getTrainingOptionMeta, getTrainingOptionTitle } from '../../utils/coder
   styleUrls: ['./training-participant-selection.component.scss']
 })
 export class TrainingParticipantSelectionComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly form = input.required<CoderTrainingForm>();
   readonly trainings = input.required<readonly CoderTraining[]>();
   readonly coders = input.required<readonly Coder[]>();
@@ -31,7 +34,7 @@ export class TrainingParticipantSelectionComponent {
   readonly selectAll = output<void>();
   readonly clearSelection = output<void>();
   protected readonly getTrainingOptionTitle = getTrainingOptionTitle;
-  protected readonly getTrainingOptionMeta = getTrainingOptionMeta;
+  protected readonly getTrainingOptionMeta = getTrainingOptionMeta.bind(undefined, this.uiTranslate);
 
   protected hasValidReferenceMode(): boolean {
     return hasValidTrainingReferenceMode(this.form());

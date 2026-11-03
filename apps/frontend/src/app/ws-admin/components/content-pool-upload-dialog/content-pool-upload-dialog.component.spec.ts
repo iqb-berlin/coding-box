@@ -2,6 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { ContentPoolUploadDialogComponent } from './content-pool-upload-dialog.component';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import { ContentPoolAcpListResponse, ContentPoolUploadFilesProgress } from '../../../shared/models/content-pool.model';
@@ -19,7 +20,7 @@ describe('ContentPoolUploadDialogComponent zoneless rendering', () => {
     progress = new Subject<ContentPoolUploadFilesProgress>();
     close.mockClear();
     await TestBed.configureTestingModule({
-      imports: [ContentPoolUploadDialogComponent],
+      imports: [GermanTranslationsTestingModule, ContentPoolUploadDialogComponent],
       providers: [
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 1, settings, files: [{ id: 1, filename: 'unit.xml' }] } },

@@ -4,6 +4,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { BehaviorSubject, of, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import { AppService } from '../../../core/services/app.service';
 import { ResponseMatchingFlag } from '../../../shared/services/workspace/workspace-settings.service';
@@ -81,12 +82,12 @@ describe('manual coding feature lifetimes in native zoneless mode', () => {
     };
     snack = { open: jest.fn() };
     TestBed.configureTestingModule({
-      imports: [ManualFacadeHost],
+      imports: [GermanTranslationsTestingModule, ManualFacadeHost],
       providers: [
         { provide: AppService, useValue: app }, { provide: TestPersonCodingService, useValue: api },
         { provide: CodingJobBackendService, useValue: {} }, { provide: CodingStatisticsService, useValue: {} },
         { provide: DoubleCodedReviewApiService, useValue: {} }, { provide: CodingBackgroundJobsService, useValue: {} },
-        { provide: MatSnackBar, useValue: snack }, { provide: TranslateService, useValue: { instant: (key: string) => key } }
+        { provide: MatSnackBar, useValue: snack }, { provide: TranslateService, useValue: { instant: translateGerman } }
       ]
     });
     fixture = TestBed.createComponent(ManualFacadeHost);

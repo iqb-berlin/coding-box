@@ -1,4 +1,5 @@
 import {
+  computed,
   Component, DestroyRef, inject, signal, ChangeDetectionStrategy, OnInit, OnDestroy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
@@ -16,6 +17,8 @@ import { MatIcon } from '@angular/material/icon';
 import {
   catchError, exhaustMap, firstValueFrom, interval, of, startWith, Subscription, switchMap
 } from 'rxjs';
+import { mergeTestCenterImportResults, testCenterImportErrorMessage } from './test-center-import-results';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestCenterLoginStepComponent } from './test-center-login-step.component';
 import { TestCenterOptionsStepComponent } from './test-center-options-step.component';
 import { TestCenterGroupsStepComponent } from './test-center-groups-step.component';
@@ -72,6 +75,8 @@ export interface ImportFormValues {
     MatIcon]
 })
 export class TestCenterImportComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
   private userBackendService = inject(UserBackendService);
   private importService = inject(ImportService);
@@ -85,28 +90,30 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private translate = inject(TranslateService);
 
-  protected testCenters: Testcenter[] = [
+  private readonly localizedTestCenters = computed<Testcenter[]>(() => ([
     {
       id: 1,
-      label: 'Testcenter 1'
+      label: this.uiTranslate('ui-text.test-center-import.instance-1')
     },
     {
       id: 2,
-      label: 'Testcenter 2'
+      label: this.uiTranslate('ui-text.test-center-import.instance-2')
     },
     {
       id: 3,
-      label: 'Testcenter 3'
+      label: this.uiTranslate('ui-text.test-center-import.instance-3')
     },
     {
       id: 4,
-      label: 'Testcenter 4'
+      label: this.uiTranslate('ui-text.test-center-import.instance-4')
     },
     {
       id: 5,
-      label: 'Testcenter 5'
+      label: this.uiTranslate('ui-text.test-center-import.instance-5')
     }
-  ];
+  ]));
+
+  protected get testCenters(): Testcenter[] { return this.localizedTestCenters(); }
 
   private authenticationRequestId = 0;
   private testGroupsRequestId = 0;
@@ -429,7 +436,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
           this.showTestGroups.set(false);
           this.testGroupsLoadError.set(this.getErrorMessage(
             error,
-            'Testgruppen konnten nicht abgerufen werden. Bitte Verbindung und Testcenter-Sitzung prüfen.'
+            this.uiTranslate('ui-text.test-center-import.groups-load-failed')
           ));
         }
       });
@@ -459,14 +466,14 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: <ConfirmDialogData>{
-        title: 'Vorhandene Logs gefunden',
+        title: this.uiTranslate('ui-text.test-center-import.existing-logs-title'),
         content:
-          `${groupsWithLogs.length} ausgewählte Testgruppe(n) haben bereits Booklet-Logs in der Datenbank. ` +
-          'Möchten Sie die vorhandenen Logs überschreiben oder vorhandene Logs überspringen?',
-        confirmButtonLabel: 'Überschreiben',
-        alternativeButtonLabel: 'Ohne Überschreiben fortfahren',
+          this.uiTranslate('ui-text.test-center-import.existing-logs-count', { length: groupsWithLogs.length }) +
+          this.uiTranslate('ui-text.test-center-import.overwrite-logs-question'),
+        confirmButtonLabel: this.uiTranslate('ui-text.test-center-import.overwrite'),
+        alternativeButtonLabel: this.uiTranslate('ui-text.test-center-import.skip-existing-logs'),
         alternativeButtonValue: 'skip',
-        cancelButtonLabel: 'Abbrechen',
+        cancelButtonLabel: this.uiTranslate('cancel'),
         showCancel: true
       }
     });
@@ -543,17 +550,19 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected readonly loadingMessage = signal('Testresultate werden hochgeladen...');
+  protected readonly loadingMessage = signal(this.uiTranslate('ui-text.test-center-import.uploading-results'));
 
-  protected readonly optionLabels: Record<ImportWorkspaceOptionKey, string> = {
-    definitions: 'Aufgabendefinitionen',
-    units: 'Aufgaben (Units-XML)',
-    player: 'Player',
-    codings: 'Kodierschemata',
-    booklets: 'Testhefte',
-    testTakers: 'Testteilnehmer',
-    metadata: 'Metadaten'
-  };
+  private readonly localizedOptionLabels = computed<Record<ImportWorkspaceOptionKey, string>>(() => ({
+    definitions: this.uiTranslate('ui-text.files-validation.unit-definitions'),
+    units: this.uiTranslate('ui-text.test-center-options-step.units-xml'),
+    player: this.uiTranslate('ui-text.files-validation.players'),
+    codings: this.uiTranslate('ui-text.files-validation.coding-schemes'),
+    booklets: this.uiTranslate('ui-text.files-validation.booklets'),
+    testTakers: this.uiTranslate('ui-text.file-utils.test-takers'),
+    metadata: this.uiTranslate('ui-text.booklet-info-dialog.metadata')
+  }));
+
+  protected get optionLabels(): Record<ImportWorkspaceOptionKey, string> { return this.localizedOptionLabels(); }
 
   private performImport(
     formValues: ImportFormValues,
@@ -566,13 +575,13 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     const importedLogs = !!formValues.importOptions.logs;
 
     if (importedLogs && importedResponses) {
-      this.loadingMessage.set(`Importiere Antworten und Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`);
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-responses-and-logs', { value1: selectedGroupNames.join(', ') }));
     } else if (importedLogs) {
-      this.loadingMessage.set(`Importiere Logs für Testgruppen: ${selectedGroupNames.join(', ')}...`);
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-logs', { value1: selectedGroupNames.join(', ') }));
     } else if (importedResponses) {
-      this.loadingMessage.set(`Importiere Antworten für Testgruppen: ${selectedGroupNames.join(', ')}...`);
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-responses', { value1: selectedGroupNames.join(', ') }));
     } else {
-      this.loadingMessage.set(`Importiere Daten für Testgruppen: ${selectedGroupNames.join(', ')}...`);
+      this.loadingMessage.set(this.uiTranslate('ui-text.test-center-import.importing-data', { value1: selectedGroupNames.join(', ') }));
     }
 
     if (this.data.importType === 'testResults') {
@@ -737,7 +746,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         error: error => {
           this.uploadError.set(this.getErrorMessage(
             error,
-            'Testcenter-Import fehlgeschlagen. Bitte Verbindung prüfen und erneut versuchen.'
+            this.uiTranslate('ui-text.test-center-import.import-failed')
           ));
           this.isUploadingTestFiles.set(false);
           this.isUploadingTestResults.set(false);
@@ -747,23 +756,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       });
   }
 
-  private mergeImportResults(base: Result | null, current: Result): Result {
-    if (!base) return { ...current };
-    return {
-      ...current,
-      success: (base.success ?? false) && (current.success ?? false),
-      testFiles: (base.testFiles || 0) + (current.testFiles || 0),
-      responses: (base.responses || 0) + (current.responses || 0),
-      logs: (base.logs || 0) + (current.logs || 0),
-      // These are workspace totals, not per-group deltas.
-      booklets: current.booklets || base.booklets || 0,
-      units: current.units || base.units || 0,
-      persons: current.persons || base.persons || 0,
-      importedGroups: [...new Set([...(base.importedGroups || []), ...(current.importedGroups || [])])],
-      issues: [...(base.issues || []), ...(current.issues || [])],
-      codingFreshness: current.codingFreshness || base.codingFreshness
-    };
-  }
+  private mergeImportResults(base: Result | null, current: Result): Result { return mergeTestCenterImportResults(base, current); }
 
   private async performTestResultsImportWithProgress(
     formValues: ImportFormValues,
@@ -843,7 +836,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
       if (currentResult.success === false) {
         this.failedGroupName.set(groupName);
         this.uploadError.set(currentResult.issues?.filter(issue => issue.level === 'error').map(issue => issue.message).join(' ') ||
-          `Import der Testgruppe "${groupName}" wurde nicht vollständig abgeschlossen.`);
+          this.uiTranslate('ui-text.test-center-import.group-incomplete', { groupName: groupName }));
         const remainingGroups = new Set(state.groups.slice(state.index));
         this.selectedRows = this.selectedRows.filter(group => remainingGroups.has(group.groupName));
         this.retrySelection = {
@@ -911,20 +904,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
     });
   }
 
-  private getErrorMessage(error: unknown, fallback: string): string {
-    const maybeHttpError = error as {
-      error?: { message?: string } | string;
-      message?: string;
-      status?: number;
-    };
-    const detail =
-      (typeof maybeHttpError?.error === 'string' && maybeHttpError.error) ||
-      (typeof maybeHttpError?.error === 'object' && maybeHttpError.error?.message) ||
-      maybeHttpError?.message ||
-      (maybeHttpError?.status ? `HTTP ${maybeHttpError.status}` : '');
-
-    return detail ? `${fallback} (${detail})` : fallback;
-  }
+  private getErrorMessage(error: unknown, fallback: string): string { return testCenterImportErrorMessage(error, fallback); }
 
   private importWasRejectedBeforeStart(error: unknown): boolean {
     const httpError = error as { status?: number; error?: { importNotStarted?: boolean } };
@@ -962,10 +942,10 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   get testGroupsLoadMessage(): string {
     if (this.testGroupsLoadProgress()?.status === 'unknown') {
-      return 'Verbindung zum Testcenter wird hergestellt.';
+      return this.uiTranslate('ui-text.test-center-import.connecting');
     }
     return this.testGroupsLoadProgress()?.message ||
-      'Testgruppen werden vom Testcenter abgerufen.';
+      this.uiTranslate('ui-text.test-center-import.loading-groups');
   }
 
   protected get testGroupsLoadElapsedText(): string {

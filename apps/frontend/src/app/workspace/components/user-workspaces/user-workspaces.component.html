@@ -40,7 +40,7 @@
       </div>
     } @else if (workspaces().length > 0) {
       <div class="fx-column-start-stretch workspace-gap">
-        <h1>Arbeitsbereiche</h1>
+        <h1>{{ 'admin.workspaces' | translate }}</h1>
         @for (ws of workspaces(); track ws.id) {
           <div class="fx-column-start-stretch">
             <div class="fx-row-space-between-center">
@@ -65,11 +65,11 @@
         </div>
       }
       <p>
-        Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.
+        {{ 'ui-text.user-workspaces.login-required' | translate }}
       </p>
       <button mat-raised-button color="primary" class="login-button" (click)="login()">
         <mat-icon>login</mat-icon>
-        <span>Anmelden</span>
+        <span>{{ 'login' | translate }}</span>
       </button>
     </div>
   }

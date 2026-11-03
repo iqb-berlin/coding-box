@@ -78,7 +78,7 @@ export class UsersComponent implements OnInit {
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.user-not-created'),
-            this.translateService.instant('error'),
+            this.translateService.instant('error.error_title'),
             { duration: 3000 });
         }
       }
@@ -113,7 +113,7 @@ export class UsersComponent implements OnInit {
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.user-not-edited'),
-            this.translateService.instant('error'),
+            this.translateService.instant('error.error_title'),
             { duration: 3000 });
         }
       }
@@ -140,7 +140,7 @@ export class UsersComponent implements OnInit {
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.users-not-deleted'),
-            this.translateService.instant('error'),
+            this.translateService.instant('error.error_title'),
             { duration: 3000 });
           this.appService.dataLoading = false;
         }
@@ -163,12 +163,12 @@ export class UsersComponent implements OnInit {
           } else if (result.mutationSucceeded && result.authDataRefreshOutcome === 'failed') {
             this.snackBar.open(
               this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
-              this.translateService.instant('error'),
+              this.translateService.instant('error.error_title'),
               { duration: 5000 });
           } else if (!result.mutationSucceeded) {
             this.snackBar.open(
               this.translateService.instant('admin.workspace-access-right-not-set'),
-              this.translateService.instant('error'),
+              this.translateService.instant('error.error_title'),
               { duration: 3000 });
           }
           this.appService.dataLoading = false;

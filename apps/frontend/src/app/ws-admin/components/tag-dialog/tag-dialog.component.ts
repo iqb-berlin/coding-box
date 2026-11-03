@@ -17,6 +17,7 @@ import { MatInput } from '@angular/material/input';
 import { FormsModule } from '@angular/forms';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { UnitTagDto } from '../../../../../../../api-dto/unit-tags/unit-tag.dto';
 import { UnitTagService } from '../../../shared/services/unit/unit-tag.service';
 import { AppService } from '../../../core/services/app.service';
@@ -29,14 +30,14 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     <div class="dialog-header">
       <h1 mat-dialog-title>{{ data.title || 'Unit Tags' }}</h1>
       <div class="header-info">
-        <span class="tag-count">{{ tags.length }} Tags</span>
+        <span class="tag-count">{{ 'ui-text.tag-dialog.count' | translate: { length: (tags.length) } }}</span>
       </div>
     </div>
 
     <div mat-dialog-content>
       <div class="tags-section">
         <div class="section-header">
-          <h2>Tags</h2>
+          <h2>{{ 'test-results-search.table-headers.tags' | translate }}</h2>
         </div>
 
         <div class="tags-container">
@@ -45,7 +46,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
               <div class="tag-item" [style.background-color]="tag.color || '#e3f2fd'">
                 <span class="tag-text" [style.color]="getContrastColor(tag.color)">{{ tag.tag }}</span>
                 <div class="tag-actions">
-                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" matTooltip="Tag löschen" [attr.aria-label]="'accessibility.actions.delete-tag' | translate">
+                  <button mat-icon-button (click)="deleteTag(tag.id)" class="tag-action-button" [matTooltip]="'accessibility.actions.delete-tag' | translate" [attr.aria-label]="'accessibility.actions.delete-tag' | translate">
                     <mat-icon [style.color]="getContrastColor(tag.color)">close</mat-icon>
                   </button>
                 </div>
@@ -54,12 +55,12 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
           </div>
           <div class="add-tag-form">
             <mat-form-field appearance="outline" class="tag-input">
-              <mat-label>Neuer Tag</mat-label>
-              <input matInput [(ngModel)]="newTagText" placeholder="Tag eingeben">
+              <mat-label>{{ 'ui-text.tag-dialog.new-tag' | translate }}</mat-label>
+              <input matInput [(ngModel)]="newTagText" [placeholder]="'ui-text.tag-dialog.placeholder' | translate">
             </mat-form-field>
             <button mat-raised-button color="primary" (click)="addTag()" class="add-tag-button">
               <mat-icon>add</mat-icon>
-              Hinzufügen
+              {{ 'ui-text.note-dialog.add' | translate }}
             </button>
           </div>
         </div>
@@ -67,7 +68,7 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
     </div>
 
     <div mat-dialog-actions align="end">
-      <button mat-stroked-button (click)="closeDialog()">Schließen</button>
+      <button mat-stroked-button (click)="closeDialog()">{{ 'deferred-view.close' | translate }}</button>
     </div>
     `,
   styles: [`
@@ -226,6 +227,8 @@ import { CreateUnitTagDto } from '../../../../../../../api-dto/unit-tags/create-
   standalone: true
 })
 export class TagDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly destroyRef = inject(DestroyRef);
 
   dialogRef = inject<MatDialogRef<TagDialogComponent>>(MatDialogRef);
@@ -253,8 +256,8 @@ export class TagDialogComponent implements OnInit {
   protected addTag(): void {
     if (!this.newTagText.trim()) {
       this.snackBar.open(
-        'Bitte geben Sie einen Tag-Text ein',
-        'Fehler',
+        this.uiTranslate('ui-text.tag-dialog.text-required'),
+        this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
         { duration: 3000 }
       );
       return;
@@ -275,15 +278,15 @@ export class TagDialogComponent implements OnInit {
         this.cdr.markForCheck();
 
         this.snackBar.open(
-          'Tag erfolgreich hinzugefügt',
+          this.uiTranslate('ui-text.tag-dialog.add-success'),
           'Erfolg',
           { duration: 3000 }
         );
       },
       error: () => {
         this.snackBar.open(
-          'Fehler beim Hinzufügen des Tags',
-          'Fehler',
+          this.uiTranslate('ui-text.tag-dialog.add-failed'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }
@@ -305,22 +308,22 @@ export class TagDialogComponent implements OnInit {
           this.cdr.markForCheck();
 
           this.snackBar.open(
-            'Tag erfolgreich gelöscht',
+            this.uiTranslate('ui-text.tag-dialog.delete-success'),
             'Erfolg',
             { duration: 3000 }
           );
         } else {
           this.snackBar.open(
-            'Fehler beim Löschen des Tags',
-            'Fehler',
+            this.uiTranslate('ui-text.tag-dialog.delete-failed'),
+            this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
             { duration: 3000 }
           );
         }
       },
       error: () => {
         this.snackBar.open(
-          'Fehler beim Löschen des Tags',
-          'Fehler',
+          this.uiTranslate('ui-text.tag-dialog.delete-failed'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }

@@ -100,7 +100,7 @@ describe('UsersComponent', () => {
     expect(appService.refreshAuthData).not.toHaveBeenCalled();
     expect(snackBar.open).toHaveBeenCalledWith(
       'admin.workspace-access-right-not-set',
-      'error',
+      'error.error_title',
       { duration: 3000 }
     );
   });
@@ -112,7 +112,7 @@ describe('UsersComponent', () => {
 
     expect(snackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
-      'error',
+      'error.error_title',
       { duration: 5000 }
     );
   });

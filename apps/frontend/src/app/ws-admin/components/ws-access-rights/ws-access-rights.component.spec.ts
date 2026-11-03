@@ -166,7 +166,7 @@ describe('WsAccessRightsComponent', () => {
     expect(component.workspaceUsers().hasChanged).toBe(true);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.workspace-access-right-not-set',
-      'error',
+      'error.error_title',
       expect.any(Object)
     );
   });
@@ -181,7 +181,7 @@ describe('WsAccessRightsComponent', () => {
     expect(component.workspaceUsers().hasChanged).toBe(false);
     expect(mockSnackBar.open).toHaveBeenCalledWith(
       'admin.change-saved-auth-data-refresh-failed',
-      'error',
+      'error.error_title',
       { duration: 5000 }
     );
   });

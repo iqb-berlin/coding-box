@@ -1,7 +1,7 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { ActivatedRoute } from '@angular/router';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule } from '@ngx-translate/core';
 import { of, Subject } from 'rxjs';
 
 import { CodingJobsComponent } from '../../apps/frontend/src/app/coding/components/coding-jobs/coding-jobs.component';
@@ -37,7 +37,7 @@ describe('CodingJobsComponent', () => {
     };
 
     return cy.mount(CodingJobsComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         {
           provide: CodingJobBackendService,

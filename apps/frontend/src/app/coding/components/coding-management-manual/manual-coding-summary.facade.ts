@@ -1,10 +1,13 @@
 import { computed, inject, Injectable } from '@angular/core';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
 /** Memoized domain summaries; the view owns navigation and user interactions. */
 @Injectable()
 export class ManualCodingSummaryFacade {
+  private readonly uiTranslate = injectUiTranslator();
+
   private readonly statistics = inject(ManualCodingStatisticsFacade);
   private readonly analysis = inject(ManualCodingAnalysisFacade);
   private readonly codingProgressOverview = this.statistics.codingProgressOverview;
@@ -108,13 +111,15 @@ export class ManualCodingSummaryFacade {
 
     const difference = statusPoolCount - effectiveCaseCount;
     const reason = difference > 0 ?
-      `${difference} Rohantworten werden durch abgeleitete Variablen, Vorverarbeitung oder Aggregation nicht separat verteilt.` :
-      'Die effektive Fallzahl kann durch Mehrfachkodierung oder manuelle Nacharbeit abweichen.';
+      this.uiTranslate('ui-text.manual-coding-summary.raw-responses-hint', { difference: difference }) :
+      this.uiTranslate('ui-text.manual-coding-summary.effective-case-count-hint');
     const openCaseHint = openCaseCount !== effectiveCaseCount ?
-      `, davon ${openCaseCount} offen` :
+      this.uiTranslate('ui-text.manual-coding-summary.open-count', { openCaseCount: openCaseCount }) :
       '';
 
-    return `${statusPoolCount} Rohantworten im Statuspool -> ${effectiveCaseCount} effektive Arbeitsfälle${openCaseHint}. ${reason}`;
+    return this.uiTranslate('ui-text.manual-coding-summary.status-pool-summary', {
+      statusPoolCount: statusPoolCount, effectiveCaseCount: effectiveCaseCount, openCaseHint: openCaseHint, reason: reason
+    });
   });
 
   readonly isResponseAnalysisOutdated = computed<boolean>(() => {

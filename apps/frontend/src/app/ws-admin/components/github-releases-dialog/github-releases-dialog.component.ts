@@ -11,6 +11,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTableModule } from '@angular/material/table';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FileService, GithubReleaseShort } from '../../../shared/services/file/file.service';
 
 export interface GithubReleasesDialogData {
@@ -35,6 +36,8 @@ export interface GithubReleasesDialogData {
   ]
 })
 export class GithubReleasesDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<GithubReleasesDialogComponent>>(MatDialogRef);
   data = inject<GithubReleasesDialogData>(MAT_DIALOG_DATA);
 
@@ -71,7 +74,7 @@ export class GithubReleasesDialogComponent implements OnInit {
         },
         error: () => {
           this.isLoading.set(false);
-          this.snackBar.open('Fehler beim Laden der Releases von GitHub.', 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.load-failed'), 'OK', { duration: 3000 });
         }
       });
   }
@@ -83,15 +86,15 @@ export class GithubReleasesDialogComponent implements OnInit {
         next: success => {
           this.isLoading.set(false);
           if (success) {
-            this.snackBar.open(`${release.name} erfolgreich installiert.`, 'OK', { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-success', { name: release.name }), 'OK', { duration: 3000 });
             this.dialogRef.close(true);
           } else {
-            this.snackBar.open('Installation fehlgeschlagen.', 'OK', { duration: 3000 });
+            this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-failed'), 'OK', { duration: 3000 });
           }
         },
         error: () => {
           this.isLoading.set(false);
-          this.snackBar.open('Fehler bei der Installation.', 'OK', { duration: 3000 });
+          this.snackBar.open(this.uiTranslate('ui-text.github-releases-dialog.install-error'), 'OK', { duration: 3000 });
         }
       });
   }

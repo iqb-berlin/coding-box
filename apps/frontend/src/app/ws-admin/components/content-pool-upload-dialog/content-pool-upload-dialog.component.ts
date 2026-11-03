@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   Component, OnDestroy, inject, signal, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -16,6 +17,7 @@ import { MatProgressBarModule } from '@angular/material/progress-bar';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSelectModule } from '@angular/material/select';
 import { Subscription } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { ContentPoolIntegrationService } from '../../services/content-pool-integration.service';
 import {
   ContentPoolAcpSummary,
@@ -46,7 +48,7 @@ export interface ContentPoolUploadDialogResult {
   templateUrl: './content-pool-upload-dialog.component.html',
   styleUrls: ['./content-pool-upload-dialog.component.scss'],
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     FormsModule,
     MatDialogModule,
     MatFormFieldModule,
@@ -59,6 +61,8 @@ export interface ContentPoolUploadDialogResult {
   ]
 })
 export class ContentPoolUploadDialogComponent implements OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly data = inject<ContentPoolUploadDialogData>(MAT_DIALOG_DATA);
 
   private readonly destroyRef = inject(DestroyRef);
@@ -92,7 +96,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
   constructor() {
     const data = this.data;
 
-    this.changelog.set(`Dateien aus Coding-Box ersetzt: ${data.files.map(file => file.filename).join(', ')}`);
+    this.changelog.set(this.uiTranslate('ui-text.content-pool-upload-dialog.default-changelog', { value1: data.files.map(file => file.filename).join(', ') }));
   }
 
   ngOnDestroy(): void {
@@ -114,19 +118,19 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           this.hasLoadedAcps.set(true);
           this.acps.set(response.acps || []);
           if (this.acps().length === 0) {
-            this.errorMessage.set('Keine ACPs gefunden oder kein Zugriff vorhanden.');
+            this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.no-packages'));
           }
         },
         error: error => {
           this.isLoadingAcps.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, 'ACP-Liste konnte nicht aus dem Content Pool geladen werden.'));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-import-dialog.packages-load-failed')));
         }
       });
   }
 
   protected uploadFiles(): void {
     if (!this.selectedAcpId()) {
-      this.errorMessage.set('Bitte ein ACP auswählen.');
+      this.errorMessage.set(this.uiTranslate('ui-text.content-pool-import-dialog.package-required'));
       return;
     }
 
@@ -136,7 +140,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       jobId: '',
       status: 'pending',
       phase: 'queued',
-      message: 'Upload wird vorbereitet...',
+      message: this.uiTranslate('ui-text.content-pool-upload-dialog.preparing-upload'),
       processedFiles: 0,
       totalFiles: this.data.files.length,
       progress: 0,
@@ -158,7 +162,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
           if (progress.status === 'failed') {
             this.isUploading.set(false);
             this.errorMessage.set(progress.error ||
-    'Dateien konnten nicht in den Content Pool übertragen werden.');
+    this.uiTranslate('ui-text.content-pool-upload-dialog.upload-failed'));
             return;
           }
 
@@ -172,7 +176,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
         },
         error: error => {
           this.isUploading.set(false);
-          this.errorMessage.set(this.extractErrorMessage(error, 'Dateien konnten nicht in den Content Pool übertragen werden.'));
+          this.errorMessage.set(this.extractErrorMessage(error, this.uiTranslate('ui-text.content-pool-upload-dialog.upload-failed')));
         }
       });
   }
@@ -202,7 +206,7 @@ export class ContentPoolUploadDialogComponent implements OnDestroy {
       const currentFile = uploadProgressSnapshot.currentFileName ?
         `: ${uploadProgressSnapshot.currentFileName}` :
         '';
-      return `Datei ${uploadProgressSnapshot.processedFiles} von ${uploadProgressSnapshot.totalFiles}${currentFile}`;
+      return this.uiTranslate('ui-text.content-pool-import-dialog.file-progress', { processedFiles: uploadProgressSnapshot.processedFiles, totalFiles: uploadProgressSnapshot.totalFiles, currentFile: currentFile });
     }
 
     return uploadProgressSnapshot.message;

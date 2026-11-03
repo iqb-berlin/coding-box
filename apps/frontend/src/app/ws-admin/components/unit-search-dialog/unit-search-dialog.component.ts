@@ -26,6 +26,7 @@ import { Router } from '@angular/router';
 import {
   Subject, debounceTime, distinctUntilChanged, takeUntil
 } from 'rxjs';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FileService } from '../../../shared/services/file/file.service';
 import { UnitService } from '../../../shared/services/unit/unit.service';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -108,6 +109,8 @@ interface BookletSearchResult {
   ]
 })
 export class UnitSearchDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   private dialogRef = inject<MatDialogRef<UnitSearchDialogComponent>>(MatDialogRef);
   protected data = inject<{ title: string }>(MAT_DIALOG_DATA);
   private fileService = inject(FileService);
@@ -354,9 +357,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Unit löschen',
-        content: `Sind Sie sicher, dass Sie die Unit "${unit.unitName}" (${unit.unitAlias || 'ohne Alias'}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.`,
-        confirmButtonLabel: 'Löschen',
+        title: this.uiTranslate('test-results-search.buttons.delete-unit'),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-unit-confirmation', { unitName: unit.unitName, value2: unit.unitAlias || this.uiTranslate('ui-text.unit-search-dialog.no-alias') }),
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -374,14 +377,14 @@ export class UnitSearchDialogComponent implements OnInit {
               this.unitSearchResults.set(this.unitSearchResults().filter(u => u.unitId !== unit.unitId));
               this.totalItems.update(total => total - 1);
               this.snackBar.open(
-                `Unit erfolgreich gelöscht. Unit ID: ${response.report.deletedUnit}`,
-                'Schließen',
+                this.uiTranslate('ui-text.unit-search-dialog.unit-deleted', { deletedUnit: response.report.deletedUnit }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                `Fehler beim Löschen der Unit: ${response.report.warnings.join(', ')}`,
-                'Fehler',
+                this.uiTranslate('ui-text.unit-search-dialog.unit-delete-failed', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
             }
@@ -389,8 +392,8 @@ export class UnitSearchDialogComponent implements OnInit {
           error: () => {
             this.isLoading.set(false);
             this.snackBar.open(
-              'Fehler beim Löschen der Unit. Bitte versuchen Sie es später erneut.',
-              'Fehler',
+              this.uiTranslate('test-results-search.snackbars.unit-delete-general-error'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 5000 }
             );
           }
@@ -403,9 +406,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Antwort löschen',
-        content: `Sind Sie sicher, dass Sie die Antwort für Variable "${response.variableId}" löschen möchten?`,
-        confirmButtonLabel: 'Löschen',
+        title: this.uiTranslate('test-results-search.buttons.delete-answer'),
+        content: this.uiTranslate('test-results-search.confirm-dialogs.delete-answer.content', { variableId: response.variableId }),
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -423,14 +426,14 @@ export class UnitSearchDialogComponent implements OnInit {
               this.responseSearchResults.set(this.responseSearchResults().filter(r => r.responseId !== response.responseId));
               this.totalItems.update(total => total - 1);
               this.snackBar.open(
-                `Antwort erfolgreich gelöscht. Antwort ID: ${apiResponse.report.deletedResponse}`,
-                'Schließen',
+                this.uiTranslate('ui-text.unit-search-dialog.response-deleted', { deletedResponse: apiResponse.report.deletedResponse }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                `Fehler beim Löschen der Antwort: ${apiResponse.report.warnings.join(', ')}`,
-                'Fehler',
+                this.uiTranslate('ui-text.unit-search-dialog.response-delete-failed', { value1: apiResponse.report.warnings.join(', ') }),
+                this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
             }
@@ -438,8 +441,8 @@ export class UnitSearchDialogComponent implements OnInit {
           error: () => {
             this.isLoading.set(false);
             this.snackBar.open(
-              'Fehler beim Löschen der Antwort. Bitte versuchen Sie es später erneut.',
-              'Fehler',
+              this.uiTranslate('test-results-search.snackbars.answer-delete-general-error'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 5000 }
             );
           }
@@ -451,7 +454,7 @@ export class UnitSearchDialogComponent implements OnInit {
   protected deleteAllUnits(): void {
     if (this.unitSearchResults().length === 0) {
       this.snackBar.open(
-        'Keine Aufgaben zum Löschen gefunden.',
+        this.uiTranslate('test-results-search.no-data.no-units'),
         'Info',
         { duration: 3000 }
       );
@@ -461,9 +464,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Alle gefilterten Aufgaben löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.unitSearchResults().length} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
+        title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-units.title'),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-units-confirmation', { value1: this.unitSearchResults().length }),
+        confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -484,14 +487,14 @@ export class UnitSearchDialogComponent implements OnInit {
               this.unitSearchResults.set([]);
               this.totalItems.set(0);
               this.snackBar.open(
-                `${deletedCount} Aufgaben erfolgreich gelöscht.`,
-                'Schließen',
+                this.uiTranslate('ui-text.unit-search-dialog.units-deleted', { deletedCount: deletedCount }),
+                this.uiTranslate('deferred-view.close'),
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                `Fehler beim Löschen der Aufgaben: ${response.report.warnings.join(', ')}`,
-                'Fehler',
+                this.uiTranslate('ui-text.unit-search-dialog.units-delete-failed', { value1: response.report.warnings.join(', ') }),
+                this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
                 { duration: 5000 }
               );
             }
@@ -499,8 +502,8 @@ export class UnitSearchDialogComponent implements OnInit {
           error: () => {
             this.isLoading.set(false);
             this.snackBar.open(
-              'Fehler beim Löschen der Aufgaben. Bitte versuchen Sie es später erneut.',
-              'Fehler',
+              this.uiTranslate('test-results-search.snackbars.units-delete-general-error'),
+              this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
               { duration: 5000 }
             );
           }
@@ -512,7 +515,7 @@ export class UnitSearchDialogComponent implements OnInit {
   protected deleteAllResponses(): void {
     if (this.responseSearchResults().length === 0) {
       this.snackBar.open(
-        'Keine Antworten zum Löschen gefunden.',
+        this.uiTranslate('test-results-search.no-data.no-answers'),
         'Info',
         { duration: 3000 }
       );
@@ -522,9 +525,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Alle gefilterten Antworten löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.responseSearchResults().length} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
+        title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-answers.title'),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-responses-confirmation', { value1: this.responseSearchResults().length }),
+        confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -539,7 +542,7 @@ export class UnitSearchDialogComponent implements OnInit {
           if (index >= responseIds.length) {
             this.isLoading.set(false);
             this.snackBar.open(
-              `${successCount} Antworten gelöscht, ${failCount} fehlgeschlagen.`,
+              this.uiTranslate('test-results-search.snackbars.answers-deleted', { successCount: successCount, failCount: failCount }),
               'OK',
               { duration: 5000 }
             );
@@ -580,7 +583,7 @@ export class UnitSearchDialogComponent implements OnInit {
 
   protected viewBookletInfo(booklet: BookletSearchResult): void {
     const loadingSnackBar = this.snackBar.open(
-      'Lade Testheft-Informationen...',
+      this.uiTranslate('test-results-table.loading-booklet'),
       '',
       { duration: 3000 }
     );
@@ -606,8 +609,8 @@ export class UnitSearchDialogComponent implements OnInit {
       error: () => {
         loadingSnackBar.dismiss();
         this.snackBar.open(
-          'Fehler beim Laden der Testheft-Informationen',
-          'Fehler',
+          this.uiTranslate('test-results-table.booklet-error'),
+          this.uiTranslate('ws-admin.export-options.item-dataset-diagnostics-severity-error'),
           { duration: 3000 }
         );
       }
@@ -618,9 +621,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Booklet löschen',
-        content: `Sind Sie sicher, dass Sie das Booklet "${booklet.bookletName}" löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Löschen',
+        title: this.uiTranslate('test-results-search.confirm-dialogs.delete-booklet.title'),
+        content: this.uiTranslate('test-results-search.confirm-dialogs.delete-booklet.content', { bookletName: booklet.bookletName }),
+        confirmButtonLabel: this.uiTranslate('delete'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -640,13 +643,13 @@ export class UnitSearchDialogComponent implements OnInit {
               this.totalItems.update(total => total - 1);
 
               this.snackBar.open(
-                `Booklet "${booklet.bookletName}" wurde erfolgreich gelöscht.`,
+                this.uiTranslate('test-results-search.snackbars.booklet-deleted', { bookletName: booklet.bookletName }),
                 'OK',
                 { duration: 3000 }
               );
             } else {
               this.snackBar.open(
-                `Fehler beim Löschen des Booklets: ${response.report.warnings.join(', ')}`,
+                this.uiTranslate('ui-text.booklet-search-dialog.delete-failed', { value1: response.report.warnings.join(', ') }),
                 'OK',
                 { duration: 5000 }
               );
@@ -655,7 +658,7 @@ export class UnitSearchDialogComponent implements OnInit {
           },
           error: () => {
             this.snackBar.open(
-              'Fehler beim Löschen des Booklets. Bitte versuchen Sie es erneut.',
+              this.uiTranslate('test-results-search.snackbars.booklet-delete-general-error'),
               'OK',
               { duration: 5000 }
             );
@@ -669,7 +672,7 @@ export class UnitSearchDialogComponent implements OnInit {
   protected deleteAllBooklets(): void {
     if (this.bookletSearchResults().length === 0) {
       this.snackBar.open(
-        'Keine Booklets zum Löschen gefunden.',
+        this.uiTranslate('test-results-search.no-data.no-booklets'),
         'Info',
         { duration: 3000 }
       );
@@ -679,9 +682,9 @@ export class UnitSearchDialogComponent implements OnInit {
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
-        title: 'Alle gefilterten Booklets löschen',
-        content: `Sind Sie sicher, dass Sie alle ${this.bookletSearchResults().length} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.`,
-        confirmButtonLabel: 'Alle löschen',
+        title: this.uiTranslate('test-results-search.confirm-dialogs.delete-all-booklets.title'),
+        content: this.uiTranslate('ui-text.unit-search-dialog.delete-booklets-confirmation', { value1: this.bookletSearchResults().length }),
+        confirmButtonLabel: this.uiTranslate('export-toast.clear-all'),
         showCancel: true
       } as ConfirmDialogData
     });
@@ -696,7 +699,7 @@ export class UnitSearchDialogComponent implements OnInit {
           if (index >= bookletIds.length) {
             this.isLoading.set(false);
             this.snackBar.open(
-              `${successCount} Booklets gelöscht, ${failCount} fehlgeschlagen.`,
+              this.uiTranslate('test-results-search.snackbars.booklets-deleted', { successCount: successCount, failCount: failCount }),
               'OK',
               { duration: 5000 }
             );

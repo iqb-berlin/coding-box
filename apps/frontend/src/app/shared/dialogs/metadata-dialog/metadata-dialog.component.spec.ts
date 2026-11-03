@@ -1,5 +1,6 @@
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TestBed } from '@angular/core/testing';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { MetadataDialogComponent } from './metadata-dialog.component';
 import { MetadataWebComponentService } from '../../services/metadata-web-component.service';
 
@@ -7,7 +8,7 @@ describe('MetadataDialog read-only capability', () => {
   async function open(mode?: 'readonly' | 'edit') {
     const close = jest.fn();
     await TestBed.configureTestingModule({
-      imports: [MetadataDialogComponent],
+      imports: [GermanTranslationsTestingModule, MetadataDialogComponent],
       providers: [
         { provide: MatDialogRef, useValue: { close } },
         { provide: MetadataWebComponentService, useValue: { ensureRegistered: jest.fn() } },

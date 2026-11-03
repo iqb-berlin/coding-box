@@ -1,40 +1,40 @@
 <div class="dialog-container">
-  <h2 class="dialog-title">{{ data.readOnly ? data.bundleGroup?.name : (data.isEdit ? 'Variablenbündel bearbeiten' : 'Neues Variablenbündel erstellen') }}</h2>
+  <h2 class="dialog-title">{{ data.readOnly ? data.bundleGroup?.name : (data.isEdit ? ('ui-text.variable-bundle-dialog.edit-title' | translate) : ('ui-text.variable-bundle-dialog.create-title' | translate)) }}</h2>
   <mat-divider></mat-divider>
 
   <div class="dialog-content">
     <form [formGroup]="bundleGroupForm" (ngSubmit)="onSubmit()">
       <div class="form-section">
-        <h3>Allgemeine Informationen</h3>
+        <h3>{{ 'coding-job-definition-dialog.sections.general-info' | translate }}</h3>
 
         <mat-form-field appearance="fill" class="full-width">
-          <mat-label>Name</mat-label>
-          <input matInput formControlName="name" placeholder="Name des Variablenbündels" required>
+          <mat-label>{{ 'user.full-name' | translate }}</mat-label>
+          <input matInput formControlName="name" [placeholder]="'ui-text.variable-bundle-dialog.name-placeholder' | translate" required>
           @if (bundleGroupForm.get('name')?.invalid && bundleGroupForm.get('name')?.touched) {
-            <mat-error>Name ist erforderlich</mat-error>
+            <mat-error>{{ 'ui-text.variable-bundle-dialog.name-required' | translate }}</mat-error>
           }
         </mat-form-field>
 
         <mat-form-field appearance="fill" class="full-width">
-          <mat-label>Beschreibung</mat-label>
-          <textarea matInput formControlName="description" placeholder="Beschreibung des Variablenbündels"
+          <mat-label>{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-label>
+          <textarea matInput formControlName="description" [placeholder]="'ui-text.variable-bundle-dialog.description-placeholder' | translate"
           rows="3"></textarea>
         </mat-form-field>
       </div>
 
       <div class="form-section">
-        <h3>Variablen im Bündel</h3>
-        <p class="section-description">Wählen Sie die Variablen aus, die diesem Bündel zugewiesen werden sollen:</p>
+        <h3>{{ 'ui-text.variable-bundle-dialog.variables' | translate }}</h3>
+        <p class="section-description">{{ 'ui-text.variable-bundle-dialog.selection-hint' | translate }}</p>
 
         <!-- Filter controls -->
         <div class="filter-container">
           <div class="filter-row">
             <mat-form-field class="filter-field">
-              <mat-label>Aufgaben-ID Filter</mat-label>
+              <mat-label>{{ 'coding-job-definition-dialog.filters.unit-name' | translate }}</mat-label>
               <input #unitNameFilterInput matInput [(ngModel)]="unitNameFilter" [ngModelOptions]="{standalone: true}"
-                placeholder="Filter nach Aufgaben-ID">
+                [placeholder]="'coding-job-definition-dialog.filters.unit-name-placeholder' | translate">
               @if (unitNameFilter) {
-                <button matSuffix mat-icon-button type="button" aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate"
                   (click)="unitNameFilter=''; unitNameFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -42,11 +42,11 @@
             </mat-form-field>
 
             <mat-form-field class="filter-field">
-              <mat-label>Variablen-ID Filter</mat-label>
+              <mat-label>{{ 'coding-job-definition-dialog.filters.variable-id' | translate }}</mat-label>
               <input #variableIdFilterInput matInput [(ngModel)]="variableIdFilter"
-                [ngModelOptions]="{standalone: true}" placeholder="Filter nach Variablen-ID">
+                [ngModelOptions]="{standalone: true}" [placeholder]="'coding-job-definition-dialog.filters.variable-id-placeholder' | translate">
               @if (variableIdFilter) {
-                <button matSuffix mat-icon-button type="button" aria-label="Clear"
+                <button matSuffix mat-icon-button type="button" [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate"
                   (click)="variableIdFilter=''; variableIdFilterInput.value=''; applyFilter()">
                   <mat-icon>close</mat-icon>
                 </button>
@@ -56,12 +56,12 @@
             <!-- Filter button is now optional since filtering happens automatically with debounce -->
             <button mat-raised-button color="primary" type="button" (click)="applyFilter()">
               <mat-icon>filter_list</mat-icon>
-              Filter anwenden
+              {{ 'journal.apply-filters' | translate }}
             </button>
 
             <button mat-raised-button type="button" (click)="clearFilters()">
               <mat-icon>clear</mat-icon>
-              Filter zurücksetzen
+              {{ 'coding.trainings.compare.reset-filters' | translate }}
             </button>
           </div>
         </div>
@@ -69,24 +69,24 @@
         @if (isLoadingVariableAnalysis()) {
           <div class="loading-container">
             <mat-spinner diameter="40"></mat-spinner>
-            <p class="loading-text">Lade Variablen...</p>
+            <p class="loading-text">{{ 'coding-job-definition-dialog.loading.variables' | translate }}</p>
           </div>
         }
 
         @if (!isLoadingVariableAnalysis() && availableVariables().length > 0) {
           <div class="quick-selection-tools">
             <div class="selection-count">
-              {{ selectedVariables.selected.length }} von {{ filteredVariables().length }} Variablen ausgewählt
+              {{ 'ui-text.variable-bundle-dialog.selected-count' | translate: { length: (selectedVariables.selected.length), value2: (filteredVariables().length) } }}
             </div>
             <div class="selection-actions">
               <button mat-button color="primary" type="button" (click)="selectAll()" [disabled]="!!data.readOnly">
                 <mat-icon>done_all</mat-icon>
-                Alle auswählen
+                {{ 'manual-coding-export.select-all' | translate }}
               </button>
               <button mat-button type="button" (click)="deselectAll()"
                 [disabled]="!!data.readOnly || selectedVariables.selected.length === 0">
                 <mat-icon>remove_done</mat-icon>
-                Auswahl aufheben
+                {{ 'ws-admin.export-options.item-dataset-clear-all' | translate }}
               </button>
             </div>
           </div>
@@ -120,9 +120,8 @@
         @if (!isLoadingVariableAnalysis() && availableVariables().length === 0) {
           <div class="empty-state">
             <mat-icon class="empty-icon">analytics</mat-icon>
-            <h3>Keine Variablen verfügbar</h3>
-            <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen Sie
-            es später erneut.</p>
+            <h3>{{ 'coding-job-definition-dialog.empty-states.no-variables' | translate }}</h3>
+            <p class="empty-text">{{ 'coding-job-definition-dialog.empty-states.no-variables-description' | translate }}</p>
           </div>
         }
       </div>
@@ -130,11 +129,11 @@
   </div>
 
   <div class="dialog-actions">
-    <button mat-button (click)="onCancel()">Abbrechen</button>
+    <button mat-button (click)="onCancel()">{{ 'cancel' | translate }}</button>
     @if (!data.readOnly) {
       <button mat-raised-button color="primary" (click)="onSubmit()"
         [disabled]="bundleGroupForm.invalid || selectedVariables.selected.length === 0">
-        {{ data.isEdit ? 'Speichern' : 'Erstellen' }}
+        {{ data.isEdit ? ('save' | translate) : ('construct' | translate) }}
       </button>
     }
   </div>

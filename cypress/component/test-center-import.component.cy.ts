@@ -1,6 +1,7 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
 import { provideHttpClient } from '@angular/common/http';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
 import { of, throwError } from 'rxjs';
 import { TestCenterImportComponent } from '../../apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component';
 import { ImportService, Result } from '../../apps/frontend/src/app/shared/services/file/import.service';
@@ -19,7 +20,7 @@ describe('Testcenter interrupted import feedback', () => {
     numUnitsMax: 1, numUnitsAvg: 1, lastChange: 0, existsInDatabase: false, hasBookletLogs: false }));
 
   const mountImport = (importWorkspaceFiles: unknown, getProgress: unknown) => cy.mount(TestCenterImportComponent, {
-    imports: [TranslateModule.forRoot()],
+    imports: [GermanTranslationsTestingModule],
     providers: [provideHttpClient(),
       { provide: MAT_DIALOG_DATA, useValue: { importType: 'testResults' } },
       { provide: MatDialogRef, useValue: { close: cy.stub().as('closeDialog') } },

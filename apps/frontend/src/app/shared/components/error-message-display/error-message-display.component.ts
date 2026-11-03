@@ -8,12 +8,14 @@ import { MatIconModule } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import { NavigationEnd, Router } from '@angular/router';
 import { filter, map } from 'rxjs';
+import { injectUiTranslator } from '../../utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { AuthService } from '../../../core/services/auth.service';
 import { AuthRefreshUnavailableError } from '../../../core/interceptors/auth-refresh-unavailable.error';
 import {
   AppHttpError,
-  AppHttpErrorRequest
+  AppHttpErrorRequest,
+  formatAppHttpErrorMessage
 } from '../../../core/interceptors/app-http-error.class';
 
 @Component({
@@ -25,6 +27,8 @@ import {
   styleUrls: ['./error-message-display.component.scss']
 })
 export class ErrorMessageDisplayComponent {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly authenticationRestored = output<void>();
   protected readonly retryingAuthentication = signal(false);
   protected appService: AppService = inject(AppService);
@@ -143,7 +147,7 @@ export class ErrorMessageDisplayComponent {
   }
 
   protected getDisplayMessage(error: AppHttpError): string {
-    return error.userMessage || error.message;
+    return formatAppHttpErrorMessage(error, this.uiTranslate);
   }
 
   protected shouldShowAffectedRequestId(error: AppHttpError, request: AppHttpErrorRequest): boolean {

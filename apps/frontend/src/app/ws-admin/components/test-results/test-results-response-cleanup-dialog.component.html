@@ -1,26 +1,26 @@
 <h2 mat-dialog-title class="dialog-title">
   <mat-icon>cleaning_services</mat-icon>
-  <span>Antworten bereinigen</span>
+  <span>{{ 'access-matrix.feature.clean-responses' | translate }}</span>
 </h2>
 
 <div mat-dialog-content class="cleanup-content">
   @if (isLoading()) {
   <div class="loading-state">
     <mat-spinner diameter="32"></mat-spinner>
-    <span>Daten werden geladen...</span>
+    <span>{{ 'test-results-table.loading' | translate }}</span>
   </div>
   }
 
   @if (!isLoading() && loadFailed()) {
   <div class="message-state">
     <mat-icon color="warn">warning</mat-icon>
-    <span>Auswahldaten konnten nicht geladen werden.</span>
+    <span>{{ 'ui-text.test-results-response-cleanup-dialog.options-load-failed' | translate }}</span>
   </div>
   }
 
   @if (!isLoading() && !loadFailed()) {
   <mat-form-field appearance="outline">
-    <mat-label>Aufgaben</mat-label>
+    <mat-label>{{ 'coding.jobs.table.units' | translate }}</mat-label>
     <mat-select
       multiple
       [(ngModel)]="selectedUnitNames"
@@ -34,18 +34,18 @@
 
   <div class="date-grid">
     <mat-form-field appearance="outline">
-      <mat-label>Von</mat-label>
+      <mat-label>{{ 'journal.from-date' | translate }}</mat-label>
       <input matInput type="datetime-local" [(ngModel)]="answeredFrom">
     </mat-form-field>
 
     <mat-form-field appearance="outline">
-      <mat-label>Vor</mat-label>
+      <mat-label>{{ 'ui-text.test-results-response-cleanup-dialog.before' | translate }}</mat-label>
       <input matInput type="datetime-local" [(ngModel)]="answeredBefore" required>
     </mat-form-field>
   </div>
 
   <mat-form-field appearance="outline">
-    <mat-label>Variablen</mat-label>
+    <mat-label>{{ 'coding.my-coding-jobs.job-variables' | translate }}</mat-label>
     <mat-select multiple [(ngModel)]="selectedVariableIds">
       @for (variable of availableVariables; track variable.unitName + variable.value) {
       <mat-option [value]="variable.value">{{ variable.label }}</mat-option>
@@ -54,14 +54,14 @@
   </mat-form-field>
 
   <mat-form-field appearance="outline">
-    <mat-label>Subforms</mat-label>
+    <mat-label>{{ 'ui-text.test-results-delete-preview-dialog.subforms' | translate }}</mat-label>
     <input matInput [(ngModel)]="subformsText">
   </mat-form-field>
   }
 </div>
 
 <div mat-dialog-actions align="end">
-  <button mat-button type="button" (click)="cancel()">Abbrechen</button>
+  <button mat-button type="button" (click)="cancel()">{{ 'cancel' | translate }}</button>
   <button
     mat-flat-button
     color="primary"
@@ -70,6 +70,6 @@
     (click)="submit()"
   >
     <mat-icon>preview</mat-icon>
-    Vorschau
+    {{ 'system-notifications.preview' | translate }}
   </button>
 </div>

@@ -5,7 +5,7 @@
   <div class="aggregation-config">
     <h3
       class="subsection-title"
-      [matTooltip]="responseAnalysisValue?.isCalculating ? 'Analyse läuft' : ''"
+      [matTooltip]="responseAnalysisValue?.isCalculating ? ('ui-text.manual-coding-preparation-view.analysis-running' | translate) : ''"
     >
       <mat-icon>settings</mat-icon>
       {{
@@ -118,7 +118,7 @@
       <button
         mat-icon-button
         (click)="restartAnalysis()"
-        matTooltip="Antwortanalyse neu berechnen"
+        [matTooltip]="'accessibility.actions.restart-analysis' | translate"
         [disabled]="
           isLoadingResponseAnalysis() || responseAnalysisValue?.isCalculating
         "
@@ -133,7 +133,7 @@
           <mat-spinner diameter="16"></mat-spinner>
           @if (responseAnalysisValue?.isCalculating) {
             <span class="analysis-progress-text">
-              Berechnung läuft...
+              {{ 'ui-text.manual-coding-preparation-view.calculation-running' | translate }}
               @if (
                 responseAnalysisValue?.progress !== null &&
                 responseAnalysisValue?.progress !== undefined
@@ -280,7 +280,7 @@
                           <td class="status-cell">
                             @if (item.isCoded) {
                               <span class="coded-badge">
-                                Kodiert (Code: {{ item.assignedCode }})
+                                {{ 'ui-text.manual-coding-preparation-view.coded-value' | translate: { assignedCode: (item.assignedCode) } }}
                               </span>
                             }
                           </td>
@@ -295,7 +295,7 @@
                   [pageSizeOptions]="[5, 10, 25, 50, 100]"
                   [pageIndex]="emptyPageIndex()"
                   (page)="onEmptyPageChange($event)"
-                  aria-label="Seite der leeren Antworten auswählen"
+                  [attr.aria-label]="'ui-text.manual-coding-preparation-view.empty-response-pagination' | translate"
                 >
                 </mat-paginator>
                 <div class="analysis-actions">
@@ -390,8 +390,7 @@
                     }})
                     @if (responseAnalysisAggregationSavings() > 0) {
                       <span>
-                        - {{ responseAnalysisAggregationSavings() }} Einsparung
-                        in dieser Analyse
+                        {{ 'ui-text.manual-coding-preparation-view.analysis-savings' | translate: { value1: (responseAnalysisAggregationSavings()) } }}
                       </span>
                     }
                   </span>
@@ -464,7 +463,7 @@
                   [pageSizeOptions]="[5, 10, 20, 50, 100]"
                   [pageIndex]="duplicatePageIndex()"
                   (page)="onDuplicatePageChange($event)"
-                  aria-label="Seite der Duplikatgruppen auswählen"
+                  [attr.aria-label]="'ui-text.manual-coding-preparation-view.duplicate-group-pagination' | translate"
                 >
                 </mat-paginator>
               </div>
@@ -486,7 +485,7 @@
         <span>{{ responseAnalysisErrorValue }}</span>
         <button mat-stroked-button color="warn" (click)="restartAnalysis()">
           <mat-icon>autorenew</mat-icon>
-          Erneut versuchen
+          {{ 'admin.user-directory-retry' | translate }}
         </button>
       </div>
     }
@@ -502,7 +501,7 @@
         }}</span>
         <button mat-stroked-button color="primary" (click)="restartAnalysis()">
           <mat-icon>autorenew</mat-icon>
-          Analyse starten
+          {{ 'ui-text.manual-coding-preparation-view.start-analysis' | translate }}
         </button>
       </div>
     }

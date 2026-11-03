@@ -10,6 +10,7 @@ import { By } from '@angular/platform-browser';
 import { provideHttpClient, HttpErrorResponse } from '@angular/common/http';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import * as jwtDecodeModule from 'jwt-decode';
+import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { ReplayComponent } from './replay.component';
 import { ReplayRouteSessionService } from './replay-route-session.service';
 import { environment } from '../../../../environments/environment';
@@ -231,7 +232,7 @@ describe('ReplayComponent', () => {
         { provide: AppService, useClass: AppServiceMock },
         { provide: MatSnackBar, useClass: MatSnackBarMock }
       ],
-      imports: [ReplayComponent, TranslateModule.forRoot()]
+      imports: [GermanTranslationsTestingModule, ReplayComponent, TranslateModule.forRoot()]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ReplayComponent);
@@ -860,8 +861,8 @@ describe('ReplayComponent', () => {
     expect(component.unitId()).toBe('UNIT_1');
     expect(component.page()).toBe('0');
     expect(snackBar.open).toHaveBeenCalledWith(
-      'replay.reauthentication-required',
-      'close',
+      translateGerman('replay.reauthentication-required'),
+      translateGerman('close'),
       { duration: 4000, panelClass: ['snackbar-error'] }
     );
   });
@@ -3020,7 +3021,7 @@ describe('ReplayComponent', () => {
       expect.any(Number),
       expect.objectContaining({
         success: false,
-        ...(status === 403 ? { errorMessage: 'error-forbidden' } : {})
+        ...(status === 403 ? { errorMessage: translateGerman('error-forbidden') } : {})
       }),
       'valid-token',
       expect.any(String)

@@ -2,11 +2,11 @@
             <div class="filter-container">
               <div class="filter-row">
                 <mat-form-field class="filter-field">
-                  <mat-label>Aufgaben-ID Filter</mat-label>
+                  <mat-label>{{ 'coding-job-definition-dialog.filters.unit-name' | translate }}</mat-label>
                   <input matInput [ngModel]="filters().unitName" (ngModelChange)="filterChanged.emit({unitName: $event})" [ngModelOptions]="{standalone: true}"
-                    placeholder="Filter nach Aufgaben-ID">
+                    [placeholder]="'coding-job-definition-dialog.filters.unit-name-placeholder' | translate">
                   @if (filters().unitName) {
-                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                  <button type="button" matSuffix mat-icon-button [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate"
                     (click)="filterChanged.emit({unitName: ''}); applyFilter.emit()">
                     <mat-icon>close</mat-icon>
                   </button>
@@ -14,11 +14,11 @@
                 </mat-form-field>
 
                 <mat-form-field class="filter-field">
-                  <mat-label>Variablen-ID Filter</mat-label>
+                  <mat-label>{{ 'coding-job-definition-dialog.filters.variable-id' | translate }}</mat-label>
                   <input matInput [ngModel]="filters().variableId" (ngModelChange)="filterChanged.emit({variableId: $event})" [ngModelOptions]="{standalone: true}"
-                    placeholder="Filter nach Variablen-ID">
+                    [placeholder]="'coding-job-definition-dialog.filters.variable-id-placeholder' | translate">
                   @if (filters().variableId) {
-                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                  <button type="button" matSuffix mat-icon-button [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate"
                     (click)="filterChanged.emit({variableId: ''}); applyFilter.emit()">
                     <mat-icon>close</mat-icon>
                   </button>
@@ -27,32 +27,32 @@
 
                 <button type="button" mat-raised-button color="primary" (click)="applyFilter.emit()">
                   <mat-icon>filter_list</mat-icon>
-                  Filter anwenden
+                  {{ 'journal.apply-filters' | translate }}
                 </button>
 
                 <button type="button" mat-raised-button (click)="clearFilters.emit()">
                   <mat-icon>clear</mat-icon>
-                  Filter zurücksetzen
+                  {{ 'coding.trainings.compare.reset-filters' | translate }}
                 </button>
 
               </div>
 
               <div class="filter-row availability-filter-row">
-                <span class="filter-label">Schulungsaufwand:</span>
+                <span class="filter-label">{{ 'export-dialog.filter.training-effort' | translate }}</span>
                 <mat-button-toggle-group [ngModel]="filters().trainingRequired" (ngModelChange)="filterChanged.emit({trainingRequired: $event})" [ngModelOptions]="{standalone: true}" (change)="applyFilter.emit()">
-                  <mat-button-toggle value="all">Alle</mat-button-toggle>
-                  <mat-button-toggle value="true">Erhöht</mat-button-toggle>
-                  <mat-button-toggle value="false">Normal</mat-button-toggle>
+                  <mat-button-toggle value="all">{{ 'coding.trainings.compare.all' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="true">{{ 'export-dialog.filter.increased' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="false">{{ 'export-dialog.filter.normal' | translate }}</mat-button-toggle>
                 </mat-button-toggle-group>
               </div>
 
               <div class="filter-row availability-filter-row">
-                <span class="filter-label">Verfügbarkeit:</span>
+                <span class="filter-label">{{ 'ui-text.job-variable-selection.availability' | translate }}</span>
                 <mat-button-toggle-group [value]="filters().availability" (change)="availabilityChanged.emit($event.value)">
-                  <mat-button-toggle value="all">Alle</mat-button-toggle>
-                  <mat-button-toggle value="full">Vollständig verfügbar</mat-button-toggle>
-                  <mat-button-toggle value="partial">Teilweise verfügbar</mat-button-toggle>
-                  <mat-button-toggle value="none">Nicht verfügbar</mat-button-toggle>
+                  <mat-button-toggle value="all">{{ 'coding.trainings.compare.all' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="full">{{ 'ui-text.job-variable-selection.fully-available' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="partial">{{ 'ui-text.job-variable-selection.partially-available' | translate }}</mat-button-toggle>
+                  <mat-button-toggle value="none">{{ 'ui-text.job-variable-selection.unavailable' | translate }}</mat-button-toggle>
                 </mat-button-toggle-group>
               </div>
             </div>
@@ -60,7 +60,7 @@
             @if (loading()) {
             <div class="loading-container">
               <mat-spinner diameter="40"></mat-spinner>
-              <p class="loading-text">Lade Variablen...</p>
+              <p class="loading-text">{{ 'coding-job-definition-dialog.loading.variables' | translate }}</p>
             </div>
             }
 
@@ -81,10 +81,10 @@
               <button mat-stroked-button color="primary" type="button" (click)="toggleAll.emit()"
                 class="select-all-button" [disabled]="readOnly()">
                 <mat-icon>{{ allSelected() ? 'deselect' : 'select_all' }}</mat-icon>
-                {{ allSelected() ? 'Alle abwählen' : 'Alle auswählen' }}
+                {{ allSelected() ? ('manual-coding-export.deselect-all' | translate) : ('manual-coding-export.select-all' | translate) }}
               </button>
               <div class="selection-count">
-                {{ selectedCount() }} von {{ rows().length }} Variablen ausgewählt
+                {{ 'ui-text.job-variable-selection.selected-count' | translate: { value1: (selectedCount()), value2: (rows().length) } }}
               </div>
             </div>
 
@@ -105,7 +105,7 @@
                         <span class="variable-id-text">{{ variable.unitName }}_{{ variable.variableId }}</span>
                         @if (variable.availableCases !== undefined && variable.responseCount !== undefined) {
                         <mat-chip class="availability-chip" [class]="row.availabilityClass">
-                          {{ row.availabilityText }} verfügbar
+                          {{ 'ui-text.job-variable-selection.available' | translate: { availabilityText: (row.availabilityText) } }}
                         </mat-chip>
                         } @else if (variable.responseCount !== null && variable.responseCount !== undefined) {
                         <span class="response-count">({{ variable.responseCount }})</span>
@@ -119,15 +119,15 @@
 	                      @if (variable.coderTrainingRequired || variable.isDerived) {
 	                      <div class="variable-badges">
                         @if (variable.coderTrainingRequired) {
-                        <mat-chip class="training-required-chip" matTooltip="Erhöhter Schulungsaufwand" matTooltipPosition="above">
+                        <mat-chip class="training-required-chip" [matTooltip]="'coding-variables-dialog.training-required-tooltip' | translate" matTooltipPosition="above">
                           <mat-icon>school</mat-icon>
-                          Schulungsaufwand
+                          {{ 'coding-variables-dialog.filters.training-effort' | translate }}
                         </mat-chip>
                         }
                         @if (variable.isDerived) {
-                        <mat-chip class="derived-chip" matTooltip="Abgeleitete Variable" matTooltipPosition="above">
+                        <mat-chip class="derived-chip" [matTooltip]="'ui-text.training-sample-editor.derived-variable' | translate" matTooltipPosition="above">
                           <mat-icon class="derived-chip-icon">merge_type</mat-icon>
-                          Abgeleitet
+                          {{ 'ui-text.job-variable-selection.derived' | translate }}
                         </mat-chip>
                         }
 	                      </div>
@@ -138,7 +138,7 @@
                             [checked]="row.includeDeriveError"
                             [disabled]="readOnly() || row.disabled || !row.selected"
                             (change)="deriveErrorChanged.emit({variable, included: $event.checked})">
-                            DERIVE_ERROR einbeziehen
+                            {{ 'ui-text.job-variable-selection.include-derive-errors' | translate }}
                           </mat-checkbox>
                         </div>
                         }
@@ -153,8 +153,7 @@
             @if (!loading() && totalVariables() === 0) {
             <div class="empty-state">
               <mat-icon class="empty-icon">analytics</mat-icon>
-              <h3>Keine Variablen verfügbar</h3>
-              <p class="empty-text">Es wurden keine Variablen gefunden. Bitte überprüfen Sie Ihre Filter oder versuchen
-                Sie es später erneut.</p>
+              <h3>{{ 'coding-job-definition-dialog.empty-states.no-variables' | translate }}</h3>
+              <p class="empty-text">{{ 'coding-job-definition-dialog.empty-states.no-variables-description' | translate }}</p>
             </div>
             }

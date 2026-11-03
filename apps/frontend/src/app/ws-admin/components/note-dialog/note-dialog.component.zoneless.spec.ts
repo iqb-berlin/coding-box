@@ -6,6 +6,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { NoteDialogComponent } from './note-dialog.component';
 import { UnitNoteService } from '../../../shared/services/unit/unit-note.service';
 import { AppService } from '../../../core/services/app.service';
@@ -47,7 +48,7 @@ describe('NoteDialogComponent zoneless mutations', () => {
     createUnitNote = jest.fn().mockReturnValue(createResponse);
     deleteUnitNote = jest.fn().mockReturnValue(deleteResponse);
     await TestBed.configureTestingModule({
-      imports: [TranslateModule.forRoot(), NotesDialogHostComponent, MatDialogModule, MatSnackBarModule],
+      imports: [GermanTranslationsTestingModule, TranslateModule.forRoot(), NotesDialogHostComponent, MatDialogModule, MatSnackBarModule],
       providers: [
         provideZonelessChangeDetection(),
         { provide: UnitNoteService, useValue: { createUnitNote, deleteUnitNote } },

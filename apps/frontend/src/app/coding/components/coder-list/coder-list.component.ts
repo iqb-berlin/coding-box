@@ -26,6 +26,7 @@ import {
   ReactiveFormsModule,
   Validators
 } from '@angular/forms';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { SearchFilterComponent } from '../../../shared/search-filter/search-filter.component';
 import { CoderService } from '../../services/coder.service';
 import { Coder } from '../../models/coder.model';
@@ -59,6 +60,8 @@ import { Coder } from '../../models/coder.model';
   ]
 })
 export class CoderListComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   private coderService = inject(CoderService);
   private readonly destroyRef = inject(DestroyRef);
   private snackBar = inject(MatSnackBar);
@@ -103,7 +106,7 @@ export class CoderListComponent implements OnInit {
         this.isLoading.set(false);
       },
       error: () => {
-        this.snackBar.open('Fehler beim Laden der Kodierer', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.load-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.isLoading.set(false);
       }
     });
@@ -137,7 +140,7 @@ export class CoderListComponent implements OnInit {
 
   createCoder(): void {
     if (this.coderForm.invalid) {
-      this.snackBar.open('Bitte füllen Sie alle erforderlichen Felder aus', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.required-fields'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -145,12 +148,12 @@ export class CoderListComponent implements OnInit {
 
     this.coderService.createCoder(newCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.snackBar.open('Kodierer erfolgreich erstellt', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.create-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.loadCoders();
         this.coderForm.reset();
       },
       error: () => {
-        this.snackBar.open('Fehler beim Erstellen des Kodierers', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.create-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
@@ -173,7 +176,7 @@ export class CoderListComponent implements OnInit {
 
   updateCoder(): void {
     if (this.coderForm.invalid || !this.editingCoderId) {
-      this.snackBar.open('Bitte füllen Sie alle erforderlichen Felder aus', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.required-fields'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
@@ -181,38 +184,38 @@ export class CoderListComponent implements OnInit {
 
     this.coderService.updateCoder(this.editingCoderId, updatedCoder).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: () => {
-        this.snackBar.open('Kodierer erfolgreich aktualisiert', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.update-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
         this.loadCoders();
         this.isEditing = false;
         this.editingCoderId = null;
         this.coderForm.reset();
       },
       error: () => {
-        this.snackBar.open('Fehler beim Aktualisieren des Kodierers', 'Schließen', { duration: 3000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coder-list.update-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       }
     });
   }
 
   deleteCoders(): void {
     if (this.selection.selected.length === 0) {
-      this.snackBar.open('Bitte wählen Sie mindestens einen Kodierer aus', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.selection-required'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       return;
     }
 
     const deletePromises = this.selection.selected.map(coder => this.coderService.deleteCoder(coder.id));
 
     Promise.all(deletePromises).then(() => {
-      this.snackBar.open('Kodierer erfolgreich gelöscht', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.delete-success'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
       this.loadCoders();
       this.selection.clear();
     }).catch(() => {
-      this.snackBar.open('Fehler beim Löschen der Kodierer', 'Schließen', { duration: 3000 });
+      this.snackBar.open(this.uiTranslate('ui-text.coder-list.delete-failed'), this.uiTranslate('deferred-view.close'), { duration: 3000 });
     });
   }
 
   getAssignedJobsText(coder: Coder): string {
     if (!coder.assignedJobs || coder.assignedJobs.length === 0) {
-      return 'Keine';
+      return this.uiTranslate('coding.trainings.compare.none');
     }
     return coder.assignedJobs.join(', ');
   }

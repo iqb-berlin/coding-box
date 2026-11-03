@@ -242,7 +242,7 @@
                                     info
                                   </mat-icon>
                                   <span class="level-indicator">
-                                    ({{ useCodeLevel() ? 'Code-Ebene' : 'Score-Ebene' }})
+                                    ({{ useCodeLevel() ? ('cohens-kappa-statistics.code-level-short' | translate) : ('cohens-kappa-statistics.score-level-short' | translate) }})
                                   </span>
                                   @if (isLoadingKappa()) {
                                     <mat-progress-spinner
@@ -295,8 +295,8 @@
                                     <span class="stat-sublabel">{{
                                       statistics.workspaceSummary.weightingMethod ===
                                       'weighted'
-                                      ? 'Gewichtet'
-                                      : 'Ungewichtet'
+                                      ? ('cohens-kappa-statistics.weighted' | translate)
+                                      : ('cohens-kappa-statistics.unweighted' | translate)
                                     }}</span>
                                   </div>
                                   <div class="stat-card">
@@ -319,8 +319,8 @@
                                     </span>
                                     <span class="stat-sublabel">{{
                                       statistics.workspaceSummary.weightingMethod === 'weighted'
-                                      ? 'Gewichtet'
-                                      : 'Ungewichtet'
+                                      ? ('cohens-kappa-statistics.weighted' | translate)
+                                      : ('cohens-kappa-statistics.unweighted' | translate)
                                     }}</span>
                                   </div>
                                   <div class="stat-card">

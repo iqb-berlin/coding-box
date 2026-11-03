@@ -3,6 +3,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { VariableBundleManagerComponent } from './variable-bundle-manager.component';
 import { VariableBundleService } from '../../services/variable-bundle.service';
@@ -27,7 +28,7 @@ describe('VariableBundleManagerComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         VariableBundleManagerComponent,
         TranslateModule.forRoot()
       ],

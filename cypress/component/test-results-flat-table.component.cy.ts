@@ -1,7 +1,9 @@
+import { GermanTranslationsTestingModule } from '../../apps/frontend/src/testing/german-translations';
+import { BehaviorSubject, of } from 'rxjs';
 import { provideHttpClient } from '@angular/common/http';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { TranslateService } from '@ngx-translate/core';
 
 import { SERVER_URL } from '../../apps/frontend/src/app/injection-tokens';
 import { AppService } from '../../apps/frontend/src/app/core/services/app.service';
@@ -12,6 +14,7 @@ import translations from '../../apps/frontend/src/assets/i18n/de.json';
 
 class AppServiceMock {
   selectedWorkspaceId = 9;
+  readonly selectedWorkspaceId$ = new BehaviorSubject(9);
 }
 
 describe('TestResultsFlatTableComponent', () => {
@@ -60,7 +63,7 @@ describe('TestResultsFlatTableComponent', () => {
     ).as('flatResponses');
 
     cy.mount(TestResultsFlatTableComponent, {
-      imports: [TranslateModule.forRoot()],
+      imports: [GermanTranslationsTestingModule],
       providers: [
         provideHttpClient(),
         TestResultService,
@@ -76,7 +79,7 @@ describe('TestResultsFlatTableComponent', () => {
         {
           provide: MatDialog,
           useValue: {
-            open: () => ({ afterClosed: () => ({ subscribe: () => {} }) })
+            open: () => ({ afterClosed: () => of(undefined), close: () => {} })
           }
         }
       ]
@@ -91,10 +94,11 @@ describe('TestResultsFlatTableComponent', () => {
     cy.contains('P001');
     cy.contains('VAR_1');
 
+    cy.contains('mat-label', 'Antwortstatus').click();
     cy.contains('mat-label', 'Antwortstatus')
       .parents('mat-form-field')
       .find('input')
-      .type('VALUE_CHANGED', { force: true });
+      .type('VALUE_CHANGED');
     cy.wait('@flatResponses', { timeout: 20000 });
   });
 });

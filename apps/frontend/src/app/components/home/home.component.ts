@@ -14,6 +14,7 @@ import {
   ActivatedRoute, NavigationStart, Params, Router
 } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { AuthService } from '../../core/services/auth.service';
 import { AppInfoComponent } from '../app-info/app-info.component';
@@ -48,6 +49,8 @@ import {
   styleUrls: ['./home.component.scss']
 })
 export class HomeComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected readonly appService: AppService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -146,20 +149,20 @@ export class HomeComponent implements OnInit {
 
     switch (errorCode) {
       case 'token_missing':
-        message = 'Kein Authorisierungs-Token angegeben';
+        message = this.uiTranslate('ui-text.replay.token-missing');
         break;
       case 'token_expired':
-        message = 'Authentisierungs-Token ist abgelaufen';
+        message = this.uiTranslate('ui-text.home.token-expired');
         break;
       case 'token_invalid':
-        message = 'Authentisierungs-Token ist ungültig';
+        message = this.uiTranslate('ui-text.replay.invalid-auth-token');
         break;
       default:
-        message = 'Ein Fehler ist aufgetreten';
+        message = this.uiTranslate('ui-text.home.error');
         break;
     }
 
-    this.snackBar.open(message, 'Schließen', {
+    this.snackBar.open(message, this.uiTranslate('deferred-view.close'), {
       duration: 5000,
       panelClass: ['snackbar-error']
     });
@@ -184,8 +187,8 @@ export class HomeComponent implements OnInit {
       case AUTH_QUERY_PARAM_ACCESS_DENIED:
         this.resetAuthDataFailedQueryParamState();
         this.snackBar.open(
-          'Sie haben keinen Zugriff auf diesen Bereich.',
-          'Schließen',
+          this.uiTranslate('ui-text.home.access-denied'),
+          this.uiTranslate('deferred-view.close'),
           {
             duration: 5000,
             panelClass: ['snackbar-error']
@@ -211,8 +214,8 @@ export class HomeComponent implements OnInit {
     if (this.authBootstrapStatus() === 'auth-data-failed' && !this.authDataFailedMessageShown) {
       this.authDataFailedMessageShown = true;
       this.snackBar.open(
-        'Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an.',
-        'Schließen',
+        this.uiTranslate('ui-text.app.session-data-load-failed'),
+        this.uiTranslate('deferred-view.close'),
         {
           duration: 8000,
           panelClass: ['snackbar-error']

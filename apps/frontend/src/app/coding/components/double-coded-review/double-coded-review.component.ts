@@ -45,6 +45,8 @@ import {
   take,
   finalize
 } from 'rxjs';
+import { reviewCodeLabel, fallbackReviewCodes } from './double-coding-code-options';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { DoubleCodedReviewApiService } from '../../services/double-coded-review-api.service';
 import { AppService } from '../../../core/services/app.service';
@@ -134,6 +136,8 @@ interface DoubleCodedReviewDialogData {
   ]
 })
 export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<DoubleCodedReviewComponent>>(MatDialogRef, { optional: true });
   dialogData = inject<unknown>(MAT_DIALOG_DATA, { optional: true });
 
@@ -676,8 +680,8 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
       string
     > = {
       draft: 'Entwurf',
-      applied: 'Angewendet',
-      superseded: 'Überholt'
+      applied: this.uiTranslate('double-coded-review.manager-state.applied'),
+      superseded: this.uiTranslate('double-coded-review.manager-state.superseded')
     };
     return this.translateWithFallback(
       `double-coded-review.manager-state.${decision.state}`,
@@ -698,7 +702,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
   private getUnknownManagerLabel(): string {
     return this.translateWithFallback(
       'double-coded-review.columns.manager-unknown',
-      'Manager unbekannt'
+      this.uiTranslate('double-coded-review.columns.manager-unknown')
     );
   }
 
@@ -1255,39 +1259,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
 
   private getFallbackAvailableCodes(
     coderResults: CoderResult[]
-  ): DoubleCodedReviewCodeDto[] {
-    const options = new Map<number, DoubleCodedReviewCodeDto>();
-    coderResults.forEach(result => {
-      const codes =
-        result.codingIssueOption !== null &&
-        result.codingIssueOption !== undefined &&
-        this.standaloneCodingIssueOptionIds.has(result.codingIssueOption) ?
-          [result.codingIssueOption] :
-          [result.code];
-      codes.forEach(code => {
-        if (code === null || code === -1 || code === -2 || options.has(code)) {
-          return;
-        }
-        options.set(code, {
-          code,
-          label: this.getCodeLabel(code) || String(code),
-          score: result.score,
-          source: code < 0 ? 'general' : 'schema'
-        });
-      });
-    });
-    [-3, -4].forEach(code => {
-      if (!options.has(code)) {
-        options.set(code, {
-          code,
-          label: this.getCodeLabel(code),
-          score: null,
-          source: 'general'
-        });
-      }
-    });
-    return [...options.values()];
-  }
+  ): DoubleCodedReviewCodeDto[] { return fallbackReviewCodes(coderResults, this.translateService.instant.bind(this.translateService)); }
 
   private sendDecisions(
     workspaceId: number,
@@ -1366,32 +1338,7 @@ export class DoubleCodedReviewComponent implements OnInit, OnDestroy {
     }
   }
 
-  protected getCodeLabel(code: number | null): string {
-    if (code === null || code === undefined) {
-      return '';
-    }
-
-    switch (code) {
-      case -1:
-        return this.translateService.instant(
-          'code-selector.coding-issue-options.code-assignment-uncertain'
-        );
-      case -2:
-        return this.translateService.instant(
-          'code-selector.coding-issue-options.new-code-needed'
-        );
-      case -3:
-        return this.translateService.instant(
-          'code-selector.coding-issue-options.invalid-joke-answer'
-        );
-      case -4:
-        return this.translateService.instant(
-          'code-selector.coding-issue-options.technical-problems'
-        );
-      default:
-        return '';
-    }
-  }
+  protected getCodeLabel(code: number | null): string { return reviewCodeLabel(code, this.translateService.instant.bind(this.translateService)); }
 
   protected close(): void {
     if (this.dialogRef) {

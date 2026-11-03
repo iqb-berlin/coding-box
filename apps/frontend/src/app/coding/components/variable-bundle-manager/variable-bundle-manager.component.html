@@ -9,14 +9,14 @@
       @if (permissions.canCreate) {
       <button mat-stroked-button color="primary" (click)="createVariableBundleGroup()">
         <mat-icon>add</mat-icon>
-        Variablenbündel erstellen
+        {{ 'ui-text.variable-bundle-manager.create' | translate }}
       </button>
       }
 
       <mat-form-field appearance="outline" class="filter-field">
-        <mat-label>Name filtern</mat-label>
+        <mat-label>{{ 'coding.my-coding-jobs.filter-job-name' | translate }}</mat-label>
         <mat-select [(value)]="selectedName" (selectionChange)="onNameFilterChange()">
-          <mat-option [value]="null">Alle Namen</mat-option>
+          <mat-option [value]="null">{{ 'coding.my-coding-jobs.filter-all-job-names' | translate }}</mat-option>
           @for (bundle of originalData(); track bundle.id) {
             <mat-option [value]="bundle.name">
               {{bundle.name}}
@@ -32,42 +32,42 @@
       </mat-row>
 
       <ng-container matColumnDef="name">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Name</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'user.full-name' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.name}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="description">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Beschreibung</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-description' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.description}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="variableCount">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Anzahl Variablen</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'ui-text.variable-bundle-manager.variable-count' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{getVariableCount(element)}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="createdAt">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Erstellt am</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-created-at' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.createdAt | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="updatedAt">
-        <mat-header-cell *matHeaderCellDef mat-sort-header>Aktualisiert am</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef mat-sort-header>{{ 'coding.my-coding-jobs.job-updated-at' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           {{element.updatedAt | date: 'dd.MM.yyyy HH:mm'}}
         </mat-cell>
       </ng-container>
 
       <ng-container matColumnDef="actions">
-        <mat-header-cell *matHeaderCellDef>Aktionen</mat-header-cell>
+        <mat-header-cell *matHeaderCellDef>{{ 'process-overview.columns.actions' | translate }}</mat-header-cell>
         <mat-cell *matCellDef="let element">
           <div class="bundle-row-actions">
             <button
@@ -78,7 +78,7 @@
               (click)="$event.stopPropagation(); editVariableBundleGroup(element)"
               [attr.aria-label]="getVariableBundleActionAriaLabel('edit', element)">
               <mat-icon>{{ permissions.canEdit(element) ? 'edit' : 'visibility' }}</mat-icon>
-              <span>Bearbeiten</span>
+              <span>{{ 'common.edit' | translate }}</span>
             </button>
 
             <button
@@ -99,7 +99,7 @@
                 (click)="deleteVariableBundleGroup(element)" [disabled]="!permissions.canEdit(element)"
                 [attr.aria-label]="getVariableBundleActionAriaLabel('delete', element)">
                 <mat-icon>delete</mat-icon>
-                <span>Löschen</span>
+                <span>{{ 'delete' | translate }}</span>
               </button>
             </mat-menu>
           </div>
@@ -109,7 +109,7 @@
 
     @if (dataSource.data.length === 0) {
       <div class="no-data-message">
-        <p>Keine Variablenbündel vorhanden. Erstellen Sie ein neues Variablenbündel mit dem Button oben.</p>
+        <p>{{ 'ui-text.variable-bundle-manager.empty' | translate }}</p>
       </div>
     }
   }

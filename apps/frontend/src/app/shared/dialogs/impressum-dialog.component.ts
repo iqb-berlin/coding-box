@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   MatDialogTitle, MatDialogContent, MatDialogActions, MatDialogClose
 } from '@angular/material/dialog';
@@ -14,12 +15,12 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   template: `
-    <h1 mat-dialog-title>IQB-Kodierbox - Impressum/Datenschutz</h1>
+    <h1 mat-dialog-title>{{ 'ui-text.impressum-dialog.title' | translate }}</h1>
     <mat-dialog-content>
       <div class="legal-notice-content" [innerHTML]="legalNoticeHtml()"></div>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-raised-button color="primary" [mat-dialog-close]="true">Schließen</button>
+      <button mat-raised-button color="primary" [mat-dialog-close]="true">{{ 'deferred-view.close' | translate }}</button>
     </mat-dialog-actions>
   `,
   styles: [`
@@ -44,7 +45,7 @@ import { SystemSettingsService } from '../../core/services/system-settings.servi
     }
   `],
   standalone: true,
-  imports: [MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
+  imports: [TranslateModule, MatDialogTitle, MatDialogContent, MatDialogActions, MatButton, MatDialogClose]
 })
 export class ImpressumDialogComponent implements OnInit {
   private readonly destroyRef = inject(DestroyRef);

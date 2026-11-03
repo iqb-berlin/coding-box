@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import {
   AfterViewInit, Component, ElementRef, OnDestroy, signal, input, output, viewChild, linkedSignal, ChangeDetectionStrategy, inject
 } from '@angular/core';
@@ -18,7 +19,7 @@ import { SchemerMessage } from '../../../core/services/post-message-types';
   templateUrl: './unit-schemer.component.html',
   styleUrls: ['./unit-schemer.component.scss'],
   standalone: true,
-  imports: []
+  imports: [TranslateModule]
 })
 export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy {
   private postMessageService = inject(PostMessageService);

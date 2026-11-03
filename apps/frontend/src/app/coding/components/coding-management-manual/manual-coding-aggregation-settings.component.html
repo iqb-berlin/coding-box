@@ -21,13 +21,10 @@
                                     </mat-form-field>
                                     <div class="threshold-help">
                                       <small>
-                                        Niedriger = weniger Kodierfälle, mehr automatische
-                                        Übertragung. Höher = mehr Einzelfälle.
+                                        {{ 'ui-text.manual-coding-aggregation-settings.threshold-hint' | translate }}
                                       </small>
                                       <small>
-                                        Änderungen gelten für neue Analysen und neu erstellte
-                                        Kodierjobs. Bestehende Kodierjobs behalten ihre beim
-                                        Erstellen gespeicherten Aggregationseinstellungen.
+                                        {{ 'ui-text.manual-coding-aggregation-settings.new-jobs-only-hint' | translate }}
                                       </small>
                                     </div>
                                     @if (isApplyingDuplicateAggregation()) {
@@ -35,7 +32,7 @@
                                         class="saving-indicator"
                                         >
                                         <mat-spinner diameter="20"></mat-spinner>
-                                        <span>Speichern...</span>
+                                        <span>{{ 'ui-text.manual-coding-aggregation-settings.saving' | translate }}</span>
                                       </div>
                                     }
                                   </div>

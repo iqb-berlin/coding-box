@@ -28,6 +28,8 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import {
   debounceTime, distinctUntilChanged, filter as filterWorkspace, Subject, take, takeUntil
 } from 'rxjs';
+import { ComparisonWarning, trainingComparisonWarnings } from './training-comparison-warnings';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { variableKey } from '../../utils/variable-key.util';
 import { TrainingDiscussionRecovery, TrainingDiscussionRecoveryDraft } from './training-discussion-recovery.service';
 import { mapDiscussionCodeForDisplay } from './training-discussion-values';
@@ -119,12 +121,6 @@ interface ComparisonFilters {
 
 type RegexComparisonFilterField = 'unitName' | 'variableId' | 'personLogin' | 'personGroup' | 'bookletName';
 
-interface ComparisonWarning {
-  icon: string;
-  text: string;
-  severity: 'info' | 'warn';
-}
-
 interface SelectedCodeSlot {
   code: string | null;
   hasEntry: boolean;
@@ -170,6 +166,8 @@ const TABLE_FILTER_DEBOUNCE_MS = 400;
   ]
 })
 export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   protected readonly variableKey = variableKey;
 
   readonly permissions = inject(CodingPermissionsService);
@@ -694,63 +692,9 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   protected getComparisonWarnings(): ComparisonWarning[] {
-    const warnings: ComparisonWarning[] = [];
-    const selectedSourceCount = this.getSelectedComparisonSourceCount();
-
-    if (this.totalItems === 0 && !this.hasNoSelectedCodersState()) {
-      return warnings;
-    }
-
-    if (selectedSourceCount === 0) {
-      warnings.push({
-        icon: 'person_off',
-        text: this.translate.instant('coding.trainings.compare.warning-no-coders'),
-        severity: 'info'
-      });
-    } else if (selectedSourceCount === 1) {
-      warnings.push({
-        icon: 'person',
-        text: this.translate.instant('coding.trainings.compare.warning-one-coder'),
-        severity: 'warn'
-      });
-    }
-
-    const trainingsWithoutCodes = this.selectedTrainingsWithoutCodes();
-    if (trainingsWithoutCodes.length > 0) {
-      warnings.push({
-        icon: 'playlist_remove',
-        text: this.translate.instant('coding.trainings.compare.warning-no-codes', { trainings: this.formatTrainingList(trainingsWithoutCodes) }),
-        severity: 'warn'
-      });
-    }
-
-    if (selectedSourceCount >= 2 && this.incompleteComparisons > 0) {
-      warnings.push({
-        icon: 'warning',
-        text: this.translate.instant(
-          this.incompleteComparisons === 1 ? 'coding.trainings.compare.warning-incomplete-one' :
-            'coding.trainings.compare.warning-incomplete-many',
-          { count: this.incompleteComparisons }
-        ),
-        severity: 'warn'
-      });
-    }
-
-    if (
-      this.comparisonMode === 'within-training' &&
-      selectedSourceCount >= 2 &&
-      this.withinTrainingData.length > 0 &&
-      this.totalComparisons === 0 &&
-      this.incompleteComparisons > 0
-    ) {
-      warnings.push({
-        icon: 'pending_actions',
-        text: this.translate.instant('coding.trainings.compare.warning-no-complete-pairs'),
-        severity: 'warn'
-      });
-    }
-
-    return warnings;
+    return trainingComparisonWarnings({
+      totalItems: this.totalItems, noSelectedCoders: this.hasNoSelectedCodersState(), selectedSourceCount: this.getSelectedComparisonSourceCount(), trainingsWithoutCodesLabel: this.formatTrainingList(this.selectedTrainingsWithoutCodes()), incompleteComparisons: this.incompleteComparisons, mode: this.comparisonMode, withinTrainingRowCount: this.withinTrainingData.length, totalComparisons: this.totalComparisons
+    }, this.translate.instant.bind(this.translate));
   }
 
   getCodingIssueLabel(codingIssueOption: number | null | undefined): string {
@@ -1114,7 +1058,7 @@ export class CodingResultsComparisonComponent implements OnInit, OnDestroy {
   }
 
   getTrainingOptionMeta(training: CoderTraining): string {
-    return getTrainingOptionMeta(training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
+    return getTrainingOptionMeta(this.uiTranslate, training, this.translate.instant('coding.trainings.compare.coder'), this.translate.instant('coding.trainings.compare.coder'));
   }
 
   getTrainingCoderOptionLabel(coder: { trainingId: number; trainingLabel: string; coderName: string }): string {

@@ -24,6 +24,8 @@ import { ActivatedRoute, Router } from '@angular/router';
 import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { codingResponseRow } from './coding-response-row';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
@@ -77,7 +79,7 @@ import {
   CodingFreshnessSummaryItemDto
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import {
-  CODING_FRESHNESS_TASK_RESULT_HELP,
+  CODING_FRESHNESS_TASK_RESULT_HELP_KEY,
   getCodingFreshnessAffectedResponseCount,
   getCodingFreshnessAffectedTaskResultCount,
   getCodingFreshnessAttentionTitle,
@@ -92,7 +94,6 @@ import {
   hasOnlyManualCodingFreshnessWarnings
 } from '../../../shared/utils/coding-freshness-text.util';
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
-import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -116,6 +117,8 @@ import { extractGeoGebraBase64 } from '../../utils/geogebra-value.util';
   styleUrls: ['./coding-management.component.scss']
 })
 export class CodingManagementComponent implements OnInit, OnDestroy {
+  private readonly uiTranslate = injectUiTranslator();
+
   readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
 
@@ -227,7 +230,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       this.deferCodingStatusRefreshIfBackgroundJobIsRunning(force);
     });
     this.freshnessPolling.errors$.pipe(takeUntil(this.destroy$)).subscribe(error => {
-      this.snackBar.open(error, 'Schließen', { duration: 5000 });
+      this.snackBar.open(error, this.uiTranslate('deferred-view.close'), { duration: 5000 });
     });
     this.freshnessPolling.completed$.pipe(takeUntil(this.destroy$)).subscribe(({ jobId, status }) => {
       const pendingRefreshHandled = this.finishFreshnessCodingJob(jobId);
@@ -235,9 +238,9 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       if (status.status === 'completed') {
         this.freshnessJobCompletionRefreshHandledIds.add(jobId);
         this.testPersonCodingService.notifyAutoCodingCompleted(jobId);
-        this.snackBar.open('Betroffene Ergebnisse wurden kodiert.', 'Schließen', { duration: 4000 });
+        this.snackBar.open(this.uiTranslate('ui-text.coding-management.affected-results-coded'), this.uiTranslate('deferred-view.close'), { duration: 4000 });
       } else if (status.status === 'failed') {
-        this.snackBar.open(status.error || 'Auto-Coding für betroffene Ergebnisse fehlgeschlagen.', 'Schließen', { duration: 6000 });
+        this.snackBar.open(status.error || this.uiTranslate('ui-text.coding-management.affected-autocoding-failed'), this.uiTranslate('deferred-view.close'), { duration: 6000 });
       }
       if (!pendingRefreshHandled) this.performCodingStatusOverviewRefresh(true);
     });
@@ -657,8 +660,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       .subscribe(result => {
         if (!result.jobId) {
           this.snackBar.open(
-            result.message || 'Keine betroffenen Ergebnisse für Auto-Coding gefunden.',
-            'Schließen',
+            result.message || this.uiTranslate('ui-text.coding-management.no-affected-results'),
+            this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
           this.invalidateCodingStatusOverviewCache();
@@ -701,8 +704,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
             this.startFreshnessJobPolling(result.jobId, workspaceId);
           });
         this.snackBar.open(
-          `Auto-Coding für ${result.unitCount} betroffene Einträge gestartet.`,
-          'Schließen',
+          this.uiTranslate('ui-text.coding-management.affected-autocoding-started', { unitCount: result.unitCount }),
+          this.uiTranslate('deferred-view.close'),
           { duration: 5000 }
         );
       });
@@ -1007,18 +1010,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       );
     }
 
-    return getCodingFreshnessSummaryText(this.codingFreshnessWarnings());
+    return getCodingFreshnessSummaryText(this.uiTranslate, this.codingFreshnessWarnings());
   }
 
   protected get codingFreshnessExplanationText(): string {
     if (this.shouldShowSecondAutocodingWaitingState()) {
       return this.translateService.instant(
         'coding-management.readiness.second-autocoding-waits-help',
-        { taskResultHelp: CODING_FRESHNESS_TASK_RESULT_HELP }
+        { taskResultHelp: this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY) }
       );
     }
 
-    return CODING_FRESHNESS_TASK_RESULT_HELP;
+    return this.uiTranslate(CODING_FRESHNESS_TASK_RESULT_HELP_KEY);
   }
 
   get codingFreshnessPanelTitle(): string {
@@ -1042,7 +1045,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return this.translateService.instant('coding-management.readiness.title-manual-coding-open');
     }
 
-    return getCodingFreshnessAttentionTitle(this.codingFreshnessWarnings());
+    return getCodingFreshnessAttentionTitle(this.uiTranslate, this.codingFreshnessWarnings());
   }
 
   get autocodingReadinessSummaryText(): string {
@@ -1123,7 +1126,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       visible;
   }
 
-  protected readonly manualCodingFreshnessGuidanceText = computed<string>(() => getCodingFreshnessManualReviewGuidanceText(this.codingFreshnessWarnings()));
+  protected readonly manualCodingFreshnessGuidanceText = computed<string>(() => getCodingFreshnessManualReviewGuidanceText(this.uiTranslate, this.codingFreshnessWarnings()));
 
   protected readonly codingFreshnessGroupPreview = computed<string>(() => {
     const groupNames = this.codingFreshnessScope()?.groupNames || [];
@@ -1140,31 +1143,31 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
   }
 
   getFreshnessVersionLabel(version: 'v1' | 'v2' | 'v3'): string {
-    return getCodingFreshnessVersionLabel(version);
+    return getCodingFreshnessVersionLabel(this.uiTranslate, version);
   }
 
   getFreshnessStateLabel(state: CodingFreshnessState): string {
-    return getCodingFreshnessStateLabel(state);
+    return getCodingFreshnessStateLabel(this.uiTranslate, state);
   }
 
   getFreshnessChipLabel(item: CodingFreshnessSummaryItemDto): string {
     if (item.version === 'v3' && this.isSecondAutocodingWaitingForManualCoding()) {
       const count = getCodingFreshnessAffectedTaskResultCount([item]);
-      const countLabel = `${count} ${count === 1 ? 'Aufgabenbearbeitung' : 'Aufgabenbearbeitungen'}`;
+      const countLabel = `${count} ${count === 1 ? this.uiTranslate('ui-text.coding-management.task-result-singular') : this.uiTranslate('ui-text.coding-management.task-result-plural')}`;
       return this.translateService.instant(
         'coding-management.readiness.second-autocoding-waits-chip',
         {
-          version: getCodingFreshnessVersionLabel(item.version),
+          version: getCodingFreshnessVersionLabel(this.uiTranslate, item.version),
           count: countLabel
         }
       );
     }
 
-    return getCodingFreshnessChipLabel(item);
+    return getCodingFreshnessChipLabel(this.uiTranslate, item);
   }
 
   protected getFreshnessAutoCodingButtonLabel(version: 'v1' | 'v3'): string {
-    return getCodingFreshnessAutoCodingButtonLabel(this.autoCodingFreshnessWarnings(), version);
+    return getCodingFreshnessAutoCodingButtonLabel(this.uiTranslate, this.autoCodingFreshnessWarnings(), version);
   }
 
   private startFreshnessJobPolling(
@@ -1307,8 +1310,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
 
         if (this.data.length === 0) {
           this.snackBar.open(
-            'Keine Daten mit den angegebenen Filtern gefunden.',
-            'Schließen',
+            this.uiTranslate('ui-text.coding-management.no-filter-matches'),
+            this.uiTranslate('deferred-view.close'),
             { duration: 5000 }
           );
         }
@@ -1326,37 +1329,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     return items.map(item => this.mapSearchResponseItemToSuccess(item));
   }
 
-  private mapSearchResponseItemToSuccess(item: SearchResponseItem): Success {
-    const geoGebraBase64 = extractGeoGebraBase64(item.value);
-    return {
-      id: item.responseId,
-      unitid: item.unitId,
-      variableid: item.variableId || '',
-      status: item.status || '',
-      value: item.value || '',
-      isGeoGebraValue: !!geoGebraBase64,
-      geoGebraBase64,
-      subform: '',
-      code: item.code?.toString() || null,
-      score: item.score?.toString() || null,
-      unit: { name: item.unitName },
-      codedstatus: item.codedStatus || '',
-      unitname: item.unitName || '',
-      login_name: item.personLogin || '',
-      login_group: item.personGroup || '',
-      login_code: item.personCode || '',
-      booklet_id: item.bookletName || '',
-      person_code: item.personCode || '',
-      person_group: item.personGroup || '',
-      variable_page: item.variablePage || '0',
-      code_v1: item.code_v1,
-      code_v2: item.code_v2,
-      code_v3: item.code_v3,
-      status_v1: item.status_v1,
-      status_v2: item.status_v2,
-      status_v3: item.status_v3
-    };
-  }
+  private mapSearchResponseItemToSuccess(item: SearchResponseItem): Success { return codingResponseRow(item); }
 
   private isSupportedResponseSort(sortBy: string): sortBy is CodingResponseSortBy {
     return [
@@ -1478,8 +1451,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
-        'Fehler: Kein Workspace ausgewählt',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-management.no-workspace'),
+        this.uiTranslate('deferred-view.close'),
         {
           duration: 5000,
           panelClass: ['error-snackbar']
@@ -1521,8 +1494,8 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) {
       this.snackBar.open(
-        'Fehler: Kein Workspace ausgewählt',
-        'Schließen',
+        this.uiTranslate('ui-text.coding-management.no-workspace'),
+        this.uiTranslate('deferred-view.close'),
         {
           duration: 5000,
           panelClass: ['error-snackbar']

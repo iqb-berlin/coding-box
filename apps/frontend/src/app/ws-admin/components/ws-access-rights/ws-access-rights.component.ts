@@ -64,7 +64,7 @@ export class WsAccessRightsComponent {
         } else if (result.mutationSucceeded && result.authDataRefreshOutcome === 'failed') {
           this.snackBar.open(
             this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
-            this.translateService.instant('error'),
+            this.translateService.instant('error.error_title'),
             { duration: 5000 }
           );
           this.workspaceUsers().setHasChangedFalse();
@@ -73,7 +73,7 @@ export class WsAccessRightsComponent {
         } else {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-access-right-not-set'),
-            this.translateService.instant('error'),
+            this.translateService.instant('error.error_title'),
             { duration: 3000 }
           );
         }

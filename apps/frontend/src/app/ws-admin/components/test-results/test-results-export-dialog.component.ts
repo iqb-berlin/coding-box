@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import {
@@ -29,7 +30,7 @@ export type TestResultsExportDialogData = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-export-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -38,20 +39,20 @@ export type TestResultsExportDialogData = {
     MatProgressBarModule
   ],
   template: `
-    <h2 mat-dialog-title>Testergebnisse exportieren</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.test-results-export-dialog.title' | translate }}</h2>
     <mat-dialog-content>
       @if (!data.isExporting) {
         <mat-list>
           <mat-list-item (click)="selectExportType('results')">
             <mat-icon matListItemIcon>download</mat-icon>
-            <div matListItemTitle>Testergebnisse ohne Kodierung exportieren</div>
-            <div matListItemLine>Rohdaten aus der Testausführung exportieren</div>
+            <div matListItemTitle>{{ 'ui-text.test-results-export-dialog.uncoded-results' | translate }}</div>
+            <div matListItemLine>{{ 'ui-text.test-results-export-dialog.uncoded-results-hint' | translate }}</div>
           </mat-list-item>
           <mat-divider></mat-divider>
           <mat-list-item (click)="selectExportType('logs')">
             <mat-icon matListItemIcon>download</mat-icon>
-            <div matListItemTitle>Logs exportieren</div>
-            <div matListItemLine>Test-Logs exportieren</div>
+            <div matListItemTitle>{{ 'ui-text.test-results-export-dialog.export-logs' | translate }}</div>
+            <div matListItemLine>{{ 'ui-text.test-results-export-dialog.logs-hint' | translate }}</div>
           </mat-list-item>
         </mat-list>
       }
@@ -64,7 +65,7 @@ export type TestResultsExportDialogData = {
           <div class="export-progress-header">
             <span class="export-status">
               {{
-              data.exportTypeInProgress === 'test-logs' ? 'Logs' : 'Ergebnisse'
+              data.exportTypeInProgress === 'test-logs' ? ('ui-text.test-center-options-step.logs' | translate) : ('ui-text.apply-coding-results-dialog.results' | translate)
               }}:
               {{ data.exportJobStatus || '...' }}
             </span>
@@ -89,8 +90,8 @@ export type TestResultsExportDialogData = {
           <mat-divider></mat-divider>
           <mat-list-item (click)="downloadExport()">
             <mat-icon matListItemIcon>file_download</mat-icon>
-            <div matListItemTitle>Download bereit</div>
-            <div matListItemLine>Exportierte Datei herunterladen</div>
+            <div matListItemTitle>{{ 'ui-text.test-results-export-dialog.download-ready' | translate }}</div>
+            <div matListItemLine>{{ 'ui-text.test-results-export-dialog.download-file' | translate }}</div>
           </mat-list-item>
         </div>
       }
@@ -100,7 +101,7 @@ export type TestResultsExportDialogData = {
         {{
         data.isExporting && data.exportJobId ?
         'Export abbrechen' :
-        'Abbrechen'
+        ('cancel' | translate)
         }}
       </button>
     </mat-dialog-actions>

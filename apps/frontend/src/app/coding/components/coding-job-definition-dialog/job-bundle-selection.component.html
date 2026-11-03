@@ -1,11 +1,11 @@
             <div class="filter-container">
               <div class="filter-row">
                 <mat-form-field class="filter-field">
-                  <mat-label>Name Filter</mat-label>
+                  <mat-label>{{ 'coding-job-definition-dialog.filters.bundle-name' | translate }}</mat-label>
                   <input matInput [ngModel]="filter()" (ngModelChange)="filterChanged.emit($event)" [ngModelOptions]="{standalone: true}"
-                    placeholder="Filter nach Namen">
+                    [placeholder]="'coding-job-definition-dialog.filters.bundle-name-placeholder' | translate">
                   @if (filter()) {
-                  <button type="button" matSuffix mat-icon-button aria-label="Clear"
+                  <button type="button" matSuffix mat-icon-button [attr.aria-label]="'ui-text.job-bundle-selection.clear' | translate"
                     (click)="filterChanged.emit(''); applyFilter.emit()">
                     <mat-icon>close</mat-icon>
                   </button>
@@ -14,12 +14,12 @@
 
                 <button type="button" mat-raised-button color="primary" (click)="applyFilter.emit()">
                   <mat-icon>filter_list</mat-icon>
-                  Filter anwenden
+                  {{ 'journal.apply-filters' | translate }}
                 </button>
 
                 <button type="button" mat-raised-button (click)="clearFilter.emit()">
                   <mat-icon>clear</mat-icon>
-                  Filter zurücksetzen
+                  {{ 'coding.trainings.compare.reset-filters' | translate }}
                 </button>
               </div>
             </div>
@@ -28,7 +28,7 @@
             @if (loading()) {
             <div class="loading-container">
               <mat-spinner diameter="40"></mat-spinner>
-              <p class="loading-text">Lade Variablenbündel...</p>
+              <p class="loading-text">{{ 'coding-job-definition-dialog.loading.bundles' | translate }}</p>
             </div>
             }
 
@@ -52,11 +52,11 @@
                   <div class="bundle-card-content">
                     <p class="bundle-description">{{ bundle.description || 'Keine Beschreibung' }}</p>
                     <div class="bundle-stats">
-                      <span class="variable-count">{{ bundle.variables.length }} Variablen</span>
+                      <span class="variable-count">{{ 'ui-text.job-bundle-selection.variable-list' | translate: { length: (bundle.variables.length) } }}</span>
                     </div>
                     <div class="bundle-variables-preview">
                       @if (bundle.variables.length > 0) {
-                      <div class="variables-preview-header">Enthaltene Variablen:</div>
+                      <div class="variables-preview-header">{{ 'coding-job-definition-dialog.bundles.variables-preview' | translate }}</div>
                       <div class="variables-preview-list">
                         @for (item of row.variables; track item.variable.unitName + item.variable.variableId) {
                         @let variable = item.variable;
@@ -69,14 +69,14 @@
                             [disabled]="readOnly()"
                             (click)="$event.stopPropagation()"
                             (change)="deriveErrorChanged.emit({bundle, variable, included: $event.checked})">
-                            DERIVE_ERROR
+                            {{ 'ui-text.training-sample-editor.derive-error-label' | translate }}
                           </mat-checkbox>
                           }
                         </div>
                         }
                         @if (!row.selected && bundle.variables.length > 3) {
                         <div class="variable-preview-more">
-                          +{{ bundle.variables.length - 3 }} weitere
+                          {{ 'ui-text.job-bundle-selection.more-variables' | translate: { value1: (bundle.variables.length - 3) } }}
                         </div>
                         }
                       </div>
@@ -98,7 +98,7 @@
                       }
                       }
                       @if (bundle.variables.length === 0) {
-                      <div class="variables-preview-empty">Keine Variablen enthalten</div>
+                      <div class="variables-preview-empty">{{ 'coding-job-definition-dialog.bundles.no-variables' | translate }}</div>
                       }
                     </div>
                   </div>
@@ -108,15 +108,14 @@
             </div>
 
             <div class="selection-summary">
-              <p>{{ selectedCount() }} Variablenbündel ausgewählt</p>
+              <p>{{ 'ui-text.job-bundle-selection.selected-count' | translate: { value1: (selectedCount()) } }}</p>
             </div>
             }
 
             @if (!loading() && totalBundles() === 0) {
             <div class="empty-state">
               <mat-icon class="empty-icon">analytics</mat-icon>
-              <h3>Keine Variablenbündel verfügbar</h3>
-              <p class="empty-text">Es wurden keine Variablenbündel gefunden. Bitte erstellen Sie zuerst Variablenbündel
-                über die Variablenbündel-Verwaltung.</p>
+              <h3>{{ 'coding-job-definition-dialog.empty-states.no-bundles' | translate }}</h3>
+              <p class="empty-text">{{ 'coding-job-definition-dialog.empty-states.no-bundles-description' | translate }}</p>
             </div>
             }

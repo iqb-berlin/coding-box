@@ -15,6 +15,7 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import type { Cell } from 'exceljs';
 import { finalize } from 'rxjs/operators';
 import { MatButtonToggle, MatButtonToggleGroup } from '@angular/material/button-toggle';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
 import { ValidationStateService } from '../../services/validation-state.service';
@@ -51,6 +52,8 @@ export type ExportFormat = 'json' | 'csv' | 'excel';
   ]
 })
 export class ExportDialogComponent implements OnInit {
+  private readonly uiTranslate = injectUiTranslator();
+
   dialogRef = inject<MatDialogRef<ExportDialogComponent>>(MatDialogRef);
   private testPersonCodingService = inject(TestPersonCodingService);
   private appService: AppService = inject(AppService);
@@ -178,10 +181,10 @@ export class ExportDialogComponent implements OnInit {
         this.validationStateService.updateProgress(10, this.translate.instant('export-dialog.validation.file-loading'));
         await workbook.xlsx.load(buffer);
         if (!this.isCurrentFile(runId)) return;
-        this.validationStateService.updateProgress(30, 'Excel-Datei wird verarbeitet...');
+        this.validationStateService.updateProgress(30, this.uiTranslate('coding-management-manual.progress.excel-processing'));
         const worksheet = workbook.getWorksheet(1);
         if (!worksheet || worksheet.rowCount <= 1) {
-          this.validationStateService.setValidationError('Die Datei enthält keine gültigen Daten');
+          this.validationStateService.setValidationError(this.uiTranslate('coding-management-manual.errors.no-valid-data'));
           return;
         }
         const headers: string[] = [];
@@ -189,7 +192,7 @@ export class ExportDialogComponent implements OnInit {
           headers.push(this.normalizeValidationHeader(this.getCellText(cell)));
         });
 
-        this.validationStateService.updateProgress(40, 'Daten werden extrahiert...');
+        this.validationStateService.updateProgress(40, this.uiTranslate('export-dialog.validation.data-extraction-general'));
         const data: Record<string, string>[] = [];
         const totalRows = worksheet.rowCount - 1;
 
@@ -208,38 +211,38 @@ export class ExportDialogComponent implements OnInit {
             const progress = 40 + Math.floor(((rowNumber - 2) / totalRows) * 20);
             this.validationStateService.updateProgress(
               progress,
-              `Daten werden extrahiert (${rowNumber - 1}/${totalRows})...`
+              this.uiTranslate('ui-text.export-dialog.extracting-data', { value1: rowNumber - 1, totalRows: totalRows })
             );
           }
         }
 
         if (data.length === 0) {
-          this.validationStateService.setValidationError('Die Datei enthält keine gültigen Daten');
+          this.validationStateService.setValidationError(this.uiTranslate('coding-management-manual.errors.no-valid-data'));
           return;
         }
 
-        this.validationStateService.updateProgress(60, 'Daten werden für Validierung vorbereitet...');
+        this.validationStateService.updateProgress(60, this.uiTranslate('coding-management-manual.progress.data-preparation'));
         const { expectedCombinations, errors } = this.mapToExpectedCombinations(data);
         if (errors.length > 0) {
           const displayedErrors = errors.slice(0, this.maxDisplayedMappingErrors).join(' ');
           const additionalErrorCount = Math.max(0, errors.length - this.maxDisplayedMappingErrors);
           this.validationStateService.setValidationError(
             additionalErrorCount > 0 ?
-              `${displayedErrors} Weitere ${additionalErrorCount} Zeilen enthalten Fehler.` :
+              this.uiTranslate('ui-text.export-dialog.more-invalid-rows', { displayedErrors: displayedErrors, additionalErrorCount: additionalErrorCount }) :
               displayedErrors
           );
           return;
         }
 
-        this.validationStateService.updateProgress(70, 'Validierung wird durchgeführt...');
+        this.validationStateService.updateProgress(70, this.uiTranslate('export-dialog.validation.validation-running'));
         this.validateCodingCompleteness(expectedCombinations);
       } catch (error) {
-        if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Parsen der Excel-Datei');
+        if (this.isCurrentFile(runId)) this.validationStateService.setValidationError(this.uiTranslate('coding-management-manual.errors.excel-parse-error'));
       }
     };
 
     reader.onerror = () => {
-      if (this.isCurrentFile(runId)) this.validationStateService.setValidationError('Fehler beim Lesen der Datei');
+      if (this.isCurrentFile(runId)) this.validationStateService.setValidationError(this.uiTranslate('coding-management-manual.errors.file-read-error'));
     };
 
     reader.readAsArrayBuffer(file);
@@ -345,11 +348,11 @@ export class ExportDialogComponent implements OnInit {
     const workspaceId = this.workspaceId;
 
     if (!workspaceId) {
-      this.validationStateService.setValidationError('Kein Arbeitsbereich ausgewählt');
+      this.validationStateService.setValidationError(this.uiTranslate('ws-admin.export.errors.no-workspace'));
       return;
     }
 
-    this.validationStateService.updateProgress(80, `Validierung wird durchgeführt (Seite ${page})...`);
+    this.validationStateService.updateProgress(80, this.uiTranslate('coding-management-manual.progress.validation-progress', { page: page }));
     this.validationCurrentPage = page;
 
     this.validationRequest?.unsubscribe();
@@ -363,7 +366,7 @@ export class ExportDialogComponent implements OnInit {
         this.validationStateService.setValidationResults(results);
       },
       error: () => {
-        this.validationStateService.setValidationError('Fehler bei der Validierung');
+        this.validationStateService.setValidationError(this.uiTranslate('coding-management-manual.errors.validation-failed'));
       }
     });
   }

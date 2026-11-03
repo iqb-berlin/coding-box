@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 
 import { MatDialogModule, MatDialogRef } from '@angular/material/dialog';
@@ -14,7 +15,7 @@ export type TestResultsImportDialogResult = {
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-import-dialog',
   standalone: true,
-  imports: [
+  imports: [TranslateModule,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -22,30 +23,30 @@ export type TestResultsImportDialogResult = {
     MatListModule
   ],
   template: `
-    <h2 mat-dialog-title>Testergebnisse importieren</h2>
+    <h2 mat-dialog-title>{{ 'ui-text.test-results-import-dialog.title' | translate }}</h2>
     <mat-dialog-content>
       <mat-list>
         <mat-list-item (click)="selectImportType('testcenter')">
           <mat-icon matListItemIcon>cloud_download</mat-icon>
-          <div matListItemTitle>Testcenter-Import</div>
-          <div matListItemLine>Aus dem Testcenter importieren</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.test-center' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.test-center-hint' | translate }}</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('responses')">
           <mat-icon matListItemIcon>upload</mat-icon>
-          <div matListItemTitle>Antworten hochladen</div>
-          <div matListItemLine>Antworten aus Datei hochladen</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.upload-responses' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.responses-hint' | translate }}</div>
         </mat-list-item>
         <mat-divider></mat-divider>
         <mat-list-item (click)="selectImportType('logs')">
           <mat-icon matListItemIcon>upload</mat-icon>
-          <div matListItemTitle>Logs hochladen</div>
-          <div matListItemLine>Logs aus Datei hochladen</div>
+          <div matListItemTitle>{{ 'ui-text.test-results-import-dialog.upload-logs' | translate }}</div>
+          <div matListItemLine>{{ 'ui-text.test-results-import-dialog.logs-hint' | translate }}</div>
         </mat-list-item>
       </mat-list>
     </mat-dialog-content>
     <mat-dialog-actions align="end">
-      <button mat-button (click)="cancel()">Abbrechen</button>
+      <button mat-button (click)="cancel()">{{ 'cancel' | translate }}</button>
     </mat-dialog-actions>
   `,
   styles: [

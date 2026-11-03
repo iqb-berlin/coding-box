@@ -5,6 +5,7 @@ import { TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
+import { GermanTranslationsTestingModule } from '../../../../testing/german-translations';
 import { CodingPermissionsService } from '../../services/coding-permissions.service';
 import { CoderTrainingsListComponent } from './coder-trainings-list.component';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -58,7 +59,7 @@ describe('CoderTrainingsListComponent', () => {
     };
 
     await TestBed.configureTestingModule({
-      imports: [
+      imports: [GermanTranslationsTestingModule,
         CoderTrainingsListComponent,
         TranslateModule.forRoot()
       ],

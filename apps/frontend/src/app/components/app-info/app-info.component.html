@@ -1,25 +1,25 @@
 <div class="app-info">
   <div class="content">
     <p>
-      Das <a href="https://www.iqb.hu-berlin.de/" target="_blank">Institut zur Qualitätsentwicklung im Bildungswesen (IQB)</a>
-      betreibt auf diesen Seiten eine Anwendung für die Kodierung von Antworten aus Testungen.
+      {{ 'ui-text.app-info.intro-prefix' | translate }} <a href="https://www.iqb.hu-berlin.de/" target="_blank">{{ 'ui-text.app-info.institute-name' | translate }}</a>
+      {{ 'ui-text.app-info.application-description' | translate }}
     </p>
 
     <div class="info-card">
       <ul>
         <li>
-          <span class="info-label">Version:</span>
+          <span class="info-label">{{ 'ui-text.app-info.version' | translate }}</span>
           <span class="info-value">{{'home.appVersion' | translate: {version: appVersion()} }}</span>
         </li>
         @if (isUserLoggedIn()) {
           <li>
-            <span class="info-label">Benutzer:</span>
+            <span class="info-label">{{ 'ui-text.app-info.user' | translate }}</span>
             <span class="info-value">{{ userName() }}</span>
           </li>
         }
         @if (isAdmin()) {
           <li>
-            <span class="info-label">Status:</span>
+            <span class="info-label">{{ 'error.details_status' | translate }}</span>
             <span class="info-value admin-badge">{{'home.isAdminMessage' | translate}}</span>
           </li>
         }

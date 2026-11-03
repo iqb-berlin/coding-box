@@ -1,3 +1,4 @@
+import { TranslateModule } from '@ngx-translate/core';
 import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
 import {
   MAT_DIALOG_DATA,
@@ -31,7 +32,7 @@ export interface TransferCodingCasesDialogResult {
   standalone: true,
   templateUrl: './transfer-coding-cases-dialog.component.html',
   styleUrls: ['./transfer-coding-cases-dialog.component.scss'],
-  imports: [
+  imports: [TranslateModule,
     MatDialogTitle,
     MatDialogContent,
     MatDialogActions,

@@ -1,8 +1,8 @@
 import { HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import {
   AppHttpError,
-  BACKEND_CONNECTIVITY_ERROR_MESSAGE,
-  SERVER_ERROR_MESSAGE
+  BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY,
+  SERVER_ERROR_MESSAGE_KEY
 } from './app-http-error.class';
 
 describe('AppHttpError', () => {
@@ -14,8 +14,8 @@ describe('AppHttpError', () => {
       url: '/api/admin/workspace/5/journal?page=1&limit=20'
     }));
 
-    expect(error.message).toBe(SERVER_ERROR_MESSAGE);
-    expect(error.userMessage).toBe(SERVER_ERROR_MESSAGE);
+    expect(error.message).toBe(SERVER_ERROR_MESSAGE_KEY);
+    expect(error.userMessage).toBe(SERVER_ERROR_MESSAGE_KEY);
     expect(error.technicalMessage).toBe('Internal server error');
   });
 
@@ -39,8 +39,8 @@ describe('AppHttpError', () => {
       url: '/api/admin/workspace/5/journal?page=1&limit=20'
     }));
 
-    expect(error.message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE);
-    expect(error.userMessage).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE);
+    expect(error.message).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY);
+    expect(error.userMessage).toBe(BACKEND_CONNECTIVITY_ERROR_MESSAGE_KEY);
     expect(error.technicalMessage).toBe('Gateway Timeout');
   });
 
