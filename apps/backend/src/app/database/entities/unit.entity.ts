@@ -7,6 +7,7 @@ import {
   OneToMany,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Booklet } from './booklet.entity';
 // eslint-disable-next-line import/no-cycle
@@ -45,7 +46,7 @@ export class Unit {
     // Not using eager loading here to avoid circular eager loading with Booklet
   })
   @JoinColumn({ name: 'bookletid' })
-  booklet: Booklet;
+  booklet: Relation<Booklet>;
 
   @OneToMany(() => UnitLog, unitLog => unitLog.unit, {
     // Cascade operations to unit logs when unit is modified

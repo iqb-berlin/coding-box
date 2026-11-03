@@ -1,10 +1,19 @@
 const filesBody = (filename: string, page = 1) => ({
-  data: [{ id: page, filename, file_type: 'Unit', file_size: '1024' }],
+  data: [{
+    id: page, filename, file_type: 'Unit', file_size: '1024'
+  }],
   total: 300,
   page,
   limit: 100,
   fileTypes: ['Unit']
 });
+
+interface DeferredResponse {
+  id: string;
+  url: string;
+}
+
+const deferResponse = (body: object, statusCode = 200) => cy.task<DeferredResponse>('deferred:create', { body, statusCode });
 
 // Force is used only to deliver a context change while the list overlay is active.
 // Regular success, empty, retry, pagination and debouncing cases use available controls.
@@ -33,6 +42,7 @@ describe('Zoneless file list', () => {
   });
 
   afterEach(() => {
+    cy.task('deferred:reset');
     cy.window().should('not.have.property', 'Zone');
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
@@ -56,7 +66,10 @@ describe('Zoneless file list', () => {
 
   it('renders the empty state after a delayed list response', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/files?*', {
-      delay: 250, body: { data: [], total: 0, page: 1, limit: 100, fileTypes: [] }
+      delay: 250,
+      body: {
+        data: [], total: 0, page: 1, limit: 100, fileTypes: []
+      }
     }).as('emptyFiles');
     cy.get('.clear-filters-btn').click();
     cy.get('coding-box-test-files .busy-overlay').should('be.visible');
@@ -204,9 +217,12 @@ describe('Zoneless file list', () => {
       let started = false;
       cy.intercept('GET', '**/api/admin/workspace/5/content-pool/config', request => {
         started = true;
-        request.reply({ delay: 700, body: {
-          enabled: true, baseUrl: 'https://synthetic.example', hasApplicationToken: token
-        } });
+        request.reply({
+          delay: 700,
+          body: {
+            enabled: true, baseUrl: 'https://synthetic.example', hasApplicationToken: token
+          }
+        });
       }).as('poolSettings');
       cy.visit('/');
       cy.wait('@authData');
@@ -285,40 +301,76 @@ describe('Zoneless file list', () => {
   for (const order of ['old-first', 'new-first', 'old-error']) {
     it(`refreshes a pending search when delayed settings enable regex with ${order} responses`, () => {
       let literalStarted = false;
-      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', {
-        delay: 1500, body: { value: '{"enabled":true}' }
+      let literalAborts = 0;
+      let regexStarted = false;
+      let settingsGate: DeferredResponse;
+      let literalGate: DeferredResponse;
+      let regexGate: DeferredResponse;
+      deferResponse({ value: '{"enabled":true}' }).then(gate => { settingsGate = gate; });
+      deferResponse(filesBody('literal-mode-file.xml'), order === 'old-error' ? 500 : 200)
+        .then(gate => { literalGate = gate; });
+      deferResponse(filesBody('regex-mode-file.xml')).then(gate => { regexGate = gate; });
+      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', request => {
+        request.url = settingsGate.url;
+        request.continue();
       }).as('switchRegex');
-      cy.intercept('GET', '**/api/admin/workspace/5/files?*', request => {
-        const params = new URL(request.url).searchParams;
-        if (!params.get('searchText')) {
-          request.alias = 'initialModeFiles';
-          request.reply({ body: filesBody('initial-file.xml') });
-        } else if (params.get('regexSearch') === 'true') {
-          expect(params.get('searchText')).to.equal('unit.*');
-          request.alias = 'regexModeFiles';
-          request.reply({ delay: order === 'new-first' ? 150 : 1000, body: filesBody('regex-mode-file.xml') });
-        } else {
+      cy.intercept('GET', '**/api/admin/workspace/5/files?*', {
+        body: filesBody('initial-file.xml')
+      }).as('initialModeFiles');
+      cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/files', query: { searchText: 'unit.*' } },
+        request => {
+          expect(new URL(request.url).searchParams.get('searchText')).to.equal('unit.*');
           literalStarted = true;
-          request.alias = 'literalModeFiles';
-          request.reply(order === 'old-error' ? { delay: 1500, statusCode: 500 } : {
-            delay: order === 'new-first' ? 2500 : 1500, body: filesBody('literal-mode-file.xml')
+          request.url = literalGate.url;
+          request.continue();
+        }).as('literalModeFiles');
+      cy.intercept({
+        method: 'GET',
+        pathname: '/api/admin/workspace/5/files',
+        query: { searchText: 'unit.*', regexSearch: 'true' }
+      }, request => {
+        expect(new URL(request.url).searchParams.get('searchText')).to.equal('unit.*');
+        regexStarted = true;
+        request.url = regexGate.url;
+        request.continue();
+      }).as('regexModeFiles');
+      cy.visit('/', {
+        onBeforeLoad(window) {
+          const prototype = window.XMLHttpRequest.prototype;
+          prototype.open = new Proxy(prototype.open, {
+            apply(target, request: XMLHttpRequest, args: unknown[]) {
+              const url = new URL(String(args[1]), window.location.href);
+              if (url.pathname.endsWith('/files') && url.searchParams.get('searchText') === 'unit.*' &&
+                url.searchParams.get('regexSearch') !== 'true') {
+                request.addEventListener('abort', () => { literalAborts += 1; });
+              }
+              return Reflect.apply(target, request, args);
+            }
           });
         }
       });
-      cy.visit('/');
       cy.wait('@authData');
       cy.get('coding-box-home').should('be.visible');
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
       cy.wait('@initialModeFiles');
       cy.get('coding-box-search-filter input').focus().type('unit.*');
       cy.wrap(null).should(() => { expect(literalStarted).to.equal(true); });
+      // Enable regex only after the literal request is pending, regardless of runner speed.
+      cy.then(() => cy.task('deferred:release', settingsGate.id));
       cy.wait('@switchRegex');
+      cy.wrap(null).should(() => { expect(regexStarted).to.equal(true); });
+      // A cancelled real HTTP request has no completed interception for cy.wait.
+      cy.wrap(null).should(() => { expect(literalAborts, 'superseded literal request aborted').to.equal(1); });
       if (order !== 'new-first') {
-        cy.wait('@literalModeFiles');
+        cy.then(() => cy.task('deferred:release', literalGate.id));
         cy.get('coding-box-test-files .busy-overlay').should('be.visible');
       }
+      cy.then(() => cy.task('deferred:release', regexGate.id));
       cy.wait('@regexModeFiles');
-      if (order === 'new-first') cy.wait('@literalModeFiles');
+      if (order === 'new-first') {
+        cy.get('coding-box-test-files mat-row').should('contain.text', 'regex-mode-file.xml');
+        cy.then(() => cy.task('deferred:release', literalGate.id));
+      }
       cy.get('coding-box-test-files mat-row').should('contain.text', 'regex-mode-file.xml');
       cy.get('coding-box-test-files').should('not.contain.text', 'literal-mode-file.xml');
       cy.get('coding-box-test-files .busy-overlay').should('not.exist');
@@ -328,48 +380,48 @@ describe('Zoneless file list', () => {
 
   for (const first of ['files', 'validation']) {
     it(`keeps list and validation loading independent when ${first} finishes first`, () => {
-      let releaseFiles: (() => void) | undefined;
-      let releaseRegex: (() => void) | undefined;
-      let releaseTask: (() => void) | undefined;
+      let filesGate: DeferredResponse;
+      let regexGate: DeferredResponse;
+      let taskGate: DeferredResponse;
+      let filesStarted = false;
       let tasks = 0;
-      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', request => (
-        new Cypress.Promise<void>(resolve => {
-          releaseRegex = () => {
-            request.reply({ body: { value: '{"enabled":true}' } });
-            resolve();
-          };
-        })
-      )).as('overlapRegex');
-      cy.intercept('GET', '**/api/admin/workspace/5/files?*', request => {
-        const params = new URL(request.url).searchParams;
-        if (params.get('regexSearch') === 'true') {
-          request.alias = 'overlapRegexFiles';
-          return new Cypress.Promise<void>(resolve => {
-            releaseFiles = () => {
-              request.reply({ body: filesBody('validation-overlap-file.xml') });
-              resolve();
-            };
-          });
-        }
-        request.alias = 'overlapLiteralFiles';
-        request.reply({ body: filesBody('validation-overlap-file.xml') });
-      });
-      cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => (
-        new Cypress.Promise<void>(resolve => {
-          tasks += 1;
-          releaseTask = () => {
-            request.reply({ body: { id: 901, status: 'completed', progress: 100 } });
-            resolve();
-          };
-        })
-      )).as('overlapTask');
+      deferResponse(filesBody('validation-overlap-file.xml')).then(gate => { filesGate = gate; });
+      deferResponse({ value: '{"enabled":true}' }).then(gate => { regexGate = gate; });
+      deferResponse({ id: 901, status: 'completed', progress: 100 }).then(gate => { taskGate = gate; });
+      // Keep responses in Node so UI assertions do not consume an intercept Promise's timeout.
+      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', request => {
+        request.url = regexGate.url;
+        request.continue();
+      }).as('overlapRegex');
+      cy.intercept('GET', '**/api/admin/workspace/5/files?*', {
+        body: filesBody('validation-overlap-file.xml')
+      }).as('overlapLiteralFiles');
+      cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/files', query: { regexSearch: 'true' } },
+        request => {
+          filesStarted = true;
+          request.url = filesGate.url;
+          request.continue();
+        }).as('overlapRegexFiles');
+      cy.intercept('POST', '**/api/admin/workspace/5/validation-tasks?type=testFiles', request => {
+        tasks += 1;
+        request.url = taskGate.url;
+        request.continue();
+      }).as('overlapTask');
       cy.intercept('GET', '**/api/admin/workspace/5/settings', {
         body: { ignoredUnits: [], ignoredBooklets: [], ignoredTestlets: [] }
       });
       cy.intercept('GET', '**/api/admin/workspace/5/validation-tasks/901/results', {
         body: { testTakersFound: true, validationResults: [] }
       }).as('overlapResults');
-      cy.visit('/');
+      cy.visit('/', {
+        onBeforeLoad(window) {
+          // This test checks overlapping requests; Material's entrance frame can stall in Electron.
+          const reducedMotion = window.matchMedia('(prefers-reduced-motion)');
+          Object.defineProperty(reducedMotion, 'matches', { value: true });
+          cy.stub(window, 'matchMedia').callThrough()
+            .withArgs('(prefers-reduced-motion)').returns(reducedMotion);
+        }
+      });
       cy.wait('@authData');
       cy.get('coding-box-home').should('be.visible');
       cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-files'; });
@@ -377,27 +429,25 @@ describe('Zoneless file list', () => {
       cy.get('coding-box-search-filter input').focus().type('unit.*');
       cy.wait('@overlapLiteralFiles');
       cy.get('coding-box-test-files').contains('button', 'Validieren').click();
-      cy.wrap(null).should(() => {
-        expect(releaseTask).to.be.a('function');
-        expect(releaseRegex).to.be.a('function');
-      });
+      cy.wrap(null).should(() => { expect(tasks).to.equal(1); });
       cy.get('.validation-busy-card').should('be.visible');
-      cy.then(() => { releaseRegex?.(); });
+      cy.then(() => cy.task('deferred:release', regexGate.id));
       cy.wait('@overlapRegex');
-      cy.wrap(null).should(() => { expect(releaseFiles).to.be.a('function'); });
+      cy.wrap(null).should(() => { expect(filesStarted).to.equal(true); });
       if (first === 'files') {
-        cy.then(() => { releaseFiles?.(); });
+        cy.then(() => cy.task('deferred:release', filesGate.id));
         cy.wait('@overlapRegexFiles');
       }
       cy.get('.validation-busy-card').should('be.visible');
       cy.get('coding-box-test-files').contains('button', 'Validieren').should('be.disabled');
-      cy.then(() => { expect(tasks).to.equal(1); releaseTask?.(); });
+      cy.then(() => { expect(tasks).to.equal(1); });
+      cy.then(() => cy.task('deferred:release', taskGate.id));
       cy.wait('@overlapTask');
       cy.wait('@overlapResults');
       cy.get('coding-box-files-validation-dialog').should('be.visible');
       if (first === 'validation') {
         cy.get('coding-box-test-files .busy-overlay').should('exist');
-        cy.then(() => { releaseFiles?.(); });
+        cy.then(() => cy.task('deferred:release', filesGate.id));
         cy.wait('@overlapRegexFiles');
       }
       cy.get('coding-box-test-files .busy-overlay').should('not.exist');

@@ -4,7 +4,8 @@ import {
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { getErrorMessage } from '../../../utils/error.util';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
-import { CODING_PROCESS_CACHE_INVALIDATOR, CodingProcessCacheInvalidator } from '../coding/coding-process-cache-invalidator.token';
+import { CODING_PROCESS_CACHE_INVALIDATOR } from '../coding/coding-process-cache-invalidator.token';
+import type { CodingProcessCacheInvalidator } from '../coding/coding-process-cache-invalidator.token';
 import { CacheService } from '../../../cache/cache.service';
 import { EXCLUSION_CACHE_PREFIX } from './workspace-constants';
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';

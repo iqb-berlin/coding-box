@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 import User from './user.entity';
@@ -29,9 +30,9 @@ export class CodingJobCoder {
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-  coding_job: CodingJob;
+  coding_job: Relation<CodingJob>;
 
   @ManyToOne(() => User)
   @JoinColumn({ name: 'user_id' })
-  user: User;
+  user: Relation<User>;
 }

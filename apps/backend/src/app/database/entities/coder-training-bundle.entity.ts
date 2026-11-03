@@ -6,10 +6,11 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
 import { VariableBundle } from './variable-bundle.entity';
-import { CaseOrderingMode } from './job-definition.entity';
+import type { CaseOrderingMode } from './job-definition.entity';
 
 @Entity({ name: 'coder_training_bundle' })
 export class CoderTrainingBundle {
@@ -35,9 +36,9 @@ export class CoderTrainingBundle {
 
   @ManyToOne(() => CoderTraining, training => training.bundles, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'coder_training_id' })
-  training: CoderTraining;
+  training: Relation<CoderTraining>;
 
   @ManyToOne(() => VariableBundle, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'variable_bundle_id' })
-  bundle: VariableBundle;
+  bundle: Relation<VariableBundle>;
 }

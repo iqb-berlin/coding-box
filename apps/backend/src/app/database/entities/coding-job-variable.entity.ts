@@ -6,6 +6,7 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import { CodingJob } from './coding-job.entity';
 
 /**
@@ -30,5 +31,5 @@ export class CodingJobVariable {
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-  coding_job: CodingJob;
+  coding_job: Relation<CodingJob>;
 }

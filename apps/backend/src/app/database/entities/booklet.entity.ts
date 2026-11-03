@@ -7,6 +7,7 @@ import {
   OneToMany,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 
 import { BookletInfo } from './bookletInfo.entity';
 // eslint-disable-next-line import/no-cycle
@@ -44,7 +45,7 @@ export class Booklet {
     eager: true
   })
   @JoinColumn({ name: 'personid' })
-  person: Persons;
+  person: Relation<Persons>;
 
   @ManyToOne(() => BookletInfo, {
     onDelete: 'CASCADE',
@@ -52,7 +53,7 @@ export class Booklet {
     eager: true
   })
   @JoinColumn({ name: 'infoid' })
-  bookletinfo: BookletInfo;
+  bookletinfo: Relation<BookletInfo>;
 
   @OneToMany(() => Session, session => session.booklet)
   sessions: Session[];

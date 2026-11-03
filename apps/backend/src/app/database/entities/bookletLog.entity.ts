@@ -1,6 +1,7 @@
 import {
   Entity, Column, PrimaryGeneratedColumn, ManyToOne, JoinColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { Booklet } from './booklet.entity';
 
@@ -25,5 +26,5 @@ export class BookletLog {
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'bookletid' })
-  booklet: Booklet;
+  booklet: Relation<Booklet>;
 }

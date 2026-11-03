@@ -8,6 +8,7 @@ import {
   PrimaryGeneratedColumn,
   UpdateDateColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 import { Unit } from './unit.entity';
 import {
@@ -23,7 +24,7 @@ import {
 export class CodingUnitFreshness {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;
@@ -60,5 +61,5 @@ export class CodingUnitFreshness {
 
   @ManyToOne(() => Unit, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'unit_id' })
-  unit: Unit;
+  unit: Relation<Unit>;
 }

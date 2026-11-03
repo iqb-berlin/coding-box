@@ -7,6 +7,7 @@ import {
   UpdateDateColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 
 @Entity({ name: 'coder_training_discussion_result' })
@@ -14,7 +15,7 @@ import Workspace from './workspace.entity';
 export class CoderTrainingDiscussionResult {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;

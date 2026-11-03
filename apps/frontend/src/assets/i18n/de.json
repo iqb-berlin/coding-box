@@ -1754,7 +1754,7 @@
     "value-validity-help": "Gültig sind nicht leere Antwortwerte ohne Fehlend- oder Fehlerstatus. Fehlende Nullwerte, leere Zeichenketten, Leerzeichen und leere Listen gelten als leer; Mehrfachantworten ohne ausgewählte Kategorie ebenfalls. Der eingegebene Text „null“ bleibt ein Antwortwert. Kodierergebnisse verändern diese Rohwertzählung nicht.",
     "code-validity-help": "Gültig sind vorhandene Codes mit Status CODING_COMPLETE oder INTENDED_INCOMPLETE im ausgewählten Lauf. Code 0, Score 0 und Codes ohne Score werden mitgezählt. Fehlende Codes und andere Status zählen zu Fehlend/ungültig. Leere Rohwerte werden unabhängig davon ausgewiesen.",
 
-    "analysis-results": "Analyseergebnisse",
+    "analysis-results": "Antwortwerte",
     "analysis-running": "Analyse läuft...",
     "analyzing-variables": "Analysiere Häufigkeiten...",
     "info-title": "Was zeigt diese Analyse?",
@@ -1796,7 +1796,7 @@
     "schema-only": "Schema",
     "table-page-label": "Analysezeilen Seiten",
     "empty-value": "[Leer]",
-    "total-cases": "Antworten gesamt",
+    "total-cases": "Antworten",
     "valid-responses-column": "Gültige Antworten",
     "empty-values": "Leere Rohwerte",
     "status-distribution": "Antwortstatus",
@@ -4097,6 +4097,8 @@
       "restart-job-failed": "Failed to restart job {{jobId}}"
     },
     "variable-analysis-dialog": {
+      "results-tab": "Analyseergebnisse",
+      "total-responses-column": "Antworten gesamt",
       "loading-distribution": "Lade Code-/Score-Verteilung...",
       "distribution-row-count": "Verteilungszeilen gefunden",
       "distribution-description": "Eine Zeile = Aufgaben-ID + Variablen-ID + Code. Die Spalte \"Antworten gesamt\" bezieht sich auf Aufgabe + Variable.",

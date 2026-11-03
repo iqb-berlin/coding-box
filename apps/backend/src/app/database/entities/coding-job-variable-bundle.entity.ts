@@ -6,12 +6,13 @@ import {
   ManyToOne,
   JoinColumn
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 // eslint-disable-next-line import/no-cycle
 import { CodingJob } from './coding-job.entity';
 // eslint-disable-next-line import/no-cycle
 import { VariableBundle } from './variable-bundle.entity';
 
-import { CaseOrderingMode } from './job-definition.entity';
+import type { CaseOrderingMode } from './job-definition.entity';
 
 /**
  * Entity for coding job variable bundles (relation between coding jobs and variable bundles)
@@ -39,9 +40,9 @@ export class CodingJobVariableBundle {
 
   @ManyToOne(() => CodingJob)
   @JoinColumn({ name: 'coding_job_id' })
-  coding_job: CodingJob;
+  coding_job: Relation<CodingJob>;
 
   @ManyToOne(() => VariableBundle)
   @JoinColumn({ name: 'variable_bundle_id' })
-  variable_bundle: VariableBundle;
+  variable_bundle: Relation<VariableBundle>;
 }

@@ -5,7 +5,7 @@
 
   <mat-tab-group>
     <!-- Analysis Results Tab -->
-    <mat-tab label="{{ 'variable-analysis.analysis-results' | translate }}">
+    <mat-tab label="{{ 'ui-text.variable-analysis-dialog.results-tab' | translate }}">
       <div class="dialog-content">
         @if (isLoading()) {
         <div class="loading-container">
@@ -263,7 +263,7 @@
 
               <ng-container matColumnDef="totalCount">
                 <th mat-header-cell *matHeaderCellDef mat-sort-header>
-                  {{ 'variable-analysis.total-cases' | translate }}
+                  {{ 'ui-text.variable-analysis-dialog.total-responses-column' | translate }}
                 </th>
                 <td mat-cell *matCellDef="let row">{{ row.totalCount }}</td>
               </ng-container>

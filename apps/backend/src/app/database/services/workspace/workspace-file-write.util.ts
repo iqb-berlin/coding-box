@@ -1,4 +1,4 @@
-import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
+import type { QueryDeepPartialEntity } from 'typeorm';
 import { EntityManager, QueryRunner, Repository } from 'typeorm';
 import FileUpload, { NO_CODING_SCHEME_REF_NORMALIZED, StructuredFileData } from '../../entities/file_upload.entity';
 

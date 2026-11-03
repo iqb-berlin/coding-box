@@ -80,6 +80,7 @@
         { "env": "BULLMQ_TEST_REDIS_HOST" },
         { "env": "BULLMQ_TEST_REDIS_PORT" },
         { "env": "KAPPA_QUERY_TEST_DATABASE_URL" },
+        { "env": "VARIABLE_ANALYSIS_TEST_DB_URL" },
         { "env": "POSTGRES_INTEGRATION_TESTS" },
         { "env": "POSTGRES_HOST" },
         { "env": "POSTGRES_PORT" },
@@ -126,6 +127,17 @@
         ]
       }
     },
+    "verify-entity-metadata-esm": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "commands": [
+          "node --test scripts/quality/check-entity-metadata-esm.test.mjs",
+          "node scripts/quality/check-entity-metadata-esm.mjs"
+        ],
+        "parallel": false
+      }
+    },
     "verify-runtime-package": {
       "executor": "nx:run-commands",
       "cache": false,
@@ -152,7 +164,9 @@
         "commands": [
           "node --test scripts/quality/check-backend-strict.test.mjs",
           "node scripts/quality/check-backend-strict.mjs",
-          "node scripts/quality/check-entity-metadata.cjs"
+          "node scripts/quality/check-entity-metadata.cjs",
+          "node --test scripts/quality/check-entity-metadata-esm.test.mjs",
+          "node scripts/quality/check-entity-metadata-esm.mjs"
         ],
         "parallel": false
       }

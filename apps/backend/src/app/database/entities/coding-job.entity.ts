@@ -9,6 +9,7 @@ import {
   JoinColumn,
   Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 // eslint-disable-next-line import/no-cycle
 import { CoderTraining } from './coder-training.entity';
@@ -18,10 +19,11 @@ import { CodingJobUnit } from './coding-job-unit.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobCoder } from './coding-job-coder.entity';
 // eslint-disable-next-line import/no-cycle
-import { JobDefinition, CaseOrderingMode } from './job-definition.entity';
+import { JobDefinition } from './job-definition.entity';
+import type { CaseOrderingMode } from './job-definition.entity';
 // eslint-disable-next-line import/no-cycle
 import { CodingJobVariableBundle } from './coding-job-variable-bundle.entity';
-import { CodingJobFreshnessStatus } from '../../../../../../api-dto/coding/job-refresh.dto';
+import type { CodingJobFreshnessStatus } from '../../../../../../api-dto/coding/job-refresh.dto';
 
 export interface Variable {
   unitName: string;
@@ -39,7 +41,7 @@ export type CodingJobType = 'regular' | 'coding_issue_review';
 export class CodingJob {
   @ManyToOne(() => Workspace, { onDelete: 'CASCADE' })
   @JoinColumn({ name: 'workspace_id' })
-  workspace?: Workspace;
+  workspace?: Relation<Workspace>;
 
   @PrimaryGeneratedColumn()
   id: number;
@@ -94,21 +96,21 @@ export class CodingJob {
 
   @ManyToOne(() => CoderTraining, coderTraining => coderTraining.codingJobs)
   @JoinColumn({ name: 'training_id' })
-  training?: CoderTraining;
+  training?: Relation<CoderTraining>;
 
   @Column({ name: 'missings_profile_id', nullable: true })
   missings_profile_id?: number;
 
   @ManyToOne(() => MissingsProfile)
   @JoinColumn({ name: 'missings_profile_id' })
-  missingsProfile?: MissingsProfile;
+  missingsProfile?: Relation<MissingsProfile>;
 
   @Column({ name: 'job_definition_id', nullable: true })
   job_definition_id?: number;
 
   @ManyToOne(() => JobDefinition, jobDefinition => jobDefinition.codingJobs, { nullable: true })
   @JoinColumn({ name: 'job_definition_id' })
-  jobDefinition?: JobDefinition;
+  jobDefinition?: Relation<JobDefinition>;
 
   @Column({
     name: 'case_ordering_mode',

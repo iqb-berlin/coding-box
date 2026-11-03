@@ -1,6 +1,7 @@
 import {
   Entity, Column, ManyToOne, JoinColumn, PrimaryGeneratedColumn, Index
 } from 'typeorm';
+import type { Relation } from 'typeorm';
 
 // eslint-disable-next-line import/no-cycle
 import { Unit } from './unit.entity';
@@ -77,5 +78,5 @@ export class ResponseEntity {
     // Not using eager loading here to avoid performance issues with large result sets
   })
   @JoinColumn({ name: 'unitid' })
-  unit: Unit;
+  unit: Relation<Unit>;
 }
