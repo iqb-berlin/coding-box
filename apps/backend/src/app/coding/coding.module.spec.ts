@@ -61,6 +61,15 @@ import { CodingJobSchemeService } from '../database/services/coding/coding-job-s
 import { CodingJobReplayService } from '../database/services/coding/coding-job-replay.service';
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobService } from '../database/services/coding/coding-job.service';
+import { WorkspaceFileQueryService } from '../database/services/workspace/workspace-file-query.service';
+import { WorkspaceFileMutationService } from '../database/services/workspace/workspace-file-mutation.service';
+import { WorkspaceFileUploadService } from '../database/services/workspace/workspace-file-upload.service';
+import { WorkspaceTestcenterFileImportService } from '../database/services/workspace/workspace-testcenter-file-import.service';
+import { WorkspaceTestTakersValidationService } from '../database/services/workspace/workspace-test-takers-validation.service';
+import { WorkspaceFileCacheService } from '../database/services/workspace/workspace-file-cache.service';
+import { WorkspaceFileFreshnessService } from '../database/services/workspace/workspace-file-freshness.service';
+import { WorkspaceXmlFileUploadService } from '../database/services/workspace/workspace-xml-file-upload.service';
+import { WorkspaceResourceFileUploadService } from '../database/services/workspace/workspace-resource-file-upload.service';
 import { WorkspaceFilesService } from '../database/services/workspace/workspace-files.service';
 import { WorkspaceFileMetadataService } from '../database/services/workspace/workspace-file-metadata.service';
 import { WORKSPACE_FILE_METADATA_READER } from '../database/services/workspace/workspace-file-metadata-reader.token';
@@ -236,6 +245,25 @@ describe('CodingModule', () => {
       expect(module.get(DERIVED_VARIABLE_READER)).toBe(metadata);
       expect(module.get(WORKSPACE_FILE_METADATA_READER)).toBe(metadata);
       expect(Reflect.get(module.get(WorkspaceFilesService), 'fileMetadata')).toBe(metadata);
+      const filesFacade = module.get(WorkspaceFilesService);
+      for (const [field, provider] of [
+        ['query', WorkspaceFileQueryService], ['mutations', WorkspaceFileMutationService],
+        ['uploads', WorkspaceFileUploadService], ['testcenter', WorkspaceTestcenterFileImportService],
+        ['testTakers', WorkspaceTestTakersValidationService], ['caches', WorkspaceFileCacheService]
+      ] as const) expect(Reflect.get(filesFacade, field)).toBe(module.get(provider));
+      for (const provider of [WorkspaceFileMutationService, WorkspaceFileUploadService, WorkspaceTestcenterFileImportService]) {
+        expect(Reflect.get(module.get(provider), 'caches')).toBe(module.get(WorkspaceFileCacheService));
+      }
+      expect(Reflect.get(module.get(WorkspaceFileUploadService), 'xml')).toBe(module.get(WorkspaceXmlFileUploadService));
+      expect(Reflect.get(module.get(WorkspaceFileUploadService), 'resources')).toBe(module.get(WorkspaceResourceFileUploadService));
+      for (const provider of [WorkspaceResourceFileUploadService, WorkspaceTestcenterFileImportService]) {
+        expect(Reflect.get(module.get(provider), 'freshness')).toBe(module.get(WorkspaceFileFreshnessService));
+      }
+      expect(Reflect.get(module.get(WorkspaceFileFreshnessService), 'codingFreshnessService')).toBe(module.get(CodingFreshnessService));
+      for (const provider of [WorkspaceFileQueryService, WorkspaceFileCacheService]) {
+        expect(Reflect.get(module.get(provider), 'fileMetadata')).toBe(metadata);
+      }
+
       expect(Reflect.get(module.get(ResponseManagementService), 'journalService'))
         .toBe(module.select(WorkspaceDataModule).get(JournalService, { strict: true }));
       const query = module.get(CodingJobQueryService);

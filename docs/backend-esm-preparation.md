@@ -99,6 +99,27 @@ Lokaler Nachweis am 01.11.2026 mit Node 24.22.1:
 | Zusammengeführter Testnachweis | Alle 4.158 unterschiedlichen ausführbaren Tests bestanden über Volltest und Wiederholung; kein einzelner vollständig grüner Volltest behauptet |
 | Remote-CI mit Coverage und PostgreSQL-/Redis-Integration | Bei Erstellung des PRs ausstehend |
 
+## Aktualisierung auf `develop` am 03.11.2026
+
+Basis: `7f94651b91cf43a5e39c7c900922d77e6f52748c` (PR #1153).
+Die aufgeteilten Workspace-Dateiworkflows bleiben erhalten. Die bisherigen
+Typimport-Anpassungen liegen jetzt im `WorkspaceFileCacheService` und in
+`workspace-file-write.util.ts`; die Kompatibilitätsfassade entspricht `develop`.
+Der Merge übernimmt außerdem die aktuellen CI-Retries für Runner-Startfehler.
+
+Erneute lokale Prüfung mit Node 24.22.1 und npm 11.19.1:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| Saubere Installation | `npm ci --no-fund` bestanden, Lockfile unverändert |
+| Backend-Typecheck | 0 Diagnosen; CommonJS- und ESM-Metadaten für 43 Entities gleich; alle 12 Regressionstests bestanden |
+| Backend-Lint | Bestanden |
+| Backend-Volltest | 256 Suites und 4.217 Tests bestanden; 18 Infrastruktur-Suites mit 160 Tests übersprungen |
+| CommonJS-Produktionsbuild | Bestanden |
+| Isolierte Produktionsabhängigkeiten | `backend:verify-runtime-package` bestanden; native Module geladen, Manifeste unverändert |
+| Dateilisten-Browsertests | Alle 19 Tests aus `cypress/zoneless/file-list.cy.ts` mit Electron bestanden |
+| Remote-CI und PostgreSQL-/Redis-Integration | Durch diese lokalen Prüfungen nicht bestätigt |
+
 Der neue native Entity-Nachweis ist keine Bestätigung, dass Bootstrap, alle
 Services, Nx-Serve, Produktionspakete und Docker bereits als ESM funktionieren.
 Diese Laufzeitumstellung sowie ein möglicher Vitest-Wechsel bleiben getrennte

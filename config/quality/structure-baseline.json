@@ -1284,49 +1284,6 @@
         }
       }
     },
-    "apps/backend/src/app/database/services/workspace/workspace-files.service.ts": {
-      "file": {
-        "max-lines": 2684
-      },
-      "functions": {
-        "class WorkspaceFilesService#1/method createDummyTestTakerFileUnlocked#1": {
-          "max-lines-per-function": 106
-        },
-        "class WorkspaceFilesService#1/method findFiles#1": {
-          "max-lines-per-function": 117
-        },
-        "class WorkspaceFilesService#1/method handleHtmlFile#1": {
-          "max-lines-per-function": 128
-        },
-        "class WorkspaceFilesService#1/method handleOctetStreamFile#1": {
-          "complexity": 22,
-          "max-lines-per-function": 148
-        },
-        "class WorkspaceFilesService#1/method handleXmlFile#1": {
-          "complexity": 28,
-          "max-lines-per-function": 145
-        },
-        "class WorkspaceFilesService#1/method testCenterImportUnlocked#1": {
-          "max-lines-per-function": 126
-        },
-        "class WorkspaceFilesService#1/method uploadTestFilesUnlocked#1": {
-          "max-lines-per-function": 172
-        },
-        "class WorkspaceFilesService#1/method uploadTestFilesUnlocked#1/function processInBatches#1": {
-          "max-lines-per-function": 107
-        },
-        "class WorkspaceFilesService#1/method validateGroupResponses#1": {
-          "complexity": 28,
-          "max-depth": 5,
-          "max-lines-per-function": 195
-        },
-        "class WorkspaceFilesService#1/method validateTestTakers#1": {
-          "complexity": 22,
-          "max-depth": 7,
-          "max-lines-per-function": 113
-        }
-      }
-    },
     "apps/backend/src/app/http/request-validation.ts": {
       "file": {},
       "functions": {
