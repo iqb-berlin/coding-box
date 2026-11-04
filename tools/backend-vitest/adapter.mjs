@@ -2,7 +2,6 @@ import ts from 'typescript';
 
 const hooks = new Set(['beforeEach', 'afterEach', 'beforeAll', 'afterAll']);
 const mockReturns = new Set(['mockClear', 'mockReset', 'mockRestore', 'mockImplementation', 'mockImplementationOnce', 'mockReturnValue', 'mockReturnValueOnce', 'mockReturnThis', 'mockResolvedValue', 'mockResolvedValueOnce', 'mockRejectedValue', 'mockRejectedValueOnce', 'mockName', 'mocked']);
-const typeImports = new Set(['CaseOrderingMode', 'CodingJobFreshnessStatus', 'CodingProcessCacheInvalidator', 'BookletUnit']);
 const isFunction = node => ts.isArrowFunction(node) || ts.isFunctionExpression(node);
 const isJest = (node, method) => ts.isPropertyAccessExpression(node) && ts.isIdentifier(node.expression) &&
   node.expression.text === 'jest' && (!method || node.name.text === method);
@@ -18,6 +17,9 @@ export function adapter(context, emit = false, runtimeImports) {
   return source => {
     let legacy = false;
     const testFile = /(?:\.(?:spec|test)\.ts|test\.factory\.ts)$/.test(source.fileName);
+    // Production modules receive only the same TypeScript ESM/decorator emit as
+    // the production build. Never repair imports or relation types in tests.
+    if (!testFile) return source;
     const findJest = node => {
       if (ts.isIdentifier(node) && node.text === 'jest' || ts.isImportDeclaration(node) && ts.isStringLiteral(node.moduleSpecifier) && node.moduleSpecifier.text === '@golevelup/ts-jest') legacy = true;
       else if (!legacy) ts.forEachChild(node, findJest);
@@ -25,7 +27,7 @@ export function adapter(context, emit = false, runtimeImports) {
     if (testFile) findJest(source);
     const test = legacy;
     const controllerTest = /[/\\]controllers-load\.spec\.ts$/.test(source.fileName);
-    let needsRuntime = false, needsTypes = false, needsEntities = false, needsRelation = false, needsControllers = false;
+    let needsRuntime = false, needsTypes = false, needsEntities = false, needsControllers = false;
     let functionDepth = 0, counter = 0;
     const globalLoads = [];
     const id = text => f.createIdentifier(text);
@@ -84,22 +86,7 @@ export function adapter(context, emit = false, runtimeImports) {
         let clause = node.importClause;
         if (emit && clause?.isTypeOnly) return undefined;
         if (test && specifier === '@golevelup/ts-jest') specifier = '@backend-vitest/deep-mock';
-        if (specifier === 'typeorm/query-builder/QueryPartialEntity') specifier = 'typeorm';
-        if (clause?.namedBindings && ts.isNamespaceImport(clause.namedBindings) && ['adm-zip', 'form-data', 'fs', 'node:fs'].includes(specifier)) {
-          clause = f.createImportClause(false, clause.namedBindings.name, undefined);
-        } else if (clause?.namedBindings && ts.isNamedImports(clause.namedBindings)) {
-          const elements = clause.namedBindings.elements.map(element => typeImports.has((element.propertyName || element.name).text) ? f.updateImportSpecifier(element, true, element.propertyName, element.name) : element).filter(element => !emit || !element.isTypeOnly);
-          if (!elements.length && !clause.name) return undefined;
-          clause = f.updateImportClause(clause, clause.isTypeOnly, clause.name, f.updateNamedImports(clause.namedBindings, elements));
-        }
         return f.updateImportDeclaration(node, node.modifiers, clause, f.createStringLiteral(specifier), node.attributes);
-      }
-      if (ts.isExportSpecifier(node) && typeImports.has((node.propertyName || node.name).text)) return emit ? undefined : f.updateExportSpecifier(node, true, node.propertyName, node.name);
-      if (ts.isPropertyDeclaration(node) && node.type && ts.canHaveDecorators(node) && (ts.getDecorators(node) || []).some(d => ts.isCallExpression(d.expression) && ts.isIdentifier(d.expression.expression) && ['ManyToOne', 'OneToOne'].includes(d.expression.expression.text))) {
-        if (!(ts.isTypeReferenceNode(node.type) && node.type.typeName.getText(source) === 'Relation')) {
-          needsRelation = true;
-          return f.updatePropertyDeclaration(node, node.modifiers, node.name, node.questionToken || node.exclamationToken, f.createTypeReferenceNode('__PilotRelation', [node.type]), node.initializer);
-        }
       }
       if (test && ts.isQualifiedName(node) && ts.isIdentifier(node.left) && node.left.text === 'jest') {
         needsTypes = true;
@@ -161,7 +148,7 @@ export function adapter(context, emit = false, runtimeImports) {
         }
       }
       if (test && isJest(node)) {
-        const special = { fn: '__pilotFn', mocked: '__pilotMocked', replaceProperty: '__pilotReplaceProperty', restoreAllMocks: '__pilotRestoreAllMocks' }[node.name.text];
+        const special = { fn: '__pilotFn', spyOn: '__backendSpyOn', mocked: '__pilotMocked', replaceProperty: '__pilotReplaceProperty', restoreAllMocks: '__pilotRestoreAllMocks' }[node.name.text];
         if (special) { needsRuntime = true; return id(special); }
         return f.createPropertyAccessExpression(id('vi'), node.name);
       }
@@ -176,11 +163,10 @@ export function adapter(context, emit = false, runtimeImports) {
     const transformed = ts.visitNode(source, visit);
     const imports = [];
     const parsedImport = text => ts.createSourceFile('pilot-import.ts', text, ts.ScriptTarget.Latest, true).statements[0];
-    if (needsRuntime) imports.push(parsedImport("import { fn as __pilotFn, mocked as __pilotMocked, replaceProperty as __pilotReplaceProperty, restoreAllMocks as __pilotRestoreAllMocks } from '@backend-vitest/compat';"));
+    if (needsRuntime) imports.push(parsedImport("import { fn as __pilotFn, spyOn as __backendSpyOn, mocked as __pilotMocked, replaceProperty as __pilotReplaceProperty, restoreAllMocks as __pilotRestoreAllMocks } from '@backend-vitest/compat';"));
     if (needsTypes && !emit) imports.push(parsedImport("import type * as __pilotMocks from '@backend-vitest/types';"));
     if (needsEntities) imports.push(parsedImport("import { pilotEntities as __pilotEntities } from '@backend-vitest/entities';"));
     if (needsControllers) imports.push(parsedImport("import { controllerModules as __pilotControllers } from '@backend-vitest/controllers';"));
-    if (needsRelation && !emit) imports.push(parsedImport("import type { Relation as __PilotRelation } from 'typeorm';"));
     // Imported nodes are synthesized to avoid mapping their foreign source offsets.
     for (const statement of imports) {
       const synthesize = node => { ts.setTextRange(node, { pos: -1, end: -1 }); ts.forEachChild(node, synthesize); };
@@ -204,13 +190,13 @@ export function transpile(code, filename) {
   let imports = [];
   const output = ts.transpileModule(code, {
     fileName: filename,
-    compilerOptions: { module: ts.ModuleKind.Preserve, target: ts.ScriptTarget.ES2021, experimentalDecorators: true, emitDecoratorMetadata: true, useDefineForClassFields: false, esModuleInterop: false, sourceMap: true, inlineSources: true },
-    transformers: {
+    compilerOptions: { module: ts.ModuleKind.ESNext, target: ts.ScriptTarget.ES2021, experimentalDecorators: true, emitDecoratorMetadata: true, useDefineForClassFields: false, esModuleInterop: false, sourceMap: true, inlineSources: true },
+    transformers: /(?:\.(?:spec|test)\.ts|test\.factory\.ts)$/.test(filename) ? {
       before: [context => adapter(context, true, statements => { imports = statements; })],
       // Insert generated value imports after TypeScript's alias elision. They
       // have no original binder symbols and must not be resolved as old aliases.
       after: [context => source => context.factory.updateSourceFile(source, [...imports, ...source.statements])]
-    }
+    } : undefined
   });
   return { code: output.outputText, map: JSON.parse(output.sourceMapText) };
 }

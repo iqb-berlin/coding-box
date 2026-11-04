@@ -49,28 +49,21 @@ Paketmetadaten auf registry.npmjs.org geprüft; der Lockfile hält die Auflösun
 
 ## Build und Tests
 
-Die Produktionskompilierung verwendet TypeScripts `module: node20` und
-`moduleResolution: node16`. Damit kennt die Auflösung die Paket-Exports und
-`require(esm)`, während ohne `type: module` weiterhin CommonJS entsteht.
-`esModuleInterop: false` erhält die bisherigen CommonJS-Importsemantiken;
-`allowSyntheticDefaultImports` erlaubt die bestehenden Default-Imports von
-Axios. Swagger-Typen kommen aus dem öffentlichen Paketexport.
+Der reguläre Produktionsbuild verwendet inzwischen `tsconfig.build.json` mit
+`module: esnext` und `moduleResolution: bundler`; Webpack erzeugt `main.mjs`.
+Die Anwendungskonfiguration im Node20-Modus bleibt für separate Prüfwerkzeuge
+erhalten. `esModuleInterop: true` und explizite Default-Imports berücksichtigen
+aufrufbare CommonJS-Pakete. Details: [ESM-Laufzeit](backend-esm-runtime.md).
 
-Jest benötigt für seine VM-Implementierung von `require(esm)` **Node 24.9+
-und `--experimental-vm-modules`**. `backend:test` startet deshalb über einen
-kleinen Launcher einen neuen Node-Prozess mit diesem Schalter, bevor Nx/Jest
-geladen wird. Das interne `backend:test-jest` behält den Nx-Jest-Executor und
-seine Argument- und CI-Konfiguration. Auch `--runInBand`, der Integrationsrunner
-und der vollständige BullMQ-Runner gehen durch diesen Einstieg. Der Volltest
-verwendet zwei Worker mit dem vorhandenen 1-GiB-Recyclinglimit; ein einzelner
-Prozess mit `--runInBand` überschreitet bei der gesamten ESM-Suite das Heap-Limit. Der Schalter
-ist nur für Tests erforderlich; die Produktionsanwendung startet ohne ihn.
-
-Der alte BullMQ-ESM-nach-CommonJS-Transformer und die Nest-Ausnahmen in
-`transformIgnorePatterns` entfallen. Die Regression prüft den VM-Loader sowie
-Dekoratormetadaten und gemeinsame Provideridentitäten über die Modulgrenze.
-Die tatsächliche Node-Version geht in die Nx-Eingaben ein, damit ein Ergebnis
-unter Node 22 kein Ergebnis unter Node 24 ersetzen kann.
+Der reguläre Backend-Testpfad verwendet nun Vitest mit ESM und separater
+Typprüfung. Der frühere Jest-Launcher und das interne Jest-Target wurden entfernt.
+Die fixierten Werkzeuge benötigen Node 24.22.1 innerhalb der Hauptversion 24.
+`--experimental-vm-modules` bleibt für die gezielten VM-Verträge aktiviert;
+die Produktionsanwendung startet ohne diesen Schalter. Bestehende Jest-Mocks
+werden ausschließlich in Testquellen angepasst. Die Anwendung selbst wird
+nicht mehr im Pilotadapter korrigiert. Die Regression prüft Dekoratormetadaten
+und die Identität nativer externer Nest-Module. Aufrufe, Installation und
+verbleibende Modulgrenzen: [Backend-Tests](backend-tests.md).
 
 Nach dem Wechsel der Node-Version Abhängigkeiten mit `npm ci` neu installieren.
 Insbesondere `libxmljs2` enthält ein natives Modul mit anderer Node-ABI.

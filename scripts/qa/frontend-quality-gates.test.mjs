@@ -323,7 +323,7 @@ test('Core also rejects inline import types and dynamic feature imports', async 
 test('Jest configurations load through ts-node regardless of configuration order', () => {
   const env = { ...process.env };
   delete env.TS_NODE_COMPILER_OPTIONS;
-  for (const first of ['apps/frontend/jest.config.ts', 'apps/backend/jest.config.ts', 'jest.config.ts']) {
+  for (const first of ['apps/frontend/jest.config.ts', 'jest.config.ts']) {
     const result = spawnSync(process.execPath, ['--no-experimental-strip-types', '-e', `
     const assert = require('node:assert/strict');
     const { readInitialOptions } = require('jest-config');
@@ -532,6 +532,7 @@ test('the actual backend job checks its complete suite and rejects test failures
       fs.writeFileSync('typecheck.tested', 'checked');
       if (fs.existsSync('fail-typecheck')) process.exitCode = 1;
     `);
+    writeFileSync(join(directory, 'runner.cjs'), "require('node:fs').writeFileSync('runner.tested', 'checked');\n");
     writeFileSync(join(directory, 'runtime-package.cjs'), `
       const fs = require('node:fs');
       fs.writeFileSync('runtime-package.tested', 'checked');
@@ -547,6 +548,9 @@ test('the actual backend job checks its complete suite and rejects test failures
           ...(project === 'backend' ? {
             typecheck: {
               executor: 'nx:run-commands', cache: false, options: { command: 'node typecheck.cjs' }
+            },
+            'verify-test-runner': {
+              executor: 'nx:run-commands', cache: false, options: { command: 'node runner.cjs' }
             },
             'verify-runtime-package': {
               executor: 'nx:run-commands', cache: false, options: { command: 'node runtime-package.cjs' }
@@ -574,6 +578,7 @@ test('the actual backend job checks its complete suite and rejects test failures
     const script = config['test-backend'].script.filter(command => command.startsWith('npx ')).join('\n');
     succeed('sh', ['-eu', '-c', script]);
     assert.equal(readFileSync(join(directory, 'migration.tested'), 'utf8'), 'checked');
+    assert.equal(readFileSync(join(directory, 'runner.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'backend.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'typecheck.tested'), 'utf8'), 'checked');
     assert.equal(readFileSync(join(directory, 'runtime-package.tested'), 'utf8'), 'checked');

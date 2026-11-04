@@ -1,5 +1,5 @@
 import { ConflictException, Logger } from '@nestjs/common';
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import FileUpload from '../../entities/file_upload.entity';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';

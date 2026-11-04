@@ -5,7 +5,7 @@
 Every pull request to `develop` or `main`, direct branch pipeline, and valid
 release or prerelease tag selects these blocking checks on its own revision:
 
-1. Complete backend Jest suite with coverage and reporter regression tests.
+1. Complete backend Vitest/ESM suite with typechecking, coverage and runner contracts ([commands and module boundaries](backend-tests.md)).
 2. Complete frontend Jest suite with coverage.
 3. Live replay and incomplete item-matrix export against an isolated stack.
 4. The existing real Keycloak login, permissions, session recovery and file settings suite.
@@ -50,7 +50,7 @@ GitHub status against that pipeline's result before merging.
 
 ## Coverage and assertions
 
-Jest requires at least 60% statements, branches, functions and lines in each
+Both test runners require at least 60% statements, branches, functions and lines in each
 application. This is a minimum, not an assertion of complete functional coverage.
 Coverage must be collected in CI and the tests must assert observable outcomes,
 including failure paths. Generic calls that ignore exceptions or count method
@@ -164,15 +164,13 @@ creates two tables in a unique temporary schema and removes that schema afterwar
 it does not require the application migrations. Like the other PostgreSQL suites,
 it runs only with `POSTGRES_INTEGRATION_TESTS=true` against a disposable database.
 
-Use a disposable PostgreSQL 14 database with the full Liquibase changelog applied.
-The opt-in fixtures create and remove only their own synthetic rows; never point
-these tests at an existing development or production database. Run the complete
-PostgreSQL group sequentially through Nx, with connection values for that database:
+Run the mandatory group through its dedicated fixture owner, using disposable
+PostgreSQL 14 and Redis test servers. It applies the complete SQL changelog:
 
 ```sh
-POSTGRES_INTEGRATION_TESTS=true POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=5432 \
-POSTGRES_USER=fixture POSTGRES_PASSWORD=fixture POSTGRES_DB=fixture \
-  npx nx test backend --runInBand --skipNxCache --testPathPatterns=postgres.spec.ts
+BACKEND_INTEGRATION_TEST_DATABASE_URL='postgresql://fixture:fixture@127.0.0.1:15441/postgres' \
+BULLMQ_TEST_REDIS_HOST=127.0.0.1 BULLMQ_TEST_REDIS_PORT=16441 \
+  npx nx run backend:test-integration
 ```
 
 `testcenter-import-recovery.postgres.spec.ts` uses the real Testcenter service,
@@ -196,15 +194,14 @@ migration before starting the updated backend; TypeORM synchronization is disabl
 Local acceptance used PostgreSQL 14.24 and Liquibase 4.28.0. These cases prove
 service-instance recovery and controlled failures, with the optional progress
 cache unavailable. They do not simulate an operating-system crash, a browser
-reload during import, or an external production Testcenter. The PostgreSQL group
-remains an additional opt-in check, separate from the required pipeline gates.
+reload during import, or an external production Testcenter. The PostgreSQL group is mandatory in the separate backend integration CI gate.
 
 ## Remaining specialist checks
 
 The live workflow covers real persistence and queue use, but does not replace
 production-scale load, worker crash/retry, accessibility or independent numerical
-reference validation. The opt-in PostgreSQL suites and targeted export load
-helper remain additional checks; their results must be reported separately.
+reference validation. The mandatory PostgreSQL gate and the optional targeted export load helper
+have separate reports; their results must be reported separately.
 The six pre-existing skipped backend unit cases remain visible in JUnit and
 require a separate decision or repair rather than being counted as passed.
 

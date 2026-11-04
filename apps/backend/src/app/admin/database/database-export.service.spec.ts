@@ -13,10 +13,12 @@ const mockSqliteClose = jest.fn((callback?: (error: Error | null) => void) => {
 });
 
 jest.mock('sqlite3', () => ({
-  Database: jest.fn().mockImplementation(() => ({
-    run: mockSqliteRun,
-    close: mockSqliteClose
-  }))
+  default: {
+    Database: jest.fn().mockImplementation(() => ({
+      run: mockSqliteRun,
+      close: mockSqliteClose
+    }))
+  }
 }));
 
 describe('DatabaseExportService', () => {

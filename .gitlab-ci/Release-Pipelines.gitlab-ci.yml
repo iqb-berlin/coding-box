@@ -590,6 +590,7 @@ test-main-pr-backend:
     - echo "${CI_REGISTRY_PASSWORD}" | docker login -u ${CI_REGISTRY_USER} --password-stdin ${CI_REGISTRY}
     - docker pull --quiet ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test
   script:
+    - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:verify-test-runner
     - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:typecheck
     - docker run --rm ${BACKEND_IMAGE_NAME}:${CI_COMMIT_SHA}_test run backend:verify-runtime-package
     - docker network create backend-unit-${CI_JOB_ID}
@@ -600,14 +601,16 @@ test-main-pr-backend:
     when: always
     paths:
       - coverage/apps/backend/
+      - tmp/backend-vitest/typecheck.json
     reports:
       junit: coverage/apps/backend/junit.xml
       coverage_report:
         coverage_format: cobertura
         path: coverage/apps/backend/cobertura-coverage.xml
   after_script:
-    - mkdir -p coverage/apps
+    - mkdir -p coverage/apps tmp/backend-vitest
     - docker cp backend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/coverage/apps/backend coverage/apps/backend
+    - docker cp backend-unit-${CI_JOB_ID}:/usr/src/coding-box-base/tmp/backend-vitest/typecheck.json tmp/backend-vitest/typecheck.json
     - docker rm backend-unit-${CI_JOB_ID}
     - docker rm --force backend-unit-redis-${CI_JOB_ID}
     - docker network rm backend-unit-${CI_JOB_ID}

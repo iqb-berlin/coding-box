@@ -13,14 +13,15 @@ den generierten CommonJS-Autocoder. Eine separate, ungebündelte Ausführung
 aller Backend-Quelldateien durch Node wird nicht eingerichtet. Lokale Imports
 benötigen daher keine flächendeckende Ergänzung von `.js`-Endungen.
 
-Das Workspace-Root-Paket bleibt unverändert. Frontend, bestehende Buildwerkzeuge
-und CommonJS-Jest-Tests behalten ihre Modulgrenzen. `tsconfig.app.json` bleibt
+Das Workspace-Root-Paket behält seine CommonJS-Modulgrenze. Frontend, bestehende Buildwerkzeuge
+behalten ihre Modulgrenzen. Der Backend-Testpfad verwendet
+inzwischen [Vitest mit ESM](backend-tests.md). `tsconfig.app.json` bleibt
 für bestehende direkte TypeScript-Prüfwerkzeuge im Node20-Modus; der reguläre
 Webpack-Build wählt ausdrücklich die zusätzliche ESM-Konfiguration.
 
 Aufrufbare CommonJS-Pakete wie AdmZip, FormData, Archiver sowie ExcelJS und
-SQLite verwenden Default-Imports. Backend- und Jest-Konfiguration aktivieren
-`esModuleInterop`, damit CommonJS-Kontrolltests dieselben Pakete korrekt laden.
+SQLite verwenden Default-Imports. Die TypeScript-Konfiguration aktiviert
+`esModuleInterop` für die verbleibenden CommonJS-Prüfwerkzeuge. Vitest lädt die Pakete über ESM-Imports.
 Reine Interface-/Typimporte sind ausdrücklich markiert, damit die isolierte
 Transpilierung keine nicht vorhandenen Runtime-Exporte für Dekorator-Metadaten
 anfordert. Nest-Injektionstokens und TypeORM-Relations-Callbacks bleiben Werte.
@@ -64,9 +65,8 @@ Das Skript erzeugt ein eigenes internes Docker-Netz und ausschließlich
 synthetische Testdaten. Es entfernt am Ende nur seine eigenen Container und
 sein eigenes Netzwerk. Ein vollständiger Import-/Kodier-/Exportdurchlauf kann
 zusätzlich mit der dokumentierten [Codebook-/Autocoder-Fixture](../scripts/e2e/codebook/README.md)
-und den Browser-Workflowtests geprüft werden. Bestehende Jest-Tests sind
-weiterhin CommonJS-Kontrollen; sie werden hier nicht als native ESM-Tests
-ausgegeben.
+und den Browser-Workflowtests geprüft werden. Vitest prüft den ESM-Anwendungsgraphen,
+ersetzt jedoch nicht den nativen Node-Start dieses Produktionsbundles und dessen Produktionsabhängigkeiten.
 
 ## Rollout und Rücknahme
 

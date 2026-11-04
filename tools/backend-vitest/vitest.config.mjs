@@ -31,10 +31,14 @@ export default defineConfig({
     include, environment: 'node', globals: true, pool: 'forks', execArgv: ['--experimental-vm-modules'],
     maxWorkers: Number(process.env.BACKEND_VITEST_WORKERS || (scope === 'integration' ? 1 : 2)),
     testTimeout: 5000, hookTimeout: 5000,
+    passWithNoTests: false,
+    // External packages must keep Node's import conditions; never guess a CJS build.
+    server: { deps: { fallbackCJS: false } },
     coverage: {
-      provider: 'v8', reportOnFailure: true,
+      provider: 'v8', reportOnFailure: true, clean: false,
+      thresholds: scope === 'all' && process.env.BACKEND_VITEST_FILTERED !== 'true' ? { branches: 60, functions: 60, lines: 60, statements: 60 } : {},
       reporter: ['json', 'json-summary', 'lcov', 'cobertura', 'html', 'text-summary'],
-      reportsDirectory: path.join(root, 'coverage/apps/backend-vitest'),
+      reportsDirectory: path.join(root, 'coverage/apps/backend'),
       include: ['apps/backend/src/app/**/*.ts'],
       exclude: ['**/*.spec.ts', '**/*.mock.ts', '**/*.module.ts', '**/*.routes.ts', '**/*.config.ts', '**/app/models/**', '**/app/core/models/**', '**/node_modules/**', '**/vendor/**']
     }

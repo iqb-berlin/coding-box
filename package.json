@@ -13,7 +13,7 @@
     "test-frontend": "nx test frontend",
     "test-frontend:coverage": "nx test frontend --codeCoverage",
     "test-backend": "nx test backend",
-    "test-backend:coverage": "nx test backend --codeCoverage",
+    "test-backend:coverage": "nx test backend --coverage",
     "lint-app": "nx run-many --target=lint --all --parallel",
     "lint-frontend": "nx lint frontend --fix",
     "lint-backend": "nx lint backend",

@@ -1,27 +1,36 @@
 import { fork } from 'child_process';
 import { once } from 'events';
 import { promises as fs } from 'fs';
-import * as os from 'os';
+import ts from 'typescript';
 import * as path from 'path';
 
 describe('Nest process shutdown', () => {
   it.each([
     ['api', 'SIGTERM'], ['api', 'SIGINT'], ['export-worker', 'SIGTERM'], ['export-worker', 'SIGINT']
   ] as const)('runs awaited cleanup for %s on %s', async (role, signal) => {
-    const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'backend-shutdown-'));
+    const temporaryRoot = path.resolve('tmp');
+    await fs.mkdir(temporaryRoot, { recursive: true });
+    const directory = await fs.mkdtemp(path.join(temporaryRoot, 'backend-shutdown-'));
     const trace = path.join(directory, 'trace.jsonl');
     const environment = { ...process.env };
     delete environment.NO_COLOR;
     delete environment.FORCE_COLOR;
-    const child = fork(path.join(__dirname, 'shutdown.test.factory.ts'), [], {
-      execArgv: ['--no-experimental-strip-types', '-r', require.resolve('ts-node/register/transpile-only')],
-      env: {
-        ...environment,
-        APP_ROLE: role,
-        SHUTDOWN_TRACE_PATH: trace,
-        TS_NODE_PROJECT: path.resolve('apps/backend/tsconfig.spec.json'),
-        TS_NODE_COMPILER_OPTIONS: JSON.stringify({ module: 'commonjs' })
-      },
+    for (const name of ['shutdown.test.factory', 'shutdown']) {
+      const source = await fs.readFile(path.join(__dirname, `${name}.ts`), 'utf8');
+      const emitted = ts.transpileModule(source, {
+        compilerOptions: {
+          module: ts.ModuleKind.ESNext,
+          target: ts.ScriptTarget.ES2021,
+          experimentalDecorators: true,
+          emitDecoratorMetadata: true,
+          useDefineForClassFields: false
+        }
+      }).outputText.replace("from './shutdown'", "from './shutdown.mjs'");
+      await fs.writeFile(path.join(directory, `${name}.mjs`), emitted);
+    }
+    const child = fork(path.join(directory, 'shutdown.test.factory.mjs'), [], {
+      execArgv: [],
+      env: { ...environment, APP_ROLE: role, SHUTDOWN_TRACE_PATH: trace },
       stdio: ['ignore', 'pipe', 'pipe', 'ipc']
     });
     let errors = '';

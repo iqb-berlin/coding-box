@@ -1,6 +1,6 @@
 import { ExecutionContext, INestApplication } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
-import * as fs from 'fs';
+import fs from 'fs';
 import { removeExternalCodingImportFile } from '../../job-queue/external-coding-import-file.util';
 import { WorkspaceCodingImportController } from './workspace-coding-import.controller';
 import { ExternalCodingImportService } from '../../database/services/coding/external-coding-import.service';

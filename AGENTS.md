@@ -34,7 +34,7 @@ This `AGENTS.md` provides context and guidelines for AI agents working on the Ko
 - **Frontend**: Angular 20+, Angular Material, RxJS.
 - **Backend**: NestJS 12+, TypeORM, PostgreSQL.
 - **Infrastructure**: Docker, Docker Compose, Make, Traefik, Redis, Liquibase.
-- **Tooling**: Nx (Monorepo), Jest, Cypress, ESLint, Prettier.
+- **Tooling**: Nx (Monorepo), Jest (frontend), Vitest (backend), Cypress, ESLint, Prettier.
 
 ## Workspace Structure
 - **`apps/frontend`**: The Angular web application (coding interface).
@@ -87,7 +87,7 @@ This `AGENTS.md` provides context and guidelines for AI agents working on the Ko
 - **Database**: Check existing TypeORM entities and Liquibase changelog conventions before changing schema or persistence behavior.
 - **Style**: Prettier and ESLint are enforced. Run the relevant `npx nx lint ...` target to verify.
 - **Testing**:
-  - Unit tests (Jest) are required for new logic.
+  - Unit tests are required for new logic (backend: Vitest; frontend: Jest).
   - E2E tests (Cypress) are expected for critical user flows.
 - **Scope control**: Avoid broad reformatting, unrelated refactors, and churn in generated or unrelated files.
 
