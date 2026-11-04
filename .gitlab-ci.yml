@@ -50,6 +50,10 @@ workflow:
     - when: always
 
 variables:
+  # Explicit full benchmark runs; retain the existing central variable map.
+  NX_SKIP_NX_CACHE: "true"
+  NX_DAEMON: "false"
+  NX_NO_CLOUD: "true"
   REGISTRY: "${CI_REGISTRY}"
   REGISTRY_USER: "${CI_REGISTRY_USER}"
   REGISTRY_PASSWORD: "${CI_REGISTRY_PASSWORD}"

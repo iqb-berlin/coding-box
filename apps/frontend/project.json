@@ -271,6 +271,13 @@
           "command": "node scripts/e2e/replay/run-replay-e2e.mjs --workflows --production"
         }
       }
+    },
+    "e2e-build-comparison-pilot": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-build-comparison/run-cypress.mjs"
+      }
     }
   }
 }

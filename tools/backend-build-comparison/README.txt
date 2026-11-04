@@ -108,8 +108,17 @@ They use the complete branch pipeline, explicit backend builds and no Nx cache.
 CI Docker builds use fresh Docker-in-Docker daemons, --pull --no-cache and the
 actual production Dockerfiles, including an npm ci --omit=dev. The tsc output
 keeps its ESM package.json under runtime/, since Docker restores the workspace
-CommonJS manifest at the image root. No shared latest image tags are updated.
+manifest without a type field at the image root. A countercheck confirmed that
+Node 24.22.1 also loads the original layout; the nested scope makes ESM explicit,
+rather than fixing a demonstrated startup crash. No shared latest image tags are updated.
 The standard production setup on develop is not changed by these experiments.
 
 The initial local report is historical evidence. Its computed local cost model
 cannot establish GitLab duration or a significant end-to-end improvement.
+
+The measurement helper is sourced by the container job; actual docker build
+commands remain inline and are still checked by the existing quality gate.
+Docker diagnostics have time bounds; build logs stream live while being saved.
+The initial remote preparation series exposed a test-parser conflict with a
+second global CI variable map. Benchmark variables now live in .gitlab-ci.yml.
+Preparation runs are recorded separately from the final comparison series.
