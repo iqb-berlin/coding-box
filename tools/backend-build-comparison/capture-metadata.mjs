@@ -8,6 +8,7 @@ if (!process.env.BUILD_COMPARISON_METADATA_FILE) throw new Error('A snapshot fil
 DataSource.prototype.initialize = async function () {
   try {
     await this.buildMetadatas();
+    if (this.entityMetadatas.length !== 43) throw new Error(`Expected 43 entities, received ${this.entityMetadatas.length}`);
     writeFileSync(process.env.BUILD_COMPARISON_METADATA_FILE, JSON.stringify(snapshot(this), null, 2));
     console.log(`Captured ${this.entityMetadatas.length} runtime entity metadata records`);
     process.exit(0);

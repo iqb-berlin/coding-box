@@ -1,9 +1,3 @@
-# Isolated benchmark branches: same job graph, no Nx task-cache hits.
-variables:
-  NX_SKIP_NX_CACHE: "true"
-  NX_DAEMON: "false"
-  NX_NO_CLOUD: "true"
-
 #############################################################################
 ## FEATURE COMMITS, 'DEVELOP' TARGETED PULL REQUESTS, PRE-RELEASE TAGS
 #############################################################################
@@ -401,7 +395,11 @@ test-backend-container:
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then echo "${CI_DEPENDENCY_PROXY_PASSWORD}" | docker login -u "${CI_DEPENDENCY_PROXY_USER}" --password-stdin "${CI_DEPENDENCY_PROXY_SERVER}"; fi
   script:
     # Build the actual production Dockerfiles; keep both images in this job.
-    - sh tools/backend-build-comparison/ci-linux-build.sh
+    - . tools/backend-build-comparison/ci-linux-build.sh
+    - measure builder docker build --progress plain --pull --no-cache --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
+    - measure runtime-base-pull docker pull --platform linux/amd64 ${DOCKER_HUB_PROXY}node:24.22.1-bookworm-slim
+    - measure production docker build --progress plain --no-cache --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    - capture_production_image
     - docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} --version
     - >-
       docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} -e
