@@ -1,13 +1,23 @@
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { composePlugins, withNx } = require('@nx/webpack');
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const nodeExternals = require('webpack-node-externals');
 
 module.exports = composePlugins(
-  // Default Nx composable plugin
   withNx(),
-  // Custom composable plugin
-  config => config
-  // `config` is the Webpack configuration object
-  // `options` is the options passed to the `@nx/webpack:webpack` executor
-  // `context` is the context passed to the `@nx/webpack:webpack` executor
-  // customize configuration here
+  config => {
+    config.experiments = { ...config.experiments, outputModule: true };
+    config.output = {
+      ...config.output,
+      filename: 'main.mjs',
+      chunkFilename: '[name].mjs',
+      module: true,
+      library: { type: 'module' }
+    };
+    delete config.output.libraryTarget;
+    // Native Node imports preserve the package's ESM/CJS export conditions.
+    config.externals = [nodeExternals({ importType: 'module' })];
+    config.externalsType = 'module';
+    return config;
+  }
 );

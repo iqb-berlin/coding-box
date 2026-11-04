@@ -1438,7 +1438,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-jobs/coding-jobs.component.ts": {
       "file": {
-        "max-lines": 1570
+        "max-lines": 1242
       },
       "functions": {}
     },
@@ -1455,7 +1455,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.ts": {
       "file": {
-        "max-lines": 1452
+        "max-lines": 1358
       },
       "functions": {
         "class CodingManagementManualComponent#1/method loadManualTabData#1": {

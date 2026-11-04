@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { IsNull, Not, Repository } from 'typeorm';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { buildCoderNameMapping } from '../../../utils/coding-utils';
 import { CodingListService } from './coding-list.service';

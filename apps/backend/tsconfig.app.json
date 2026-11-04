@@ -4,7 +4,7 @@
     "outDir": "../../dist/out-tsc",
     "module": "node20",
     "moduleResolution": "node16",
-    "esModuleInterop": false,
+    "esModuleInterop": true,
     "allowSyntheticDefaultImports": true,
     "types": ["node"],
     "emitDecoratorMetadata": true,

@@ -73,7 +73,7 @@ describe('CodebookDocxGenerator integration', () => {
     const xml = new AdmZip(await CodebookDocxGenerator.generateDocx(
       units, { ...defaultSettings, hasGeneralInstructions: true, showScore }
     )).readAsText('word/document.xml');
-    const paragraphs = xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g) || [];
+    const paragraphs: string[] = xml.match(/<w:p(?:\s[^>]*)?>[\s\S]*?<\/w:p>/g) || [];
     const instructions = paragraphs.filter(paragraph => paragraph.includes('>VOR</w:t>'));
     expect(instructions).toHaveLength(2);
     instructions.forEach(paragraph => {

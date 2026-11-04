@@ -11,7 +11,7 @@ import { OAuth2ClientCredentialsService, ClientCredentialsTokenResponse } from '
 import { OidcAuthService, OidcTokenResponse, OidcUserInfo } from './service/oidc-auth.service';
 import { AuthService } from './service/auth.service';
 import { CreateUserDto } from '../../../../../api-dto/user/create-user-dto';
-import { normalizeRequestId, RequestWithRequestId } from '../http/request-id';
+import { normalizeRequestId, type RequestWithRequestId } from '../http/request-id';
 import { AuthFailureException } from './auth-failure.exception';
 import { ValidatedBody } from '../http/validated-body.decorator';
 import type { RequestBody } from '../../../../../api-dto/request-contracts';

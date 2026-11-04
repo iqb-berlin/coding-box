@@ -12,7 +12,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosError } from 'axios';
 import { randomUUID } from 'crypto';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { In, Repository } from 'typeorm';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { Setting } from '../../database/entities/setting.entity';

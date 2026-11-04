@@ -1,5 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { PATH_METADATA } from '@nestjs/common/constants';
 
 const appRoot = path.resolve(__dirname, '..');
 
@@ -22,7 +23,7 @@ describe('backend controller imports', () => {
     for (const file of controllerFiles) {
       const moduleExports = await import(file);
       const controllers = Object.values(moduleExports)
-        .filter(value => typeof value === 'function' && `${(value as { name?: string }).name}`.endsWith('Controller'));
+        .filter(value => typeof value === 'function' && Reflect.hasMetadata(PATH_METADATA, value));
 
       expect(controllers).not.toHaveLength(0);
     }

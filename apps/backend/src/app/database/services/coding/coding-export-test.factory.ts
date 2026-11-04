@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import { createFacadeTestProxy } from '../shared/facade-test.factory';
 import { CodingListService } from './coding-list.service';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -48,33 +49,5 @@ export function createCodingExportService(responseRepository: Repository<Respons
   const facade = new CodingExportService(downloads, byVariable, aggregated, byCoder, compact, detailed, times);
   const providers = [query, formatting, replay, downloads, aggregated, rows, columns, byCoder, byVariable, compact, detailed, times];
   // Legacy fixtures probe/stub private methods; production uses explicit DI.
-  const owners = new Map<string, object>();
-  for (const provider of providers) {
-    for (const key of Object.getOwnPropertyNames(Object.getPrototypeOf(provider))) {
-      if (key !== 'constructor') owners.set(key, provider);
-    }
-  }
-  return new Proxy(facade, {
-    get(target, key) {
-      const owner = (typeof key === 'string' ? owners.get(key) : undefined) || providers.find(provider => Reflect.has(provider, key));
-      const value = Reflect.get(owner || target, key);
-      return owner && typeof value === 'function' && !Reflect.get(value, '_isMockFunction') ? value.bind(owner) : value;
-    },
-    set(target, key, value) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) return Reflect.set(owner, key, value);
-      const matching = providers.filter(provider => Reflect.has(provider, key));
-      if (matching.length) { matching.forEach(provider => Reflect.set(provider, key, value)); return true; }
-      return Reflect.set(target, key, value);
-    },
-    getOwnPropertyDescriptor(target, key) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) {
-        return {
-          configurable: true, enumerable: true, writable: true, value: Reflect.get(owner, key)
-        };
-      }
-      return Reflect.getOwnPropertyDescriptor(target, key);
-    }
-  });
+  return createFacadeTestProxy(facade, providers);
 }

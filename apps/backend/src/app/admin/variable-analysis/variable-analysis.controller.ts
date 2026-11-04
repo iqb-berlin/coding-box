@@ -22,7 +22,7 @@ import {
   ApiTags
 } from '@nestjs/swagger';
 import { Response } from 'express';
-import { VariableAnalysisMode, VariableAnalysisCodingVersion } from '../../../../../../api-dto/coding/variable-analysis-options';
+import type { VariableAnalysisMode, VariableAnalysisCodingVersion } from '../../../../../../api-dto/coding/variable-analysis-options';
 import { getErrorMessage } from '../../utils/error.util';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from '../workspace/workspace.guard';

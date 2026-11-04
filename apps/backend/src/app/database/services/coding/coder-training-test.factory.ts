@@ -1,6 +1,7 @@
 import {
   Repository
 } from 'typeorm';
+import { createFacadeTestProxy } from '../shared/facade-test.factory';
 import { ChunkEntity } from '../../entities/chunk.entity';
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
@@ -69,34 +70,5 @@ export function createCoderTrainingService(codingJobRepository: Repository<Codin
   const freshness = new CoderTrainingFreshnessService(codingJobRepository, codingJobUnitRepository, coderTrainingRepository, coderTrainingDiscussionResultRepository, workspaceExclusionService);
   const facade = new CoderTrainingService(selection, mutation, comparison, kappa, discussion, query, freshness);
   const providers = [display, sampling, selection, mutation, comparison, comparisonQuery, kappa, discussion, query, freshness];
-  // Legacy behavioral fixtures probe private methods. Production uses explicit DI.
-  const owners = new Map<string, object>();
-  for (const provider of providers) {
-    for (const key of Object.getOwnPropertyNames(Object.getPrototypeOf(provider))) {
-      if (key !== 'constructor') owners.set(key, provider);
-    }
-  }
-  return new Proxy(facade, {
-    get(target, key) {
-      const owner = (typeof key === 'string' ? owners.get(key) : undefined) || providers.find(provider => Reflect.has(provider, key));
-      const value = Reflect.get(owner || target, key);
-      return owner && typeof value === 'function' && !Reflect.get(value, '_isMockFunction') ? value.bind(owner) : value;
-    },
-    set(target, key, value) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) return Reflect.set(owner, key, value);
-      const matching = providers.filter(provider => Reflect.has(provider, key));
-      if (matching.length) { matching.forEach(provider => Reflect.set(provider, key, value)); return true; }
-      return Reflect.set(target, key, value);
-    },
-    getOwnPropertyDescriptor(target, key) {
-      const owner = typeof key === 'string' ? owners.get(key) : undefined;
-      if (owner) {
-        return {
-          configurable: true, enumerable: true, writable: true, value: Reflect.get(owner, key)
-        };
-      }
-      return Reflect.getOwnPropertyDescriptor(target, key);
-    }
-  });
+  return createFacadeTestProxy(facade, providers);
 }

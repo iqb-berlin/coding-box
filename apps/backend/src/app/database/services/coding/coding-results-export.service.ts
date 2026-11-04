@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   In, IsNull, Not, Repository
 } from 'typeorm';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { Request } from 'express';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber, EXCLUDED_STATUSES } from '../../utils/response-status-converter';

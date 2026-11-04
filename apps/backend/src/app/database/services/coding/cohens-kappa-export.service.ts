@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as fastCsv from 'fast-csv';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { sanitizeCsvText } from '../../../utils/csv.util';
 import { CodingReplayService } from './coding-replay.service';
 import {

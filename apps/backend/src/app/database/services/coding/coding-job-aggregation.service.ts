@@ -8,7 +8,7 @@ import { Setting } from '../../entities/setting.entity';
 import {
   buildAggregationGroups, deduplicateManualCodingResponses, getManualCodingDeduplicationKey, ManualCodingDeduplicationResponse
 } from './aggregation-metrics.util';
-import { DERIVED_VARIABLE_READER, DerivedVariableReader } from '../workspace/derived-variable-reader.token';
+import { DERIVED_VARIABLE_READER, type DerivedVariableReader } from '../workspace/derived-variable-reader.token';
 import { SlimResponse, CodingJobAggregationSettings } from './coding-job.types';
 
 @Injectable()

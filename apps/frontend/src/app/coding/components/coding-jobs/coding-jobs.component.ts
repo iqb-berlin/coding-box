@@ -8,7 +8,6 @@ import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
   debounceTime,
   distinctUntilChanged,
-  firstValueFrom,
   filter,
   finalize,
   Observable,
@@ -52,6 +51,7 @@ import { MatDividerModule } from '@angular/material/divider';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { SelectionModel } from '@angular/cdk/collections';
+import { CodingJobMutationsFacade } from './coding-job-mutations.facade';
 import { codingJobVariableSummary, codingJobIssueSummary } from './coding-job-summary';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
@@ -59,7 +59,6 @@ import { CodingPermissionsService } from '../../services/coding-permissions.serv
 import { AppService } from '../../../core/services/app.service';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import {
-  ApplyCodingResultsResponse,
   CodingJobBackendService
 } from '../../services/coding-job-backend.service';
 import { CodingTrainingBackendService } from '../../services/coding-training-backend.service';
@@ -86,33 +85,10 @@ import {
   TransferCodingCasesDialogResult
 } from './transfer-coding-cases-dialog/transfer-coding-cases-dialog.component';
 import {
-  ApplyCodingResultsDialogComponent,
-  ApplyCodingResultsDialogResult
-} from './apply-coding-results-dialog.component';
-import {
   appendReplayUrlParams,
   normalizeReplayUrlToCurrentOrigin
 } from '../../utils/replay-url.util';
 import { hasManagementWorkspaceAccess } from '../../../shared/utils/workspace-access';
-
-interface BulkApplyResultItem {
-  jobId: number;
-  jobName: string;
-  hasIssues: boolean;
-  skipped: boolean;
-  skippedReason?:
-  | 'training-job'
-  | 'not-completed'
-  | 'freshness-stale';
-  result?: {
-    success: boolean;
-    updatedResponsesCount: number;
-    skippedReviewCount: number;
-    skippedAlreadyCodedCount: number;
-    overwrittenExistingCount: number;
-    message: string;
-  };
-}
 
 type JobPrimaryAction =
   | 'start'
@@ -128,6 +104,7 @@ type CodingJobScope = 'all' | 'training' | 'productive';
   templateUrl: './coding-jobs.component.html',
   styleUrls: ['./coding-jobs.component.scss'],
   standalone: true,
+  providers: [CodingJobMutationsFacade],
   imports: [
     CommonModule,
     FormsModule,
@@ -166,6 +143,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   readonly permissions = inject(CodingPermissionsService);
   private readonly destroyRef = inject(DestroyRef);
+  private readonly mutations = inject(CodingJobMutationsFacade);
 
   appService = inject(AppService);
   codingJobBackendService = inject(CodingJobBackendService);
@@ -258,6 +236,12 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   };
 
   ngOnInit(): void {
+    this.mutations.changed$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(change => {
+      if (change.clearSelection) this.selection.clear();
+      if (change.deletedCount !== undefined) this.reloadCurrentOrPreviousPageAfterDelete(change.deletedCount);
+      else this.loadCodingJobs();
+      if (change.deletedCount === undefined || change.deletedCount > 0) this.jobsChanged.emit();
+    });
     let workspaceId = this.appService.selectedWorkspaceId;
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(id => {
       if (id === workspaceId) return;
@@ -679,63 +663,7 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   deleteCodingJob(job: CodingJob): void {
-    if (!this.permissions.canEdit(job)) return;
-    if (!this.canManageCodingJobs()) {
-      this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.manage-permission-required'),
-        this.uiTranslate('deferred-view.close'),
-        { duration: 4000 }
-      );
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) return;
-
-    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.delete-confirmation', { name: job.name });
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '400px',
-      data: {
-        title: this.uiTranslate('coding.trainings.delete.confirm.title'),
-        message: confirmMessage,
-        confirmButtonText: this.uiTranslate('delete'),
-        cancelButtonText: this.uiTranslate('cancel')
-      }
-    });
-
-    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
-      if (result) {
-        this.codingJobBackendService
-          .deleteCodingJob(workspaceId, job.id).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: response => {
-              if (response.success) {
-                this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.delete-success', { name: job.name }),
-                  this.uiTranslate('deferred-view.close'),
-                  { duration: 3000 }
-                );
-                this.reloadCurrentOrPreviousPageAfterDelete(1);
-                this.jobsChanged.emit();
-              } else {
-                this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.delete-failed', { name: job.name }),
-                  this.uiTranslate('deferred-view.close'),
-                  { duration: 3000 }
-                );
-              }
-            },
-            error: () => {
-              this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.delete-failed', { name: job.name }),
-                this.uiTranslate('deferred-view.close'),
-                { duration: 3000 }
-              );
-            }
-          });
-      }
-    });
+    this.mutations.deleteCodingJob(job, this.canManageCodingJobs());
   }
 
   getProgress(job: CodingJob): string {
@@ -1405,205 +1333,11 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
 
   bulkDeleteCodingJobs(): void {
     if (!this.canDeleteSelectedJobs()) return;
-    if (!this.canManageCodingJobs()) {
-      this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.manage-permission-required'),
-        this.uiTranslate('deferred-view.close'),
-        { duration: 4000 }
-      );
-      return;
-    }
-
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) return;
-    const selectedJobs = [...this.selection.selected];
-    if (selectedJobs.length === 0) {
-      this.snackBar.open(this.uiTranslate('ui-text.coding-jobs.no-selection'), this.uiTranslate('deferred-view.close'), {
-        duration: 3000
-      });
-      return;
-    }
-
-    const jobNamesHTML = selectedJobs
-      .map(job => `"${job.name}"`)
-      .join('<br>');
-    const confirmMessage = this.uiTranslate('ui-text.coding-jobs.bulk-delete-confirmation', { length: selectedJobs.length, jobNamesHTML: jobNamesHTML });
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '500px',
-      data: {
-        title: this.uiTranslate('ui-text.coding-jobs.bulk-delete-title'),
-        message: confirmMessage,
-        confirmButtonText: this.uiTranslate('export-toast.clear-all'),
-        cancelButtonText: this.uiTranslate('cancel')
-      }
-    });
-
-    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
-      if (result) {
-        this.performBulkDelete(selectedJobs, workspaceId);
-      }
-    });
-  }
-
-  private async performBulkDelete(jobs: CodingJob[], workspaceId: number): Promise<void> {
-    if (!jobs.every(job => this.permissions.canEdit(job))) return;
-    const generation = this.workspaceGeneration;
-    if (!workspaceId) {
-      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
-        duration: 3000
-      });
-      return;
-    }
-
-    const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.coding-jobs.deleting-count', { length: jobs.length }),
-      '',
-      { duration: 3000 }
-    );
-
-    let successCount = 0;
-    let failureCount = 0;
-    const failedJobs: string[] = [];
-
-    try {
-      const response = await firstValueFrom(this.codingJobBackendService.deleteCodingJobs(workspaceId, jobs.map(job => job.id)).pipe(
-        takeUntilWorkspaceChanged(this.appService, workspaceId),
-        takeUntilDestroyed(this.destroyRef),
-        finalize(() => loadingSnack.dismiss())
-      ), { defaultValue: undefined });
-      if (!response) return;
-      if (response.success) successCount = jobs.length;
-      else { failureCount = jobs.length; failedJobs.push(...jobs.map(job => job.name)); }
-    } catch {
-      failureCount = jobs.length;
-      failedJobs.push(...jobs.map(job => job.name));
-    }
-
-    loadingSnack.dismiss();
-    if (this.destroyRef.destroyed || generation !== this.workspaceGeneration) return;
-
-    this.selection.clear();
-
-    if (failureCount === 0) {
-      this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.bulk-delete-success', { successCount: successCount }),
-        this.uiTranslate('deferred-view.close'),
-        { duration: 3000 }
-      );
-    } else if (successCount === 0) {
-      this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.bulk-delete-failed', { failureCount: failureCount }),
-        this.uiTranslate('deferred-view.close'),
-        { duration: 5000 }
-      );
-    } else {
-      this.snackBar.open(
-        this.uiTranslate('ui-text.coding-jobs.bulk-delete-partial', { successCount: successCount, failureCount: failureCount, value3: failedJobs.join(', ') }),
-        this.uiTranslate('deferred-view.close'),
-        { duration: 5000 }
-      );
-    }
-
-    this.reloadCurrentOrPreviousPageAfterDelete(successCount);
-    if (successCount > 0) {
-      this.jobsChanged.emit();
-    }
+    this.mutations.bulkDeleteCodingJobs([...this.selection.selected], this.canManageCodingJobs());
   }
 
   applyCodingResults(job: CodingJob): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
-        duration: 3000
-      });
-      return;
-    }
-
-    const dialogRef = this.dialog.open(ApplyCodingResultsDialogComponent, {
-      width: '600px',
-      data: {
-        jobName: job.name,
-        totalResults: job.totalUnits,
-        codedResults: job.codedUnits,
-        hasReviewIssues: job.hasIssues
-      }
-    });
-
-    this.observeWorkspaceDialog(dialogRef)
-      .subscribe((dialogResult?: ApplyCodingResultsDialogResult | false) => {
-        if (!dialogResult) {
-          return;
-        }
-
-        const loadingSnack = this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.applying-results', { name: job.name }),
-          '',
-          { duration: 3000 }
-        );
-
-        this.codingJobBackendService
-          .applyCodingResults(workspaceId, job.id, {
-            overwriteExisting: dialogResult.overwriteExisting
-          }).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-          .subscribe({
-            next: result => {
-              loadingSnack.dismiss();
-              if (result.success) {
-                this.snackBar.open(
-                  this.formatApplyCodingResultsMessage(result),
-                  this.uiTranslate('deferred-view.close'),
-                  { duration: 6000 }
-                );
-                this.loadCodingJobs(); // Refresh the list to show updated status
-                this.notifyCodingResultsApplied(workspaceId);
-                this.jobsChanged.emit();
-              } else {
-                this.snackBar.open(
-                  this.uiTranslate('ui-text.coding-jobs.apply-failed', { value1: this.translateService.instant(result.messageKey, result.messageParams || {}) }),
-                  this.uiTranslate('deferred-view.close'),
-                  { duration: 5000 }
-                );
-              }
-            },
-            error: error => {
-              loadingSnack.dismiss();
-              this.snackBar.open(
-                this.uiTranslate('ui-text.coding-jobs.apply-failed', { value1: error.message || this.uiTranslate('error.unknown') }),
-                this.uiTranslate('deferred-view.close'),
-                { duration: 5000 }
-              );
-            }
-          });
-      });
-  }
-
-  private formatApplyCodingResultsMessage(
-    result: ApplyCodingResultsResponse
-  ): string {
-    const parts = [
-      this.uiTranslate('ui-text.coding-jobs.apply-success', { updatedResponsesCount: result.updatedResponsesCount })
-    ];
-
-    if (result.skippedAlreadyCodedCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.preserved-responses', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
-      );
-    }
-
-    if (result.overwrittenExistingCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.overwritten-responses', { overwrittenExistingCount: result.overwrittenExistingCount })
-      );
-    }
-
-    if (result.skippedReviewCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.review-skipped-responses', { skippedReviewCount: result.skippedReviewCount })
-      );
-    }
-
-    return parts.join('\n');
+    this.mutations.applyCodingResults(job);
   }
 
   protected getAggregationSettingsText(job: CodingJob): string {
@@ -1651,100 +1385,6 @@ export class CodingJobsComponent implements OnInit, OnDestroy {
   }
 
   bulkApplyCodingResults(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
-      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
-        duration: 3000
-      });
-      return;
-    }
-
-    const confirmMessage = [
-      this.uiTranslate('ui-text.coding-jobs.bulk-apply-question'),
-      this.uiTranslate('ui-text.coding-jobs.bulk-apply-valid-results'),
-      this.uiTranslate('ui-text.coding-jobs.bulk-apply-review-hint')
-    ].join(' ');
-
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '500px',
-      data: {
-        title: this.uiTranslate('ui-text.coding-jobs.bulk-apply-title'),
-        message: confirmMessage,
-        confirmButtonText: this.uiTranslate('coding.trainings.compare.apply-dialog.apply'),
-        cancelButtonText: this.uiTranslate('cancel')
-      }
-    });
-
-    this.observeWorkspaceDialog(dialogRef).subscribe(result => {
-      if (result) {
-        this.performBulkApply(workspaceId);
-      }
-    });
-  }
-
-  private performBulkApply(workspaceId: number): void {
-    if (!workspaceId) {
-      this.snackBar.open(this.uiTranslate('error.noWorkspaceSelected'), this.uiTranslate('deferred-view.close'), {
-        duration: 3000
-      });
-      return;
-    }
-
-    const loadingSnack = this.snackBar.open(
-      this.uiTranslate('ui-text.coding-jobs.applying-all-results'),
-      '',
-      { duration: 3000 }
-    );
-
-    this.codingJobBackendService.bulkApplyCodingResults(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef)).subscribe({
-      next: result => {
-        loadingSnack.dismiss();
-        if (result.success) {
-          const skippedCount = result.results.filter(
-            (r: BulkApplyResultItem) => r.skipped
-          ).length;
-          const failedCount = result.results.filter(
-            (r: BulkApplyResultItem) => r.result && !r.result.success
-          ).length;
-          const processedCount = result.jobsProcessed;
-          const alreadyCodedInfo =
-            result.totalSkippedAlreadyCoded > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.preserved-results-info', { totalSkippedAlreadyCoded: result.totalSkippedAlreadyCoded }) :
-              '';
-          const failedInfo =
-            failedCount > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.failed-jobs-info', { failedCount: failedCount }) :
-              '';
-          const reviewInfo =
-            result.totalSkippedReview > 0 ?
-              this.uiTranslate('ui-text.coding-jobs.pending-review-info', { totalSkippedReview: result.totalSkippedReview }) :
-              '';
-          this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.bulk-apply-success', {
-              processedCount: processedCount, totalUpdatedResponses: result.totalUpdatedResponses, alreadyCodedInfo: alreadyCodedInfo, reviewInfo: reviewInfo, value5: skippedCount > 0 ? this.uiTranslate('ui-text.coding-jobs.skipped-jobs-info', { skippedCount: skippedCount }) : '', failedInfo: failedInfo
-            }),
-            this.uiTranslate('deferred-view.close'),
-            { duration: 5000 }
-          );
-          this.loadCodingJobs(); // Refresh the list
-          this.notifyCodingResultsApplied(workspaceId);
-          this.jobsChanged.emit();
-        } else {
-          this.snackBar.open(
-            this.uiTranslate('ui-text.coding-jobs.bulk-apply-failed', { message: result.message }),
-            this.uiTranslate('deferred-view.close'),
-            { duration: 5000 }
-          );
-        }
-      },
-      error: error => {
-        loadingSnack.dismiss();
-        this.snackBar.open(
-          this.uiTranslate('ui-text.coding-jobs.bulk-apply-request-failed', { value1: error.message || this.uiTranslate('error.unknown') }),
-          this.uiTranslate('deferred-view.close'),
-          { duration: 5000 }
-        );
-      }
-    });
+    this.mutations.bulkApplyCodingResults();
   }
 }

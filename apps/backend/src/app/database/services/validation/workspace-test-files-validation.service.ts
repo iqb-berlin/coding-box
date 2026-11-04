@@ -25,7 +25,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { ResourcePackageService } from '../workspace/resource-package.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
-import codingSchemeSchema = require('../../../schemas/coding-scheme.schema.json');
+import codingSchemeSchema from '../../../schemas/coding-scheme.schema.json';
 
 type FileStatus = {
   filename: string;

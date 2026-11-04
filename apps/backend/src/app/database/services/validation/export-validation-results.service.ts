@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   CacheService,

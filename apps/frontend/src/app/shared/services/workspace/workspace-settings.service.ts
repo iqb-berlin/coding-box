@@ -1,6 +1,8 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable, Subject } from 'rxjs';
+import {
+  catchError, defer, map, Observable, of, Subject, take
+} from 'rxjs';
 import { finalize, shareReplay, tap } from 'rxjs/operators';
 import { injectUiTranslator } from '../../utils/ui-translator';
 import { SERVER_URL } from '../../../injection-tokens';
@@ -83,10 +85,7 @@ export class WorkspaceSettingsService {
     );
     const cached = this.settingsCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
-      return new Observable(observer => {
-        observer.next(cached.value);
-        observer.complete();
-      });
+      return of(cached.value);
     }
 
     const inFlight = this.settingsInFlight.get(requestCacheKey);
@@ -111,7 +110,7 @@ export class WorkspaceSettingsService {
           this.settingsInFlight.delete(requestCacheKey);
         }
       }),
-      shareReplay({ bufferSize: 1, refCount: false })
+      shareReplay({ bufferSize: 1, refCount: true })
     );
     this.settingsInFlight.set(requestCacheKey, request$);
     return request$;
@@ -182,27 +181,9 @@ export class WorkspaceSettingsService {
   }
 
   getAutoFetchCodingStatistics(workspaceId: number): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'auto-fetch-coding-statistics',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? false);
-          } catch {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(false);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'auto-fetch-coding-statistics', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? false, false, true
+    );
   }
 
   setAutoFetchCodingStatistics(
@@ -219,27 +200,9 @@ export class WorkspaceSettingsService {
   }
 
   getAutoRefreshManualCodingJobs(workspaceId: number): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'auto-refresh-manual-coding-jobs',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? true);
-          } catch {
-            observer.next(true);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(true);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'auto-refresh-manual-coding-jobs', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? true, true, true
+    );
   }
 
   setAutoRefreshManualCodingJobs(
@@ -256,27 +219,9 @@ export class WorkspaceSettingsService {
   }
 
   getEvaluationMode(workspaceId: number): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'evaluation-mode',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? false);
-          } catch {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(false);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'evaluation-mode', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? false, false, true
+    );
   }
 
   setEvaluationMode(
@@ -308,27 +253,9 @@ export class WorkspaceSettingsService {
   }
 
   getShowTestResultsLogAnomalies(workspaceId: number): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'show-test-results-log-anomalies',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? false);
-          } catch {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(false);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'show-test-results-log-anomalies', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? false, false, true
+    );
   }
 
   setShowTestResultsLogAnomalies(
@@ -344,30 +271,10 @@ export class WorkspaceSettingsService {
     );
   }
 
-  getIncludeDeriveErrorInManualCoding(
-    workspaceId: number
-  ): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'include-derive-error-in-manual-coding',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? false);
-          } catch {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(false);
-          observer.complete();
-        }
-      });
-    });
+  getIncludeDeriveErrorInManualCoding(workspaceId: number): Observable<boolean> {
+    return this.readSetting(
+      workspaceId, 'include-derive-error-in-manual-coding', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? false, false, true
+    );
   }
 
   setIncludeDeriveErrorInManualCoding(
@@ -384,27 +291,9 @@ export class WorkspaceSettingsService {
   }
 
   getEnableRegexSearch(workspaceId: number): Observable<boolean> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'enable-regex-search',
-        true
-      ).subscribe({
-        next: setting => {
-          try {
-            const parsed = JSON.parse(setting.value);
-            observer.next(parsed.enabled ?? false);
-          } catch {
-            observer.next(false);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(false);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'enable-regex-search', value => (JSON.parse(value) as { enabled?: boolean }).enabled ?? false, false, true
+    );
   }
 
   setEnableRegexSearch(
@@ -421,22 +310,9 @@ export class WorkspaceSettingsService {
   }
 
   getReplayUrlExportMode(workspaceId: number): Observable<ReplayUrlExportMode> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        REPLAY_URL_EXPORT_MODE_SETTING_KEY,
-        true
-      ).subscribe({
-        next: setting => {
-          observer.next(this.parseReplayUrlExportMode(setting.value));
-          observer.complete();
-        },
-        error: () => {
-          observer.next(DEFAULT_REPLAY_URL_EXPORT_MODE);
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, REPLAY_URL_EXPORT_MODE_SETTING_KEY, value => this.parseReplayUrlExportMode(value), DEFAULT_REPLAY_URL_EXPORT_MODE, true
+    );
   }
 
   setReplayUrlExportMode(
@@ -456,26 +332,9 @@ export class WorkspaceSettingsService {
     workspaceId: number,
     maxDurationDays = DEFAULT_EXTERNAL_REPLAY_TOKEN_DURATION_DAYS
   ): Observable<number> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY,
-        true
-      ).subscribe({
-        next: setting => {
-          observer.next(
-            this.parseReplayUrlExportTokenDurationDays(setting.value, maxDurationDays)
-          );
-          observer.complete();
-        },
-        error: () => {
-          observer.next(
-            this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays)
-          );
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, REPLAY_URL_EXPORT_TOKEN_DURATION_DAYS_SETTING_KEY, value => this.parseReplayUrlExportTokenDurationDays(value, maxDurationDays), this.normalizeReplayUrlExportTokenDurationDays(undefined, maxDurationDays), true
+    );
   }
 
   setReplayUrlExportTokenDurationDays(
@@ -496,22 +355,9 @@ export class WorkspaceSettingsService {
   }
 
   getAuthSessionIdleTimeoutMinutes(workspaceId: number): Observable<number> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY,
-        true
-      ).subscribe({
-        next: setting => {
-          observer.next(this.parseAuthSessionIdleTimeoutMinutes(setting.value));
-          observer.complete();
-        },
-        error: () => {
-          observer.next(this.normalizeAuthSessionIdleTimeoutMinutes(undefined));
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, AUTH_SESSION_IDLE_TIMEOUT_MINUTES_SETTING_KEY, value => this.parseAuthSessionIdleTimeoutMinutes(value), this.normalizeAuthSessionIdleTimeoutMinutes(undefined), true
+    );
   }
 
   setAuthSessionIdleTimeoutMinutes(
@@ -534,30 +380,10 @@ export class WorkspaceSettingsService {
     );
   }
 
-  getResponseMatchingMode(
-    workspaceId: number
-  ): Observable<ResponseMatchingFlag[]> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(workspaceId, 'response-matching-mode').subscribe(
-        {
-          next: setting => {
-            try {
-              const parsed = JSON.parse(setting.value);
-              observer.next(
-                parsed.flags ?? DEFAULT_RESPONSE_MATCHING_MODE.flags
-              );
-            } catch {
-              observer.next(DEFAULT_RESPONSE_MATCHING_MODE.flags);
-            }
-            observer.complete();
-          },
-          error: () => {
-            observer.next(DEFAULT_RESPONSE_MATCHING_MODE.flags);
-            observer.complete();
-          }
-        }
-      );
-    });
+  getResponseMatchingMode(workspaceId: number): Observable<ResponseMatchingFlag[]> {
+    return this.readSetting(
+      workspaceId, 'response-matching-mode', value => (JSON.parse(value) as ResponseMatchingModeDto).flags ?? DEFAULT_RESPONSE_MATCHING_MODE.flags, DEFAULT_RESPONSE_MATCHING_MODE.flags
+    );
   }
 
   setResponseMatchingMode(
@@ -574,25 +400,9 @@ export class WorkspaceSettingsService {
   }
 
   getAggregationThreshold(workspaceId: number): Observable<number | null> {
-    return new Observable(observer => {
-      this.getWorkspaceSetting(
-        workspaceId,
-        'duplicate-aggregation-threshold'
-      ).subscribe({
-        next: setting => {
-          try {
-            observer.next(this.normalizeAggregationThreshold(setting.value));
-          } catch {
-            observer.next(2);
-          }
-          observer.complete();
-        },
-        error: () => {
-          observer.next(2); // Default
-          observer.complete();
-        }
-      });
-    });
+    return this.readSetting(
+      workspaceId, 'duplicate-aggregation-threshold', value => this.normalizeAggregationThreshold(value), 2
+    );
   }
 
   setAggregationThreshold(
@@ -607,6 +417,20 @@ export class WorkspaceSettingsService {
         'disabled' :
         normalizedThreshold.toString(),
       'Minimum number of identical responses required for aggregation'
+    );
+  }
+
+  private readSetting<T>(
+    workspaceId: number,
+    key: string,
+    parse: (value: string) => T,
+    fallback: T,
+    suppressGlobalError = false
+  ): Observable<T> {
+    return defer(() => this.getWorkspaceSetting(workspaceId, key, suppressGlobalError)).pipe(
+      map(setting => parse(setting.value)),
+      catchError(() => of(fallback)),
+      take(1)
     );
   }
 
