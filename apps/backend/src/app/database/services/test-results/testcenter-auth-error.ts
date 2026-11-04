@@ -12,7 +12,10 @@ export function testcenterAuthenticationError(error: unknown): HttpException {
       return new GatewayTimeoutException('Testcenter authentication timed out', options);
     }
     switch (error.response?.status) {
-      case 400: return new BadRequestException('Testcenter rejected the authentication request', options);
+      case 400:
+        return error.response.data === 'No login with this password.' ?
+          new UnprocessableEntityException('Invalid Testcenter credentials', options) :
+          new BadRequestException('Testcenter rejected the authentication request', options);
       // A provider login failure must not invalidate the application's bearer session.
       case 401: return new UnprocessableEntityException('Invalid Testcenter credentials', options);
       case 403: return new ForbiddenException('Testcenter access denied', options);
@@ -24,7 +27,8 @@ export function testcenterAuthenticationError(error: unknown): HttpException {
   return new ServiceUnavailableException('Testcenter authentication is unavailable', options);
 }
 
-export function testcenterAuthenticationResponse(data: unknown): Record<string, unknown> {
+export function testcenterAuthenticationResponse(data: unknown, status?: number): Record<string, unknown> {
+  if (status === 202 || status === 204) throw new ForbiddenException('Testcenter access denied');
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
     throw new BadGatewayException('Invalid Testcenter authentication response');
   }

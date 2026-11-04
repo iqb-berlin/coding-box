@@ -2,7 +2,7 @@ import { provideZonelessChangeDetection } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
-import { Subject } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { TestCenterImportComponent } from './test-center-import.component';
 import { WorkspaceAdmin } from '../../../shared/models/test-center-authentication.model';
@@ -71,7 +71,7 @@ describe('Testcenter delayed responses without Zone.js', () => {
         provideZonelessChangeDetection(),
         { provide: MAT_DIALOG_DATA, useValue: dialogData },
         { provide: MatDialogRef, useValue: dialogRef },
-        { provide: UserBackendService, useValue: { authenticate: () => login } },
+        { provide: UserBackendService, useValue: { authenticate: () => login, getTestcenterInstances: () => of([]) } },
         { provide: ImportService, useValue: importService },
         { provide: WorkspaceAdminService, useValue: workspaceAdmin },
         { provide: AppService, useValue: { selectedWorkspaceId: 1 } }
@@ -113,10 +113,20 @@ describe('Testcenter delayed responses without Zone.js', () => {
     if (kind === 'network error') login.error(new Error('offline'));
     else login.next({});
     await fixture.whenStable();
-    expect(element().querySelector('.auth-section .error-message')?.textContent).toContain(translateGerman('login-error'));
+    const message = kind === 'network error' ? 'ui-text.testcenter-instances.login-error.unavailable' : 'login-error';
+    expect(element().querySelector('.auth-section .error-message')?.textContent).toContain(translateGerman(message));
     login = new Subject();
     await authenticate();
     expect(element().querySelector('.auth-section')).toBeNull();
+  });
+
+  it('ignores a login response if its destination was changed while it was pending', async () => {
+    fixture.componentInstance.authenticate();
+    fixture.componentInstance.loginForm.patchValue({ testCenter: 2 });
+    login.next({ token: 'wrong-destination', claims: { workspaceAdmin: [workspace] } });
+    await fixture.whenStable();
+    expect(fixture.componentInstance.authenticated()).toBe(false);
+    expect(workspaceAdmin.setLastAuthToken).not.toHaveBeenCalledWith('wrong-destination');
   });
 
   it('ignores login responses after logout or destruction', async () => {
@@ -126,7 +136,9 @@ describe('Testcenter delayed responses without Zone.js', () => {
     await fixture.whenStable();
     expect(element().querySelector('.auth-section')).not.toBeNull();
     expect(workspaceAdmin.setLastAuthToken).not.toHaveBeenCalledWith('old-token');
+    fixture.componentInstance.loginForm.patchValue({ name: 'user', pw: 'password', testCenter: 1 });
     fixture.componentInstance.authenticate();
+    expect(login.observed).toBe(true);
     fixture.destroy();
     expect(login.observed).toBe(false);
     login.next({ token: 'destroyed-token', claims: { workspaceAdmin: [workspace] } });

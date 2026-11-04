@@ -1083,7 +1083,7 @@
     },
     "apps/backend/src/app/database/services/test-results/testcenter.service.ts": {
       "file": {
-        "max-lines": 1439
+        "max-lines": 1424
       },
       "functions": {
         "class TestcenterService#1/method executeWorkspaceImport#1": {
@@ -1607,7 +1607,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.ts": {
       "file": {
-        "max-lines": 959
+        "max-lines": 956
       },
       "functions": {
         "class TestCenterImportComponent#1/method continueTestResultsImport#1": {

@@ -4,10 +4,10 @@ import {
 import { HttpService } from '@nestjs/axios';
 import { DataSource } from 'typeorm';
 import * as https from 'https';
-import { firstValueFrom } from 'rxjs';
 import { ConfigService } from '@nestjs/config';
 import { resolveTestcenterBaseUrl } from './testcenter-target';
-import { testcenterAuthenticationError, testcenterAuthenticationResponse } from './testcenter-auth-error';
+import { authenticateTestcenter } from './testcenter-authentication';
+import { TestcenterInstancesService } from '../../../testcenter/testcenter-instances.service';
 import { getErrorMessage } from '../../../utils/error.util';
 import { Person, Response, Log } from '../shared';
 
@@ -84,7 +84,8 @@ export class TestcenterService {
     private readonly codingFreshnessService?: CodingFreshnessService,
     @Optional()
     private readonly codingAnalysisService?: CodingAnalysisService,
-    @Optional() private readonly configService?: ConfigService
+    @Optional() private readonly configService?: ConfigService,
+    @Optional() private readonly instances?: TestcenterInstancesService
   ) {}
 
   persons: Person[] = [];
@@ -95,28 +96,10 @@ export class TestcenterService {
     server: string;
     url: string;
   }): Promise<Record<string, unknown>> {
-    const endpoint = `${this.testcenterBaseUrl(credentials.server, credentials.server ? '' : credentials.url)}/api/session/admin`;
-
-    try {
-      const { data } = await firstValueFrom(
-        this.httpService
-          .put(
-            endpoint,
-            {
-              name: credentials.username,
-              password: credentials.password
-            },
-            {
-              httpsAgent: agent,
-              timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
-              maxRedirects: 0
-            }
-          )
-      );
-      return testcenterAuthenticationResponse(data);
-    } catch (error) {
-      throw testcenterAuthenticationError(error);
-    }
+    const baseUrl = await this.testcenterBaseUrl(credentials.server, credentials.server ? '' : credentials.url);
+    return authenticateTestcenter(this.httpService, baseUrl, credentials, {
+      httpsAgent: agent, timeout: TESTCENTER_REQUEST_TIMEOUT_MS
+    });
   }
 
   async getTestgroups(
@@ -142,7 +125,7 @@ export class TestcenterService {
       });
 
       const response = await this.httpService.axiosRef.get<TestGroupsInfoDto[]>(
-        `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/results`,
+        `${await this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/results`,
         {
           httpsAgent: agent,
           timeout: TESTCENTER_REQUEST_TIMEOUT_MS,
@@ -369,7 +352,7 @@ export class TestcenterService {
 
           for (const chunk of chunks) {
             await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-responses');
-            const endpoint = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
+            const endpoint = `${await this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/response?dataIds=${chunk.join(',')}`;
 
             let rawResponses: Response[] = [];
             try {
@@ -481,7 +464,7 @@ export class TestcenterService {
 
     for (const chunk of logsChunks) {
       await this.updateResultImportPhase(workspace_id, importRunId, 'fetching-logs');
-      const logsUrl = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
+      const logsUrl = `${await this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/report/log?dataIds=${chunk.join(',')}`;
 
       try {
         const { data: logData } = await this.httpService.axiosRef.get<Log[]>(
@@ -733,7 +716,7 @@ export class TestcenterService {
     uploadResult: TestFilesUploadResultDto;
   }> {
     const headersRequest = this.createHeaders(authToken);
-    const filesEndpoint = `${this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/files`;
+    const filesEndpoint = `${await this.testcenterBaseUrl(server, url)}/api/workspace/${tc_workspace}/files`;
 
     try {
       const { data: files } =
@@ -1517,7 +1500,7 @@ export class TestcenterService {
     id: string;
   }> {
     const headersRequest = this.createHeaders(authToken);
-    const requestUrl = this.buildFileRequestUrl(file, server, tcWorkspace, url);
+    const requestUrl = await this.buildFileRequestUrl(file, server, tcWorkspace, url);
 
     try {
       const response = await this.httpService.axiosRef.get<File>(requestUrl, {
@@ -1549,16 +1532,17 @@ export class TestcenterService {
     }
   }
 
-  private testcenterBaseUrl(server: string, url?: string): string {
-    return resolveTestcenterBaseUrl(server, url, this.configService?.get<string>('TESTCENTER_ALLOWED_URLS'));
+  private async testcenterBaseUrl(server: string, url?: string): Promise<string> {
+    return this.instances ? this.instances.resolve(server, url) :
+      resolveTestcenterBaseUrl(server, url, this.configService?.get<string>('TESTCENTER_ALLOWED_URLS'));
   }
 
-  private buildFileRequestUrl(
+  private async buildFileRequestUrl(
     file: File,
     server: string,
     tcWorkspace: string,
     url?: string
-  ): string {
-    return `${this.testcenterBaseUrl(server, url)}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
+  ): Promise<string> {
+    return `${await this.testcenterBaseUrl(server, url)}/api/workspace/${tcWorkspace}/file/${file.type}/${file.name}`;
   }
 }

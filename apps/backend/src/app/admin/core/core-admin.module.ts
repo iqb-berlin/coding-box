@@ -2,6 +2,9 @@ import { Module, Type } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminTestcenterInstancesController } from '../testcenter/testcenter-instances.controller';
+import { TestcenterInstancesController } from '../testcenter/testcenter-discovery.controller';
+import { TestcenterInstancesModule } from '../../testcenter/testcenter-instances.module';
 import { DatabaseModule } from '../../database/database.module';
 import { UserModule } from '../../user/user.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
@@ -54,6 +57,7 @@ export function getEnabledCoreAdminProcessors(
 
 @Module({
   imports: [
+    TestcenterInstancesModule,
     DatabaseModule,
     ContentPoolModule,
     UserModule,
@@ -69,6 +73,8 @@ export function getEnabledCoreAdminProcessors(
     JobQueueModule
   ],
   controllers: [
+    AdminTestcenterInstancesController,
+    TestcenterInstancesController,
     UsersController,
     LogoController,
     UnitTagsController,

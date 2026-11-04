@@ -1,9 +1,15 @@
 describe('zoneless Testcenter import with delayed responses', () => {
+  beforeEach(() => {
+    cy.intercept('GET', '**/api/testcenter/instances', {
+      body: [{ label: 'Study Testcenter', baseUrl: 'https://study-testcenter.example.org/tci', source: 'administrator' }]
+    });
+  });
   for (const testcenter of [
-    { label: 'Testcenter 1', id: '1', server: '1', url: '' },
-    { label: 'individuelle Testcenter URL', id: '6', server: '', url: 'https://custom-testcenter.example.org/tci' },
+    { label: 'Testcenter 1', id: '1', server: '1', url: '', approved: false },
+    { label: 'individuelle Testcenter URL', id: '6', server: '', url: 'https://custom-testcenter.example.org/tci', approved: false },
+    { label: 'Study Testcenter', id: '7', server: '', url: 'https://study-testcenter.example.org/tci', approved: true },
     ...Array.from({ length: 10 }, (_, index) => ({
-      label: 'individuelle Testcenter URL', id: '6', server: '', url: `https://iqb-testcenter${index + 1}.de`
+      label: 'individuelle Testcenter URL', id: '6', server: '', url: `https://iqb-testcenter${index + 1}.de`, approved: false
     }))
   ]) {
     it(`renders login, progress, upload failure and retry for ${testcenter.url || testcenter.label}`, () => {
@@ -67,7 +73,7 @@ describe('zoneless Testcenter import with delayed responses', () => {
       cy.get('coding-box-test-center-import input[formControlName="pw"]').type('password');
       cy.get('coding-box-test-center-import mat-select[formControlName="testCenter"]').click();
       cy.get('mat-option').contains(testcenter.label).click();
-      if (testcenter.url) {
+      if (testcenter.url && !testcenter.approved) {
         cy.get('coding-box-test-center-import .auth-form button[type="submit"]').should('be.disabled');
         cy.get('coding-box-test-center-import input[formControlName="testCenterIndividual"]').should('be.enabled').type(testcenter.url);
       }
@@ -111,4 +117,72 @@ describe('zoneless Testcenter import with delayed responses', () => {
       cy.window().should('not.have.property', 'Zone');
     });
   }
+
+  for (const failure of [
+    { status: 403, message: 'Testcenter target is not allowed', expected: 'noch nicht freigegeben' },
+    { status: 422, message: 'Invalid Testcenter credentials', expected: 'Zugangsdaten abgelehnt' }
+  ]) {
+    it(`explains login HTTP ${failure.status} while retaining the Coding-Box session`, () => {
+      cy.mockKeycloakAuthentication();
+      cy.stubWorkspace({ workspaceId: 5 });
+      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', { body: { value: '{"enabled":false}' } });
+      cy.intercept('GET', '**/api/admin/workspace/5/content-pool/config', { body: { enabled: false, baseUrl: '', hasApplicationToken: false } });
+      cy.intercept('GET', '**/api/admin/workspace/5/files?*', { body: { data: [], total: 0, page: 1, limit: 100, fileTypes: [] } }).as('files');
+      cy.intercept('POST', '**/api/tc_authentication', { statusCode: failure.status, body: { message: failure.message } }).as('login');
+      cy.visit('/');
+      cy.wait('@authData', { requestTimeout: 30_000 });
+      cy.window().then(window => { window.location.hash = '/workspace-admin/5/test-files'; });
+      cy.wait('@files');
+      cy.get('coding-box-test-files').contains('button', 'Testcenter Import').click();
+      cy.get('input[formControlName="name"]').type('user');
+      cy.get('input[formControlName="pw"]').type('password');
+      cy.get('mat-select[formControlName="testCenter"]').click();
+      cy.get('mat-option').contains('individuelle Testcenter URL').click();
+      cy.get('input[formControlName="testCenterIndividual"]').type('https://study.example/tci');
+      cy.get('.auth-form button[type="submit"]').click();
+      cy.wait('@login');
+      cy.get('.auth-section [role="alert"]').should('contain.text', failure.expected);
+      cy.get('.auth-form button[type="submit"]').should('be.enabled');
+      cy.window().then(window => { expect(window.localStorage.getItem('auth_token')).to.be.a('string'); });
+    });
+  }
+
+
+  it('lets a system administrator approve, probe and revoke an instance in settings', () => {
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    const instance = { label: 'Study Testcenter', baseUrl: 'https://study.example/tci', source: 'administrator' };
+    cy.intercept('GET', '**/api/admin/testcenter/instances', { body: [] });
+    cy.intercept('POST', '**/api/admin/testcenter/instances', request => {
+      expect(request.body).to.deep.equal({ label: instance.label, baseUrl: instance.baseUrl });
+      request.reply({ body: [instance] });
+    }).as('approveInstance');
+    cy.intercept('POST', '**/api/admin/testcenter/instances/test', {
+      body: { version: '19.0.1', checkedAt: '2026-11-04T12:00:00Z' }
+    }).as('probeInstance');
+    cy.intercept('DELETE', '**/api/admin/testcenter/instances', request => {
+      expect(request.body).to.deep.equal({ baseUrl: instance.baseUrl });
+      request.reply({ body: [] });
+    }).as('revokeInstance');
+    cy.intercept('GET', '**/api/admin/content-pool/settings', { body: { enabled: false, baseUrl: '', hasApplicationToken: false } });
+    cy.intercept('GET', '**/api/legal-notice', { body: { html: '', isDefault: true } });
+    cy.visit('/');
+    cy.wait('@authData', { requestTimeout: 30_000 });
+    cy.window().then(window => { window.location.hash = '/admin/settings'; });
+    cy.get('coding-box-testcenter-settings').contains('mat-label', 'Name des Testcenters').click();
+    cy.get('coding-box-testcenter-settings input[name="name"]').should('be.focused').type(instance.label);
+    cy.get('coding-box-testcenter-settings').contains('mat-label', 'HTTPS-Basisadresse').click();
+    cy.get('coding-box-testcenter-settings input[name="baseUrl"]').should('be.focused').type(instance.baseUrl);
+    cy.get('coding-box-testcenter-settings button[type="submit"]').click();
+    cy.wait('@approveInstance');
+    cy.get('coding-box-testcenter-settings li').should('contain.text', instance.label);
+    cy.get('coding-box-testcenter-settings').contains('button', 'Verbindung prüfen').click();
+    cy.wait('@probeInstance');
+    cy.get('coding-box-testcenter-settings [role="status"]').should('contain.text', '19.0.1');
+    cy.get('coding-box-testcenter-settings').screenshot('testcenter-instance-settings');
+    cy.get('coding-box-testcenter-settings').contains('button', 'Freigabe aufheben').click();
+    cy.wait('@revokeInstance');
+    cy.get('coding-box-testcenter-settings li').should('not.exist');
+  });
+
 });
