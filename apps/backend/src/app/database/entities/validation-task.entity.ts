@@ -37,7 +37,7 @@ export class ValidationTask extends Job {
    * - 'deleteTestResultResponses': Delete response rows by unit, answer time, and optional variable/subform filters
    * - 'deleteTestLogs': Delete test log data by selected scope
    */
-  @Column()
+  @Column({ type: 'varchar' })
   validation_type: ValidationType;
 
   /**

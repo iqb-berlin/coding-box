@@ -245,6 +245,131 @@
           "command": "node tools/backend-vitest/run.mjs --scope=contracts"
         }
       }
+    },
+    "build-webpack-pilot": {
+      "executor": "@nx/webpack:webpack",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "schemas",
+            "output": "schemas"
+          }
+        ],
+        "webpackConfig": "tools/backend-build-comparison/webpack.config.cjs",
+        "outputPath": "dist/backend-build-comparison/webpack",
+        "main": "apps/backend/src/main.ts",
+        "outputFileName": "main.mjs",
+        "tsConfig": "apps/backend/tsconfig.build.json",
+        "generatePackageJson": true,
+        "target": "node",
+        "compiler": "tsc",
+        "typeCheckOptions": {
+          "async": false
+        }
+      },
+      "configurations": {
+        "production": {
+          "optimization": false,
+          "extractLicenses": true,
+          "inspect": false,
+          "fileReplacements": [
+            {
+              "replace": "apps/backend/src/environments/environment.ts",
+              "with": "apps/backend/src/environments/environment.prod.ts"
+            }
+          ]
+        }
+      },
+      "cache": false
+    },
+    "build-rspack-pilot": {
+      "executor": "@nx/rspack:rspack",
+      "outputs": [
+        "{options.outputPath}"
+      ],
+      "options": {
+        "assets": [
+          {
+            "glob": "**/*",
+            "input": "schemas",
+            "output": "schemas"
+          }
+        ],
+        "outputPath": "dist/backend-build-comparison/rspack",
+        "main": "apps/backend/src/main.ts",
+        "outputFileName": "main.mjs",
+        "tsConfig": "apps/backend/tsconfig.build.json",
+        "generatePackageJson": true,
+        "target": "node",
+        "rspackConfig": "tools/backend-build-comparison/rspack.config.cjs",
+        "skipTypeChecking": true,
+        "typeCheckOptions": {
+          "async": false
+        },
+        "sourceMap": false
+      },
+      "configurations": {
+        "production": {
+          "optimization": false,
+          "extractLicenses": true,
+          "fileReplacements": [
+            {
+              "replace": "apps/backend/src/environments/environment.ts",
+              "with": "apps/backend/src/environments/environment.prod.ts"
+            }
+          ]
+        }
+      },
+      "cache": false
+    },
+    "build-tsc-pilot": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-build-comparison/build-tsc.mjs"
+      }
+    },
+    "compare-builds": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-build-comparison/measure.mjs"
+      },
+      "configurations": {
+        "watch": {
+          "command": "node tools/backend-build-comparison/measure.mjs --watch-only"
+        },
+        "watch-webpack": {
+          "command": "node tools/backend-build-comparison/measure.mjs --watch-only --watch-variant=webpack"
+        },
+        "builds": {
+          "command": "node tools/backend-build-comparison/measure.mjs --builds-only"
+        },
+        "watch-tsc": {
+          "command": "node tools/backend-build-comparison/measure.mjs --watch-only --watch-variant=tsc"
+        }
+      }
+    },
+    "verify-build-runtime-pilot": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-build-comparison/runtime.mjs"
+      }
+    },
+    "compare-build-common-checks": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-build-comparison/common-checks.mjs"
+      },
+      "configurations": {
+        "resume": { "command": "node tools/backend-build-comparison/common-checks.mjs --resume" }
+      }
     }
   }
 }

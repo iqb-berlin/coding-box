@@ -11,6 +11,8 @@ RUN --mount=type=cache,target=/root/.npm \
     npm install -g --no-fund npm@11.19.1
 RUN npm --version
 
+ENV NX_DAEMON=false NX_NO_CLOUD=true NX_SKIP_NX_CACHE=true
+
 WORKDIR /usr/src/coding-box-base
 COPY . .
 
