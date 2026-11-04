@@ -33,7 +33,7 @@
       "invalidCount": 1,
       "emptyCount": 1,
       "emptyPercentage": 25,
-      "distinctValueCount": 3
+      "distinctValueCount": 4
     }
   ],
   "frequencies": [
@@ -122,6 +122,16 @@
       "percentageValid": 33.33333333333333,
       "isSchemaOnly": false,
       "label": "Gamma"
+    },
+    {
+      "unitName": "UNIT_REF",
+      "variableId": "VAR_MULTI",
+      "value": "",
+      "count": 1,
+      "validOccurrenceCount": 0,
+      "percentageTotal": 25,
+      "percentageValid": 0,
+      "isSchemaOnly": false
     }
   ]
 }

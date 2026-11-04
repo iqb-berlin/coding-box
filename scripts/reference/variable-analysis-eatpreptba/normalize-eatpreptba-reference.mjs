@@ -164,7 +164,7 @@ function comboKey(unitName, variableId) {
 function parseResponseValues(response) {
   if (response.isMultiple === 'true') {
     const values = JSON.parse(response.value || '[]');
-    return [...new Set(values)];
+    return values.length > 0 ? [...new Set(values)] : [''];
   }
 
   return [response.value];
@@ -246,9 +246,6 @@ function getVariableCombos(responses) {
 
     groupRows.forEach(row => {
       parseResponseValues(row).forEach(value => {
-        if (row.isMultiple === 'true' && value === '') {
-          return;
-        }
         distinctValues.add(value);
       });
     });
