@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as AdmZip from 'adm-zip';
+import AdmZip from 'adm-zip';
 import { Test } from '@nestjs/testing';
 import { ConflictException } from '@nestjs/common';
 import { getDataSourceToken } from '@nestjs/typeorm';

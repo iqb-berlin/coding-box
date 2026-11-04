@@ -5,8 +5,8 @@ import {
   IsOptional
 } from 'class-validator';
 import {
-  AuditActorType,
-  AuditEventResult,
+  type AuditActorType,
+  type AuditEventResult,
   auditActorTypes,
   auditEventResults
 } from '../../../../../../../api-dto/audit-journal/audit-journal.dto';

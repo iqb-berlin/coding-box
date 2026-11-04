@@ -21,7 +21,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { isExportWorkerProcess } from '../../../export-worker/export-worker-role';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,

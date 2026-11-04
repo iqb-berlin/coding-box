@@ -22,12 +22,12 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { WorkspaceTestResultsService, ResponseManagementService } from '../../database/services/test-results';
-import {
+import type {
   ResponseSearchSortBy,
   ResponseSearchSortDirection
 } from '../../database/services/test-results/workspace-test-results.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
-import { RequestWithUser, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
+import { type RequestWithUser, ResponseSearchResult } from './dto/workspace-test-results.interfaces';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { toRegexSearchException } from '../../utils/regex-search.util';

@@ -79,7 +79,7 @@ try {
   } else {
     const report = { sourceCommit: execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf8' }).trim(),
       createdAt: new Date().toISOString(), synthetic: true, persons: 2740, expectedCells: 5480,
-      backendSha256: hash(await readFile('dist/apps/backend/main.js')), exports: [] };
+      backendSha256: hash(await readFile('dist/apps/backend/main.mjs')), exports: [] };
     const workspace = Number(await json('/admin/workspace', { name: `Item matrix proof ${Date.now()}`, settings: {} }, 'POST', 201));
     report.workspaceId = workspace;
     let nextFile = Number((await database.query('SELECT coalesce(max(id),104100) AS id FROM file_upload')).rows[0].id);

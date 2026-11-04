@@ -63,6 +63,9 @@ den ergänzten PR-Stand ist damit noch nicht belegt.
 
 ## Nachprüfung der Reviewkorrekturen
 
+Die folgende Nachprüfung gehört zum Korrekturstand `555524635`. Der anschließende
+Abgleich mit dem weitergelaufenen `develop` wird gesondert dokumentiert.
+
 - **Umbenennen:** Die Oberfläche hält die ausgewählte Basisadresse fest, zeigt
   sie schreibgeschützt an und bietet **Name speichern** sowie **Abbrechen** an.
   Ein veränderter Formularwert kann beim Umbenennen keine zweite Adresse
@@ -119,6 +122,25 @@ docker stop tc-approval-tests
 Erwartet: vier ausgeführte, bestandene Tests und keine übersprungenen Fälle.
 Die Suite legt ein eigenes Schema an und entfernt nur dieses Schema. Die
 Testdatenbank liegt im Arbeitsspeicher des separat angelegten Containers.
+
+## Abgleich mit dem aktuellen develop
+
+Nach dem Push der Korrekturen wurde `develop` bis `7a4197c5b` übernommen. Die
+Importkonflikte betrafen die dort bereits gemergte Backend-ESM-Umstellung:
+`FormData` verwendet den Default-Import; der Interface-Import für den
+Workspace-Dateileser ist nun im ausgelagerten Autocoder-Schema-Service als
+Typimport markiert. Die Integrationsgrenzen und Reviewkorrekturen bleiben
+Bestandteil des zusammengeführten Stands.
+
+| Nachprüfung nach dem Abgleich | Stand |
+| --- | --- |
+| Testcenter, Content-Pool, Autocoder-Schema und -Prozess sowie Modul-/Controller-Regressionen | 162 Tests bestanden; zwölf umgebungsabhängige Fälle in diesem Lauf übersprungen. |
+| PostgreSQL-Freigaben mit getrennten Verbindungspools | Alle vier Fälle anschließend mit PostgreSQL 18.4 ausgeführt und bestanden; keine übersprungenen Fälle. |
+| Produktionsbuild als `main.mjs` | Bestanden. |
+| Native ESM-Importe | ZIP-, XLSX-, Multipart-, Archiv- und SQLite-Roundtrips mit den vorhandenen lokalen Abhängigkeiten bestanden. Zusätzlich Autocoder-Namespace, leere Kodierung und Schema-Konstruktor nativ geprüft. |
+| Backend-Lint und strikte Typ-/Metadatenprüfung | Bestanden; null Typdiagnosen und weiterhin 43 Entities in beiden Importreihenfolgen geprüft. |
+| Betroffene Frontend-Suites und Qualitätsgates | 118 Tests in fünf Suites, alle 81 Qualitäts-/Übersetzungsprüfungen und Frontend-Lint bestanden. |
+| Neuer Frontend-Build und Testcenter-Browserfälle | Produktionsbuild und erneut alle 16 Browserfälle bestanden, ohne übersprungene Fälle oder Wiederholungen. |
 
 ## Versionsaussage und Grenzen
 

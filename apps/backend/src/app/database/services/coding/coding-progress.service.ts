@@ -13,7 +13,7 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { Setting } from '../../entities/setting.entity';
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService

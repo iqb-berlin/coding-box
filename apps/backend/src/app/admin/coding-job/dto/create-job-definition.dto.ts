@@ -15,7 +15,7 @@ import {
   ValidateNested
 } from 'class-validator';
 import { Transform, Type } from 'class-transformer';
-import { JobDefinitionStatus, CaseOrderingMode } from '../../../database/entities/job-definition.entity';
+import type { JobDefinitionStatus, CaseOrderingMode } from '../../../database/entities/job-definition.entity';
 import {
   JobDefinitionVariableDto,
   JobDefinitionVariableBundleDto

@@ -26,7 +26,6 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  finalize, Observable,
   Subject, takeUntil
 } from 'rxjs';
 import { completionReadinessTitle } from './manual-completion-readiness';
@@ -42,7 +41,6 @@ import { CodingJobsReloadScope, ManualCodingJobsRefreshFacade } from './manual-c
 import { ManualCodingRefreshWorkflowFacade, ManualCodingTabLoadOptions } from './manual-coding-refresh-workflow.facade';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CoderTraining } from '../../models/coder-training.model';
-import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
 import { CoderTrainingComponent } from '../coder-training/coder-training.component';
 import { CODER_TRAINING_RECOVERY_KEY, CoderTrainingRecoveryDraft, VariableConfig } from '../coder-training/coder-training.models';
 import { CoderTrainingsListComponent } from '../coder-trainings-list/coder-trainings-list.component';
@@ -51,9 +49,9 @@ import { CodingJobsComponent } from '../coding-jobs/coding-jobs.component';
 import { VariableBundleManagerComponent } from '../variable-bundle-manager/variable-bundle-manager.component';
 import { ManualCodingAggregationFacade } from './manual-coding-aggregation.facade';
 import { ManualCodingAnalysisFacade } from './manual-coding-analysis.facade';
-import { createManualCodingExportConfig } from './manual-coding-export-plan';
+import { ManualCodingExportWorkflowFacade } from './manual-coding-export-workflow.facade';
 import { ManualCodingExportScopeFacade } from './manual-coding-export-scope.facade';
-import { ManualCodingExportFacade, ManualExportDecision, ManualExportWorksheetWarning } from './manual-coding-export.facade';
+import { ManualCodingExportFacade } from './manual-coding-export.facade';
 import { ManualCodingImportFacade } from './manual-coding-import.facade';
 import {
   buildManualFreshnessJobSummary,
@@ -71,7 +69,6 @@ import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 import { ManualCodingSummaryFacade } from './manual-coding-summary.facade';
 
-import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import type { Coder } from '../../models/coder.model';
 import { CodingJob } from '../../models/coding-job.model';
 import { TestPersonCodingService } from '../../services/test-person-coding.service';
@@ -116,10 +113,6 @@ import {
 } from '../../../shared/utils/coding-freshness-text.util';
 import { CohensKappaStatisticsComponent } from '../cohens-kappa-statistics/cohens-kappa-statistics.component';
 import { DoubleCodedReviewComponent } from '../double-coded-review/double-coded-review.component';
-import {
-  ManualCodingExportDialogComponent,
-  ManualCodingExportDialogResult
-} from '../manual-coding-export-dialog/manual-coding-export-dialog.component';
 
 interface ManualFreshnessJobSummary {
   activeTrainingJobs: number;
@@ -134,7 +127,7 @@ interface ManualFreshnessJobSummary {
   templateUrl: './coding-management-manual.component.html',
   styleUrls: ['./coding-management-manual.component.scss'],
   standalone: true,
-  providers: [ManualCodingRefreshWorkflowFacade, ManualCodingJobsRefreshFacade, ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
+  providers: [ManualCodingExportWorkflowFacade, ManualCodingRefreshWorkflowFacade, ManualCodingJobsRefreshFacade, ManualCodingViewState, ManualCodingCompletionFacade, ManualCodingSummaryFacade, ManualCodingAggregationFacade, ManualCodingExportScopeFacade, ManualCodingExportFacade, ManualCodingImportFacade, ManualCodingStatisticsFacade, ManualCodingSettingsFacade, ManualCodingAnalysisFacade, ManualCodingPlanningFacade],
   imports: [
     ManualCodingPreparationViewComponent,
     ManualCodingPlanningViewComponent,
@@ -181,6 +174,7 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private readonly planningData = inject(ManualCodingPlanningFacade);
   private readonly exportScope = inject(ManualCodingExportScopeFacade);
   private readonly exports = inject(ManualCodingExportFacade);
+  private readonly exportWorkflow = inject(ManualCodingExportWorkflowFacade);
   private readonly jobsRefresh = inject(ManualCodingJobsRefreshFacade);
   private readonly refreshWorkflow = inject(ManualCodingRefreshWorkflowFacade);
 
@@ -767,91 +761,11 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   protected openTrainingExport(): void {
-    const coderTrainingIds = this.getCoderTrainingIds();
-
-    if (coderTrainingIds.length === 0) {
-      this.showError(this.uiTranslate('ui-text.coding-management-manual.trainings-loading'));
-      return;
-    }
-
-    if (!this.ensureCoderScopeReady()) {
-      return;
-    }
-
-    this.openManualCodingExportDialog('training');
+    this.exportWorkflow.openTrainingExport(this.getCoderTrainingsForExport());
   }
 
   openExecutionExport(): void {
-    if (!this.ensureExecutionJobDefinitionScopeReady()) {
-      return;
-    }
-
-    if (!this.ensureCoderScopeReady()) {
-      return;
-    }
-
-    this.openManualCodingExportDialog('execution');
-  }
-
-  private openManualCodingExportDialog(context: 'training' | 'execution'): void {
-    this.dialog.open(ManualCodingExportDialogComponent, {
-      width: '680px',
-      maxWidth: '95vw',
-      data: {
-        context,
-        coders: this.coders(),
-        jobDefinitions: context === 'execution' ? this.getJobDefinitionExportOptions() : undefined,
-        coderTrainings: context === 'training' ? this.getCoderTrainingsForExport() : undefined
-      }
-    }).afterClosed()
-      .pipe(takeUntilWorkspaceChanged(this.appService), takeUntil(this.destroy$))
-      .subscribe((result?: ManualCodingExportDialogResult) => {
-        if (!result) {
-          return;
-        }
-
-        this.startManualCodingExport(context, result);
-      });
-  }
-
-  private startManualCodingExport(
-    context: 'training' | 'execution',
-    result: ManualCodingExportDialogResult
-  ): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-
-    if (!workspaceId) {
-      this.showError(this.uiTranslate('ui-text.coding-management-manual.no-workspace'));
-      return;
-    }
-
-    const config = createManualCodingExportConfig(context, result, this.appService.userId, context === 'training' ? this.getCoderTrainingIds() : this.getJobDefinitionIds());
-    this.exports.start(workspaceId, config, warning => this.confirmLargeExport(warning))
-      .subscribe(outcome => {
-        if (outcome === 'started') this.showSuccess(this.uiTranslate('ui-text.coding-management-manual.export-started'));
-        if (outcome === 'estimate-failed') this.showError(this.translateService.instant('manual-coding-export.worksheet-estimate-failed'));
-      });
-  }
-
-  private confirmLargeExport(warning: ManualExportWorksheetWarning): Observable<ManualExportDecision> {
-    const dialogRef = this.dialog.open(ConfirmDialogComponent, {
-      width: '560px',
-      data: {
-        title: this.translateService.instant('manual-coding-export.too-many-worksheets-title'),
-        message: this.translateService.instant('manual-coding-export.too-many-worksheets-message', warning),
-        confirmButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-continue'),
-        alternativeButtonText: this.translateService.instant('manual-coding-export.too-many-worksheets-compact'),
-        alternativeButtonValue: 'compact',
-        cancelButtonText: this.translateService.instant('cancel')
-      }
-    });
-    return dialogRef.afterClosed().pipe(finalize(() => dialogRef.close?.()));
-  }
-
-  private getCoderTrainingIds(): number[] {
-    return this.getCoderTrainingsForExport()
-      .map(training => training.id)
-      .filter((id): id is number => Number.isFinite(id));
+    this.exportWorkflow.openExecutionExport(this.codingJobDefinitionsComponent()?.jobDefinitions());
   }
 
   private getJobDefinitionIds(): number[] {
@@ -867,22 +781,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
       coderTrainingsListComponent?.coderTrainings() ?? [];
   }
 
-  private getJobDefinitionExportOptions(): { id: number; label: string }[] {
-    return this.getJobDefinitionsForManualScope()
-      .filter(jobDefinition => Number.isFinite(jobDefinition.id))
-      .map(jobDefinition => {
-        const variableCount = jobDefinition.assignedVariables?.length ?? 0;
-        const bundleCount = jobDefinition.assignedVariableBundles?.length ?? 0;
-        const status = jobDefinition.status ? ` (${jobDefinition.status})` : '';
-        return {
-          id: jobDefinition.id as number,
-          label: this.uiTranslate('ui-text.coding-management-manual.variable-bundle-summary', {
-            value1: getJobDefinitionDisplayLabel(jobDefinition), status: status, variableCount: variableCount, bundleCount: bundleCount
-          })
-        };
-      });
-  }
-
   private getJobDefinitionsForManualScope(): JobDefinition[] {
     return this.exportScope.getDefinitions(this.codingJobDefinitionsComponent()?.jobDefinitions());
   }
@@ -890,12 +788,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   private ensureExecutionJobDefinitionScopeReady(): boolean {
     if (this.exportScope.ensureDefinitionsReady(!!this.codingJobDefinitionsComponent())) return true;
     this.showError(this.uiTranslate('ui-text.coding-management-manual.definitions-loading'));
-    return false;
-  }
-
-  private ensureCoderScopeReady(): boolean {
-    if (this.exportScope.ensureCodersReady()) return true;
-    this.showError(this.uiTranslate('ui-text.coding-management-manual.coders-loading'));
     return false;
   }
 
