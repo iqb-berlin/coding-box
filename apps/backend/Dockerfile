@@ -8,6 +8,8 @@ FROM $BASE_IMAGE_NAME AS base
 
 
 FROM base AS dev
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci --prefix tools/backend-vitest --include=dev --ignore-scripts --no-fund
 ENTRYPOINT ["npx", "nx"]
 
 

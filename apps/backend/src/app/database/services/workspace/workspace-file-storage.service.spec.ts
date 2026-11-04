@@ -1,4 +1,4 @@
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import FileUpload from '../../entities/file_upload.entity';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 

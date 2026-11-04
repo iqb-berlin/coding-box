@@ -211,14 +211,18 @@ install-dependencies:
     key:
       files:
         - package-lock.json
+        - tools/backend-vitest/package-lock.json
     paths:
       - node_modules
+      - tools/backend-vitest/node_modules
       - .npm/
   script:
     - npm ci --cache .npm --prefer-offline --no-fund
+    - npm ci --prefix tools/backend-vitest --include=dev --ignore-scripts --cache .npm --prefer-offline --no-fund
   artifacts:
     paths:
       - node_modules
+      - tools/backend-vitest/node_modules
 
 build-cicd-base-image:
   stage: build
@@ -536,7 +540,7 @@ test-backend:
     - !reference [ .quality_gate_rules, rules ]
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
-    - node --test scripts/qa/junit-reporter.test.cjs
+    - npx nx run backend:verify-test-runner
     - npx nx exec -- bash "$CI_PROJECT_DIR/scripts/tests/install-migration-regression.sh"
     - npx nx run backend:typecheck
     - npx nx run backend:verify-runtime-package
@@ -552,6 +556,7 @@ test-backend:
     expire_in: 30 days
     paths:
       - coverage/apps/backend/
+      - tmp/backend-vitest/typecheck.json
     reports:
       junit: coverage/apps/backend/junit.xml
       coverage_report:
@@ -587,6 +592,8 @@ test-backend-integration:
     expire_in: 30 days
     paths:
       - coverage/apps/backend/integration-results.json
+      - coverage/apps/backend/integration-results-normalized.json
+      - tmp/backend-vitest/typecheck.json
       - coverage/apps/backend/integration-junit.xml
     reports:
       junit: coverage/apps/backend/integration-junit.xml

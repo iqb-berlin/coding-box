@@ -33,7 +33,7 @@ export function checkTypes() {
   fs.mkdirSync(path.join(root, 'tmp/backend-vitest'), { recursive: true });
   fs.writeFileSync(path.join(root, 'tmp/backend-vitest/typecheck.json'), JSON.stringify(report, null, 2));
   for (const d of report.diagnostics.slice(0, 30)) console.error(`${d.file}:${d.line || 0}: TS${d.code}: ${d.message}`);
-  console.log(`Vitest pilot typecheck: ${diagnostics.length} diagnostics in ${report.elapsedMs} ms (${files.length} root files).`);
+  console.log(`Backend Vitest typecheck: ${diagnostics.length} diagnostics in ${report.elapsedMs} ms (${files.length} root files).`);
   return diagnostics.length === 0;
 }
 

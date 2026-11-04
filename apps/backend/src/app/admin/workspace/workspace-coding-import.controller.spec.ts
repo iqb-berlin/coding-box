@@ -1,5 +1,5 @@
 import { BadRequestException } from '@nestjs/common';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as path from 'path';
 import { WorkspaceCodingImportController } from './workspace-coding-import.controller';
 import { removeExternalCodingImportFile } from '../../job-queue/external-coding-import-file.util';

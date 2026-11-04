@@ -7,7 +7,7 @@ import { WorkspaceExclusionService } from '../../database/services/workspace';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { VariableAnalysisJobData } from '../job-queue.service';
 import { VariableAnalysisProcessor } from './variable-analysis.processor';
-import eatPrepReferenceGolden = require('./__fixtures__/variable-analysis-eatpreptba-reference.golden.json');
+import eatPrepReferenceGolden from './__fixtures__/variable-analysis-eatpreptba-reference.golden.json';
 
 type MockQueryBuilder = ReturnType<typeof createQueryBuilder>;
 

@@ -1,6 +1,8 @@
+import fs from 'node:fs';
+import * as nativeFs from 'node:fs';
 import { describe, it, expect, vi, afterEach } from 'vitest';
 import { createMock } from '../deep-mock';
-import { replaceProperty, restoreAllMocks, fn, mocked } from '../compat';
+import { replaceProperty, restoreAllMocks, fn, mocked, spyOn } from '../compat';
 import { resetMock, typedMock, genericMock, constructors } from './fixtures/legacy-test.factory';
 import type { Mock } from '../types';
 
@@ -53,6 +55,17 @@ describe('legacy test contracts on native Vitest mocks', () => {
     const object = { get limit() { return 2; } };
     expect(() => replaceProperty(object, 'limit', 9)).toThrow(TypeError);
     expect(() => replaceProperty({} as { limit: number }, 'limit', 9)).toThrow(TypeError);
+  });
+  it('synchronizes builtin named exports with spies and restores native identity', () => {
+    const original = nativeFs.existsSync;
+    const spy = spyOn(fs, 'existsSync').mockReturnValue(true);
+    expect(nativeFs.existsSync).toBe(spy);
+    expect(nativeFs.existsSync('/synthetic/no-io')).toBe(true);
+    spy.mockRestore();
+    expect(nativeFs.existsSync).toBe(original);
+    spyOn(fs, 'existsSync').mockReturnValue(false);
+    restoreAllMocks();
+    expect(nativeFs.existsSync).toBe(original);
   });
   it('keeps mocked identity and strict argument/return types', () => {
     const mock = fn((value: number) => String(value));

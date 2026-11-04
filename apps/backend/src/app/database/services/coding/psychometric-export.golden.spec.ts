@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import fs from 'fs';
 import * as path from 'path';
 import { PsychometricAnalysisEngine } from './psychometric-analysis-engine';
 import { PsychometricExportWriter } from './psychometric-export-writer.service';

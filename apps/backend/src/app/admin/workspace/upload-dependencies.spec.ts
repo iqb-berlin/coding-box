@@ -1,5 +1,6 @@
 import { spawn } from 'child_process';
-import FormData = require('form-data');
+// eslint-disable-next-line import/no-extraneous-dependencies -- test the pinned transitive multipart dependency
+import FormData from 'form-data';
 
 // Keep parser failures in a child process: a vulnerable Multer version throws
 // from a stream event, outside Nest's request error handling.

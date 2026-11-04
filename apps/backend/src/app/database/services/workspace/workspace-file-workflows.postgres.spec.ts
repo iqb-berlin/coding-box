@@ -8,7 +8,7 @@ import { AddressInfo } from 'net';
 import { ConflictException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import Redis from 'ioredis';
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import { CacheService } from '../../../cache/cache.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import FileUpload from '../../entities/file_upload.entity';

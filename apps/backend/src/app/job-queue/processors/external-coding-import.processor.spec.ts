@@ -1,6 +1,6 @@
 import { ForbiddenException } from '@nestjs/common';
 import { Job } from 'bullmq';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { ExternalCodingImportProcessor } from './external-coding-import.processor';

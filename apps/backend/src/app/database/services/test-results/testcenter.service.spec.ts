@@ -4,7 +4,7 @@ import { HttpService } from '@nestjs/axios';
 import axios, { AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import { DataSource, Repository } from 'typeorm';
 import * as https from 'https';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { execFileSync } from 'child_process';

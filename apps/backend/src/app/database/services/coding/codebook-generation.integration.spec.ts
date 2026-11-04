@@ -1,4 +1,4 @@
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
 import { CodingSchemeFactory } from '@iqb/responses';
 import { CodebookGenerationService } from './codebook-generation.service';

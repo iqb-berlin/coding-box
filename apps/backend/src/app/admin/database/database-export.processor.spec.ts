@@ -1,4 +1,4 @@
-import * as fs from 'fs';
+import fs from 'fs';
 import { DatabaseExportProcessor } from './database-export.processor';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 

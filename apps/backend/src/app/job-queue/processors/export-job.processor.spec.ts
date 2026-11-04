@@ -1,6 +1,6 @@
 import { Job } from 'bullmq';
-import AdmZip = require('adm-zip');
-import * as fs from 'fs';
+import AdmZip from 'adm-zip';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { PassThrough, Readable } from 'stream';

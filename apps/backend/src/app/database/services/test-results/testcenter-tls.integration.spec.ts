@@ -1,5 +1,5 @@
 import { execFile, execFileSync } from 'child_process';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as https from 'https';
 import { AddressInfo } from 'net';
 import * as os from 'os';

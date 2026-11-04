@@ -1,4 +1,4 @@
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import { load } from 'cheerio';
 import { CodebookGenerator } from './codebook-generator.class';
 import type { CodeBookContentSetting } from './codebook.interfaces';

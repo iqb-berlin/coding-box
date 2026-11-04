@@ -262,16 +262,15 @@ test('release backend test and lint failures block publication', () => {
   const project = JSON.parse(readFileSync(new URL('../../apps/backend/project.json', import.meta.url)));
   assert.equal(project.targets.test.executor, 'nx:run-commands');
   assert.equal(project.targets.test.configurations.ci.command,
-    'node scripts/qa/run-backend-jest.mjs --configuration=ci');
-  const launcher = readFileSync(new URL('./run-backend-jest.mjs', import.meta.url), 'utf8');
-  assert.match(launcher, /'--experimental-vm-modules'/);
-  assert.match(launcher, /'backend:test-jest'/);
-  const jest = project.targets['test-jest'];
-  assert.equal(jest.executor, '@nx/jest:jest');
-  assert.equal(jest.cache, false);
-  assert.equal(jest.configurations.ci.codeCoverage, true);
-  assert.equal(jest.configurations.ci.ci, true);
-  assert.equal(jest.options.passWithNoTests, false);
+    'node tools/backend-vitest/run.mjs --configuration=ci');
+  assert.equal(project.targets.test.cache, false);
+  assert.equal(project.targets['test-jest'], undefined);
+  assert.ok(project.targets.test.inputs.includes('{workspaceRoot}/tools/backend-vitest/**/*'));
+  const install = resolve('install-dependencies');
+  assert.ok(install.script.some(command => command.includes('npm ci --prefix tools/backend-vitest --include=dev --ignore-scripts')));
+  assert.ok(install.artifacts.paths.includes('tools/backend-vitest/node_modules'));
+  const dockerfile = readFileSync(new URL('../../apps/backend/Dockerfile', import.meta.url), 'utf8');
+  assert.match(dockerfile, /FROM base AS dev\nRUN[\s\S]*npm ci --prefix tools\/backend-vitest/);
 });
 
 test('the installed frontend JUnit reporter includes suite initialization errors', async t => {

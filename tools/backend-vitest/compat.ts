@@ -1,5 +1,6 @@
+import { syncBuiltinESMExports } from 'node:module';
 import { vi } from 'vitest';
-import type { Mock } from 'vitest';
+import type { Mock, MockInstance } from 'vitest';
 import type { Mocked, MockedFunction } from './types';
 
 type Procedure = (...args: any[]) => any;
@@ -42,5 +43,15 @@ export function replaceProperty<T extends object, K extends keyof T>(object: T, 
 
 export function restoreAllMocks() {
   vi.restoreAllMocks();
+  syncBuiltinESMExports();
   for (const restore of [...replacements].reverse()) restore();
 }
+
+/** Native builtin namespaces keep live named exports only after this Node API. */
+export const spyOn: typeof vi.spyOn = ((...args: Parameters<typeof vi.spyOn>) => {
+  const mock = (vi.spyOn as (...parameters: Parameters<typeof vi.spyOn>) => MockInstance)(...args);
+  const restore = mock.mockRestore.bind(mock);
+  mock.mockRestore = () => { restore(); syncBuiltinESMExports(); };
+  syncBuiltinESMExports();
+  return mock;
+}) as typeof vi.spyOn;

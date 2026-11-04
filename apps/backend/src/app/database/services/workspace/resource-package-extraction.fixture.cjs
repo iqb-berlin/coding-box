@@ -2,7 +2,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const repo = process.argv[2];
-require('ts-node').register({ project: path.join(repo, 'apps/backend/tsconfig.spec.json'), transpileOnly: true });
+require('ts-node').register({ project: path.join(repo, 'apps/backend/tsconfig.app.json'), transpileOnly: true });
 const AdmZip = require('adm-zip');
 const { ResourcePackageService } = require('./resource-package.service');
 const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'package-extraction-regression-'));

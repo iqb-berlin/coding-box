@@ -1,7 +1,7 @@
 import { Repository } from 'typeorm';
 import { Readable } from 'stream';
 import * as ExcelJS from 'exceljs';
-import * as fs from 'fs';
+import fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { createCodingExportService } from './coding-export-test.factory';

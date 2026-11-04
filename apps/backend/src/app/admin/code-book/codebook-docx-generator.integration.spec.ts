@@ -1,4 +1,4 @@
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import {
   CodeBookContentSetting,
   CodebookUnitDto

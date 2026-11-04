@@ -71,8 +71,6 @@
       "inputs": [
         "default",
         "^production",
-        "{workspaceRoot}/jest.config.ts",
-        "{workspaceRoot}/jest.preset.js",
         "{workspaceRoot}/docs/workspace-api-token-rights-de.md",
         "{workspaceRoot}/docs/workspace-api-token-rights.md",
         "{workspaceRoot}/scripts/qa/**/*",
@@ -93,16 +91,27 @@
         { "env": "WORKSPACE_DELETION_TEST_DATABASE_URL" },
         { "env": "PSQL_BIN" },
         { "env": "KAPPA_QUERY_BENCHMARK" },
-        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
+        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" },
+        "{workspaceRoot}/tools/backend-vitest/**/*"
       ],
       "options": {
-        "command": "node scripts/qa/run-backend-jest.mjs"
+        "command": "node tools/backend-vitest/run.mjs"
       },
       "configurations": {
         "ci": {
-          "command": "node scripts/qa/run-backend-jest.mjs --configuration=ci"
+          "command": "node tools/backend-vitest/run.mjs --configuration=ci"
+        },
+        "coverage": {
+          "command": "node tools/backend-vitest/run.mjs --coverage"
+        },
+        "typecheck": {
+          "command": "node tools/backend-vitest/run.mjs --typecheck-only"
+        },
+        "contracts": {
+          "command": "node tools/backend-vitest/run.mjs --scope=contracts"
         }
-      }
+      },
+      "cache": false
     },
     "docker-build": {
       "executor": "nx:run-commands",
@@ -208,20 +217,6 @@
         }
       }
     },
-    "test-jest": {
-      "executor": "@nx/jest:jest",
-      "cache": false,
-      "options": {
-        "jestConfig": "apps/backend/jest.config.ts",
-        "passWithNoTests": false
-      },
-      "configurations": {
-        "ci": {
-          "ci": true,
-          "codeCoverage": true
-        }
-      }
-    },
     "test-vitest": {
       "executor": "nx:run-commands",
       "cache": false,
@@ -244,6 +239,13 @@
         "contracts": {
           "command": "node tools/backend-vitest/run.mjs --scope=contracts"
         }
+      }
+    },
+    "verify-test-runner": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node --test tools/backend-vitest/*.test.mjs scripts/qa/run-backend-integration.test.mjs"
       }
     }
   }

@@ -3,7 +3,7 @@
 These instructions apply to `apps/backend` and supplement the root `AGENTS.md`.
 
 ## Project Shape
-- This is a NestJS 12 application using TypeORM, PostgreSQL, BullMQ queues, Redis, Swagger, and Jest.
+- This is a NestJS 12 application using TypeORM, PostgreSQL, BullMQ queues, Redis, Swagger, and Vitest.
 - The bootstrap file is `src/main.ts`; the API prefix is `/api`, and Swagger UI is served at `/api/docs`.
 - `src/app/app.module.ts` wires the main application modules.
 - `src/app/database` contains TypeORM entities, repositories, database services, and database utilities.
@@ -30,7 +30,7 @@ These instructions apply to `apps/backend` and supplement the root `AGENTS.md`.
 - Preserve existing GeoGebra/package asset behavior in `src/main.ts` when changing static asset handling.
 
 ## Testing Notes
-- Backend tests use Jest with `ts-jest` and `testEnvironment: node`.
+- Backend tests use Vitest with ESM TypeScript/decorator emission and a Node environment. Install the pinned tools with `npm ci --prefix tools/backend-vitest --include=dev --ignore-scripts`. See `docs/backend-tests.md`; legacy Jest mocks are adapted only in test files. New tests should use Vitest APIs.
 - Add focused unit tests near changed services, controllers, processors, guards, or utilities.
 - For controller tests, mock services and guards using the local patterns already present in `*.controller.spec.ts`.
 - For queue or cache unit tests, mock BullMQ queues and Redis clients. Run `npx nx run backend:verify-bullmq-live` for real Redis/Nest worker checks; it starts an isolated local `redis-server` (override the binary with `BULLMQ_REDIS_SERVER`). Never point this runner at application Redis data.
