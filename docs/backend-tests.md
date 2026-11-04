@@ -39,12 +39,20 @@ Zur Fehlersuche:
 ```sh
 npx nx test backend --filter=workspace-file-workflows
 npx nx test backend --tests-only --filter=nest-esm
+npx nx test backend --testPathPatterns='(nest-esm|environment.validation)\.spec\.ts$'
 npx nx test backend --coverage
 ```
 
 `--tests-only` überspringt ausdrücklich die Test-Typprüfung. Die bisherigen
 Aufrufe mit `--codeCoverage`, `--maxWorkers=2` und `--runInBand` funktionieren
-weiter. `backend:test-vitest` bleibt als Alias für vorhandene Pilotaufrufe.
+weiter. `--filter` wählt Dateien über einfache Teilzeichenfolgen aus;
+`--testPathPatterns` behält reguläre Ausdrücke mit Alternativen, Ankern und
+maskierten Punkten bei, einschließlich projektbezogener `./src/`-Pfade und
+Groß-/Kleinschreibungsunabhängigkeit. Mehrfach angegebene Muster bilden eine
+Oder-Auswahl. Beide Filteroptionen werden getrennt verwendet. Ungültige Muster
+und eine Auswahl ohne Treffer schlagen fehl. Im CI-Aufruf und im verpflichtenden
+Integrationsgate sind beide Filter gesperrt. `backend:test-vitest` bleibt als Alias für vorhandene
+Pilotaufrufe.
 Frontend- und Backend-Prüfungen lokal immer nacheinander ausführen.
 
 ## Modulgrenzen und Kompatibilität
@@ -116,10 +124,26 @@ der exakt benannte optionale Kappa-Benchmark darf ohne
 `KAPPA_QUERY_BENCHMARK=1` übersprungen werden. Vitests Status `skipped` wird nur
 in einer Kopie des Rohberichts nach `pending` normalisiert.
 
-Im Unitlauf werden allgemeine PostgreSQL-Opt-ins deaktiviert. Die dedizierten
-`BULLMQ_TEST_REDIS_*`- und `KAPPA_QUERY_TEST_DATABASE_URL`-Variablen können
-zusätzlich die entsprechenden Live-Fälle aktivieren; die CI stellt diese Dienste
-weiterhin bereit. `backend:verify-bullmq-live` nutzt denselben regulären Runner.
+Ohne explizite Opt-ins läuft der reguläre Testaufruf ohne allgemeine
+PostgreSQL-Fixtures und übernimmt keine Anwendungs-Redis-Konfiguration.
+`POSTGRES_INTEGRATION_TESTS=true` sowie die unabhängige
+`WORKSPACE_DELETION_TEST_DATABASE_URL` werden dagegen unverändert weitergegeben.
+Dabei bleibt auch eine ausdrücklich bereitgestellte Redis-Konfiguration erhalten.
+Diese Aufrufe benötigen selbst vorbereitete, wegwerfbare Testdatenbanken und
+übernehmen deren Migrationen nicht automatisch. Die dokumentierten gezielten
+Prüfungen bleiben damit ausführbar, beispielsweise:
+
+```sh
+POSTGRES_INTEGRATION_TESTS=true POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=15441 \
+POSTGRES_USER=fixture POSTGRES_PASSWORD=disposable_test_only POSTGRES_DB=fixture \
+npx nx test backend --runInBand --testPathPatterns='flat-response-filters\.postgres\.spec\.ts$'
+```
+
+Die dedizierten `BULLMQ_TEST_REDIS_*`- und `KAPPA_QUERY_TEST_DATABASE_URL`-
+Variablen aktivieren weiterhin ihre entsprechenden Live-Fälle; die CI stellt
+diese Dienste bereit. `backend:verify-bullmq-live` nutzt denselben regulären
+Runner. Das vollständige verpflichtende Integrationsgate oben ist weiterhin
+der maßgebliche CI-Nachweis und kann nicht gefiltert werden.
 
 ## Coverage und CI-Artefakte
 

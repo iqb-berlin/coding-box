@@ -18,7 +18,7 @@ export function normalizeResults(report) {
 }
 
 export async function runIntegration(options, environment = process.env) {
-  if (options.filter) throw new Error('The mandatory integration selection cannot be filtered.');
+  if (options.filter || options.testPathPatterns?.length) throw new Error('The mandatory integration selection cannot be filtered.');
   const config = integrationConfiguration(environment);
   const databaseName = `backend_vitest_${randomUUID().replaceAll('-', '')}`;
   const admin = new Client({ connectionString: config.server.toString(), connectionTimeoutMillis: 5000 });
@@ -57,6 +57,7 @@ export async function runIntegration(options, environment = process.env) {
       `--outputFile.json=${resultsFile}`, `--outputFile.junit=${path.join(output, 'integration-junit.xml')}`,
       ...(options.coverage ? ['--coverage'] : [])], { cwd: root, stdio: 'inherit', env: {
       ...environment, BACKEND_VITEST_SCOPE: 'integration', BACKEND_VITEST_WORKERS: '1',
+      BACKEND_VITEST_TEST_PATH_PATTERNS: '[]', BACKEND_VITEST_FILTERED: 'false',
       POSTGRES_INTEGRATION_TESTS: 'true', POSTGRES_HOST: config.server.hostname, POSTGRES_PORT: config.server.port || '5432',
       POSTGRES_USER: decodeURIComponent(config.server.username), POSTGRES_PASSWORD: decodeURIComponent(config.server.password), POSTGRES_DB: databaseName,
       WORKSPACE_DELETION_TEST_DATABASE_URL: config.server.toString(), KAPPA_QUERY_TEST_DATABASE_URL: config.server.toString(),

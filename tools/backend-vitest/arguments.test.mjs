@@ -12,7 +12,7 @@ test('existing Nx callers select coverage and limit workers without starting Jes
 });
 
 test('CI cannot silently reduce its suite, typecheck, or coverage', () => {
-  for (const flag of ['--scope=pilot', '--filter=one', '--tests-only', '--typecheck-only', '--codeCoverage=false', '--coverage=false']) {
+  for (const flag of ['--scope=pilot', '--filter=one', '--testPathPatterns=one', '--tests-only', '--typecheck-only', '--codeCoverage=false', '--coverage=false']) {
     for (const args of [['--configuration=ci', flag], [flag, '--configuration=ci']]) assert.throws(() => parseArguments(args), /CI requires/);
   }
 });
@@ -22,6 +22,15 @@ test('unsupported options, invalid worker limits and weakened integration select
     assert.throws(() => parseArguments([flag]));
   }
   assert.throws(() => parseArguments(['--scope=integration', '--filter=one']), /cannot be filtered/);
+  assert.throws(() => parseArguments(['--scope=integration', '--testPathPatterns=one']), /cannot be filtered/);
   assert.throws(() => parseArguments(['--scope=integration', '--coverage']), /unit coverage/);
   assert.throws(() => parseArguments(['--tests-only', '--typecheck-only']), /Choose either/);
+});
+
+test('legacy path patterns remain regular expressions rather than literal Vitest filters', () => {
+  const options = parseArguments([String.raw`--testPathPatterns=(nest-esm|app)\.spec\.ts$`, '--testPathPatterns=comma,a']);
+  assert.deepEqual(options.testPathPatterns, [String.raw`(nest-esm|app)\.spec\.ts$`, 'comma,a']);
+  assert.equal(options.filter, undefined);
+  assert.throws(() => parseArguments(['--testPathPatterns=[']), /Invalid --testPathPatterns regular expression/);
+  assert.throws(() => parseArguments(['--filter=one', '--testPathPatterns=two']), /Choose either/);
 });

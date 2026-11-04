@@ -40,6 +40,9 @@ Die bestehenden PR-Branches und das primäre Arbeitsverzeichnis blieben unberüh
 
 ## Lokale Nachweise
 
+Die Erstqualifikation dieses Abschnitts bezieht sich auf Commit `5aee14dae`.
+Die Nachqualifikation der Reviewkorrekturen folgt im nächsten Abschnitt.
+
 Umgebung: macOS/arm64, Node 24.22.1, Vitest/coverage-v8 5.0.5,
 Vite 7.3.7, TypeScript 5.9.3. PostgreSQL 14.22 und Redis 7.4 liefen in
 neu angelegten eigenen Docker-Testcontainern mit flüchtigem Datenspeicher und
@@ -88,6 +91,38 @@ Die Runner zählen Coverage unterschiedlich; diese Werte sind keine Behauptung
 numerischer Gleichheit zu historischen Jest-Berichten oder eines CI-Speedups.
 Der dokumentierte vollständige Vitest-Lauf dauerte 126.23 Sekunden zuzüglich
 separater Test-Typprüfung; ein lokaler Einzellauf ist kein Linux-CI-Benchmark.
+
+## Nachqualifikation der beiden Reviewbefunde
+
+Explizites `POSTGRES_INTEGRATION_TESTS=true` und die unabhängige
+`WORKSPACE_DELETION_TEST_DATABASE_URL` werden im normalen Backend-Testaufruf
+jetzt erhalten. So werden angeforderte PostgreSQL-Prüfungen ausgeführt.
+Ohne diese Opt-ins bleiben allgemeine PostgreSQL-Fixtures deaktiviert und
+Anwendungs-Redis-Einstellungen werden weiterhin nicht übernommen.
+
+`--testPathPatterns` wird getrennt vom einfachen Vitest-Dateifilter behandelt.
+Die Auswahl wertet reguläre Ausdrücke gegen projektbezogene und absolute
+Dateipfade aus, einschließlich Alternativen, Ankern, maskierten Punkten,
+`./src/`-Pfaden und Groß-/Kleinschreibungsunabhängigkeit. Wiederholte Muster
+bilden eine Oder-Auswahl. Ungültige Muster und eine leere Treffermenge führen
+zu einem Fehler. Die Filterverbote für CI und das Pflichtintegrationsgate
+bleiben bestehen; geerbte Diagnosefilter können dieses Gate nicht verkürzen.
+
+Die neuen Regressionen starten auch den tatsächlichen Runner in einer eigenen
+synthetischen Teststruktur. Sie beweisen die Ausführung bei Opt-in, die
+Weitergabe der Fixture-Einstellungen, den Offline-Standard und den Fehler bei
+fehlenden Regex-Treffern. Zusätzlich wurden die realen bisherigen Aufrufe
+gegen ausschließlich eigene wegwerfbare Testdienste wiederholt:
+
+| Prüfung | Ergebnis |
+| --- | --- |
+| `POSTGRES_INTEGRATION_TESTS=true … npx nx test backend --runInBand --testPathPatterns='(flat-response-filters|workspace-settings)\.postgres\.spec\.ts$'` | 15 bestanden, 0 Skips |
+| `WORKSPACE_DELETION_TEST_DATABASE_URL=… npx nx test backend --runInBand --testPathPatterns='workspace-deletion\.postgres\.spec\.ts$'` | 7 bestanden, 0 Skips; Opt-in unabhängig vom allgemeinen PostgreSQL-Schalter |
+| `npx nx test backend --testPathPatterns='nest-esm\.spec\.ts$'` | 3 bestanden, 0 Skips |
+| `npx nx run backend:verify-test-runner` | 24 Verträge bestanden |
+| `npx nx lint backend` | Bestanden |
+| `npx nx run backend:test-integration` nach der Korrektur | 154 bestanden, 1 optionaler Benchmark-Skip |
+| Vollständiger CI-Unitlauf nach der Korrektur, einschließlich Test-Typprüfung | 4.278 bestanden, unverändert 126 Skips; 0 Typdiagnosen; alle Coverage-Mindestwerte erfüllt |
 
 ## Wiederholung und Grenzen
 

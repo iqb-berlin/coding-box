@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { spawn } from 'node:child_process';
 import { parseArguments } from './arguments.mjs';
+import { backendTestEnvironment } from './environment.mjs';
 
 const directory = path.dirname(fileURLToPath(import.meta.url)), root = path.resolve(directory, '../..');
 
@@ -53,9 +54,7 @@ export async function runBackendTests(overrides = {}, environment = process.env)
     const { runIntegration } = await import('./integration.mjs');
     return runIntegration(options, environment);
   }
-  const env = { ...environment, BACKEND_VITEST_SCOPE: options.scope, BACKEND_VITEST_FILTERED: options.filter ? 'true' : 'false', POSTGRES_INTEGRATION_TESTS: 'false', WORKSPACE_DELETION_TEST_DATABASE_URL: '' };
-  if (options.workers) env.BACKEND_VITEST_WORKERS = String(options.workers);
-  delete env.REDIS_HOST; delete env.REDIS_PORT; delete env.REDIS_PREFIX;
+  const env = backendTestEnvironment(options, environment);
   const status = await execute(['--experimental-vm-modules', path.join(directory, 'node_modules/vitest/vitest.mjs'), 'run',
     '--config', path.join(directory, 'vitest.config.mjs'), '--reporter=default', '--reporter=json', '--reporter=junit',
     '--outputFile.json=coverage/apps/backend/results.json', '--outputFile.junit=coverage/apps/backend/junit.xml',
