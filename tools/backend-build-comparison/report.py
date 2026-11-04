@@ -80,9 +80,10 @@ code,pre,.mono{{font-family:ui-monospace,monospace;font-size:12px}}pre{{backgrou
 </style><body><article>
 <div class="eyebrow">Technischer Versuch · 04.11.2026 · Entwicklung</div>
 <h1>Kodierbox: Webpack, Rspack/SWC und ungebündeltes ESM</h1>
-<div class="decision"><strong>Empfehlung: den produktiven Webpack-Build vorerst beibehalten.</strong>
-Rspack zeigt einen messbaren, kleinen Vorteil. Der zusätzliche Aufwand für Metadaten und Watch-Integration ist damit noch nicht überzeugend gerechtfertigt.
-Der tsc-Pilot zeigt, dass eine Ausführung ohne Bundler möglich ist; er benötigt derzeit jedoch eigene Ausgabeaufbereitung.</div>
+<div class="decision"><strong>Historische lokale Messung; die Bewertung wurde kritisch nachgeprüft.</strong>
+Die lokalen Zeiten deuten auf kürzere Compilerläufe hin, belegen aber keinen stabilen Vorteil der gesamten CI.
+Die ESM-Paketgrenze des tsc-Piloten wurde für den Produktions-Dockerfile explizit gemacht; eine Gegenprobe bestätigt, dass auch die ursprüngliche Ausgabe unter Node 24.22.1 lädt.
+<a href="review-und-ci.html">Aktueller Review und echte GitLab-/Linux-Messung</a>.</div>
 <p>Basis ist <code>7a4197c5badd19a89c220c4c1c83e85f1cff82dd</code>, der Merge von
 <a href="https://github.com/iqb-berlin/coding-box/pull/1157">PR #1157</a> auf <code>develop</code>.
 Der Versuch liegt im separaten Branch <code>compare-backend-builds</code>. Der Standard-Build wurde nicht umgestellt.
@@ -123,7 +124,7 @@ Integrationslauf: {integration.get('numPassedTests','–')} bestanden, {integrat
 Die gemeinsame Testsuite gilt für alle drei Varianten, weil sie dieselben Anwendungs- und Testquellen verwenden. Ein erster, fehlgeschlagener Vorbereitungslauf wurde nach Korrektur wiederholt; die Tabelle verwendet den abschließenden Lauf.</p>
 <table><thead><tr><th>Variante</th><th>Gemeinsame lokale Prüfungen + Buildmedian</th><th>Ersparnis gegenüber Webpack</th></tr></thead><tbody>{pipeline}</tbody></table>
 <p><strong>Das ist ein transparentes lokales Rechenmodell, keine gemessene GitLab-Gesamtlaufzeit.</strong>
-Es wurden keine Vergleichspipelines veröffentlicht. Runner-Wartezeiten, Downloads, parallele Jobs, Frontend-Jobs und vollständige Docker-Neubauten sind hier nicht enthalten.
+Diese ursprüngliche lokale Messserie enthielt keine Vergleichspipelines. Runner-Wartezeiten, Downloads, parallele Jobs, Frontend-Jobs und vollständige Docker-Neubauten sind in diesem lokalen Modell nicht enthalten. Die anschließend gestartete GitLab-/Linux-Nachprüfung wird separat verlinkt.
 Eine Aussage über die tatsächliche kritische Laufzeit der Remote-CI ist daraus nicht ableitbar. Die absolute Buildersparnis beträgt auf diesem Rechner {number((medians['webpack']-medians['rspack'])/1000)} Sekunden.</p>
 
 <h2>Festgestellter Migrationsaufwand</h2>

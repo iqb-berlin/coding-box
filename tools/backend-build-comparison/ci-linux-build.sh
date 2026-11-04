@@ -3,34 +3,41 @@
 set -eu
 proof=dist/backend-build-comparison-ci
 mkdir -p "$proof"
-docker version > "$proof/docker-version.txt"
-docker info > "$proof/docker-info.txt"
-docker system df > "$proof/docker-before.txt"
+trap 'rm -f "$proof"/.stream-*' EXIT
+printf '%s\n' 'Collecting Docker diagnostics (bounded; no build has started yet)'
+timeout 30 docker version > "$proof/docker-version.txt"
+timeout 30 docker info > "$proof/docker-info.txt"
+# Disk-usage introspection must never indefinitely block the measured build.
+if timeout 30 docker system df > "$proof/docker-before.txt" 2>&1; then
+  cat "$proof/docker-before.txt"
+else
+  printf '%s\n' 'Docker disk-usage introspection unavailable within 30 seconds' | tee -a "$proof/docker-before.txt"
+fi
 printf 'step\tstarted_epoch\tfinished_epoch\telapsed_seconds\tstatus\n' > "$proof/timings.tsv"
 measure() {
   step="$1"; shift
   started=$(date +%s)
+  printf 'BEGIN %s at %s\n' "$step" "$started"
+  fifo="$proof/.stream-$step"
+  mkfifo "$fifo"
+  tee "$proof/$step.log" < "$fifo" &
+  logger_pid=$!
   set +e
-  "$@" > "$proof/$step.log" 2>&1
+  "$@" > "$fifo" 2>&1
   status=$?
+  wait "$logger_pid"
+  logger_status=$?
+  if [ "$status" -eq 0 ] && [ "$logger_status" -ne 0 ]; then status="$logger_status"; fi
   set -e
+  rm "$fifo"
   finished=$(date +%s)
-  cat "$proof/$step.log"
+  printf 'END %s at %s (status %s)\n' "$step" "$finished" "$status"
   printf '%s\t%s\t%s\t%s\t%s\n' "$step" "$started" "$finished" "$((finished-started))" "$status" >> "$proof/timings.tsv"
-  [ "$status" -eq 0 ]
+  return "$status"
 }
-# No imported layer cache, no Nx cache, no prior dist or node_modules in context.
-measure builder docker build --progress plain --pull --no-cache --platform linux/amd64 \
-  --build-arg REGISTRY_PATH="${DOCKER_HUB_PROXY:-}" --target builder \
-  --tag "coding-box-base:ci-${CI_JOB_ID}" .
-# Refresh the registry runtime base explicitly. --pull on the following build
-# would incorrectly try to fetch our job-local builder tag from Docker Hub.
-measure runtime-base-pull docker pull --platform linux/amd64 "${DOCKER_HUB_PROXY:-}node:24.22.1-bookworm-slim"
-measure production docker build --progress plain --no-cache --platform linux/amd64 \
-  --build-arg REGISTRY_PATH="${DOCKER_HUB_PROXY:-}" \
-  --build-arg BASE_IMAGE_NAME="coding-box-base:ci-${CI_JOB_ID}" \
-  --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod \
-  --tag "coding-box-backend:ci-${CI_JOB_ID}" .
+# Sourced by GitLab. Actual build commands remain visible in the CI job so
+# the existing functional quality gate continues to inspect their contract.
+capture_production_image() {
 docker image inspect "coding-box-backend:ci-${CI_JOB_ID}" > "$proof/image-inspect.json"
 docker run --rm --entrypoint node "coding-box-backend:ci-${CI_JOB_ID}" --input-type=module -e '
   import fs from "node:fs";
@@ -54,7 +61,7 @@ cat "$proof/timings.tsv" "$proof/production-artifact.json"
 # Capture the actual image's entity metadata, before any database connection.
 # The probe is copied into a disposable container, never into the built image.
 container="build-comparison-metadata-${CI_JOB_ID}"
-trap 'docker rm -f "$container" >/dev/null 2>&1 || true' EXIT
+trap 'docker rm -f "$container" >/dev/null 2>&1 || true; rm -f "$proof"/.stream-*' EXIT
 sed "s#../../scripts/quality/entity-metadata-snapshot.cjs#./entity-metadata-snapshot.cjs#" \
   tools/backend-build-comparison/capture-metadata.mjs > "$proof/capture-metadata.mjs"
 docker create --name "$container" --network none --entrypoint node \
@@ -71,3 +78,5 @@ docker start -a "$container" > "$proof/metadata.log" 2>&1
 cat "$proof/metadata.log"
 [ "$(docker inspect --format '{{.State.ExitCode}}' "$container")" -eq 0 ]
 docker cp "$container:/tmp/entity-metadata.json" "$proof/entity-metadata.json"
+
+}

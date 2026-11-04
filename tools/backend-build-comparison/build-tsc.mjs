@@ -9,7 +9,7 @@ const configPath = path.join(root, 'apps/backend/tsconfig.build.json');
 const outputArgument = process.argv.find(argument => argument.startsWith('--outputPath='));
 const output = path.resolve(root, outputArgument?.slice('--outputPath='.length) ?? 'dist/backend-build-comparison/tsc');
 assert.ok(output.startsWith(path.join(root, 'dist') + path.sep), 'Output must be inside workspace dist/');
-// The production Dockerfile restores the CommonJS workspace manifest at its
+// The production Dockerfile restores the typeless workspace manifest at its
 // root. Keep emitted ESM in an independent package scope which survives that.
 const runtime = path.join(output, 'runtime');
 const watch = process.argv.includes('--watch');
