@@ -11,6 +11,7 @@ import {
   HttpTestingController,
   provideHttpClientTesting
 } from '@angular/common/http/testing';
+import { WorkspaceSettings } from '../../../shared/models/workspace-settings.model';
 import { JournalComponent } from '../journal/journal.component';
 import { WsAccessRightsComponent } from '../ws-access-rights/ws-access-rights.component';
 import { WsSettingsComponent } from './ws-settings.component';
@@ -143,6 +144,341 @@ describe('WsSettingsComponent', () => {
     expect(fixture.nativeElement.querySelector('.replay-url-export-token-duration')).toBeNull();
     expect(fixture.nativeElement.querySelector('.replay-url-export-mode').textContent)
       .toContain('ws-settings.replay-url-export-mode-workspace');
+  });
+
+  describe('queued settings writes', () => {
+    const numericSettings = [
+      {
+        field: 'authSessionIdleTimeoutMinutes',
+        save: 'saveAuthSessionIdleTimeout',
+        setter: 'setAuthSessionIdleTimeoutMinutes',
+        selector: '.auth-session-timeout',
+        loaded: 45,
+        submitted: 60,
+        newer: 90
+      },
+      {
+        field: 'replayUrlExportTokenDurationDays',
+        save: 'saveReplayUrlExportTokenDuration',
+        setter: 'setReplayUrlExportTokenDurationDays',
+        selector: '.replay-url-export-token-duration',
+        loaded: 90,
+        submitted: 45,
+        newer: 60
+      }
+    ] as const;
+
+    it.each(numericSettings)('preserves newer $field drafts after a rejected save', async setting => {
+      await fixture.whenStable();
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService[setting.setter].mockReturnValueOnce(saving);
+      const input = fixture.nativeElement.querySelector(`${setting.selector} input`) as HTMLInputElement;
+      input.value = String(setting.submitted);
+      input.dispatchEvent(new Event('input'));
+      component[setting.save]();
+      input.value = String(setting.newer);
+      input.dispatchEvent(new Event('input'));
+      saving.error(new Error('save rejected'));
+      await fixture.whenStable();
+
+      expect(component[setting.field]()).toBe(setting.newer);
+      expect(input.value).toBe(String(setting.newer));
+      component[setting.save]();
+      expect(mockWorkspaceSettingsService[setting.setter].mock.calls.at(-1)?.[1]).toBe(setting.newer);
+    });
+
+    it.each(numericSettings)('restores the confirmed $field value after a rejected save', setting => {
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService[setting.setter].mockReturnValueOnce(saving);
+      component[setting.field].set(setting.submitted);
+      component[setting.save]();
+      saving.error(new Error('save rejected'));
+
+      expect(component[setting.field]()).toBe(setting.loaded);
+    });
+
+    it('preserves a newer numeric draft even if it returns to the submitted value', async () => {
+      await fixture.whenStable();
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValueOnce(saving);
+      const input = fixture.nativeElement.querySelector('.auth-session-timeout input') as HTMLInputElement;
+      input.value = '60';
+      input.dispatchEvent(new Event('input'));
+      component.saveAuthSessionIdleTimeout();
+      input.value = '90';
+      input.dispatchEvent(new Event('input'));
+      input.value = '60';
+      input.dispatchEvent(new Event('input'));
+      saving.error(new Error('save rejected'));
+      await fixture.whenStable();
+
+      expect(component.authSessionIdleTimeoutMinutes()).toBe(60);
+      expect(input.value).toBe('60');
+    });
+
+    it('preserves numeric drafts updated directly while a save is pending', () => {
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValueOnce(saving);
+      component.authSessionIdleTimeoutMinutes.set(60);
+      component.saveAuthSessionIdleTimeout();
+      component.authSessionIdleTimeoutMinutes.set(90);
+      saving.error(new Error('save rejected'));
+
+      expect(component.authSessionIdleTimeoutMinutes()).toBe(90);
+    });
+
+    it('retains a numeric draft across a delayed initial read and uses the loaded rollback value', async () => {
+      fixture.destroy();
+      const initial = new Subject<number>();
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.getAuthSessionIdleTimeoutMinutes.mockReturnValueOnce(initial);
+      mockWorkspaceSettingsService.setAuthSessionIdleTimeoutMinutes.mockReturnValueOnce(saving);
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      await fixture.whenStable();
+      const input = fixture.nativeElement.querySelector('.auth-session-timeout input') as HTMLInputElement;
+      input.value = '90';
+      input.dispatchEvent(new Event('input'));
+      initial.next(45);
+      initial.complete();
+      await fixture.whenStable();
+      expect(component.authSessionIdleTimeoutMinutes()).toBe(90);
+      expect(input.value).toBe('90');
+
+      component.saveAuthSessionIdleTimeout();
+      saving.error(new Error('save rejected'));
+      expect(component.authSessionIdleTimeoutMinutes()).toBe(45);
+    });
+
+    const initialReadOrders = [
+      ['mode', 'fetch', 'refresh'], ['mode', 'refresh', 'fetch'],
+      ['fetch', 'mode', 'refresh'], ['fetch', 'refresh', 'mode'],
+      ['refresh', 'mode', 'fetch'], ['refresh', 'fetch', 'mode']
+    ] as const;
+    const presetCases = [false, true].flatMap(persistedMode => initialReadOrders.map(order => ({ persistedMode, order })));
+
+    it.each(presetCases)('rolls back to confirmed mode $persistedMode with initial reads $order', ({ persistedMode, order }) => {
+      fixture.destroy();
+      const initial = { mode: new Subject<boolean>(), fetch: new Subject<boolean>(), refresh: new Subject<boolean>() };
+      const saving = new Subject<WorkspaceSettings[]>();
+      mockWorkspaceSettingsService.getEvaluationMode.mockReturnValueOnce(initial.mode);
+      mockWorkspaceSettingsService.getAutoFetchCodingStatistics.mockReturnValueOnce(initial.fetch);
+      mockWorkspaceSettingsService.getAutoRefreshManualCodingJobs.mockReturnValueOnce(initial.refresh);
+      mockWorkspaceSettingsService.setEvaluationMode.mockReturnValueOnce(saving);
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+
+      component.toggleEvaluationMode({ checked: true });
+      order.forEach(key => {
+        initial[key].next(key === 'mode' ? persistedMode : true);
+        initial[key].complete();
+      });
+      saving.error(new Error('preset rejected'));
+
+      expect(component.evaluationMode()).toBe(persistedMode);
+      expect(component.autoFetchCodingStatistics()).toBe(!persistedMode);
+      expect(component.autoRefreshManualCodingJobs()).toBe(!persistedMode);
+    });
+
+    it('keeps the latest input when an earlier write fails, then persists it in order', async () => {
+      const first = new Subject<WorkspaceSettings>();
+      const second = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch
+        .mockReturnValueOnce(first).mockReturnValueOnce(second);
+
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledTimes(1);
+      first.error(new Error('first write failed'));
+
+      expect(component.enableRegexSearch()).toBe(false);
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch.mock.calls).toEqual([[1, true], [1, false]]);
+      second.complete();
+      await fixture.whenStable();
+      const setting = Array.from(fixture.nativeElement.querySelectorAll('.setting-item'))
+        .find(item => (item as HTMLElement).textContent?.includes('ws-settings.enable-regex-search')) as HTMLElement;
+      expect(setting.querySelector('button[role="switch"]')?.getAttribute('aria-checked')).toBe('false');
+    });
+
+    it('restores the last successful value when the latest write fails', () => {
+      const first = new Subject<WorkspaceSettings>();
+      const second = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch
+        .mockReturnValueOnce(first).mockReturnValueOnce(second);
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+
+      first.next({ id: 1, key: 'enable-regex-search', value: '{"enabled":true}' });
+      first.complete();
+      second.error(new Error('latest write failed'));
+
+      expect(component.enableRegexSearch()).toBe(true);
+      component.toggleEnableRegexSearch({ checked: false });
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledTimes(3);
+      expect(component.enableRegexSearch()).toBe(false);
+    });
+
+    it('restores the loaded value when every queued write fails', () => {
+      const first = new Subject<WorkspaceSettings>();
+      const second = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch
+        .mockReturnValueOnce(first).mockReturnValueOnce(second);
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      first.error(new Error('first failed'));
+      second.error(new Error('second failed'));
+      expect(component.enableRegexSearch()).toBe(false);
+    });
+
+    it('ignores delayed initial settings after a successful write', () => {
+      const initial = new Subject<boolean>();
+      mockWorkspaceSettingsService.getEnableRegexSearch.mockReturnValueOnce(initial);
+      component.ngOnInit();
+      component.toggleEnableRegexSearch({ checked: true });
+      initial.next(false);
+      initial.complete();
+      expect(component.enableRegexSearch()).toBe(true);
+    });
+
+    it('uses a delayed initial value as rollback while a write is pending', () => {
+      const initial = new Subject<boolean>();
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.getEnableRegexSearch.mockReturnValueOnce(initial);
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValueOnce(saving);
+      component.ngOnInit();
+      component.toggleEnableRegexSearch({ checked: false });
+      initial.next(true);
+      saving.error(new Error('failed'));
+      expect(component.enableRegexSearch()).toBe(true);
+    });
+
+    it('finishes writes for their original workspace after a round trip without stale feedback', () => {
+      const saving = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValueOnce(saving);
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      mockAppService.selectedWorkspaceId = 2;
+      (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
+      mockAppService.selectedWorkspaceId = 1;
+      (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
+      mockSnackBar.open.mockClear();
+      expect(saving.observed).toBe(true);
+      saving.complete();
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch.mock.calls).toEqual([[1, true], [1, false]]);
+      expect(component.enableRegexSearch()).toBe(false);
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+    });
+
+    it('blocks dependent refresh changes until the evaluation-mode write settles', async () => {
+      component.toggleEvaluationMode({ checked: true });
+      const disable = new Subject<WorkspaceSettings[]>();
+      mockWorkspaceSettingsService.setEvaluationMode.mockReturnValueOnce(disable);
+      component.toggleEvaluationMode({ checked: false });
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+      component.toggleAutoFetchCodingStatistics({ checked: true });
+      await fixture.whenStable();
+      const automaticSettings = Array.from(fixture.nativeElement.querySelectorAll('.setting-item'))
+        .filter(item => ['ws-settings.auto-fetch-coding-statistics', 'ws-settings.auto-refresh-manual-coding-jobs']
+          .some(key => (item as HTMLElement).textContent?.includes(key))) as HTMLElement[];
+      expect(automaticSettings).toHaveLength(2);
+      automaticSettings.forEach(setting => expect(setting.querySelector('button')?.disabled).toBe(true));
+      expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).not.toHaveBeenCalled();
+      disable.error(new Error('mode change failed'));
+      expect(component.evaluationMode()).toBe(true);
+      expect(component.autoFetchCodingStatistics()).toBe(false);
+      expect(component.autoRefreshManualCodingJobs()).toBe(false);
+
+      component.toggleEvaluationMode({ checked: false });
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, true);
+    });
+
+    it('captures numeric inputs when enqueued and persists them in order', () => {
+      const first = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays.mockReturnValueOnce(first);
+      component.replayUrlExportTokenDurationDays.set(45);
+      component.saveReplayUrlExportTokenDuration();
+      component.replayUrlExportTokenDurationDays.set(60);
+      component.saveReplayUrlExportTokenDuration();
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays).toHaveBeenCalledTimes(1);
+      first.next({ id: 1, key: 'replay-url-export-token-duration-days', value: '{"durationDays":45}' });
+      first.complete();
+      expect(mockWorkspaceSettingsService.setReplayUrlExportTokenDurationDays.mock.calls)
+        .toEqual([[1, 45, 90], [1, 60, 90]]);
+      expect(component.replayUrlExportTokenDurationDays()).toBe(60);
+    });
+
+    it('persists the final toggle after the view is destroyed without changing the old view', () => {
+      const saving = new Subject<WorkspaceSettings>();
+      const stored = { enabled: false };
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockImplementation((_id, enabled) => {
+        if (enabled) return saving;
+        stored.enabled = false;
+        return of({ id: 1, key: 'enable-regex-search', value: '{"enabled":false}' });
+      });
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      fixture.destroy();
+      mockSnackBar.open.mockClear();
+      expect(saving.observed).toBe(true);
+      stored.enabled = true;
+      saving.next({ id: 1, key: 'enable-regex-search', value: '{"enabled":true}' });
+      saving.complete();
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch.mock.calls).toEqual([[1, true], [1, false]]);
+      expect(stored.enabled).toBe(false);
+      expect(component.enableRegexSearch()).toBe(false);
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+    });
+
+    it('waits for all writes from the previous view before loading settings again', () => {
+      const first = new Subject<WorkspaceSettings>();
+      const last = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValueOnce(first).mockReturnValueOnce(last);
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      fixture.destroy();
+      mockWorkspaceSettingsService.getEnableRegexSearch.mockClear();
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).not.toHaveBeenCalled();
+      first.complete();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).not.toHaveBeenCalled();
+      last.complete();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledTimes(1);
+      expect(component.enableRegexSearch()).toBe(false);
+    });
+
+    it.each([false, true])('blocks dependent saves until the initial evaluation mode %s is loaded', async enabled => {
+      fixture.destroy();
+      const mode = new Subject<boolean>();
+      mockWorkspaceSettingsService.getEvaluationMode.mockReturnValueOnce(mode);
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      const switches = Array.from(fixture.nativeElement.querySelectorAll('.setting-item'))
+        .filter(item => ['ws-settings.auto-fetch-coding-statistics', 'ws-settings.auto-refresh-manual-coding-jobs']
+          .some(key => (item as HTMLElement).textContent?.includes(key))) as HTMLElement[];
+      expect(switches).toHaveLength(2);
+      switches.forEach(setting => expect(setting.querySelector('button')?.disabled).toBe(true));
+      component.toggleAutoFetchCodingStatistics({ checked: true });
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+      expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).not.toHaveBeenCalled();
+      mode.next(enabled);
+      mode.complete();
+      await fixture.whenStable();
+      switches.forEach(setting => expect(setting.querySelector('button')?.disabled).toBe(enabled));
+      expect(component.autoFetchCodingStatistics()).toBe(!enabled);
+      expect(component.autoRefreshManualCodingJobs()).toBe(!enabled);
+      if (!enabled) {
+        component.toggleAutoRefreshManualCodingJobs({ checked: false });
+        expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, false);
+      }
+    });
   });
 
   describe('ngOnInit', () => {
@@ -454,7 +790,8 @@ describe('WsSettingsComponent', () => {
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setIncludeDeriveErrorInManualCoding.mockReturnValue(throwError(() => new Error('error')));
-      component.includeDeriveErrorInManualCoding.set(true);
+      mockWorkspaceSettingsService.getIncludeDeriveErrorInManualCoding.mockReturnValueOnce(of(true));
+      component.ngOnInit();
       component.toggleIncludeDeriveErrorInManualCoding({ checked: false });
       expect(component.includeDeriveErrorInManualCoding()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
@@ -476,7 +813,8 @@ describe('WsSettingsComponent', () => {
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setShowTestResultsLogAnomalies.mockReturnValue(throwError(() => new Error('error')));
-      component.showTestResultsLogAnomalies.set(true);
+      mockWorkspaceSettingsService.getShowTestResultsLogAnomalies.mockReturnValueOnce(of(true));
+      component.ngOnInit();
       component.toggleShowTestResultsLogAnomalies({ checked: false });
       expect(component.showTestResultsLogAnomalies()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();
@@ -492,7 +830,8 @@ describe('WsSettingsComponent', () => {
 
     it('should revert state on error', () => {
       mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValue(throwError(() => new Error('error')));
-      component.enableRegexSearch.set(true);
+      mockWorkspaceSettingsService.getEnableRegexSearch.mockReturnValueOnce(of(true));
+      component.ngOnInit();
       component.toggleEnableRegexSearch({ checked: false });
       expect(component.enableRegexSearch()).toBe(true);
       expect(mockSnackBar.open).toHaveBeenCalled();

@@ -34,6 +34,47 @@ describe('WorkspaceSettingsService', () => {
     expect(service).toBeTruthy();
   });
 
+  describe('setting read lifecycle', () => {
+    const cases: [string, (settings: WorkspaceSettingsService) => import('rxjs').Observable<unknown>][] = [
+      ['auto-fetch-coding-statistics', settings => settings.getAutoFetchCodingStatistics(1)],
+      ['auto-refresh-manual-coding-jobs', settings => settings.getAutoRefreshManualCodingJobs(1)],
+      ['evaluation-mode', settings => settings.getEvaluationMode(1)],
+      ['show-test-results-log-anomalies', settings => settings.getShowTestResultsLogAnomalies(1)],
+      ['include-derive-error-in-manual-coding', settings => settings.getIncludeDeriveErrorInManualCoding(1)],
+      ['enable-regex-search', settings => settings.getEnableRegexSearch(1)],
+      ['replay-url-export-mode', settings => settings.getReplayUrlExportMode(1)],
+      ['replay-url-export-token-duration-days', settings => settings.getReplayUrlExportTokenDurationDays(1)],
+      ['auth-session-idle-timeout-minutes', settings => settings.getAuthSessionIdleTimeoutMinutes(1)],
+      ['response-matching-mode', settings => settings.getResponseMatchingMode(1)],
+      ['duplicate-aggregation-threshold', settings => settings.getAggregationThreshold(1)]
+    ];
+
+    it.each(cases)('cancels %s when its last consumer unsubscribes', (key, read) => {
+      const value = read(service);
+      httpMock.expectNone(`${mockServerUrl}/workspace/1/settings/${key}`);
+      const subscription = value.subscribe();
+      const request = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/${key}`);
+      subscription.unsubscribe();
+      expect(request.cancelled).toBe(true);
+    });
+
+    it('retains a shared request until its last consumer leaves, then allows a fresh read', () => {
+      const first = service.getAutoRefreshManualCodingJobs(1).subscribe();
+      const second = service.getAutoRefreshManualCodingJobs(1).subscribe();
+      const request = httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-refresh-manual-coding-jobs`);
+      first.unsubscribe();
+      expect(request.cancelled).toBe(false);
+      second.unsubscribe();
+      expect(request.cancelled).toBe(true);
+
+      const values: boolean[] = [];
+      service.getAutoRefreshManualCodingJobs(1).subscribe(value => values.push(value));
+      httpMock.expectOne(`${mockServerUrl}/workspace/1/settings/auto-refresh-manual-coding-jobs`)
+        .flush({ value: '{"enabled":false}' });
+      expect(values).toEqual([false]);
+    });
+  });
+
   describe('getWorkspaceSetting', () => {
     it('should fetch setting', () => {
       service.getWorkspaceSetting(1, 'k').subscribe();

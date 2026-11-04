@@ -120,9 +120,8 @@ describe('File view settings with real services without Zone', () => {
       if (action === 'roundtrip') app.selectedWorkspaceId = 1;
     }
     expect(pool.cancelled).toBe(true);
-    // WorkspaceSettingsService intentionally retains shared requests for its cache.
-    expect(regex.cancelled).toBe(false);
-    regex.flush({ value: '{"enabled":true}' });
+    // Shared reads now stop with their last consumer instead of finishing solely for the cache.
+    expect(regex.cancelled).toBe(true);
     expect(fixture.componentInstance.enableRegexSearch()).toBe(false);
     expect(fixture.componentInstance.contentPoolSettings().enabled).toBe(false);
     expect(fixture.componentInstance.isLoadingContentPoolConfig()).toBe(false);
