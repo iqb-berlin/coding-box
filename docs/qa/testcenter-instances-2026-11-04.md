@@ -142,6 +142,33 @@ Bestandteil des zusammengeführten Stands.
 | Betroffene Frontend-Suites und Qualitätsgates | 118 Tests in fünf Suites, alle 81 Qualitäts-/Übersetzungsprüfungen und Frontend-Lint bestanden. |
 | Neuer Frontend-Build und Testcenter-Browserfälle | Produktionsbuild und erneut alle 16 Browserfälle bestanden, ohne übersprungene Fälle oder Wiederholungen. |
 
+## Nachprüfung des fehlgeschlagenen CI-Browsertests
+
+Im Job [test-browser #499761](https://scm.cms.hu-berlin.de/iqb/coding-box/-/jobs/499761)
+der Pipeline #107269 am Stand `d1eec77aa` scheiterten alle fünf Fälle in
+`cypress/component/test-center-import.component.cy.ts` beim Initialisieren:
+`this.backend.getTestcenterInstances is not a function`. Der vorhandene
+Backend-Mock war noch leer, obwohl der Importdialog inzwischen die freigegebenen
+Instanzen lädt. Die übrigen 32 Komponententests dieses Jobs waren erfolgreich.
+Die bisherigen 16 Testcenter-Browserfälle gehören zu einer anderen Suite und
+hatten diesen veralteten Komponenten-Mock nicht ausgeführt.
+
+Der Mock liefert jetzt eine leere Instanzliste über ein Observable. Sein
+Rückgabevertrag wird mit `Pick<UserBackendService, 'getTestcenterInstances'>`
+typisiert. Anwendung und Fehlerbehandlung werden unverändert ausgeführt;
+keiner der fünf Fälle wird übersprungen oder abgeschwächt.
+
+Mit Node 24.22.1 und Cypress 15.21.1 erneut lokal ausgeführt:
+
+```sh
+NX_DAEMON=false npx nx run frontend:component-test --browser=electron
+```
+
+Ergebnis: alle elf Specs mit insgesamt 37 Tests bestanden, einschließlich der
+fünf zuvor fehlgeschlagenen Importfälle; keine Wiederholungen, übersprungenen
+oder ausstehenden Fälle. Der lokale Erfolg ersetzt den noch ausstehenden
+Remote-CI-Nachweis für den korrigierten Stand nicht.
+
 ## Versionsaussage und Grenzen
 
 Die Quellprüfung wurde an den Testcenter-Tags 17.6.1, 18.3.1 und 19.0.1
