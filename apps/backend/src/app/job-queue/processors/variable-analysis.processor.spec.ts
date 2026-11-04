@@ -1380,7 +1380,7 @@ describe('VariableAnalysisProcessor', () => {
         validCount: 2,
         invalidCount: 1,
         emptyCount: 1,
-        distinctValueCount: 2
+        distinctValueCount: 3
       })
     ]);
 
@@ -1403,6 +1403,13 @@ describe('VariableAnalysisProcessor', () => {
           count: 1,
           validOccurrenceCount: 1,
           percentage: 33.33333333333333
+        }),
+        expect.objectContaining({
+          value: '',
+          count: 1,
+          validOccurrenceCount: 0,
+          percentageTotal: 33.33333333333333,
+          percentageValid: 0
         })
       ]]
     ]);
@@ -1473,7 +1480,7 @@ describe('VariableAnalysisProcessor', () => {
         variableId: 'BOOL_MULTI',
         totalCount: 3,
         emptyCount: 1,
-        distinctValueCount: 2
+        distinctValueCount: 3
       })
     ]);
 
@@ -1496,8 +1503,77 @@ describe('VariableAnalysisProcessor', () => {
           count: 1,
           percentage: 33.33333333333333,
           schemaOrder: 1
+        }),
+        expect.objectContaining({
+          value: '',
+          count: 1,
+          validOccurrenceCount: 0,
+          percentageTotal: 33.33333333333333,
+          percentageValid: null
         })
       ]]
+    ]);
+  });
+
+  it('keeps actual empty multiple responses as an observed row when every answer is empty', async () => {
+    const values = [null, '', '   ', '[]', '[false,false]', '[null,""]'];
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [[], [], values.map((value, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+      }))]
+    });
+    await processor.processWorkspaceJob(createJob());
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 6,
+        validCount: 0,
+        invalidCount: 6,
+        emptyCount: 6,
+        emptyPercentage: 100,
+        distinctValueCount: 1
+      })
+    ]);
+    const frequencies = findCacheSetPayload<Array<[string, { isSchemaOnly?: boolean }[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(frequencies).toEqual([['1:MULTI', [expect.objectContaining({
+      value: '', count: 6, validOccurrenceCount: 0, percentageTotal: 100, percentageValid: null
+    })]]]);
+    expect(frequencies[0][1][0].isSchemaOnly).not.toBe(true);
+  });
+
+  it('keeps a rare empty multiple response in addition to the twenty most frequent categories', async () => {
+    const responseValues = Array.from({ length: 21 }, (_, index) => [String(index), String(index)]).flat();
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [[], [], [...responseValues.map(value => JSON.stringify([value])), '[]'].map((value, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+      }))]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const frequencies = findCacheSetPayload<Array<[string, { value: string; count: number }[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    )[0][1];
+    expect(frequencies).toHaveLength(21);
+    expect(frequencies.filter(row => row.value !== '')).toHaveLength(20);
+    expect(frequencies).toContainEqual(expect.objectContaining({ value: '', count: 1, validOccurrenceCount: 0 }));
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 43, validCount: 42, emptyCount: 1, distinctValueCount: 22
+      })
     ]);
   });
 
@@ -1604,7 +1680,7 @@ describe('VariableAnalysisProcessor', () => {
 
     expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
       expect.objectContaining({
-        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 2
+        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 3
       })
     ]);
     expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([

@@ -58,7 +58,24 @@ gleichzeitig vorliegen.
 `Prozent gültig = Anzahl gültiger Antworten / Gültige Antworten × 100`.
 Bei null gültigen Antworten wird kein gültiger Prozentwert ausgegeben.
 Bei Mehrfachantworten wird jede Kategorie höchstens einmal pro Antwort gezählt;
-die Kategorieprozente können sich deshalb zu mehr als 100 % summieren.
+die Kategorieprozente können sich deshalb zu mehr als 100 % summieren. Eine Antwort
+mit `["A","B"]` zählt sowohl bei A als auch bei B. Deshalb muss auch die Summe aus
+Kategoriehäufigkeiten und leeren Antworten nicht der Zahl der Antwortdatensätze entsprechen.
+
+Mehrfachantworten ohne ausgewählte Kategorie erhalten eine eigene Zeile `[Leer]`
+mit ihrer tatsächlichen Häufigkeit. Sie zählt einmal je leerer Antwort und bleibt
+auch zusätzlich zu den 20 häufigsten Kategorien enthalten. Das gilt ebenso, wenn
+alle Antworten leer sind. Leere Antworten zählen in der Antwortwertanalyse nicht
+als gültig; ihr Anteil an gültigen Antworten ist 0 %, bei fehlendem gültigem Nenner
+bleibt er ohne Wert. Die Spalte „Leere Rohwerte“ bleibt als Angabe zur gesamten
+Variable erhalten. CSV und XLSX enthalten dieselbe Leerzeile als leeren Wert mit
+„Wert ist leer = ja“.
+
+Beispiel: `["A","B"]`, `["B"]`, `[]` ergeben drei Antworten, davon zwei gültige
+(bei gültigem ursprünglichem Antwortstatus). Die Wertzeilen zeigen A einmal,
+B zweimal und `[Leer]` einmal. Die Summe der Wertzeilen ist vier.
+Ergebnisversion 5 erfordert nach Bereitstellung eine neue Berechnung; ältere
+Ergebnisse enthalten die Leerzeile noch nicht zuverlässig.
 
 Die Statusübersicht zeigt pro Variable einmal die vollständige Verteilung auf
 der aktuellen Ergebnisseite. Bei Antwortwerten verwendet sie den ursprünglichen

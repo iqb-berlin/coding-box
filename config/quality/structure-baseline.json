@@ -1343,14 +1343,14 @@
     },
     "apps/backend/src/app/job-queue/processors/variable-analysis.processor.ts": {
       "file": {
-        "max-lines": 1257
+        "max-lines": 1252
       },
       "functions": {
         "class VariableAnalysisProcessor#1/method processWorkspaceJob#1": {
           "max-lines-per-function": 197
         },
         "class VariableAnalysisProcessor#1/method recalculateMultipleVariableFrequencies#1": {
-          "max-lines-per-function": 129
+          "max-lines-per-function": 122
         }
       }
     },

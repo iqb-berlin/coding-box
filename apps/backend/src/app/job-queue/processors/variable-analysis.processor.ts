@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { getTopMultipleResponseCounts } from './variable-analysis-frequency.util';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -1039,14 +1040,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         summary.validCounts
       );
 
-      const sortedValues = Array.from(summary.counts.entries())
-        .sort(([valueA, countA], [valueB, countB]) => {
-          if (countA !== countB) {
-            return countB - countA;
-          }
-          return valueA.localeCompare(valueB);
-        })
-        .slice(0, this.MAX_VALUES_PER_VARIABLE);
+      const sortedValues = getTopMultipleResponseCounts(summary.counts, this.MAX_VALUES_PER_VARIABLE);
 
       frequencies[entry.comboKey] = sortedValues.map(([value, count]) => {
         const category = summary.categories.get(value);
@@ -1096,6 +1090,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
     if (categories.length === 0) {
       summary.emptyCount += 1;
+      summary.counts.set('', summary.emptyCount);
       return;
     }
 
