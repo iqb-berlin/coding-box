@@ -2,7 +2,7 @@ import { ApiProperty } from '@nestjs/swagger';
 import { CodingJob } from '../../../database/entities/coding-job.entity';
 import { MissingsProfile } from '../../../database/entities/missings-profile.entity';
 import { VariableDto } from '../../variable-bundle/dto/variable.dto';
-import { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
+import type { CodingJobFreshnessStatus } from '../../../../../../../api-dto/coding/job-refresh.dto';
 
 interface CodingJobIssueSummary {
   total: number;

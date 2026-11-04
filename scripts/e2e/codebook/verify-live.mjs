@@ -72,7 +72,7 @@ try {
   const schema = await db.query('SELECT count(*)::int AS n FROM databasechangelog');
   assert.equal(schema.rows[0].n, 163);
   report.migrations = schema.rows[0].n;
-  report.backendArtifactSha256 = createHash('sha256').update(await readFile('dist/apps/backend/main.js')).digest('hex');
+  report.backendArtifactSha256 = createHash('sha256').update(await readFile('dist/apps/backend/main.mjs')).digest('hex');
   report.frontendArtifactSha256 = await hashFrontendArtifact('dist/apps/frontend');
   report.runnerSha256 = createHash('sha256').update(await readFile('scripts/e2e/codebook/verify-live.mjs')).digest('hex');
   const lock = JSON.parse(await readFile('package-lock.json', 'utf8'));

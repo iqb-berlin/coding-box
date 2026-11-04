@@ -1,5 +1,5 @@
 import { Injectable } from '@nestjs/common';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import * as fs from 'fs';
 import { PassThrough } from 'stream';

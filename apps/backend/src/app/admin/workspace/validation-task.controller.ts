@@ -23,7 +23,7 @@ import { ValidationTaskService } from '../../database/services/validation';
 import { ValidationTaskDto } from './dto/validation-task.dto';
 import { CreateValidationTaskRequestDto } from './dto/create-validation-task-request.dto';
 import { WorkspaceId } from './workspace.decorator';
-import { ValidationType } from '../../database/entities/validation-task.entity';
+import type { ValidationType } from '../../database/entities/validation-task.entity';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';

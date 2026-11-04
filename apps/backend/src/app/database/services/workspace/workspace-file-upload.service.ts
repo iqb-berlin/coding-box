@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
-import AdmZip = require('adm-zip');
+import AdmZip from 'adm-zip';
 import * as path from 'path';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';

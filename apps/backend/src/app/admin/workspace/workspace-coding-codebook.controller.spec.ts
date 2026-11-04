@@ -1,6 +1,6 @@
 import { BadRequestException, ForbiddenException } from '@nestjs/common';
 import { Response } from 'express';
-import * as fs from 'fs';
+import fs from 'fs';
 import { Readable, Writable } from 'stream';
 import { WorkspaceCodingCodebookController } from './workspace-coding-codebook.controller';
 import { CodeBookContentSetting } from '../code-book/codebook.interfaces';

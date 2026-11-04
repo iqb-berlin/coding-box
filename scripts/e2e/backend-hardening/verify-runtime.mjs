@@ -15,7 +15,7 @@ const root = fileURLToPath(new URL('../../..', import.meta.url));
 const runtimeDirectory = process.env.BACKEND_HARDENING_RUNTIME_DIR ?
   path.resolve(process.env.BACKEND_HARDENING_RUNTIME_DIR) : root;
 const executable = process.env.BACKEND_HARDENING_RUNTIME_DIR ?
-  path.join(runtimeDirectory, 'main.js') : path.join(root, 'dist/apps/backend/main.js');
+  path.join(runtimeDirectory, 'main.mjs') : path.join(root, 'dist/apps/backend/main.mjs');
 const output = path.resolve(process.env.BACKEND_HARDENING_PROOF_DIR || 'dist/backend-hardening-proof');
 const environment = {
   ...process.env, NODE_OPTIONS: '--max-old-space-size=2048', API_HOST: '127.0.0.1',

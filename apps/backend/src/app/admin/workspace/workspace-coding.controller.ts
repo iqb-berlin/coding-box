@@ -34,7 +34,7 @@ import {
   CodingResponseQueryService,
   CodingResultsService
 } from '../../database/services/coding';
-import {
+import type {
   CodingResponseSortBy,
   CodingResponseSortDirection
 } from '../../database/services/coding/coding-response-query.service';

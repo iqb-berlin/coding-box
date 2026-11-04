@@ -10,7 +10,7 @@ import {
 } from 'typeorm';
 import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
-import { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding/double-coded-review.dto';
+import type { DoubleCodedReviewDecisionState } from '../../../../../../api-dto/coding/double-coded-review.dto';
 
 @Entity({ name: 'double_coding_review_decision' })
 @Check('double_coding_review_decision_state_check', '"state" IN (\'draft\', \'applied\', \'superseded\')')

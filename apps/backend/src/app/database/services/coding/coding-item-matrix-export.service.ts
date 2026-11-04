@@ -2,7 +2,7 @@ import {
   Inject, BadRequestException, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import * as fs from 'fs';
 import { PassThrough, Stream } from 'stream';
@@ -28,7 +28,7 @@ import {
   normalizeExclusionBookletId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   IqbStandardMissingId,
   MissingsProfilesService,

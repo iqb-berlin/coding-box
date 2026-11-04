@@ -8,7 +8,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import { Setting } from '../../entities/setting.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
 
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 
 import {
   applyResolvedExclusionsToQuery,

@@ -21,7 +21,8 @@
         "webpackConfig": "apps/backend/webpack.config.js",
         "outputPath": "dist/apps/backend",
         "main": "apps/backend/src/main.ts",
-        "tsConfig": "apps/backend/tsconfig.app.json",
+        "outputFileName": "main.mjs",
+        "tsConfig": "apps/backend/tsconfig.build.json",
         "generatePackageJson": true,
         "target": "node",
         "compiler": "tsc"
