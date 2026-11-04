@@ -18,6 +18,8 @@ cleanup() {
 trap cleanup EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+docker run --rm -i --entrypoint node "$BACKEND_IMAGE" --input-type=module \
+  < scripts/qa/verify-backend-esm-interop.mjs
 docker network create --internal "$network" >/dev/null
 docker run -d --name "$prefix-db" --network "$network" --network-alias test-db \
   --tmpfs /var/lib/postgresql/data:rw,size=256m \

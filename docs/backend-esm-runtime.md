@@ -46,6 +46,8 @@ wegwerfbare PostgreSQL-/Redis-Instanzen; siehe `backend:test-integration`.
 Das verpflichtende Feature-CI-Gate `test-backend-container` baut die tatsächlichen
 Produktions-Dockerfiles aus den Quellen für Linux/amd64. Es prüft native
 XML-/SQLite-Abhängigkeiten und den Fehler bei ungültiger JWT-Konfiguration.
+Native ESM-Roundtrips für ZIP, XLSX, Multipart, Archiver und SQLite sichern die
+erst bei Import-/Exportaufrufen benötigten CommonJS-Exporte ab.
 Anschließend führt `scripts/qa/verify-backend-container.sh` mit diesem Image
 API und Export-Worker gegen neu erzeugte PostgreSQL-/Redis-Container aus:
 vollständiges SQL-Schema, HTTP 200 auf `/api/health`, echte Verbindungen,
