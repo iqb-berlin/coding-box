@@ -110,6 +110,7 @@ interface MatrixContext {
   bookletDesigns: Map<string, BookletDesign>;
   profile: ProfileDefinitions;
   derivedSources: Map<string, string[]>;
+  variablePositions: Map<string, number>;
 }
 
 interface ItemMatrixDiagnosticsCollector {
@@ -156,6 +157,8 @@ export class CodingItemMatrixExportService {
     workspaceId: number
   ): Promise<ItemDatasetOptionsDto> {
     const result = await this.buildColumns(workspaceId);
+    const orderWarnings = result.issues.length ? [] :
+      (await this.metadataService.getVariableOrder(workspaceId, result.columns)).warnings;
     return {
       items: result.columns.map(column => ({
         unitId: column.unitId,
@@ -168,7 +171,7 @@ export class CodingItemMatrixExportService {
         columnName: column.header
       })),
       mappingIssues: result.issues,
-      mappingWarnings: result.warnings
+      mappingWarnings: [...result.warnings, ...orderWarnings]
     };
   }
 
@@ -466,7 +469,12 @@ export class CodingItemMatrixExportService {
       analysisColumns: orderedColumns,
       bookletDesigns,
       profile,
-      derivedSources
+      derivedSources,
+      variablePositions: (await this.metadataService.getVariableOrder(
+        workspaceId,
+        orderedColumns,
+        checkCancellation
+      )).positions
     };
   }
 
@@ -633,7 +641,8 @@ export class CodingItemMatrixExportService {
           context.profile,
           context.derivedSources,
           configuration,
-          checkCancellation
+          checkCancellation,
+          context.variablePositions
         );
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
@@ -753,7 +762,8 @@ export class CodingItemMatrixExportService {
     profile: ProfileDefinitions,
     derivedSources: Map<string, string[]>,
     configuration: ItemMatrixExportConfiguration,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    variablePositions?: ReadonlyMap<string, number>
   ): Promise<ResolvedCell[]> {
     await checkCancellation?.();
     const resolution = this.cellResolver.resolveIncrementally(
@@ -762,7 +772,7 @@ export class CodingItemMatrixExportService {
       responseValues,
       profile,
       derivedSources,
-      configuration
+      { ...configuration, variablePositions }
     );
     let step = resolution.next();
     while (!step.done) {

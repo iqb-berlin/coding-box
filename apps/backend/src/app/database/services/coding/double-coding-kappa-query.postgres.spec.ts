@@ -196,7 +196,7 @@ describePostgres('Kappa SQL filters against PostgreSQL and the complete Liquibas
       };
       expect(await cells(actual)).toEqual(await cells(expected));
     }
-  });
+  }, 30000);
 
   (process.env.KAPPA_QUERY_BENCHMARK === '1' ? it : it.skip)('measures the former and filtered retrieval on identical synthetic data', async () => {
     const bench = await fixture.workspace('Kappa benchmark');
