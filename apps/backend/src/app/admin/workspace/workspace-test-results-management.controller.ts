@@ -18,7 +18,7 @@ import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import Persons from '../../database/entities/persons.entity';
 import {
-  RequestWithUser,
+  type RequestWithUser,
   PersonTestResult,
   BookletSearchResult,
   UnitSearchResult,

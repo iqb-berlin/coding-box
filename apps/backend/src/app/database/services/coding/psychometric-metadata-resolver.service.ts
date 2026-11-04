@@ -7,7 +7,7 @@ import {
   PsychometricDomainSelection
 } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import FileUpload from '../../entities/file_upload.entity';
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { MissingsProfilesService } from './missings-profiles.service';
 import {
   getPsychometricLogicalKey,

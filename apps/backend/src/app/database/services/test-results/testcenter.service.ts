@@ -14,7 +14,7 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import {
   ImportOptionsDto as ImportOptions,
-  ImportResultDto as Result,
+  type ImportResultDto as Result,
   TestResultsOverwriteMode
 } from '../../../../../../../api-dto/files/import-options.dto';
 
@@ -38,7 +38,7 @@ import { JournalService } from '../shared/journal.service';
 import { withWorkspaceTestcenterImportLock, WorkspaceTestcenterImportBusyError } from '../shared/workspace-test-results-lock.util';
 import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity';
 
-export { Result };
+export type { Result };
 
 const agent = new https.Agent({
   rejectUnauthorized: true

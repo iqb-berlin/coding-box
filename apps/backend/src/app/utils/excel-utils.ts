@@ -1,4 +1,4 @@
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 
 /**
  * Generates a unique worksheet name within a workbook by appending a counter if necessary.

@@ -1,5 +1,6 @@
 export { WorkspaceTestResultsService } from './workspace-test-results.service';
-export { TestcenterService, Result } from './testcenter.service';
+export { TestcenterService } from './testcenter.service';
+export type { Result } from './testcenter.service';
 export { UploadResultsService } from './upload-results.service';
 export { PersonService } from './person.service';
 export { PersonQueryService } from './person-query.service';

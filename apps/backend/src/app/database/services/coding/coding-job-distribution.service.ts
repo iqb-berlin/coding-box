@@ -21,7 +21,7 @@ import { CodingJobAggregationService } from './coding-job-aggregation.service';
 import { CodingJobMutationService } from './coding-job-mutation.service';
 import { CodingJobQueryService } from './coding-job-query.service';
 import { CodingJobResponsesService } from './coding-job-responses.service';
-import { DERIVED_VARIABLE_READER, DerivedVariableReader } from '../workspace/derived-variable-reader.token';
+import { DERIVED_VARIABLE_READER, type DerivedVariableReader } from '../workspace/derived-variable-reader.token';
 import {
   isSafeKey, JobCreationWarning, VariableReference, BundleItem, DistributionItem, DistributionCoderInput, NormalizedDistributionCoder, DistributionDoubleCodingInfo, DistributionPlanRequest, DistributionVariableUsageRequest, DistributionVariableUsageBatchRequest, DistributionVariableUsageByStatus, DistributionVariableUsageCaseStatus, DistributionVariableUsageContext, DistributionPlanItem, DistributionPlanCaseGroup, DistributionPlanCase, DistributionPlanJob, DistributionPlan, JobDefinitionExistingTaskRow, DistributionCreatedJob, DistributedCodingJobsResult, DistributedCodingJobsTransactionHook, RefreshDistributedCodingJobsTransactionHook, JobDefinitionRefreshCodingJobsResult, DEFAULT_DISTRIBUTION_CODER_WEIGHT, MIN_DISTRIBUTION_CODER_CAPACITY_PERCENT, MAX_DISTRIBUTION_CODER_CAPACITY_PERCENT, SlimResponse, DistributableResponses, InternalCreateCodingJobDto
 } from './coding-job.types';

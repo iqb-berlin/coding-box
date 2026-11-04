@@ -4,9 +4,9 @@ import {
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as fastCsv from 'fast-csv';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import * as fs from 'fs';
-import archiver = require('archiver');
+import archiver from 'archiver';
 import { PassThrough, Writable } from 'stream';
 import { Repository } from 'typeorm';
 import { getErrorMessage, toError } from '../../../utils/error.util';
@@ -24,7 +24,7 @@ import {
 } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
 
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   buildGeoGebraFileName,
   decodeGeoGebraValue

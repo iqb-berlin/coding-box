@@ -412,10 +412,12 @@ test-backend-container:
       then cat container-startup.log; echo 'Invalid production configuration unexpectedly started'; exit 1; fi
     - cat container-startup.log
     - grep -F 'JWT_SECRET must be a non-empty string' container-startup.log
+    - BACKEND_IMAGE=coding-box-backend:ci-${CI_JOB_ID} POSTGRES_TEST_IMAGE=${DOCKER_HUB_PROXY}postgres:14.22-alpine3.22 REDIS_TEST_IMAGE=${DOCKER_HUB_PROXY}redis:7.4-alpine sh scripts/qa/verify-backend-container.sh
   artifacts:
     when: always
     paths:
       - container-startup.log
+      - dist/backend-container-proof/
 
 test-db:
   stage: test-db

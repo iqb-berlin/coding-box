@@ -1,5 +1,9 @@
 # Vorbereitung der Backend-Entities auf ESM
 
+Dieser Text dokumentiert den Vorbereitungsstand von PR #1145. Die anschließende
+Umstellung des regulären Builds ist unter [Backend-Laufzeit als ESM](backend-esm-runtime.md)
+beschrieben.
+
 Die Backend-Anwendung wird weiterhin als CommonJS gebaut und gestartet. Das
 Root-Paket, Docker, Jest samt Launcher und die bestehende Request-Validierung
 mit gemeinsamen Schemas, AJV und class-validator bleiben unverändert. Dieser

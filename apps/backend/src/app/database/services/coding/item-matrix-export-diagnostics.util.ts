@@ -1,5 +1,5 @@
 import * as fs from 'fs';
-import archiver = require('archiver');
+import archiver from 'archiver';
 import { pipeline } from 'stream/promises';
 import type {
   ItemMatrixCellFailureReason,

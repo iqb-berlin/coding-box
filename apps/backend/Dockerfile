@@ -60,4 +60,4 @@ COPY --chown=node:node --from=build /usr/src/coding-box-${PROJECT}/package.json 
 
 FROM source AS prod
 ENTRYPOINT ["/usr/bin/tini", "--"]
-CMD ["node", "main.js"]
+CMD ["node", "main.mjs"]

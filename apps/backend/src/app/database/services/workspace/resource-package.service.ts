@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import 'multer';
-import * as AdmZip from 'adm-zip';
+import AdmZip from 'adm-zip';
 import * as crypto from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
