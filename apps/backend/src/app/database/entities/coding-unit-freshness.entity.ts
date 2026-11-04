@@ -11,7 +11,7 @@ import {
 import type { Relation } from 'typeorm';
 import Workspace from './workspace.entity';
 import { Unit } from './unit.entity';
-import {
+import type {
   CodingFreshnessReason,
   CodingFreshnessState,
   CodingFreshnessVersion

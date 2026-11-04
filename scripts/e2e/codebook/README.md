@@ -37,7 +37,7 @@ POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=15441 \
 POSTGRES_USER=codebook_test POSTGRES_PASSWORD=disposable_test_only \
 POSTGRES_DB=codebook_test REDIS_HOST=127.0.0.1 REDIS_PORT=16441 \
 REDIS_PREFIX=codebook-proof API_HOST=127.0.0.1 \
-node dist/apps/backend/main.js
+node dist/apps/backend/main.mjs
 ```
 
 Once `/api/health` responds, run the acceptance target:

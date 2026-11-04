@@ -24,7 +24,7 @@ import {
   normalizeExclusionBookletId,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
 
 const fixedHeaders = [

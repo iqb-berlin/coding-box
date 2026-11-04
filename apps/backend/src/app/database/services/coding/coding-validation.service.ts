@@ -16,7 +16,7 @@ import {
 } from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { generateExpectedCombinationsHash } from '../../../utils/coding-utils';
 
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { VariableDetailDto } from '../../../models/unit-variable-details.dto';
 import { WorkspacePlayerService } from '../workspace/workspace-player.service';
 import {

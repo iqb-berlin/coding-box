@@ -4,7 +4,7 @@ import {
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, QueryRunner, Repository } from 'typeorm';
 import * as fastCsv from 'fast-csv';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import * as cheerio from 'cheerio';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';

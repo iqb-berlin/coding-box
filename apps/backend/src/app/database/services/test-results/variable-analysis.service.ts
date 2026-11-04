@@ -6,7 +6,7 @@ import {
   NotFoundException
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
 import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {

@@ -3,7 +3,7 @@ import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource, QueryRunner } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
-import * as sqlite3 from 'sqlite3';
+import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';

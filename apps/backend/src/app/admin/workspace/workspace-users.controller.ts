@@ -15,7 +15,7 @@ import { WorkspaceId } from './workspace.decorator';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import {
   WORKSPACE_TOKEN_SCOPES,
-  WorkspaceTokenPolicy,
+  type WorkspaceTokenPolicy,
   WorkspaceTokenScope
 } from '../../auth/workspace-token';
 

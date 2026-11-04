@@ -1,5 +1,5 @@
 import { PassThrough } from 'stream';
-import * as ExcelJS from 'exceljs';
+import ExcelJS from 'exceljs';
 import { StreamingWorkbookTarget } from './coding-export.types';
 
 export const getCurrentCodingTuplePresenceCondition = (

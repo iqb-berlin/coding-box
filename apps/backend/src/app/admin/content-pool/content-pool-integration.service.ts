@@ -14,7 +14,7 @@ import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosError } from 'axios';
 // eslint-disable-next-line import/no-extraneous-dependencies
-import * as FormData from 'form-data';
+import FormData from 'form-data';
 import { In, Raw, Repository } from 'typeorm';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { requireJobId } from '../../job-queue/job-queue.util';

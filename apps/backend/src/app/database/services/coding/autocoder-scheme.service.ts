@@ -8,7 +8,7 @@ import FileUpload from '../../entities/file_upload.entity';
 import { Unit } from '../../entities/unit.entity';
 import { getErrorMessage } from '../../../utils/error.util';
 import { RuntimeConfigService } from '../../../config/runtime-config.service';
-import { WORKSPACE_FILE_METADATA_READER, WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
+import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
 import { AutocoderNamespace } from './coding-process.types';
 import { AutocoderEngineService } from './autocoder-engine.service';

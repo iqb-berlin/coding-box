@@ -34,7 +34,7 @@ import {
 import {
   ExportJobStatus,
   ExportResult,
-  RequestWithUser
+  type RequestWithUser
 } from './dto/workspace-test-results.interfaces';
 
 interface DatabaseExportJobStatusResponse {
