@@ -212,7 +212,7 @@
           <div class="setting-control">
             <mat-slide-toggle
               [checked]="autoFetchCodingStatistics()"
-              [disabled]="evaluationMode() || isSavingEvaluationMode()"
+              [disabled]="isAutomaticRefreshDisabled()"
               (change)="toggleAutoFetchCodingStatistics($event)">
               {{autoFetchCodingStatistics() ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
             </mat-slide-toggle>
@@ -226,7 +226,7 @@
           <div class="setting-control">
             <mat-slide-toggle
               [checked]="autoRefreshManualCodingJobs()"
-              [disabled]="evaluationMode() || isSavingEvaluationMode()"
+              [disabled]="isAutomaticRefreshDisabled()"
               (change)="toggleAutoRefreshManualCodingJobs($event)">
               {{autoRefreshManualCodingJobs() ? ('ws-settings.enabled' | translate) : ('ws-settings.disabled' | translate)}}
             </mat-slide-toggle>

@@ -20,24 +20,31 @@ of the returned DTO objects.
 - Draft recovery can synchronously replace preloaded rows with a filtered
   request. Only the current request may release its loading state.
 - Cancel workspace-bound requests on the first workspace change, including an
-  A-to-B-to-A round trip, and on destruction of their owning view.
+  A-to-B-to-A round trip, and on destruction of their owning view. Accepted
+  workspace-setting writes are an exception: the application owns their queue;
+  only feedback to the former view is cancelled.
 
 ## Workspace settings writes
 
-`WorkspaceSettingsSaveFacade` is local to the settings page. It serializes all
-setting writes, including evaluation-mode presets that update several values.
+`WorkspaceSettingsSaveFacade` is local to the settings page. The root-provided
+`WorkspaceSettingsWriteQueueService` serializes its accepted writes, including
+evaluation-mode presets that update several values. Every command retains its
+original workspace ID and finishes across navigation and workspace changes.
+Reopening settings waits for outstanding writes to that workspace before reading
+values, so an old read cannot hide the final persisted change.
 Inputs remain optimistic. Each field tracks its latest intent and last confirmed
 value, so an older failure cannot revert a newer input. Numeric drafts have their
 own revision: editing during a save preserves the draft even when it returns to
 the submitted value. Initial reads update the rollback value without replacing
 an edited draft. Evaluation-mode rollback values use the loaded server mode
 independently of the optimistic input and the order of initial responses.
-Automatic-refresh inputs stay disabled until evaluation-mode writes settle,
-including queued presets. A failed latest write
+Automatic-refresh inputs stay disabled until the initial evaluation mode is
+loaded and evaluation-mode writes settle, including queued presets. A failed latest write
 restores the last accepted value; later commands still run. Delayed initial reads
 cannot overwrite pending or successfully saved inputs. The first workspace
-change discards queued commands and cancels the active subscription, including
-an A-to-B-to-A transition. View destruction ends the queue as well.
+change or view destruction stops local rollback, signal updates and feedback,
+including an A-to-B-to-A transition, while the write queue continues. A failed
+request releases its workspace's pending count and does not block later writes.
 
 `WorkspaceSettingsService` composes parsed reads with `map` and `catchError`.
 Consumers share in-flight reads; removing the last subscriber cancels the HTTP

@@ -88,6 +88,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   readonly autoFetchCodingStatistics = signal(true);
   readonly autoRefreshManualCodingJobs = signal(true);
   readonly evaluationMode = signal(false);
+  private readonly hasLoadedEvaluationMode = signal(false);
   readonly includeDeriveErrorInManualCoding = signal(false);
   readonly enableRegexSearch = signal(false);
   readonly showTestResultsLogAnomalies = signal(false);
@@ -117,6 +118,14 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   private loadWorkspaceSettings(workspaceId: number): void {
+    this.hasLoadedEvaluationMode.set(false);
+    this.settingsSave.whenSettled(workspaceId).pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => this.readWorkspaceSettings(workspaceId));
+  }
+
+  private readWorkspaceSettings(workspaceId: number): void {
     this.loadWorkspaceTokenPolicy(workspaceId);
     if (workspaceId) {
       // Initial rollback values must not depend on an optimistic evaluation preset.
@@ -140,6 +149,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
             this.settingsSave.initialize(this.autoFetchCodingStatistics, false);
             this.settingsSave.initialize(this.autoRefreshManualCodingJobs, false);
           }
+          this.hasLoadedEvaluationMode.set(true);
         });
       this.workspaceSettingsService
         .getAutoFetchCodingStatistics(workspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
@@ -392,8 +402,12 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
     return this.settingsSave.isPending(this.evaluationMode);
   }
 
+  protected isAutomaticRefreshDisabled(): boolean {
+    return !this.hasLoadedEvaluationMode() || this.evaluationMode() || this.isSavingEvaluationMode();
+  }
+
   toggleAutoFetchCodingStatistics(toggleEvent: { checked: boolean }): void {
-    if (this.evaluationMode() || this.isSavingEvaluationMode()) return;
+    if (this.isAutomaticRefreshDisabled()) return;
     const enabled = toggleEvent.checked;
     this.settingsSave.change(
       [{ state: this.autoFetchCodingStatistics, value: enabled }],
@@ -403,7 +417,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   toggleAutoRefreshManualCodingJobs(toggleEvent: { checked: boolean }): void {
-    if (this.evaluationMode() || this.isSavingEvaluationMode()) return;
+    if (this.isAutomaticRefreshDisabled()) return;
     const enabled = toggleEvent.checked;
     this.settingsSave.change(
       [{ state: this.autoRefreshManualCodingJobs, value: enabled }],

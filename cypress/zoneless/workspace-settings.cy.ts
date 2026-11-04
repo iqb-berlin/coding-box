@@ -45,6 +45,88 @@ describe('Workspace settings writes', () => {
       .find('button[role="switch"]');
   }
 
+  function statisticsSwitch() {
+    return cy.contains('coding-box-ws-settings .setting-item', 'Automatisches Laden der Kodierstatistiken')
+      .find('button[role="switch"]');
+  }
+
+  it('finishes queued writes after navigation and reloads their final value when the page is reopened', () => {
+    let reads = 0;
+    cy.task<{ id: string; url: string }>('deferred:create', {
+      body: { id: 1, key: 'enable-regex-search', value: '{"enabled":true}' }
+    }).then(gate => {
+      cy.intercept('GET', '**/api/workspace/5/settings/enable-regex-search', request => {
+        reads += 1;
+        request.reply({ body: { id: 1, value: JSON.stringify({ enabled: storedRegex }) } });
+      }).as('loadRegex');
+      cy.intercept('POST', '**/api/workspace/5/settings', request => {
+        expect(request.body.key).to.equal('enable-regex-search');
+        storedRegex = JSON.parse(request.body.value).enabled as boolean;
+        writes.push(storedRegex);
+        if (writes.length === 1) {
+          request.url = gate.url;
+          request.continue();
+        } else request.reply({ body: { id: 1, ...request.body } });
+      }).as('saveSetting');
+      cy.visit('/#/workspace-admin/5/settings');
+      cy.wait('@loadRegex');
+      regexSwitch().click();
+      cy.wrap(null).should(() => { expect(writes).to.deep.equal([true]); });
+      regexSwitch().click().should('have.attr', 'aria-checked', 'false');
+      cy.window().then(win => { win.location.hash = '/home'; });
+      cy.get('coding-box-home').should('be.visible');
+      cy.get('coding-box-ws-settings').should('not.exist');
+      cy.window().then(win => { win.location.hash = '/workspace-admin/5/settings'; });
+      cy.get('coding-box-ws-settings').should('be.visible');
+      refreshSwitch().should('be.disabled');
+      cy.then(() => { expect(reads).to.equal(1); });
+      cy.task('deferred:release', gate.id);
+      cy.wait('@saveSetting').its('response.statusCode').should('eq', 200);
+      cy.wait('@saveSetting').its('response.statusCode').should('eq', 200);
+      cy.wait('@loadRegex');
+      regexSwitch().should('have.attr', 'aria-checked', 'false');
+      cy.then(() => {
+        expect(writes).to.deep.equal([true, false]);
+        expect(storedRegex).to.equal(false);
+      });
+      cy.get('mat-snack-bar-container').should('not.exist');
+      cy.reload();
+      regexSwitch().should('have.attr', 'aria-checked', 'false');
+    });
+  });
+
+  [false, true].forEach(enabled => {
+    it(`locks dependent switches until initial evaluation mode ${enabled} has loaded`, () => {
+      cy.task<{ id: string; url: string }>('deferred:create', {
+        body: { id: 1, key: 'evaluation-mode', value: JSON.stringify({ enabled }) }
+      }).then(gate => {
+        cy.intercept('GET', '**/api/workspace/5/settings/evaluation-mode', request => {
+          request.url = gate.url;
+          request.continue();
+        }).as('loadMode');
+        cy.intercept('POST', '**/api/workspace/5/settings', { body: { id: 1 } }).as('saveRefresh');
+        cy.visit('/#/workspace-admin/5/settings');
+        modeSwitch().should('have.attr', 'aria-checked', 'false');
+        refreshSwitch().should('be.disabled');
+        statisticsSwitch().should('be.disabled');
+        cy.task('deferred:release', gate.id);
+        cy.wait('@loadMode');
+        modeSwitch().should('have.attr', 'aria-checked', String(enabled));
+        refreshSwitch().should('have.attr', 'aria-checked', 'false');
+        statisticsSwitch().should('have.attr', 'aria-checked', 'false');
+        if (enabled) {
+          refreshSwitch().should('be.disabled');
+          statisticsSwitch().should('be.disabled');
+        } else {
+          statisticsSwitch().should('be.enabled');
+          refreshSwitch().should('be.enabled').click();
+          cy.wait('@saveRefresh').its('request.body.key').should('eq', 'auto-refresh-manual-coding-jobs');
+          refreshSwitch().should('have.attr', 'aria-checked', 'true');
+        }
+      });
+    });
+  });
+
   it('preserves the latest input after an older failure and persists it before reload', () => {
     cy.task<{ id: string; url: string }>('deferred:create', {
       statusCode: 500, body: { message: 'First save failed' }

@@ -5,10 +5,11 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import {
-  EMPTY, Observable, Subject, catchError, concatMap, defer, finalize, tap
+  EMPTY, Observable, catchError, finalize, tap
 } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
+import { WorkspaceSettingsWriteQueueService } from '../../../shared/services/workspace/workspace-settings-write-queue.service';
 
 interface SettingSnapshot {
   restore: () => void;
@@ -31,18 +32,16 @@ interface SettingWrite {
   generation: number;
   revision: number;
   fields: SettingWriteField[];
-  persist: (workspaceId: number) => Observable<unknown>;
-  successMessage: string;
 }
 
-/** Serialize writes, retaining the last confirmed value for each optimistic input. */
+/** View-local optimistic inputs and feedback for application-owned writes. */
 @Injectable()
 export class WorkspaceSettingsSaveFacade {
   private readonly appService = inject(AppService);
   private readonly destroyRef = inject(DestroyRef);
   private readonly snackBar = inject(MatSnackBar);
   private readonly translate = inject(TranslateService);
-  private readonly writes = new Subject<SettingWrite>();
+  private readonly writeQueue = inject(WorkspaceSettingsWriteQueueService);
   private readonly snapshots = new Map<object, SettingSnapshot>();
   private readonly pendingFields = signal<ReadonlySet<object>>(new Set());
   private generation = 0;
@@ -57,39 +56,14 @@ export class WorkspaceSettingsSaveFacade {
       this.snapshots.clear();
       this.pendingFields.set(new Set());
     });
-    this.writes.pipe(
-      concatMap(write => {
-        if (!this.isCurrent(write)) return EMPTY;
-        return defer(() => write.persist(write.workspaceId)).pipe(
-          takeUntilWorkspaceChanged(this.appService, write.workspaceId),
-          tap(() => {
-            write.fields.forEach(field => field.commit());
-            if (this.isLatest(write)) this.showMessage(write.successMessage);
-          }),
-          catchError(() => {
-            write.fields.forEach(field => field.rollback());
-            if (this.isLatest(write)) this.showMessage('ws-settings.error-saving-setting', true);
-            return EMPTY;
-          }),
-          finalize(() => write.fields.forEach(({ state, snapshot }) => {
-            snapshot.pending -= 1;
-            if (this.isCurrent(write) && snapshot.pending === 0) {
-              this.pendingFields.update(fields => {
-                const pending = new Set(fields);
-                pending.delete(state);
-                return pending;
-              });
-            }
-          }))
-        );
-      }),
-      takeUntilDestroyed()
-    ).subscribe();
     this.destroyRef.onDestroy(() => {
-      this.writes.complete();
       this.snapshots.clear();
       this.pendingFields.set(new Set());
     });
+  }
+
+  whenSettled(workspaceId: number): Observable<void> {
+    return this.writeQueue.whenIdle(workspaceId);
   }
 
   isPending<T>(state: WritableSignal<T>): boolean {
@@ -147,18 +121,40 @@ export class WorkspaceSettingsSaveFacade {
 
   private enqueue(
     fields: SettingWriteField[],
-    persist: SettingWrite['persist'],
+    persist: (workspaceId: number) => Observable<unknown>,
     successMessage: string,
     revision: number
   ): void {
-    this.writes.next({
+    const write: SettingWrite = {
       workspaceId: this.appService.selectedWorkspaceId,
       generation: this.generation,
       fields,
-      persist,
-      successMessage,
       revision
-    });
+    };
+    // Only view feedback is cancelled. The application queue retains the request.
+    this.writeQueue.enqueue(write.workspaceId, persist).pipe(
+      takeUntilWorkspaceChanged(this.appService, write.workspaceId),
+      takeUntilDestroyed(this.destroyRef),
+      tap(() => {
+        fields.forEach(field => field.commit());
+        if (this.isLatest(write)) this.showMessage(successMessage);
+      }),
+      catchError(() => {
+        fields.forEach(field => field.rollback());
+        if (this.isLatest(write)) this.showMessage('ws-settings.error-saving-setting', true);
+        return EMPTY;
+      }),
+      finalize(() => fields.forEach(({ state, snapshot }) => {
+        snapshot.pending -= 1;
+        if (this.isCurrent(write) && snapshot.pending === 0) {
+          this.pendingFields.update(pending => {
+            const remaining = new Set(pending);
+            remaining.delete(state);
+            return remaining;
+          });
+        }
+      }))
+    ).subscribe();
   }
 
   private getSnapshot<T>(state: WritableSignal<T>): SettingSnapshot {

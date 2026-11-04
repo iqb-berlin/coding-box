@@ -354,19 +354,21 @@ describe('WsSettingsComponent', () => {
       expect(component.enableRegexSearch()).toBe(true);
     });
 
-    it('cancels active and queued writes on the first workspace change, including a round trip', () => {
+    it('finishes writes for their original workspace after a round trip without stale feedback', () => {
       const saving = new Subject<WorkspaceSettings>();
-      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValue(saving);
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValueOnce(saving);
       component.toggleEnableRegexSearch({ checked: true });
       component.toggleEnableRegexSearch({ checked: false });
       mockAppService.selectedWorkspaceId = 2;
       (mockAppService.selectedWorkspaceId$ as Subject<number>).next(2);
       mockAppService.selectedWorkspaceId = 1;
       (mockAppService.selectedWorkspaceId$ as Subject<number>).next(1);
-      expect(saving.observed).toBe(false);
+      mockSnackBar.open.mockClear();
+      expect(saving.observed).toBe(true);
       saving.complete();
-      expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledTimes(1);
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch.mock.calls).toEqual([[1, true], [1, false]]);
       expect(component.enableRegexSearch()).toBe(false);
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
     });
 
     it('blocks dependent refresh changes until the evaluation-mode write settles', async () => {
@@ -409,15 +411,73 @@ describe('WsSettingsComponent', () => {
       expect(component.replayUrlExportTokenDurationDays()).toBe(60);
     });
 
-    it('ends active writes and discards queued writes when the view is destroyed', () => {
+    it('persists the final toggle after the view is destroyed without changing the old view', () => {
       const saving = new Subject<WorkspaceSettings>();
-      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValue(saving);
+      const stored = { enabled: false };
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockImplementation((_id, enabled) => {
+        if (enabled) return saving;
+        stored.enabled = false;
+        return of({ id: 1, key: 'enable-regex-search', value: '{"enabled":false}' });
+      });
       component.toggleEnableRegexSearch({ checked: true });
       component.toggleEnableRegexSearch({ checked: false });
       fixture.destroy();
-      expect(saving.observed).toBe(false);
+      mockSnackBar.open.mockClear();
+      expect(saving.observed).toBe(true);
+      stored.enabled = true;
+      saving.next({ id: 1, key: 'enable-regex-search', value: '{"enabled":true}' });
       saving.complete();
-      expect(mockWorkspaceSettingsService.setEnableRegexSearch).toHaveBeenCalledTimes(1);
+      expect(mockWorkspaceSettingsService.setEnableRegexSearch.mock.calls).toEqual([[1, true], [1, false]]);
+      expect(stored.enabled).toBe(false);
+      expect(component.enableRegexSearch()).toBe(false);
+      expect(mockSnackBar.open).not.toHaveBeenCalled();
+    });
+
+    it('waits for all writes from the previous view before loading settings again', () => {
+      const first = new Subject<WorkspaceSettings>();
+      const last = new Subject<WorkspaceSettings>();
+      mockWorkspaceSettingsService.setEnableRegexSearch.mockReturnValueOnce(first).mockReturnValueOnce(last);
+      component.toggleEnableRegexSearch({ checked: true });
+      component.toggleEnableRegexSearch({ checked: false });
+      fixture.destroy();
+      mockWorkspaceSettingsService.getEnableRegexSearch.mockClear();
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).not.toHaveBeenCalled();
+      first.complete();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).not.toHaveBeenCalled();
+      last.complete();
+      expect(mockWorkspaceSettingsService.getEnableRegexSearch).toHaveBeenCalledTimes(1);
+      expect(component.enableRegexSearch()).toBe(false);
+    });
+
+    it.each([false, true])('blocks dependent saves until the initial evaluation mode %s is loaded', async enabled => {
+      fixture.destroy();
+      const mode = new Subject<boolean>();
+      mockWorkspaceSettingsService.getEvaluationMode.mockReturnValueOnce(mode);
+      fixture = TestBed.createComponent(WsSettingsComponent);
+      component = fixture.componentInstance;
+      fixture.detectChanges();
+      const switches = Array.from(fixture.nativeElement.querySelectorAll('.setting-item'))
+        .filter(item => ['ws-settings.auto-fetch-coding-statistics', 'ws-settings.auto-refresh-manual-coding-jobs']
+          .some(key => (item as HTMLElement).textContent?.includes(key))) as HTMLElement[];
+      expect(switches).toHaveLength(2);
+      switches.forEach(setting => expect(setting.querySelector('button')?.disabled).toBe(true));
+      component.toggleAutoFetchCodingStatistics({ checked: true });
+      component.toggleAutoRefreshManualCodingJobs({ checked: true });
+      expect(mockWorkspaceSettingsService.setAutoFetchCodingStatistics).not.toHaveBeenCalled();
+      expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).not.toHaveBeenCalled();
+      mode.next(enabled);
+      mode.complete();
+      await fixture.whenStable();
+      switches.forEach(setting => expect(setting.querySelector('button')?.disabled).toBe(enabled));
+      expect(component.autoFetchCodingStatistics()).toBe(!enabled);
+      expect(component.autoRefreshManualCodingJobs()).toBe(!enabled);
+      if (!enabled) {
+        component.toggleAutoRefreshManualCodingJobs({ checked: false });
+        expect(mockWorkspaceSettingsService.setAutoRefreshManualCodingJobs).toHaveBeenCalledWith(1, false);
+      }
     });
   });
 
