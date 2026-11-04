@@ -3,19 +3,22 @@ import { TestcenterInstancesService } from './testcenter-instances.service';
 
 describe('Testcenter instance approvals', () => {
   let store: Map<string, { key: string; content: string }>;
-  let settings: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock; delete: jest.Mock };
+  let settings: { find: jest.Mock; findOne: jest.Mock; save: jest.Mock; delete: jest.Mock; manager: { transaction: jest.Mock } };
   let http: { axiosRef: { get: jest.Mock } };
   let service: TestcenterInstancesService;
   const input = { label: 'Study Testcenter', baseUrl: 'https://study.example/tci' };
 
   beforeEach(() => {
     store = new Map();
+    const manager = { getRepository: jest.fn(), query: jest.fn().mockResolvedValue([]) };
     settings = {
       find: jest.fn(async () => [...store.values()]),
       findOne: jest.fn(async ({ where }: { where: { key: string } }) => store.get(where.key) || null),
       save: jest.fn(async entry => { store.set(entry.key, entry); return entry; }),
-      delete: jest.fn(async key => { store.delete(key); })
+      delete: jest.fn(async key => { store.delete(key); }),
+      manager: { transaction: jest.fn(async (_isolation: string, change: (value: typeof manager) => Promise<unknown>) => change(manager)) }
     };
+    manager.getRepository.mockReturnValue(settings);
     http = { axiosRef: { get: jest.fn() } };
     service = new TestcenterInstancesService(settings as never, new ConfigService({ TESTCENTER_ALLOWED_URLS: 'http://127.0.0.1:8080/tci' }), http as never);
   });

@@ -11,14 +11,17 @@
     <form (ngSubmit)="save()" #instanceForm="ngForm">
       <mat-form-field appearance="outline">
         <mat-label>{{ 'ui-text.testcenter-instances.name' | translate }}</mat-label>
-        <input matInput name="name" [ngModel]="name()" (ngModelChange)="name.set($event)" required maxlength="80">
+        <input matInput name="name" [ngModel]="name()" (ngModelChange)="name.set($event)" [readonly]="busy()" required maxlength="80">
       </mat-form-field>
       <mat-form-field appearance="outline">
         <mat-label>{{ 'ui-text.testcenter-instances.url' | translate }}</mat-label>
-        <input matInput name="baseUrl" [ngModel]="baseUrl()" (ngModelChange)="baseUrl.set($event)" required maxlength="2048" pattern="https://.+">
-        <mat-hint>{{ 'ui-text.testcenter-instances.url-hint' | translate }}</mat-hint>
+        <input matInput name="baseUrl" [ngModel]="baseUrl()" (ngModelChange)="baseUrl.set($event)" [readonly]="editingUrl() !== null || busy()" required maxlength="2048" pattern="https://.+">
+        <mat-hint>{{ (editingUrl() !== null ? 'ui-text.testcenter-instances.edit-url-hint' : 'ui-text.testcenter-instances.url-hint') | translate }}</mat-hint>
       </mat-form-field>
-      <button mat-raised-button type="submit" [disabled]="instanceForm.invalid || busy() || loading()">{{ 'ui-text.testcenter-instances.save' | translate }}</button>
+      <button mat-raised-button type="submit" [disabled]="instanceForm.invalid || busy() || loading()">{{ (editingUrl() !== null ? 'ui-text.testcenter-instances.save-name' : 'ui-text.testcenter-instances.save') | translate }}</button>
+      @if (editingUrl() !== null) {
+        <button mat-button type="button" (click)="resetForm()" [disabled]="busy()">{{ 'ui-text.testcenter-instances.cancel-edit' | translate }}</button>
+      }
     </form>
     <ul class="instances">
       @for (instance of displayedInstances(); track instance.baseUrl) {

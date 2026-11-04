@@ -22,6 +22,7 @@ import {
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { UserBackendService } from '../../shared/services/user/user-backend.service';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -297,20 +298,31 @@ describe('authInterceptor', () => {
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
-  it('keeps the application session when Testcenter credentials are rejected', async () => {
-    http.post('/api/tc_authentication', {
-      username: 'testcenter-user', password: 'invalid', server: '1', url: ''
-    }).subscribe({ error: () => undefined });
+  it.each([400, 403, 422, 429, 500, 502, 503, 504])('leaves Testcenter HTTP %s failures to the login view without a second error message', async status => {
+    TestBed.inject(UserBackendService).authenticate('testcenter-user', 'invalid', '1', '')
+      .subscribe({ error: () => undefined });
     await Promise.resolve();
 
-    const request = httpMock.expectOne('/api/tc_authentication');
+    const request = httpMock.expectOne('api/tc_authentication');
     expect(request.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
     request.flush({ message: 'Invalid Testcenter credentials' }, {
-      status: 422, statusText: 'Unprocessable Entity'
+      status, statusText: 'Testcenter failure'
     });
 
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.setBackendUnavailable).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('still requires application reauthentication for HTTP 401 on a locally handled Testcenter login', async () => {
+    TestBed.inject(UserBackendService).authenticate('testcenter-user', 'password', '1', '')
+      .subscribe({ error: () => undefined });
+    await Promise.resolve();
+    httpMock.expectOne('api/tc_authentication').flush({}, { status: 401, statusText: 'Unauthorized' });
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
   });
 
   it.each([500, 504, 999])('leaves a locally handled HTTP %s failure to the requesting view', async status => {

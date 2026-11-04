@@ -36,6 +36,9 @@ Ablauf anhand der sichtbaren Beschriftungen und der Anwendungsquellen.
 
 Offene Fälle wurden nicht als bestanden gewertet. Die lokalen Testläufe sind
 von einer fachlichen Abnahme und einem Deployment getrennt zu betrachten.
+Die folgende Tabelle dokumentiert die ursprüngliche Erweiterung bis
+`d1eec77aa`; die anschließenden Reviewkorrekturen und ihre Nachprüfungen sind
+darunter gesondert aufgeführt.
 
 | Prüfung | Stand |
 | --- | --- |
@@ -57,6 +60,65 @@ Reproduzierbarkeitsvergleich. Der Bundle-Abgleich ist mit der eigenen Kopie
 bestanden. Frühere abgebrochene Läufe werden nicht als Gesamtnachweis gewertet.
 Die Tabelle dokumentiert lokale Ergebnisse; ein erfolgreicher Remote-CI-Lauf für
 den ergänzten PR-Stand ist damit noch nicht belegt.
+
+## Nachprüfung der Reviewkorrekturen
+
+- **Umbenennen:** Die Oberfläche hält die ausgewählte Basisadresse fest, zeigt
+  sie schreibgeschützt an und bietet **Name speichern** sowie **Abbrechen** an.
+  Ein veränderter Formularwert kann beim Umbenennen keine zweite Adresse
+  freigeben. Wird der gerade bearbeitete Eintrag aufgehoben, wird die Eingabe
+  zurückgesetzt.
+- **Freigabegrenze:** Prüfung und Speicherung laufen in einer PostgreSQL-
+  Transaktion unter einer gemeinsamen, transaktionsgebundenen Advisory-Sperre.
+  Auch Widerrufe verwenden dieselbe Sperre. Die Abfragen innerhalb der Sperre
+  verwenden den Transaktionsmanager. Es wird keine nur pro Backend-Prozess
+  wirksame Sperre eingesetzt; eine Datenbankmigration ist nicht erforderlich.
+  Zum Sperrverhalten siehe die [PostgreSQL-Dokumentation](https://www.postgresql.org/docs/18/explicit-locking.html#ADVISORY-LOCKS).
+- **Fehlermeldungen:** Die Testcenter-Anmeldung meldet erwartete Fehler lokal im
+  Dialog. Die zusätzliche globale Anzeige entfällt auch bei HTTP 403. HTTP 401
+  führt weiterhin zur erneuten Anmeldung an der Kodierbox. Die Prüfungen verwenden
+  den echten HTTP-Service zusammen mit dem Auth-Interceptor.
+
+| Nachprüfung | Stand |
+| --- | --- |
+| Backend-Service, HTTP-Rechtegrenze und PostgreSQL-Konkurrenzfälle | 17 Tests bestanden; davon vier mit PostgreSQL 18.4 und zwei getrennten Verbindungspools. |
+| Vollständige Frontend-Suite | 351 Suites / 3.821 Tests bestanden. |
+| Frontend-Regressionssuite nach Extraktion der Auth-Prädikate | Alle 118 Tests in fünf betroffenen Suites bestanden; einschließlich HTTP 401 und unveränderter globaler Fehlerbehandlung für andere Anfragen. |
+| Backend-Lint, strikte Typprüfung und Produktionsbuild | Bestanden; null Typdiagnosen und übereinstimmende CommonJS-/ESM-Metadaten für 43 Entities. |
+| Frontend-Lint und Übersetzungsgates | Bestanden; 81 Qualitäts- und Übersetzungsprüfungen. Die bisherigen Struktur-Ausnahmen des Auth-Interceptors konnten entfernt werden. |
+| Aktueller Frontend-Produktionsbuild und erweiterte Browserfälle | Bestanden; alle 16 Cypress-Fälle ohne Wiederholungen oder übersprungene Fälle. Zusätzlich geprüft: URL-Sperre beim Umbenennen, Abbrechen, Widerruf während einer Bearbeitung und keine globale Doppelmeldung bei HTTP 403/422. Neue Umbenennungsansicht visuell geprüft. |
+
+Die vier Datenbankfälle prüfen den letzten freien Platz bei zwei gleichzeitigen
+Freigaben (99 → genau 100), gleichzeitige Änderungen derselben Adresse ohne
+Duplikate, Umbenennen bei voller Liste und Wiederverwendung eines aufgehobenen
+Platzes sowie Rollback und Freigabe der Sperre nach einem Schreibfehler.
+
+Zur Wiederholung einen eigenen, entbehrlichen PostgreSQL-Testserver verwenden.
+Beispiel mit ausschließlich synthetischen Zugangsdaten und freiem lokalen Port:
+
+```sh
+docker run -d --name tc-approval-tests --memory=512m \
+  --tmpfs /var/lib/postgresql \
+  -e POSTGRES_DB=testcenter_approvals -e POSTGRES_USER=fixture \
+  -e POSTGRES_PASSWORD=fixture-only-password \
+  -p 127.0.0.1:55435:5432 postgres:18.4
+docker exec tc-approval-tests pg_isready -U fixture -d testcenter_approvals
+```
+
+Erst wenn `pg_isready` die Verbindung annimmt, mit Node laut `.nvmrc` ausführen:
+
+```sh
+POSTGRES_INTEGRATION_TESTS=true POSTGRES_HOST=127.0.0.1 POSTGRES_PORT=55435 \
+POSTGRES_USER=fixture POSTGRES_PASSWORD=fixture-only-password \
+POSTGRES_DB=testcenter_approvals NX_DAEMON=false \
+npx nx run backend:test --runInBand \
+  '--testMatch=**/testcenter-instances.postgres.spec.ts'
+docker stop tc-approval-tests
+```
+
+Erwartet: vier ausgeführte, bestandene Tests und keine übersprungenen Fälle.
+Die Suite legt ein eigenes Schema an und entfernt nur dieses Schema. Die
+Testdatenbank liegt im Arbeitsspeicher des separat angelegten Containers.
 
 ## Versionsaussage und Grenzen
 

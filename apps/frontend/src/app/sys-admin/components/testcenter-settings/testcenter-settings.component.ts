@@ -34,6 +34,7 @@ export class TestcenterSettingsComponent implements OnInit {
   protected readonly error = signal('');
   protected readonly name = signal('');
   protected readonly baseUrl = signal('');
+  protected readonly editingUrl = signal<string | null>(null);
   protected readonly testingUrl = signal('');
   protected readonly checks = signal<Record<string, string>>({});
   protected readonly sourceLabels = {
@@ -60,22 +61,29 @@ export class TestcenterSettingsComponent implements OnInit {
     if (this.busy() || !this.name().trim() || !this.baseUrl().trim()) return;
     this.busy.set(true);
     this.error.set('');
-    this.service.saveInstance({ label: this.name().trim(), baseUrl: this.baseUrl().trim() }).pipe(
+    this.service.saveInstance({ label: this.name().trim(), baseUrl: this.editingUrl() ?? this.baseUrl().trim() }).pipe(
       takeUntilDestroyed(this.destroyRef), finalize(() => this.busy.set(false))
     ).subscribe({
       next: instances => {
         this.instances.set(instances);
-        this.name.set('');
-        this.baseUrl.set('');
-        this.instanceForm()?.resetForm({ name: '', baseUrl: '' });
+        this.resetForm();
       },
       error: () => this.error.set(this.translate.instant('ui-text.testcenter-instances.save-failed'))
     });
   }
 
   protected edit(instance: TestcenterInstanceDto): void {
+    if (this.busy() || instance.source !== 'administrator') return;
+    this.editingUrl.set(instance.baseUrl);
     this.name.set(instance.label);
     this.baseUrl.set(instance.baseUrl);
+  }
+
+  protected resetForm(): void {
+    this.editingUrl.set(null);
+    this.name.set('');
+    this.baseUrl.set('');
+    this.instanceForm()?.resetForm({ name: '', baseUrl: '' });
   }
 
   protected remove(instance: TestcenterInstanceDto): void {
@@ -85,7 +93,10 @@ export class TestcenterSettingsComponent implements OnInit {
     this.service.deleteInstance(instance.baseUrl).pipe(
       takeUntilDestroyed(this.destroyRef), finalize(() => this.busy.set(false))
     ).subscribe({
-      next: instances => this.instances.set(instances),
+      next: instances => {
+        this.instances.set(instances);
+        if (this.editingUrl() === instance.baseUrl) this.resetForm();
+      },
       error: () => this.error.set(this.translate.instant('ui-text.testcenter-instances.delete-failed'))
     });
   }

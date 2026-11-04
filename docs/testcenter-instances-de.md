@@ -20,12 +20,20 @@ Veröffentlichung und dem Update der jeweiligen Kodierbox-Installation verfügba
    einen vollständigen Import.
 
 Die Freigabe gilt für die gesamte Kodierbox-Installation. Zugangsdaten werden
-dabei nicht gespeichert. **Name bearbeiten** lädt einen Eintrag in die Eingabe;
-mit unveränderter Adresse und **Speichern und freigeben** wird sein Name geändert.
+dabei nicht gespeichert. **Name bearbeiten** lädt einen Eintrag in die Eingabe.
+Die Basisadresse ist dann schreibgeschützt; **Name speichern** ändert nur den Namen.
+**Abbrechen** verwirft die Bearbeitung und öffnet wieder die Eingabe für eine neue
+Freigabe. Für eine andere Basisadresse eine neue Freigabe anlegen und die alte
+bei Bedarf ausdrücklich aufheben.
 **Freigabe aufheben** entfernt eine hier eingerichtete Freigabe. Anschließende
 Anmeldungen und Importanfragen an diese Adresse werden abgewiesen, auch wenn ein
 Dialog noch eine ältere Auswahl oder Sitzung anzeigt. Bereits laufende externe
 HTTP-Anfragen werden dadurch nicht abgebrochen.
+
+Es sind höchstens 100 zusätzliche, in der Systemadministration angelegte Freigaben
+zulässig. Diese Grenze gilt auch bei gleichzeitigen Änderungen durch mehrere
+Administratoren oder Backend-Prozesse. Bestehende Einträge können bei voller Liste
+weiterhin umbenannt oder aufgehoben werden.
 
 Standardmäßig erlaubt sind `https://iqb-testcenter.de` sowie
 `https://iqb-testcenter1.de` bis `https://iqb-testcenter10.de`. Eine Freigabe gilt

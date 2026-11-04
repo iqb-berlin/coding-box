@@ -1521,17 +1521,6 @@
         }
       }
     },
-    "apps/frontend/src/app/core/interceptors/auth.interceptor.ts": {
-      "file": {},
-      "functions": {
-        "function authInterceptor : HttpInterceptorFn#1": {
-          "max-lines-per-function": 105
-        },
-        "function authInterceptor : HttpInterceptorFn#1/anonymous:f6c33ebbbbbf99e5#1/function error#1": {
-          "complexity": 32
-        }
-      }
-    },
     "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
       "file": {
         "max-lines": 1398

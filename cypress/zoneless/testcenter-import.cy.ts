@@ -143,6 +143,8 @@ describe('zoneless Testcenter import with delayed responses', () => {
       cy.wait('@login');
       cy.get('.auth-section [role="alert"]').should('contain.text', failure.expected);
       cy.get('.auth-form button[type="submit"]').should('be.enabled');
+      cy.get('coding-box-error-message-display .other-error').should('not.exist');
+      cy.get('mat-snack-bar-container').should('not.exist');
       cy.window().then(window => { expect(window.localStorage.getItem('auth_token')).to.be.a('string'); });
     });
   }
@@ -154,8 +156,9 @@ describe('zoneless Testcenter import with delayed responses', () => {
     const instance = { label: 'Study Testcenter', baseUrl: 'https://study.example/tci', source: 'administrator' };
     cy.intercept('GET', '**/api/admin/testcenter/instances', { body: [] });
     cy.intercept('POST', '**/api/admin/testcenter/instances', request => {
-      expect(request.body).to.deep.equal({ label: instance.label, baseUrl: instance.baseUrl });
-      request.reply({ body: [instance] });
+      expect(request.body.baseUrl).to.equal(instance.baseUrl);
+      expect([instance.label, 'Renamed Study Testcenter']).to.include(request.body.label);
+      request.reply({ body: [{ ...instance, label: request.body.label }] });
     }).as('approveInstance');
     cy.intercept('POST', '**/api/admin/testcenter/instances/test', {
       body: { version: '19.0.1', checkedAt: '2026-11-04T12:00:00Z' }
@@ -180,9 +183,22 @@ describe('zoneless Testcenter import with delayed responses', () => {
     cy.wait('@probeInstance');
     cy.get('coding-box-testcenter-settings [role="status"]').should('contain.text', '19.0.1');
     cy.get('coding-box-testcenter-settings').screenshot('testcenter-instance-settings');
+    cy.get('coding-box-testcenter-settings').contains('button', 'Name bearbeiten').click();
+    cy.get('coding-box-testcenter-settings input[name="baseUrl"]').should('have.prop', 'readOnly', true).and('have.value', instance.baseUrl);
+    cy.get('coding-box-testcenter-settings input[name="name"]').clear().type('Renamed Study Testcenter');
+    cy.get('coding-box-testcenter-settings').screenshot('testcenter-instance-rename');
+    cy.get('coding-box-testcenter-settings').contains('button', 'Name speichern').click();
+    cy.wait('@approveInstance');
+    cy.get('coding-box-testcenter-settings li').should('have.length', 1).and('contain.text', 'Renamed Study Testcenter');
+    cy.get('coding-box-testcenter-settings input[name="baseUrl"]').should('have.prop', 'readOnly', false);
+    cy.get('coding-box-testcenter-settings').contains('button', 'Name bearbeiten').click();
+    cy.get('coding-box-testcenter-settings').contains('button', 'Abbrechen').click();
+    cy.get('coding-box-testcenter-settings input[name="baseUrl"]').should('have.value', '').and('have.prop', 'readOnly', false);
+    cy.get('coding-box-testcenter-settings').contains('button', 'Name bearbeiten').click();
     cy.get('coding-box-testcenter-settings').contains('button', 'Freigabe aufheben').click();
     cy.wait('@revokeInstance');
     cy.get('coding-box-testcenter-settings li').should('not.exist');
+    cy.get('coding-box-testcenter-settings input[name="baseUrl"]').should('have.value', '').and('have.prop', 'readOnly', false);
   });
 
 });

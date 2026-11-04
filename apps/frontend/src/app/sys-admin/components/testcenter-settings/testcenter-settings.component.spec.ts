@@ -57,6 +57,71 @@ describe('System administrator Testcenter approvals', () => {
     expect(fixture.nativeElement.textContent).toContain('vollständiger Import werden damit nicht geprüft');
   });
 
+  it('renames only the selected instance and keeps its original URL even if the form value changes', async () => {
+    service.getInstances.mockReturnValue(of([builtin, custom]));
+    service.saveInstance.mockReturnValue(of([builtin, { ...custom, label: 'Renamed study' }]));
+    const fixture = TestBed.createComponent(TestcenterSettingsComponent);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const edit: HTMLButtonElement = [...fixture.nativeElement.querySelectorAll('button')]
+      .find(button => button.textContent.includes('Name bearbeiten'));
+    edit.click();
+    await fixture.whenStable();
+    const url: HTMLInputElement = fixture.nativeElement.querySelector('input[name="baseUrl"]');
+    expect(url.readOnly).toBe(true);
+    expect(url.value).toBe(custom.baseUrl);
+    const name: HTMLInputElement = fixture.nativeElement.querySelector('input[name="name"]');
+    name.value = 'Renamed study';
+    name.dispatchEvent(new Event('input'));
+    // Readonly blocks ordinary edits; retaining the URL also protects against a stale/form-programmatic change.
+    url.value = 'https://another.example/tci';
+    url.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+    fixture.nativeElement.querySelector('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }));
+    await fixture.whenStable();
+    expect(service.saveInstance).toHaveBeenCalledWith({ label: 'Renamed study', baseUrl: custom.baseUrl });
+    expect(fixture.nativeElement.querySelectorAll('li')).toHaveLength(2);
+    expect(url.readOnly).toBe(false);
+    expect(url.value).toBe('');
+  });
+
+  it('can cancel renaming and enter a new URL without changing the saved approval', async () => {
+    service.getInstances.mockReturnValue(of([custom]));
+    const fixture = TestBed.createComponent(TestcenterSettingsComponent);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const button = (label: string): HTMLButtonElement => [...fixture.nativeElement.querySelectorAll('button')]
+      .find(entry => entry.textContent.includes(label));
+    button('Name bearbeiten').click();
+    await fixture.whenStable();
+    expect(button('Name speichern')).toBeDefined();
+    button('Abbrechen').click();
+    await fixture.whenStable();
+    const url: HTMLInputElement = fixture.nativeElement.querySelector('input[name="baseUrl"]');
+    expect(url.readOnly).toBe(false);
+    expect(url.value).toBe('');
+    expect(fixture.nativeElement.querySelector('input[name="name"]').value).toBe('');
+    expect(service.saveInstance).not.toHaveBeenCalled();
+    expect(fixture.nativeElement.querySelector('li').textContent).toContain(custom.baseUrl);
+  });
+
+  it('clears an unfinished rename when that approval is revoked', async () => {
+    service.getInstances.mockReturnValue(of([custom]));
+    service.deleteInstance.mockReturnValue(of([]));
+    const fixture = TestBed.createComponent(TestcenterSettingsComponent);
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+    const button = (label: string): HTMLButtonElement => [...fixture.nativeElement.querySelectorAll('button')]
+      .find(entry => entry.textContent.includes(label));
+    button('Name bearbeiten').click();
+    await fixture.whenStable();
+    button('Freigabe aufheben').click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('input[name="baseUrl"]').readOnly).toBe(false);
+    expect(fixture.nativeElement.querySelector('input[name="baseUrl"]').value).toBe('');
+    expect(fixture.nativeElement.querySelector('button[type="submit"]').disabled).toBe(true);
+  });
+
   it('cancels outstanding discovery when the settings screen is destroyed', async () => {
     const discovery = new Subject<TestcenterInstanceDto[]>();
     service.getInstances.mockReturnValue(discovery);

@@ -15,6 +15,7 @@ import {
 } from '../../../../../api-dto/testcenter/testcenter-instance.dto';
 
 const settingPrefix = 'system-testcenter-instance-';
+const instanceLockNamespace = 774020260;
 
 @Injectable()
 export class TestcenterInstancesService {
@@ -25,6 +26,10 @@ export class TestcenterInstancesService {
   ) {}
 
   async getInstances(): Promise<TestcenterInstanceDto[]> {
+    return this.readInstances(this.settings);
+  }
+
+  private async readInstances(settings: Repository<Setting>): Promise<TestcenterInstanceDto[]> {
     const instances = new Map<string, TestcenterInstanceDto>();
     standardTestcenterUrls.forEach((baseUrl, index) => instances.set(baseUrl, {
       label: index ? `Testcenter ${index}` : 'IQB Testcenter', baseUrl, source: 'standard'
@@ -32,7 +37,7 @@ export class TestcenterInstancesService {
     parseAllowedTestcenterUrls(this.config.get<string>('TESTCENTER_ALLOWED_URLS')).forEach(baseUrl => {
       if (!instances.has(baseUrl)) instances.set(baseUrl, { label: baseUrl, baseUrl, source: 'environment' });
     });
-    const stored = await this.settings.find({ where: { key: Like(`${settingPrefix}%`) } });
+    const stored = await settings.find({ where: { key: Like(`${settingPrefix}%`) } });
     for (const setting of stored) {
       const input = this.readStoredInstance(setting);
       if (!instances.has(input.baseUrl)) instances.set(input.baseUrl, { ...input, source: 'administrator' });
@@ -42,26 +47,38 @@ export class TestcenterInstancesService {
 
   async saveInstance(input: TestcenterInstanceInput): Promise<TestcenterInstanceDto[]> {
     const instance = this.validateInput(input);
-    const existing = await this.getInstances();
-    const same = existing.find(entry => entry.baseUrl === instance.baseUrl);
-    if (same && same.source !== 'administrator') {
-      throw new BadRequestException('This Testcenter instance is managed by the operator');
-    }
-    if (!same && existing.filter(entry => entry.source === 'administrator').length >= 100) {
-      throw new BadRequestException('At most 100 additional Testcenter instances are allowed');
-    }
-    await this.settings.save({ key: this.settingKey(instance.baseUrl), content: JSON.stringify(instance) });
-    return this.getInstances();
+    return this.withMutation(async settings => {
+      const existing = await this.readInstances(settings);
+      const same = existing.find(entry => entry.baseUrl === instance.baseUrl);
+      if (same && same.source !== 'administrator') {
+        throw new BadRequestException('This Testcenter instance is managed by the operator');
+      }
+      if (!same && existing.filter(entry => entry.source === 'administrator').length >= 100) {
+        throw new BadRequestException('At most 100 additional Testcenter instances are allowed');
+      }
+      await settings.save({ key: this.settingKey(instance.baseUrl), content: JSON.stringify(instance) });
+      return this.readInstances(settings);
+    });
   }
 
   async deleteInstance(baseUrl: string): Promise<TestcenterInstanceDto[]> {
     const normalized = normalizeTestcenterBaseUrl(baseUrl);
-    const existing = (await this.getInstances()).find(entry => entry.baseUrl === normalized);
-    if (existing && existing.source !== 'administrator') {
-      throw new BadRequestException('This Testcenter instance is managed by the operator');
-    }
-    await this.settings.delete(this.settingKey(normalized));
-    return this.getInstances();
+    return this.withMutation(async settings => {
+      const existing = (await this.readInstances(settings)).find(entry => entry.baseUrl === normalized);
+      if (existing && existing.source !== 'administrator') {
+        throw new BadRequestException('This Testcenter instance is managed by the operator');
+      }
+      await settings.delete(this.settingKey(normalized));
+      return this.readInstances(settings);
+    });
+  }
+
+  private async withMutation<T>(change: (settings: Repository<Setting>) => Promise<T>): Promise<T> {
+    // Serialize approval changes across API replicas, including when no settings row exists yet.
+    return this.settings.manager.transaction('READ COMMITTED', async manager => {
+      await manager.query('SELECT pg_advisory_xact_lock($1::int, $2::int)', [instanceLockNamespace, 0]);
+      return change(manager.getRepository(Setting));
+    });
   }
 
   async resolve(server: string, url = ''): Promise<string> {

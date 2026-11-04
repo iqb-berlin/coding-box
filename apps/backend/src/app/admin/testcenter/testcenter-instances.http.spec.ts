@@ -19,6 +19,13 @@ describe('Testcenter instance approval HTTP authorization', () => {
   const http = { axiosRef: { get: jest.fn() } };
 
   beforeAll(async () => {
+    const repository = {
+      find: async () => [...store.values()],
+      findOne: async ({ where }: { where: { key: string } }) => store.get(where.key) || null,
+      save: async (entry: { key: string; content: string }) => { store.set(entry.key, entry); return entry; },
+      delete: async (key: string) => { store.delete(key); }
+    };
+    const manager = { getRepository: () => repository, query: async () => [] };
     const module = await Test.createTestingModule({
       controllers: [AdminTestcenterInstancesController, TestcenterInstancesController],
       providers: [
@@ -28,10 +35,8 @@ describe('Testcenter instance approval HTTP authorization', () => {
         {
           provide: getRepositoryToken(Setting),
           useValue: {
-            find: async () => [...store.values()],
-            findOne: async ({ where }: { where: { key: string } }) => store.get(where.key) || null,
-            save: async (entry: { key: string; content: string }) => { store.set(entry.key, entry); return entry; },
-            delete: async (key: string) => { store.delete(key); }
+            ...repository,
+            manager: { transaction: async (_isolation: string, change: (value: typeof manager) => Promise<unknown>) => change(manager) }
           }
         },
         { provide: AuthService, useValue: { isAdminUser: async () => false } },
