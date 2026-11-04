@@ -47,7 +47,7 @@ von einer fachlichen Abnahme und einem Deployment getrennt zu betrachten.
 | Frontend-Lint und vollständige Frontend-Suite | Lint bestanden; 351 Suites / 3.809 Tests bestanden. Nach der visuellen Korrektur des Formularzustands zusätzlich alle drei Einstellungen-Komponententests bestanden. |
 | Frontend-Qualitäts- und Übersetzungsgates | 81 Prüfungen bestanden. |
 | Frontend-Produktionsbuild und Browserfälle | Produktionsbuild bestanden; alle 16 Cypress-Fälle in Electron bestanden, ohne übersprungene Fälle oder Wiederholungen. Visuelle Prüfung der neuen Einstellungen erfolgt. |
-| Reale angemeldete Gegenstellen 17/18/19 | Offen: Docker Desktop ist nach einem lokalen Ressourcenengpass nicht erreichbar. |
+| Reale angemeldete Gegenstellen 17/18/19 | Alle drei offiziellen Backends bestanden: Anmeldung, Gruppen, Unit-Datei, Antwort-/Logabruf und echte Kodierbox-Parser. Falsche Zugangsdaten wurden jeweils auf HTTP 422 abgebildet. |
 
 Die Prüfungen verwenden Node 24.22.1 laut `.nvmrc`. Die Abhängigkeiten wurden
 für den abschließenden Backend-Lauf als eigene Kopie im isolierten Arbeitsbaum
@@ -66,13 +66,33 @@ sowie Antwort- und Logberichte besitzen die von der Kodierbox verwendeten
 Endpunkte. Seit 18.2 kann der Admin-Challenge-Schutz die direkte Anmeldung
 abweisen. Das wird durch die Erweiterung berücksichtigt.
 
-| Version | Quellvergleich | Echter angemeldeter Import |
+| Version | Quellvergleich | Echter angemeldeter Abruf und Parser |
 | --- | --- | --- |
-| 17.6.1 | Direkte Anmeldung und benötigte Endpunkte vorhanden | Nicht durchgeführt |
-| 18.3.1 | Benötigte Endpunkte und Challenge-Anmeldung geprüft | Nicht durchgeführt |
-| 19.0.1 | Benötigte Endpunkte und Challenge-Anmeldung geprüft | Nicht durchgeführt |
+| 17.6.1 | Direkte Anmeldung und benötigte Endpunkte vorhanden | Bestanden, direkte Anmeldung |
+| 18.3.1 | Benötigte Endpunkte und Challenge-Anmeldung geprüft | Bestanden, Challenge-Schutz aktiviert |
+| 19.0.1 | Benötigte Endpunkte und Challenge-Anmeldung geprüft | Bestanden, Challenge-Schutz aktiviert |
 
-Der eigenständige Prüfclient wurde zusätzlich mit echten lokalen HTTP-Anfragen
+Nach dem Neustart von Docker Desktop wurden die offiziellen Backend-Images mit
+eigenen lokalen Datenbanken und vorbereiteten synthetischen Daten geprüft. Für
+17/18 lief MySQL 8.4, für 19 PostgreSQL 18.4. Die Backend-Images liefen als
+Linux/amd64 unter Docker-Desktop-Emulation, der Prüfclient mit Node 24.22.1 auf
+macOS/arm64. Die Protokollierung am lokalen Gateway bestätigte für 18/19 die
+Abfolge `PUT /session/admin` → HTTP 400, `POST /session/challenge` → HTTP 200,
+`PUT /session` → HTTP 200. Version 17 meldete sich direkt erfolgreich an.
+
+Jede Version lieferte eine Antwortzeile und zwei Logzeilen. Die Kodierbox-Parser
+behielten eine Antwort und drei Log-/Sitzungseinträge; es gab keine Parserfehler
+oder -warnungen. Ein gesonderter negativer Anmeldeversuch pro Version ergab
+HTTP 422 für das falsche Testkennwort.
+
+Die [maschinenlesbaren Zähler und Image-Digests](testcenter-compatibility-2026-11-04.json)
+halten den geprüften Stand fest. Die [isolierten Fixtures und Befehle](../../scripts/qa/testcenter-fixtures/README.md)
+ermöglichen die Wiederholung. Die Gegenstellen wurden nur über einen lokalen
+HTTP-Gateway angesprochen; Zertifikatsvertrauen wurde in den separaten
+HTTPS-Regressionen geprüft. Das ist keine Prüfung produktiver Konten oder ein
+Nachweis der Speicherung in der Kodierbox-Datenbank.
+
+Der eigenständige Prüfclient wurde außerdem mit echten lokalen HTTP-Anfragen
 gegen drei synthetische API-Generationen geprüft: direkte Anmeldung,
 Challenge-Anmeldung, Gruppen, Dateien und Antwort-/Logparser. Die Rückgaben werden
 auf nicht leere Daten geprüft, ohne Zugangsdaten oder Antwortzeilen auszugeben.
@@ -128,8 +148,8 @@ Parserwarnungen müssen anhand der vorbereiteten Testdaten bewertet werden.
 Dieser Client schreibt keine Ergebnisse in die Kodierbox-Datenbank
 (`persistedToCodingBox: false`). Den vollständigen Import einschließlich
 Persistenz anschließend in einem vereinbarten Testbereich prüfen und das
-tatsächliche Ergebnis separat dokumentieren. Bis dahin bleibt die letzte Spalte
-der Versionsmatrix offen.
+tatsächliche Ergebnis separat dokumentieren. Dieser Nachweis der Speicherung und
+die fachliche Abnahme bleiben offen.
 
 ## Betriebsgrenzen
 
