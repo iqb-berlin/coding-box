@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import {
   Queue, JobsOptions, Job, JobType
 } from 'bullmq';
+import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-analysis-options';
 import { requireJobId, withQueueJobId } from './job-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -129,7 +130,7 @@ export interface CodingAnalysisJobData {
   runId?: string;
 }
 
-export interface VariableAnalysisJobData {
+export interface VariableAnalysisJobData extends VariableAnalysisOptions {
   resultVersion?: number;
   skipRetries?: boolean;
   workspaceId: number;
@@ -138,15 +139,7 @@ export interface VariableAnalysisJobData {
   cacheKey?: string;
 }
 
-export interface VariableAnalysisJobResult {
-  cacheKey: string;
-  workspaceId: number;
-  total: number;
-  storage: 'chunked';
-  variableComboChunks: number;
-  frequencyChunks: number;
-  storedAt: string;
-}
+export type VariableAnalysisJobResult = VariableAnalysisResultCacheManifest & { cacheKey: string };
 
 export interface VariableAnalysisResultCacheManifest {
   storage: 'chunked';

@@ -1,5 +1,6 @@
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { VariableAnalysisTableRowDto } from '../../../shared/services/response/variable-analysis.service';
-import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
+import { getResponseStatusLabel, getResponseStatusMetadata } from '../../../shared/utils/response-status-metadata.util';
 import { UiTranslator } from '../../../shared/utils/ui-translator';
 
 export interface VariableFrequency {
@@ -30,7 +31,7 @@ export interface VariableStatusCount {
   percentage: number;
 }
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;
@@ -67,15 +68,11 @@ export function variableStatusSummary(statusCounts: VariableStatusCount[], trans
     return translate('variable-analysis.no-status-data');
   }
 
-  const visibleItems = statusCounts.slice(0, 3).map(item => {
+  const visibleItems = statusCounts.map(item => {
     const status = getResponseStatusLabel(item.status);
     return `${status}: ${item.count} (${`${item.percentage.toFixed(1)}%`})`;
   });
-  const remainingCount = statusCounts.length - visibleItems.length;
-
-  return remainingCount > 0 ?
-    `${visibleItems.join(', ')} +${remainingCount}` :
-    visibleItems.join(', ');
+  return visibleItems.join(', ');
 }
 
 export function variableComboSummary(combo: VariableCombo, frequenciesByCombo: Record<string, VariableFrequency[]>, translate: UiTranslator): VariableComboSummary {
@@ -187,6 +184,8 @@ export function createVariableAnalysisRows(
         sourceType: combo.sourceType,
         isDerived: combo.isDerived,
         hasCodingScheme: combo.hasCodingScheme,
+        analysisMode: combo.analysisMode,
+        codingVersion: combo.codingVersion,
         value: frequency.value,
         label: frequency.label,
         score: frequency.score,
@@ -215,4 +214,67 @@ export function createVariableAnalysisRows(
       };
     });
   });
+}
+
+export function summarizeVariableAnalysisResponses(
+  responses: readonly { variableid: string; value: string; status: string | number }[]
+): {
+  responsesByVariable: Record<string, Record<string, number>>;
+  validCountsByVariable: Map<string, Map<string, number>>;
+  comboSummaries: Map<string, VariableCombo>;
+} {
+  const responsesByVariable: Record<string, Record<string, number>> = {};
+  const validCountsByVariable = new Map<string, Map<string, number>>();
+  const comboSummaries = new Map<string, VariableCombo>();
+  responses.forEach(response => {
+    if (!responsesByVariable[response.variableid]) {
+      responsesByVariable[response.variableid] = {};
+    }
+
+    const value = response.value || '';
+    if (!responsesByVariable[response.variableid][value]) {
+      responsesByVariable[response.variableid][value] = 0;
+    }
+
+    responsesByVariable[response.variableid][value] += 1;
+
+    const comboKey = `0:${response.variableid}`;
+    const summary = comboSummaries.get(comboKey) || {
+      unitId: 0,
+      unitName: 'Unknown',
+      variableId: response.variableid,
+      totalCount: 0,
+      validCount: 0,
+      emptyCount: 0,
+      emptyPercentage: 0,
+      distinctValueCount: 0,
+      statusCounts: []
+    };
+    summary.totalCount = (summary.totalCount || 0) + 1;
+    const trimmedValue = value.trim().toLowerCase();
+    const isEmpty = /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/.test(trimmedValue);
+    const numericStatus = getResponseStatusMetadata(response.status)?.numeric ?? 0;
+    const isValid = !isEmpty && ![0, 1, 2, 4, 7, 9, 10].includes(numericStatus);
+    if (isEmpty) summary.emptyCount = (summary.emptyCount || 0) + 1;
+    if (isValid) {
+      summary.validCount = (summary.validCount || 0) + 1;
+      const validCounts = validCountsByVariable.get(response.variableid) ?? new Map<string, number>();
+      validCounts.set(value, (validCounts.get(value) ?? 0) + 1);
+      validCountsByVariable.set(response.variableid, validCounts);
+    }
+
+    const status = response.status;
+    const statusCounts = summary.statusCounts || [];
+    const existingStatus = statusCounts.find(
+      item => item.status === status
+    );
+    if (existingStatus) {
+      existingStatus.count += 1;
+    } else {
+      statusCounts.push({ status, count: 1, percentage: 0 });
+    }
+    summary.statusCounts = statusCounts;
+    comboSummaries.set(comboKey, summary);
+  });
+  return { responsesByVariable, validCountsByVariable, comboSummaries };
 }

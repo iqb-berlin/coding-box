@@ -1,8 +1,9 @@
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { VariableFrequencyDto } from './variable-frequency.dto';
 
-export const VARIABLE_ANALYSIS_RESULT_VERSION = 3;
+export const VARIABLE_ANALYSIS_RESULT_VERSION = 4;
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;

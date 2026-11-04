@@ -1,6 +1,6 @@
 import { translateGerman } from '../../../../testing/german-translations';
 import {
-  VariableCombo, VariableFrequency, createVariableAnalysisRows, variableComboSummary
+  VariableCombo, VariableFrequency, createVariableAnalysisRows, variableComboSummary, variableStatusSummary
 } from './variable-analysis-projection';
 
 describe('variable analysis projection', () => {
@@ -35,5 +35,22 @@ describe('variable analysis projection', () => {
     expect(rows[0]).toMatchObject({
       isSchemaOnly: true, count: 0, percentageValid: null, hiddenValueCount: 0
     });
+  });
+  it('retains the selected coding run when projecting code frequencies', () => {
+    const rows = createVariableAnalysisRows([
+      { ...combo, analysisMode: 'codes', codingVersion: 'v3' }
+    ], frequencies, translateGerman);
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({ analysisMode: 'codes', codingVersion: 'v3', value: 'A' })
+    ]));
+  });
+  it('shows every status in both variable summaries and projected rows', () => {
+    const statusCounts = [3, 5, 6, 7].map(status => ({ status, count: 1, percentage: 25 }));
+    const summary = variableStatusSummary(statusCounts, translateGerman);
+    expect(summary.split(', ')).toHaveLength(4);
+    expect(summary).toContain('INVALID: 1 (25.0%)');
+    const rows = createVariableAnalysisRows([{ ...combo, statusCounts }], frequencies, translateGerman);
+    expect(rows[0].statusSummary).toBe(summary);
+    expect(variableComboSummary({ ...combo, statusCounts }, frequencies, translateGerman).statusSummary).toBe(summary);
   });
 });

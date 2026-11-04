@@ -22,19 +22,13 @@ import {
 } from '../../database/services/workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { VariableDetailDto } from '../../models/unit-variable-details.dto';
+import { VariableAnalysisOptions } from '../../../../../../api-dto/coding/variable-analysis-options';
 import {
-  getExplicitSchemaValues, resolveSchemaValue, SchemaValueDefinition
+  resolveSchemaValue, SchemaValueDefinition
 } from './variable-analysis-schema.util';
+import { enrichSchemaValueDefinition, getVariableAnalysisMetadata, VariableAnalysisMetadata } from './variable-analysis-metadata.util';
 
 type SchemaCodeInfo = SchemaValueDefinition;
-
-interface VariableAnalysisMetadata {
-  coding?: VariableDetailDto['coding'];
-  type: VariableDetailDto['type'];
-  multiple: boolean;
-  categoryDefinitions: SchemaCodeInfo[];
-  valuesByPosition: SchemaCodeInfo[];
-}
 
 interface SchemaValueCountRow {
   unitName: string;
@@ -51,9 +45,6 @@ interface MultipleResponseRow {
   variableId: string;
   value: string | null;
   status: string | number | null;
-  statusV1: string | number | null;
-  codeV1: string | number | null;
-  scoreV1: string | number | null;
 }
 
 interface AnalyzedVariableScopeEntry extends VariableAnalysisMetadata {
@@ -79,7 +70,7 @@ interface AnalysisValueRow {
   nullCount: string | number;
 }
 
-interface VariableAnalysisScopeOptions {
+interface VariableAnalysisScopeOptions extends VariableAnalysisOptions {
   unitId?: number;
   variableId?: string;
 }
@@ -149,8 +140,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       await job.updateProgress(0);
 
       const workspaceId = job.data.workspaceId;
-      const unitId = job.data.unitId;
-      const variableId = job.data.variableId;
+      const { unitId, variableId, analysisMode = 'values' } = job.data;
       const cacheKey = job.data.cacheKey || this.createResultCacheKey(workspaceId, job.id);
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
@@ -172,7 +162,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       const scopeEntries = await this.getAnalysisScope(
         workspaceId,
         query,
-        { unitId, variableId }
+        { ...job.data, unitId, variableId }
       );
       const variableCombos = scopeEntries.map(entry => entry.combo);
 
@@ -204,7 +194,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       );
       const analysisSql = this.getDedupedAnalysisSql(
         query,
-        scopeEntries.map(entry => entry.logicalKey)
+        scopeEntries.map(entry => entry.logicalKey),
+        job.data
       );
 
       await job.updateProgress(25);
@@ -216,7 +207,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             analysis_rows."variableId" AS "variableId",
             COUNT(*) AS "totalCount",
             SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount",
-            SUM(CASE WHEN analysis_rows."value" IS NULL OR analysis_rows."value" = '' THEN 1 ELSE 0 END) AS "emptyCount",
+            SUM(CASE WHEN ${this.getEmptyValueSql('analysis_rows', 'rawValue')} THEN 1 ELSE 0 END) AS "emptyCount",
             COUNT(DISTINCT COALESCE(analysis_rows."value", '')) AS "distinctValueCount"
           FROM (${analysisSql.sql}) analysis_rows
           GROUP BY analysis_rows."unitName", analysis_rows."variableId"
@@ -289,7 +280,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
       await this.addObservedValueFrequencies(valueRows, scopeByLogicalKey, frequencies);
 
-      const multipleObservedCounts =
+      const multipleObservedCounts = analysisMode === 'codes' ? undefined :
         await this.recalculateMultipleVariableFrequencies(
           query,
           scopeEntries,
@@ -564,45 +555,19 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   }
 
   private getValidResponseSql(alias = 'analysis_rows'): string {
-    const ignoredStatuses =
-      this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.join(', ');
+    return `${alias}."analysisValid"`;
+  }
 
-    return `(
-      (
-        (
-          ${alias}."statusV1" IS NOT NULL
-          OR ${alias}."codeV1" IS NOT NULL
-          OR ${alias}."scoreV1" IS NOT NULL
-        )
-        AND COALESCE(${alias}."statusV1", 0) NOT IN (${ignoredStatuses})
-      )
-      OR (
-        ${alias}."statusV1" IS NULL
-        AND ${alias}."codeV1" IS NULL
-        AND ${alias}."scoreV1" IS NULL
-        AND ${alias}."value" IS NOT NULL
-        AND ${alias}."value" <> ''
-        AND COALESCE(${alias}."status", 0) NOT IN (${ignoredStatuses})
-      )
-    )`;
+  private getEmptyValueSql(alias: string, column: string): string {
+    const value = `${alias}."${column}"`;
+    // The importer stores missing null values as SQL NULL and literal strings unchanged.
+    return String.raw`(${value} IS NULL OR ${value} ~* '^\s*(\[\s*(false\s*(,\s*false\s*)*)?\])?\s*$')`;
   }
 
   private isValidAnalysisRow(row: {
     value: string | null;
     status: string | number | null;
-    statusV1: string | number | null;
-    codeV1: string | number | null;
-    scoreV1: string | number | null;
   }): boolean {
-    const hasCodingInfo =
-      (row.statusV1 !== null && row.statusV1 !== undefined) ||
-      (row.codeV1 !== null && row.codeV1 !== undefined) ||
-      (row.scoreV1 !== null && row.scoreV1 !== undefined);
-
-    if (hasCodingInfo) {
-      return this.isValidStatus(row.statusV1);
-    }
-
     const value = String(row.value || '').trim();
     if (this.isEmptyStoredValue(value)) {
       return false;
@@ -733,25 +698,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         seenLogicalKeys.add(logicalKey);
 
         const unitId = getUnitId(normalizedUnitName);
-        const metadata = this.getVariableMetadata(variable);
-        const combo: VariableCombo = {
-          unitId,
-          unitName,
-          variableId: variableAlias,
-          sourceVariableId,
-          variableAlias: variableAlias !== sourceVariableId ?
-            variableAlias :
-            undefined,
-          selectionSource: this.getSelectionSource(variable),
-          sourceType: variable.sourceType,
-          isDerived: variable.isDerived,
-          hasCodingScheme: variable.hasCodingScheme,
-          totalCount: 0,
-          emptyCount: 0,
-          emptyPercentage: 0,
-          distinctValueCount: 0,
-          statusCounts: []
-        };
+        const metadata = getVariableAnalysisMetadata(variable, options);
+        const combo = this.createVariableCombo(unitId, unitName, variableAlias, sourceVariableId, variable, options);
 
         entries.push({
           combo,
@@ -778,6 +726,36 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     ));
   }
 
+  private createVariableCombo(
+    unitId: number,
+    unitName: string,
+    variableAlias: string,
+    sourceVariableId: string,
+    variable: VariableDetailDto,
+    options: VariableAnalysisOptions
+  ): VariableCombo {
+    return {
+      unitId,
+      unitName,
+      variableId: variableAlias,
+      sourceVariableId,
+      variableAlias: variableAlias !== sourceVariableId ?
+        variableAlias :
+        undefined,
+      selectionSource: this.getSelectionSource(variable),
+      sourceType: variable.sourceType,
+      isDerived: variable.isDerived,
+      hasCodingScheme: variable.hasCodingScheme,
+      analysisMode: options.analysisMode ?? 'values',
+      codingVersion: options.analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined,
+      totalCount: 0,
+      emptyCount: 0,
+      emptyPercentage: 0,
+      distinctValueCount: 0,
+      statusCounts: []
+    };
+  }
+
   private async getRepresentativeUnitIdsByUnitName(
     query: SelectQueryBuilder<ResponseEntity>
   ): Promise<Map<string, number>> {
@@ -796,67 +774,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         ])
         .filter(([, unitId]) => Number.isFinite(unitId)) as [string, number][]
     );
-  }
-
-  private getVariableMetadata(
-    variable: VariableDetailDto
-  ): VariableAnalysisMetadata {
-    const categoryDefinitions = getExplicitSchemaValues(variable);
-    const seenValues = new Set(categoryDefinitions.map(definition => definition.value));
-
-    (variable.values || []).forEach(valueInfo => {
-      const value = String(valueInfo.value);
-      if (seenValues.has(value)) {
-        return;
-      }
-      seenValues.add(value);
-      categoryDefinitions.push({
-        value,
-        label: valueInfo.label,
-        order: categoryDefinitions.length
-      });
-    });
-
-    const variableValues = variable.values || [];
-    const valuePositionLabels = variable.valuePositionLabels || [];
-    const positionCount = Math.max(
-      variableValues.length,
-      valuePositionLabels.length
-    );
-    const valuesByPosition: SchemaCodeInfo[] = [];
-    Array.from({ length: positionCount }).forEach((_, index) => {
-      const variableValue = variableValues[index]?.value;
-      const label =
-        valuePositionLabels[index] ||
-        variableValues[index]?.label ||
-        String(variableValue ?? index + 1);
-      valuesByPosition.push({
-        value: variableValue !== undefined ?
-          String(variableValue) :
-          String(index + 1),
-        label,
-        order: index
-      });
-    });
-
-    valuesByPosition.forEach(positionValue => {
-      if (seenValues.has(positionValue.value)) {
-        return;
-      }
-      seenValues.add(positionValue.value);
-      categoryDefinitions.push({
-        ...positionValue,
-        order: categoryDefinitions.length
-      });
-    });
-
-    return {
-      coding: variable.coding,
-      type: variable.type,
-      multiple: variable.multiple === true,
-      categoryDefinitions,
-      valuesByPosition
-    };
   }
 
   private getVariableMetadataByComboKey(
@@ -900,17 +817,29 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private getDedupedAnalysisSql(
     query: SelectQueryBuilder<ResponseEntity>,
-    logicalKeys: string[]
+    logicalKeys: string[],
+    options: VariableAnalysisOptions = {}
   ): AnalysisSql {
+    // Select columns from a fixed map; query parameters must never become SQL identifiers.
+    const codingColumns = {
+      v1: { code: 'response.code_v1', status: 'response.status_v1' },
+      v2: { code: 'response.code_v2', status: 'response.status_v2' },
+      v3: { code: 'response.code_v3', status: 'response.status_v3' }
+    }[options.codingVersion ?? 'v1'];
+    const isCodeAnalysis = options.analysisMode === 'codes';
+    const valueColumn = isCodeAnalysis ? `CAST(${codingColumns.code} AS text)` : 'response.value';
+    const statusColumn = isCodeAnalysis ? codingColumns.status : 'response.status';
+    const validSql = isCodeAnalysis ?
+      `${codingColumns.code} IS NOT NULL AND ${statusColumn} IN (5, 12)` :
+      `NOT ${this.getEmptyValueSql('response', 'value')} AND COALESCE(response.status, 0) NOT IN (${this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.join(', ')})`;
     const analysisRowsQuery = query.clone()
       .select('response.id', 'responseId')
       .addSelect('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status', 'status')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('response.code_v1', 'codeV1')
-      .addSelect('response.score_v1', 'scoreV1')
+      .addSelect(valueColumn, 'value')
+      .addSelect('response.value', 'rawValue')
+      .addSelect(statusColumn, 'status')
+      .addSelect(`(${validSql})`, 'analysisValid')
       .addSelect(
         `
           ROW_NUMBER() OVER (
@@ -1056,10 +985,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
                 analysis_rows."unitName" AS "unitName",
                 analysis_rows."variableId" AS "variableId",
                 analysis_rows."value" AS "value",
-                analysis_rows."status" AS "status",
-                analysis_rows."statusV1" AS "statusV1",
-                analysis_rows."codeV1" AS "codeV1",
-                analysis_rows."scoreV1" AS "scoreV1"
+                analysis_rows."status" AS "status"
               FROM (${analysisSql.sql}) analysis_rows
               WHERE analysis_rows."responseId" > ${lastResponseIdParameter}
               ORDER BY analysis_rows."responseId" ASC
@@ -1163,10 +1089,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     }
 
     summary.totalCount += 1;
-    const isValidResponse = this.isValidAnalysisRow(row);
-    if (isValidResponse) {
-      summary.validCount += 1;
-    }
     const categories = this.parseMultipleResponseCategories(
       row.value,
       metadata
@@ -1175,6 +1097,11 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     if (categories.length === 0) {
       summary.emptyCount += 1;
       return;
+    }
+
+    const isValidResponse = this.isValidAnalysisRow(row);
+    if (isValidResponse) {
+      summary.validCount += 1;
     }
 
     const uniqueCategories = new Map<string, ParsedMultipleCategory>();
@@ -1217,7 +1144,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         return this.parseMultipleArrayValue(parsedValue, metadata);
       }
 
-      return this.valueToCategory(parsedValue, metadata);
+      // A missing raw value was handled above; the text "null" is a response category.
+      return this.valueToCategory(parsedValue === null ? trimmedValue : parsedValue, metadata);
     } catch {
       return this.valueToCategory(trimmedValue, metadata);
     }
@@ -1296,7 +1224,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   }
 
   private isEmptyStoredValue(value: string): boolean {
-    return value === '' || value.toLowerCase() === 'null';
+    return /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(value);
   }
 
   private formatDirectValuePreview(value: string): string {
@@ -1351,14 +1279,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         const definition = this.resolveObservedSchemaValue(
           schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
         );
-        const schemaCode = entry.multiple ? schemaValue : {
-          ...schemaValue,
-          label: definition?.label ?? schemaValue.label,
-          score: definition?.score,
-          code: definition?.code,
-          order: definition?.order ?? schemaValue.order,
-          isFromSchema: definition?.isFromSchema
-        };
+        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ?
+          schemaValue : enrichSchemaValueDefinition(schemaValue, definition);
         const valuePreview = entry.multiple ?
           this.formatDirectValuePreview(schemaCode.value) :
           this.formatSchemaValuePreview(schemaCode.value);
@@ -1372,15 +1294,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         }
 
         if (existingRow) {
-          existingRow.label = existingRow.label ?? schemaCode.label;
-          if (valuePreview !== '') {
-            existingRow.score = existingRow.score ?? schemaCode.score;
-            existingRow.code = existingRow.code ?? schemaCode.code;
-            existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
-          }
-          existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
-          existingRow.validOccurrenceCount =
-            existingRow.validOccurrenceCount ?? validOccurrenceCount;
+          this.enrichSchemaFrequencyRow(existingRow, schemaCode, validOccurrenceCount);
           return;
         }
 
@@ -1406,6 +1320,22 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     });
   }
 
+  private enrichSchemaFrequencyRow(
+    existingRow: VariableFrequencyDto,
+    schemaCode: SchemaCodeInfo,
+    validOccurrenceCount: number
+  ): void {
+    existingRow.label = existingRow.label ?? schemaCode.label;
+    if (existingRow.value !== '') {
+      existingRow.score = existingRow.score ?? schemaCode.score;
+      existingRow.code = existingRow.code ?? schemaCode.code;
+      existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
+    }
+    existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
+    existingRow.validOccurrenceCount =
+      existingRow.validOccurrenceCount ?? validOccurrenceCount;
+  }
+
   private async getObservedSchemaValueCounts(
     query: SelectQueryBuilder<ResponseEntity>,
     scopeEntries: AnalyzedVariableScopeEntry[],
@@ -1425,7 +1355,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       const entryChunk = entriesWithSchemaCodes.slice(index, index + chunkSize);
       const analysisSql = this.getDedupedAnalysisSql(
         query,
-        entryChunk.map(entry => entry.logicalKey)
+        entryChunk.map(entry => entry.logicalKey),
+        entryChunk[0]?.combo
       );
       const schemaValueFilters = entryChunk.flatMap(entry => (
         (schemaCodesByComboKey.get(entry.comboKey) || []).map(schemaCode => ({

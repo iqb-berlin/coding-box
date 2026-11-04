@@ -8,6 +8,7 @@ import {
 import { randomUUID } from 'crypto';
 import ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {
   VariableAnalysisResultDto,
@@ -26,6 +27,7 @@ import {
 import { VariableFrequencyDto } from '../../../admin/variable-analysis/dto/variable-frequency.dto';
 import { VariableAnalysisJobDto } from '../../../admin/variable-analysis/dto/variable-analysis-job.dto';
 import { CacheService } from '../../../cache/cache.service';
+import { VARIABLE_ANALYSIS_EXPORT_COLUMNS, VariableAnalysisExportCell, VariableAnalysisExportRow } from './variable-analysis-export-columns';
 
 interface NormalizedVariableAnalysisPaging {
   page: number;
@@ -66,43 +68,6 @@ type VariableAnalysisSortBy =
   | 'emptyPercentage'
   | 'statusSummary';
 
-const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
-  { header: 'Unit-ID', key: 'unitId', width: 12 },
-  { header: 'Unit-Name', key: 'unitName', width: 24 },
-  { header: 'Variablen-ID', key: 'variableId', width: 22 },
-  { header: 'Wert', key: 'value', width: 36 },
-  { header: 'Label', key: 'label', width: 36 },
-  { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
-  { header: 'Anzahl', key: 'count', width: 12 },
-  { header: 'Gültige Anzahl', key: 'validOccurrenceCount', width: 16 },
-  { header: 'Anteil gesamt (%)', key: 'percentageTotal', width: 18 },
-  { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
-  { header: 'Antworten gesamt', key: 'totalCount', width: 18 },
-  { header: 'Antworten gültig', key: 'validCount', width: 18 },
-  { header: 'Fehlend/ungültig', key: 'invalidCount', width: 18 },
-  { header: 'Leere Werte', key: 'emptyCount', width: 14 },
-  { header: 'Leere Werte (%)', key: 'emptyPercentage', width: 18 },
-  { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
-  { header: 'Weitere Werte nicht enthalten', key: 'hiddenValueCount', width: 28 },
-  { header: 'Antwortstatus', key: 'statusSummary', width: 42 },
-  { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
-  { header: 'Code-PBC', key: 'codePbc', width: 14 },
-  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 },
-  { header: 'Score', key: 'score', width: 12 },
-  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 },
-  { header: 'Code', key: 'code', width: 14 }
-] as const;
-
-type VariableAnalysisExportColumnKey =
-  typeof VARIABLE_ANALYSIS_EXPORT_COLUMNS[number]['key'];
-
-type VariableAnalysisExportCell = string | number;
-
-type VariableAnalysisExportRow = Record<
-  VariableAnalysisExportColumnKey,
-  VariableAnalysisExportCell
->;
-
 @Injectable()
 export class VariableAnalysisService {
   private readonly logger = new Logger(VariableAnalysisService.name);
@@ -141,8 +106,17 @@ export class VariableAnalysisService {
   async createAnalysisJob(
     workspaceId: number,
     unitId?: number,
-    variableId?: string
+    variableId?: string,
+    options: VariableAnalysisOptions = {}
   ): Promise<VariableAnalysisJobDto> {
+    if (options.analysisMode !== undefined && !['values', 'codes'].includes(options.analysisMode)) {
+      throw new BadRequestException('analysisMode must be values or codes');
+    }
+    if (options.codingVersion !== undefined && !['v1', 'v2', 'v3'].includes(options.codingVersion)) {
+      throw new BadRequestException('codingVersion must be v1, v2 or v3');
+    }
+    const analysisMode = options.analysisMode ?? 'values';
+    const codingVersion = analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined;
     const existingJobs = await this.getAnalysisJobs(workspaceId);
     const hasActiveJob = existingJobs.some(
       j => j.status === 'pending' || j.status === 'processing'
@@ -159,6 +133,8 @@ export class VariableAnalysisService {
       workspaceId,
       unitId,
       variableId,
+      analysisMode,
+      codingVersion,
       cacheKey: this.createResultCacheKey(workspaceId)
     };
 
@@ -171,6 +147,8 @@ export class VariableAnalysisService {
       workspaceId,
       unitId,
       variableId,
+      analysisMode,
+      codingVersion,
       status: 'pending', // Initial status
       progress: 0,
       timestamp: Date.now()
@@ -199,6 +177,8 @@ export class VariableAnalysisService {
       workspaceId: job.data.workspaceId,
       unitId: job.data.unitId,
       variableId: job.data.variableId,
+      analysisMode: job.data.analysisMode,
+      codingVersion: job.data.codingVersion,
       status: state === 'active' ? 'processing' : state, // Map 'active' to 'processing' to match previous enum if needed
       progress,
       error: job.failedReason,
@@ -382,6 +362,8 @@ export class VariableAnalysisService {
           workspaceId: job.data.workspaceId,
           unitId: job.data.unitId,
           variableId: job.data.variableId,
+          analysisMode: job.data.analysisMode,
+          codingVersion: job.data.codingVersion,
           status: state === 'active' ? 'processing' : state,
           progress,
           error: job.failedReason,
@@ -1041,6 +1023,8 @@ export class VariableAnalysisService {
         sourceType: combo.sourceType,
         isDerived: combo.isDerived,
         hasCodingScheme: combo.hasCodingScheme,
+        analysisMode: combo.analysisMode,
+        codingVersion: combo.codingVersion,
         value: row.value,
         label: row.label,
         score: row.score,
@@ -1320,10 +1304,12 @@ export class VariableAnalysisService {
           variableId: combo.variableId,
           value: frequency.value,
           label: frequency.label || '',
+          analysisMode: combo.analysisMode === 'codes' ? 'Codes' : 'Antwortwerte',
+          codingVersion: combo.analysisMode === 'codes' ? combo.codingVersion ?? 'v1' : '',
           score: frequency.score ?? '',
+          isEmptyValue: /^(\[\s*(false\s*(,\s*false\s*)*)?\])?$/i.test(frequency.value.trim()) ? 'ja' : 'nein',
           code: frequency.code ?? '',
           isFromSchema: frequency.isFromSchema ? 'ja' : 'nein',
-          isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
           count: frequency.count,
           validOccurrenceCount,
           percentageTotal: this.roundPercentage(percentageTotal),
