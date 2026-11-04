@@ -6,7 +6,7 @@
   "tags": [],
   "targets": {
     "build": {
-      "executor": "@nx/webpack:webpack",
+      "executor": "@nx/rspack:rspack",
       "outputs": [
         "{options.outputPath}"
       ],
@@ -18,20 +18,23 @@
             "output": "schemas"
           }
         ],
-        "webpackConfig": "apps/backend/webpack.config.js",
         "outputPath": "dist/apps/backend",
         "main": "apps/backend/src/main.ts",
         "outputFileName": "main.mjs",
         "tsConfig": "apps/backend/tsconfig.build.json",
         "generatePackageJson": true,
         "target": "node",
-        "compiler": "tsc"
+        "rspackConfig": "tools/backend-build-comparison/rspack.config.cjs",
+        "skipTypeChecking": true,
+        "typeCheckOptions": {
+          "async": false
+        },
+        "sourceMap": false
       },
       "configurations": {
         "production": {
           "optimization": false,
           "extractLicenses": true,
-          "inspect": false,
           "fileReplacements": [
             {
               "replace": "apps/backend/src/environments/environment.ts",
@@ -39,7 +42,8 @@
             }
           ]
         }
-      }
+      },
+      "cache": false
     },
     "serve": {
       "executor": "@nx/js:node",
@@ -61,7 +65,9 @@
     "prune-structure-baseline": {
       "executor": "nx:run-commands",
       "cache": false,
-      "options": { "command": "node scripts/quality/prune-structure-baseline.cjs backend" }
+      "options": {
+        "command": "node scripts/quality/prune-structure-baseline.cjs backend"
+      }
     },
     "test": {
       "executor": "nx:run-commands",
@@ -78,22 +84,54 @@
         "{workspaceRoot}/scripts/qa/**/*",
         "{workspaceRoot}/database/changelog/**/*",
         "{workspaceRoot}/scripts/reference/variable-analysis-eatpreptba/**/*",
-        { "env": "BULLMQ_TEST_REDIS_HOST" },
-        { "env": "BULLMQ_TEST_REDIS_PORT" },
-        { "env": "KAPPA_QUERY_TEST_DATABASE_URL" },
-        { "env": "POSTGRES_INTEGRATION_TESTS" },
-        { "env": "POSTGRES_HOST" },
-        { "env": "POSTGRES_PORT" },
-        { "env": "POSTGRES_USER" },
-        { "env": "POSTGRES_PASSWORD" },
-        { "env": "POSTGRES_DB" },
-        { "env": "REDIS_HOST" },
-        { "env": "REDIS_PORT" },
-        { "env": "REDIS_PREFIX" },
-        { "env": "WORKSPACE_DELETION_TEST_DATABASE_URL" },
-        { "env": "PSQL_BIN" },
-        { "env": "KAPPA_QUERY_BENCHMARK" },
-        { "env": "KAPPA_QUERY_BENCHMARK_OUTPUT" }
+        {
+          "env": "BULLMQ_TEST_REDIS_HOST"
+        },
+        {
+          "env": "BULLMQ_TEST_REDIS_PORT"
+        },
+        {
+          "env": "KAPPA_QUERY_TEST_DATABASE_URL"
+        },
+        {
+          "env": "POSTGRES_INTEGRATION_TESTS"
+        },
+        {
+          "env": "POSTGRES_HOST"
+        },
+        {
+          "env": "POSTGRES_PORT"
+        },
+        {
+          "env": "POSTGRES_USER"
+        },
+        {
+          "env": "POSTGRES_PASSWORD"
+        },
+        {
+          "env": "POSTGRES_DB"
+        },
+        {
+          "env": "REDIS_HOST"
+        },
+        {
+          "env": "REDIS_PORT"
+        },
+        {
+          "env": "REDIS_PREFIX"
+        },
+        {
+          "env": "WORKSPACE_DELETION_TEST_DATABASE_URL"
+        },
+        {
+          "env": "PSQL_BIN"
+        },
+        {
+          "env": "KAPPA_QUERY_BENCHMARK"
+        },
+        {
+          "env": "KAPPA_QUERY_BENCHMARK_OUTPUT"
+        }
       ],
       "options": {
         "command": "node scripts/qa/run-backend-jest.mjs"
@@ -299,7 +337,7 @@
             "output": "schemas"
           }
         ],
-        "outputPath": "dist/backend-build-comparison/rspack",
+        "outputPath": "dist/apps/backend",
         "main": "apps/backend/src/main.ts",
         "outputFileName": "main.mjs",
         "tsConfig": "apps/backend/tsconfig.build.json",
@@ -368,7 +406,9 @@
         "command": "node tools/backend-build-comparison/common-checks.mjs"
       },
       "configurations": {
-        "resume": { "command": "node tools/backend-build-comparison/common-checks.mjs --resume" }
+        "resume": {
+          "command": "node tools/backend-build-comparison/common-checks.mjs --resume"
+        }
       }
     }
   }
