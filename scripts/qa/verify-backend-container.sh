@@ -38,8 +38,18 @@ wait_for docker exec "$prefix-redis" redis-cli ping
 # Execute the same SQL changesets used by the integration gate, in root order.
 sed -n 's/.*<include file="\([^"]*\)".*/\1/p' database/changelog/coding-box.changelog-root.xml |
 while IFS= read -r file; do
-  docker exec -i "$prefix-db" psql -U esm_test -d esm_test -X -q -v ON_ERROR_STOP=1 \
-    < "database/changelog/$file"
+  # Match Liquibase's per-changeset transactions, including temporary tables
+  # with ON COMMIT DROP. Concurrent-index changesets remain outside a transaction.
+  awk '
+    /^-- changeset / {
+      if (transaction) print "COMMIT;"
+      transaction = ($0 !~ /runInTransaction:false/)
+      if (transaction) print "BEGIN;"
+    }
+    { print }
+    END { if (transaction) print "COMMIT;" }
+  ' "database/changelog/$file" |
+    docker exec -i "$prefix-db" psql -U esm_test -d esm_test -X -q -v ON_ERROR_STOP=1
 done
 connections_closed() {
   pg=$(docker exec "$prefix-db" psql -U esm_test -d esm_test -X -A -t -c \
