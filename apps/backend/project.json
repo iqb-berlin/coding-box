@@ -220,6 +220,30 @@
           "codeCoverage": true
         }
       }
+    },
+    "test-vitest": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": {
+        "command": "node tools/backend-vitest/run.mjs"
+      },
+      "configurations": {
+        "pilot": {
+          "command": "node tools/backend-vitest/run.mjs --scope=pilot"
+        },
+        "integration": {
+          "command": "node tools/backend-vitest/run.mjs --scope=integration"
+        },
+        "coverage": {
+          "command": "node tools/backend-vitest/run.mjs --coverage"
+        },
+        "typecheck": {
+          "command": "node tools/backend-vitest/run.mjs --typecheck-only"
+        },
+        "contracts": {
+          "command": "node tools/backend-vitest/run.mjs --scope=contracts"
+        }
+      }
     }
   }
 }

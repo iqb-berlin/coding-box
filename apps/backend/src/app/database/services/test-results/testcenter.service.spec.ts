@@ -177,7 +177,8 @@ describe('TestCenterService', () => {
       await jest.advanceTimersByTimeAsync(119999);
       expect(settled).toBe(false);
       await jest.advanceTimersByTimeAsync(1);
-      await expect(outcome).resolves.toThrow('Testcenter request timed out');
+      await expect(outcome).resolves.toBeInstanceOf(Error);
+      await expect(outcome).resolves.toMatchObject({ message: expect.stringContaining('Testcenter request timed out') });
       expect(personService.getWorkspaceGroups).not.toHaveBeenCalled();
       expect(cacheService.set).toHaveBeenLastCalledWith(
         'testcenter_test_groups_progress:123:timeout-run',

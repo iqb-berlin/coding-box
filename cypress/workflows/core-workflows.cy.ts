@@ -14,7 +14,6 @@ type BackgroundJob = { status: string; error?: string };
 
 describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
   let setup: WorkflowSetup;
-  let accessToken: string;
 
   before(() => {
     cy.task('workflows:setup', null, { log: false, timeout: 180_000 }).then(value => {
@@ -27,11 +26,7 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
   });
 
   function login(username: string) {
-    cy.intercept('POST', '**/api/auth/exchange', request => {
-      request.continue(response => {
-        if (response.body.access_token) accessToken = response.body.access_token;
-      });
-    }).as('loginToken');
+    cy.intercept('POST', '**/api/auth/exchange').as('loginToken');
     cy.intercept('GET', '**/api/auth-data*').as('authData');
     cy.visit('/');
     cy.window().should(win => {
@@ -52,8 +47,39 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     cy.get('coding-box-home').should('be.visible');
   }
 
+  function currentAccessToken(forceRefresh = false): Cypress.Chainable<string> {
+    return cy.window({ log: false }).then(win => {
+      const token = win.localStorage.getItem('auth_token');
+      const refreshToken = win.localStorage.getItem('refresh_token');
+      expect(typeof token === 'string' && token.length > 0, 'browser access token present').to.equal(true);
+      const payload = JSON.parse(Cypress.Buffer.from(token!.split('.')[1], 'base64').toString('utf8'));
+      if (!forceRefresh && payload.exp * 1000 > Date.now() + 5000) {
+        return cy.wrap(token!, { log: false });
+      }
+      expect(typeof refreshToken === 'string' && refreshToken.length > 0, 'browser refresh token present').to.equal(true);
+      return cy.request({
+        method: 'POST',
+        url: `${setup.apiUrl}/api/auth/refresh`,
+        body: { refresh_token: refreshToken },
+        log: false
+      }).then(({ status, body }) => {
+        expect(status).to.equal(200);
+        expect(typeof body.access_token === 'string' && body.access_token.length > 0, 'refreshed access token present').to.equal(true);
+        // Do not overwrite a newer refresh completed by the application meanwhile.
+        if (win.localStorage.getItem('refresh_token') === refreshToken) {
+          win.localStorage.setItem('auth_token', body.access_token);
+          if (body.refresh_token) win.localStorage.setItem('refresh_token', body.refresh_token);
+          if (body.id_token) win.localStorage.setItem('id_token', body.id_token);
+        }
+        const current = win.localStorage.getItem('auth_token');
+        expect(typeof current === 'string' && current.length > 0, 'current browser access token present').to.equal(true);
+        return cy.wrap(current!, { log: false });
+      });
+    });
+  }
+
   function apiRequest(route: string, options: Partial<Cypress.RequestOptions> = {}) {
-    return cy.then(() => cy.request({
+    return currentAccessToken().then(accessToken => cy.request({
       url: `${setup.apiUrl}/api${route}`,
       headers: { authorization: `Bearer ${accessToken}` },
       log: false,
@@ -105,6 +131,18 @@ describe('required workflows with real Keycloak, PostgreSQL and Redis', () => {
     });
     cy.location('hash').should('include', 'access-denied');
     cy.get('coding-box-test-results').should('not.exist');
+  });
+
+  it('refreshes the browser session after token expiry without changing the actor', () => {
+    login(setup.username);
+    currentAccessToken().then(previous => {
+      const payload = JSON.parse(Cypress.Buffer.from(previous.split('.')[1], 'base64').toString('utf8'));
+      cy.wait(Math.max(0, payload.exp * 1000 - Date.now() + 1000), { log: false });
+      currentAccessToken(true).then(current => {
+        expect(current !== previous, 'access token rotated after expiry').to.equal(true);
+      });
+      apiRequest('/auth-data').its('body.userId').should('eq', setup.userId);
+    });
   });
 
   it('imports in the browser, persists coding across reload, submits and exports the same result', () => {
