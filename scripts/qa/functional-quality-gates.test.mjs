@@ -17,7 +17,7 @@ const config = Object.assign({}, read('.gitlab-ci.yml'),
   read('.gitlab-ci/Release-Pipelines.gitlab-ci.yml'),
   read('.gitlab-ci/Quality-Gates.gitlab-ci.yml'));
 const gates = ['test-backend', 'test-frontend', 'lint-app', 'test-replay-live',
-  'test-auth-live', 'test-workflows-live'];
+  'test-auth-live', 'test-workflows-live', 'test-e2e-report'];
 const publishers = ['build-main-pr-backend-image', 'build-main-pr-frontend-image',
   'build-develop-commit-backend-image', 'build-develop-commit-frontend-image',
   'build-main-commit-backend-image', 'build-main-commit-frontend-image',
@@ -68,6 +68,27 @@ const githubDevelopPr = {
   CI_EXTERNAL_PULL_REQUEST_SOURCE_REPOSITORY: 'iqb-berlin/coding-box',
   CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY: 'iqb-berlin/coding-box'
 };
+
+test('Cypress jobs publish JUnit on failure and join live evidence before publication', () => {
+  for (const [name, suites] of [
+    ['test-browser', 'component,browser'], ['test-replay-live', 'replay-live'],
+    ['test-auth-live', 'auth-live'], ['test-workflows-live', 'workflows-live']
+  ]) {
+    const job = resolve(name);
+    assert.equal(job.artifacts.when, 'always');
+    assert.equal(job.artifacts.reports.junit, 'coverage/cypress/*/junit.xml');
+    assert.ok(job.artifacts.paths.includes('coverage/cypress/'));
+    assert.ok(job.after_script.includes(`npx nx run frontend:e2e-report --suites=${suites}`));
+  }
+  const aggregate = resolve('test-e2e-report');
+  assert.ok(resolve('test-browser').script.includes('npx nx run frontend:e2e-report --suites=component,browser'));
+  assert.equal(aggregate.when, 'always');
+  assert.equal(aggregate.allow_failure, false);
+  for (const live of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+    assert.ok(aggregate.needs.some(dependency => dependency.job === live && dependency.artifacts !== false));
+  }
+  assert.ok(aggregate.script.includes('npx nx run frontend:e2e-report --suites=auth-live,replay-live,workflows-live'));
+});
 
 test('a same-repository GitHub develop PR selects exactly one complete pipeline', () => {
   assert.equal(pipelineSelected(githubDevelopPr), false);

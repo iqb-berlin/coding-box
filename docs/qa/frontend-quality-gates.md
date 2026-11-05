@@ -35,6 +35,10 @@ project bot has no group Dependency Proxy access. Regular branch pipelines retai
 the proxy. Project registry images and all checks stay enabled.
 Live Replay and Keycloak authentication remain separate integration jobs and
 exercise the production frontend with their disposable backend environments.
+All Cypress suites now publish JUnit and JSON results. The required
+`test-e2e-report` job combines the three live suites before publication. The
+workflow catalog, execution criteria, local commands and known gaps are described
+in [E2E coverage](e2e-coverage.md).
 
 For pull requests targeting `main`, `test-main-pr-frontend` enables the same
 zoneless coverage gate inside the existing test image and copies reports from the

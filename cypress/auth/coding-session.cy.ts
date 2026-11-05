@@ -15,7 +15,8 @@ describe('real Keycloak coding session', () => {
   let setup: CodingSetup;
   let accessToken: string;
 
-  before(() => {
+  beforeEach(() => {
+    cy.task('coding:cleanup', null, { log: false, timeout: 180_000 });
     cy.task('coding:setup', null, { log: false, timeout: 180_000 }).then((value) => {
       setup = value as CodingSetup;
     });
@@ -29,7 +30,7 @@ describe('real Keycloak coding session', () => {
     cy.task('coding:set-provider-available', true, { log: false });
   });
 
-  it('persists coding, recovers an expired session, and completes the job', () => {
+  function openCodingJob() {
     cy.intercept(
       'POST',
       '**/api/auth/exchange'
@@ -87,18 +88,36 @@ describe('real Keycloak coding session', () => {
       cy.visit(replay.toString(), { log: false });
     });
     cy.get('coding-box-code-selector [data-code-id="1"]').should('be.visible');
-    // Advance only browser timeout callbacks; Keycloak and the backend retain real time.
-    cy.clock(Date.now(), ['setTimeout', 'clearTimeout']);
-    cy.window().then(win => win.dispatchEvent(new Event('mousemove')));
-    cy.tick(AUTH_SESSION_WARNING_DELAY_MS);
-    cy.get('.session-expiry-warning').should('be.visible');
-    cy.clock().then(clock => clock.restore());
-    cy.window().then(win => win.localStorage.removeItem('auth_token'));
-    cy.intercept('POST', '**/api/auth/refresh').as('extendSession');
-    cy.get('.session-expiry-warning button').click();
-    cy.wait('@extendSession').its('response.statusCode').should('eq', 200);
-    cy.get('.session-expiry-warning').should('not.exist');
-    cy.get('.re-authentication').should('not.exist');
+  }
+
+  function jobRequest(method: 'GET' | 'POST', suffix: string, body?: Record<string, unknown>) {
+    return cy.window({ log: false }).then(win => cy.request({
+      method,
+      url: `${setup.apiUrl}/api/wsg-admin/workspace/${setup.workspaceId}/coding-job/${setup.codingJobId}/${suffix}`,
+      headers: { authorization: `Bearer ${win.localStorage.getItem('auth_token')}` },
+      body, log: false
+    }));
+  }
+
+  function prepareCompletedJob() {
+    // This view test prepares its own results instead of relying on a previous test.
+    jobRequest('POST', 'start').its('body.total').should('eq', 2);
+    jobRequest('GET', 'units').then(({ body }) => {
+      expect(body).to.have.length(2);
+      cy.wrap(body).each((unit: {
+        personLogin: string; personCode: string; personGroup: string;
+        bookletName: string; unitName: string; variableId: string;
+      }) => jobRequest('POST', 'progress', {
+        testPerson: [unit.personLogin, unit.personCode, unit.personGroup, unit.bookletName].join('@'),
+        unitId: unit.unitName, variableId: unit.variableId,
+        selectedCode: { id: 1, score: 1 }, isOpen: false
+      }));
+    });
+    jobRequest('POST', 'submit').its('body.status').should('eq', 'completed');
+  }
+
+  it('persists codes and notes across reload, navigates cases and completes the job', () => {
+    openCodingJob();
     cy.get('coding-box-code-selector [data-code-id="1"]').click();
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (request.body.notes === 'Persisted live note') {
@@ -131,6 +150,71 @@ describe('real Keycloak coding session', () => {
       'Persisted live note'
     );
 
+    cy.intercept('PUT', '**/coding-job/*/comment', (request) => {
+      if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
+    });
+    cy.get('coding-box-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea').type('Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Speichern').click();
+    cy.wait('@jobComment').its('response.statusCode').should('be.oneOf', [200, 201]);
+    cy.reload();
+    cy.get('coding-box-code-selector .comment-button').click();
+    cy.get('coding-box-coding-job-comment-dialog textarea')
+      .should('have.value', 'Live job comment');
+    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
+
+    cy.intercept('POST', '**/coding-job/*/pause').as('pause');
+    cy.intercept('PUT', '**/coding-job/*/status', request => {
+      if (request.body.status === 'active') request.alias = 'resume';
+    });
+    cy.get('coding-box-code-selector .pause-button').click();
+    cy.wait('@pause').its('response.statusCode').should('eq', 201);
+    cy.get('.pause-overlay .resume-button').should('be.visible').click();
+    cy.wait('@resume').its('response.statusCode').should('eq', 200);
+    cy.get('.pause-overlay').should('not.exist');
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector .prev-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '1');
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector [data-code-id="0"]').click();
+    cy.intercept('POST', '**/coding-job/*/submit').as('submit');
+    // Production opens replay in a separate window; keep the Cypress tab alive.
+    cy.window().then((win) => {
+      cy.stub(win, 'close').as('closeReplay');
+    });
+    cy.get('.completion-overlay .submit-button')
+      .should('not.be.disabled')
+      .click();
+    cy.wait('@submit').its('response.statusCode').should('eq', 201);
+    cy.get('@closeReplay').should('have.been.calledOnce');
+    cy.visit('/');
+    cy.get('coding-box-user-menu > button').click();
+    cy.contains('coding-box-account-action button', 'Abmelden').click();
+    cy.get('.login-button').should('be.visible');
+    cy.get('.re-authentication').should('not.exist');
+  });
+
+  it('renews a coding session from the expiry warning', () => {
+    openCodingJob();
+    // Advance only browser timeout callbacks; Keycloak and the backend retain real time.
+    cy.clock(Date.now(), ['setTimeout', 'clearTimeout']);
+    cy.window().then(win => win.dispatchEvent(new Event('mousemove')));
+    cy.tick(AUTH_SESSION_WARNING_DELAY_MS);
+    cy.get('.session-expiry-warning').should('be.visible');
+    cy.clock().then(clock => clock.restore());
+    cy.window().then(win => win.localStorage.removeItem('auth_token'));
+    cy.intercept('POST', '**/api/auth/refresh').as('extendSession');
+    cy.get('.session-expiry-warning button').click();
+    cy.wait('@extendSession').its('response.statusCode').should('eq', 200);
+    cy.get('.session-expiry-warning').should('not.exist');
+    cy.get('.re-authentication').should('not.exist');
+  });
+
+  it('preserves and saves a draft after a real provider outage', () => {
+    openCodingJob();
     let outageNoteWrites = 0;
     let refreshBeforeOutage: string | null = null;
     cy.intercept('POST', '**/coding-job/*/notes', request => {
@@ -164,6 +248,16 @@ describe('real Keycloak coding session', () => {
     cy.reload();
     cy.get('coding-box-code-selector textarea').should('have.value', 'Provider outage draft');
 
+  });
+
+  it('persists the latest code while a progress write is held', () => {
+    openCodingJob();
+    // A new-code-needed marker requires its own saved explanation.
+    cy.intercept('POST', '**/coding-job/*/notes', request => {
+      if (request.body.notes === 'Reason for the new code') request.alias = 'orderingNote';
+    });
+    cy.get('coding-box-code-selector textarea').clear().type('Reason for the new code').blur();
+    cy.wait('@orderingNote').its('response.statusCode').should('eq', 201);
     // Hold a real progress save while the coder adds a problem marker.
     let releaseProgress: (() => void) | undefined;
     let holdProgress = true;
@@ -182,10 +276,24 @@ describe('real Keycloak coding session', () => {
     cy.wait('@newCodeNeeded').its('response.statusCode').should('eq', 201);
     cy.reload();
     cy.get('coding-box-code-selector [data-code-id="-2"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Reason for the new code');
     cy.get('coding-box-code-selector .deselect-button').click();
+    cy.intercept('POST', '**/coding-job/*/progress', request => {
+      if (request.body.selectedCode?.id === 1) request.alias = 'finalCode';
+    });
     cy.get('coding-box-code-selector [data-code-id="1"]').click();
+    cy.wait('@finalCode').its('response.statusCode').should('eq', 201);
     cy.get('coding-box-code-selector .next-button').should('not.be.disabled');
 
+    cy.reload();
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+  });
+
+  it('restores an unsaved draft after revoked authentication and re-login', () => {
+    openCodingJob();
+    cy.intercept('POST', '**/coding-job/*/progress').as('initialCode');
+    cy.get('coding-box-code-selector [data-code-id="1"]').click();
+    cy.wait('@initialCode').its('response.statusCode').should('eq', 201);
     let failNotes = true;
     cy.intercept('POST', '**/coding-job/*/notes', (request) => {
       if (failNotes) {
@@ -281,51 +389,6 @@ describe('real Keycloak coding session', () => {
       'Recovered live draft'
     );
 
-    cy.intercept('PUT', '**/coding-job/*/comment', (request) => {
-      if (request.body.comment === 'Live job comment') request.alias = 'jobComment';
-    });
-    cy.get('coding-box-code-selector .comment-button').click();
-    cy.get('coding-box-coding-job-comment-dialog textarea').type('Live job comment');
-    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Speichern').click();
-    cy.wait('@jobComment').its('response.statusCode').should('be.oneOf', [200, 201]);
-    cy.reload();
-    cy.get('coding-box-code-selector .comment-button').click();
-    cy.get('coding-box-coding-job-comment-dialog textarea')
-      .should('have.value', 'Live job comment');
-    cy.get('coding-box-coding-job-comment-dialog').contains('button', 'Abbrechen').click();
-
-    cy.intercept('POST', '**/coding-job/*/pause').as('pause');
-    cy.intercept('PUT', '**/coding-job/*/status', request => {
-      if (request.body.status === 'active') request.alias = 'resume';
-    });
-    cy.get('coding-box-code-selector .pause-button').click();
-    cy.wait('@pause').its('response.statusCode').should('eq', 201);
-    cy.get('.pause-overlay .resume-button').should('be.visible').click();
-    cy.wait('@resume').its('response.statusCode').should('eq', 200);
-    cy.get('.pause-overlay').should('not.exist');
-    cy.get('coding-box-code-selector .next-button').click();
-    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
-    cy.get('coding-box-code-selector .prev-button').click();
-    cy.get('coding-box-code-selector .current-position').should('have.text', '1');
-    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
-    cy.get('coding-box-code-selector .next-button').click();
-    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
-    cy.get('coding-box-code-selector [data-code-id="0"]').click();
-    cy.intercept('POST', '**/coding-job/*/submit').as('submit');
-    // Production opens replay in a separate window; keep the Cypress tab alive.
-    cy.window().then((win) => {
-      cy.stub(win, 'close').as('closeReplay');
-    });
-    cy.get('.completion-overlay .submit-button')
-      .should('not.be.disabled')
-      .click();
-    cy.wait('@submit').its('response.statusCode').should('eq', 201);
-    cy.get('@closeReplay').should('have.been.calledOnce');
-    cy.visit('/');
-    cy.get('coding-box-user-menu > button').click();
-    cy.contains('coding-box-account-action button', 'Abmelden').click();
-    cy.get('.login-button').should('be.visible');
-    cy.get('.re-authentication').should('not.exist');
   });
 
   it('shows a real backend 401 after a successful provider login without discarding the refresh session', () => {
@@ -448,6 +511,7 @@ describe('real Keycloak coding session', () => {
     );
     cy.wait('@authData').its('response.statusCode')
       .should('be.oneOf', [200, 304]);
+    prepareCompletedJob();
     cy.window().then((win) => {
       expect('Zone' in win).to.equal(!setup.zoneless);
       win.location.hash = '/admin/workspaces';
