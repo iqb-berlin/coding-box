@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress';
+import { registerCypressReporting } from './scripts/qa/cypress-reporting.cjs';
 import { loadAspectPlayer } from './cypress/support/aspect-player-task.cjs';
 import { createDeferredResponses } from './cypress/support/deferred-response-task.cjs';
 
@@ -18,6 +19,7 @@ export default defineConfig({
     justInTimeCompile: false,
     setupNodeEvents(on, config) {
       requireExecutedSpec(on);
+      registerCypressReporting(on, config, 'component');
       on('task', { 'replay:aspect-player': loadAspectPlayer });
       config.screenshotsFolder = 'cypress/component-screenshots';
       config.videosFolder = 'cypress/component-videos';
@@ -52,7 +54,7 @@ export default defineConfig({
   },
   e2e: {
     experimentalMemoryManagement: true,
-    setupNodeEvents(on) {
+    setupNodeEvents(on, config) {
       requireExecutedSpec(on);
       const responses = createDeferredResponses();
       on('task', {
@@ -60,7 +62,7 @@ export default defineConfig({
         'deferred:release': responses.release,
         'deferred:reset': responses.reset
       });
-      on('after:run', responses.reset);
+      registerCypressReporting(on, config, 'browser', responses.reset);
     },
     baseUrl: 'http://localhost:4200',
     specPattern: ['cypress/e2e/**/*.cy.ts', 'cypress/zoneless/**/*.cy.ts'],

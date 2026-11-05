@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress';
+import { registerCypressReporting } from './scripts/qa/cypress-reporting.cjs';
 import { createReplayHarness } from './scripts/e2e/replay/harness.mjs';
 
 export default defineConfig({
@@ -13,7 +14,7 @@ export default defineConfig({
     baseUrl: process.env.REPLAY_E2E_BASE_URL,
     specPattern: 'cypress/workflows/**/*.cy.ts',
     supportFile: 'cypress/support/replay-e2e.ts',
-    setupNodeEvents(on) {
+    setupNodeEvents(on, config) {
       const harness = createReplayHarness(process.env);
       on('task', {
         'workflows:setup': () => harness.setup(),
@@ -26,7 +27,7 @@ export default defineConfig({
       on('after:spec', (spec, results) => {
         if (!results?.tests?.length) throw new Error(`Workflow spec executed no tests: ${spec.relative}`);
       });
-      on('after:run', () => harness.cleanup());
+      registerCypressReporting(on, config, 'workflows-live', () => harness.cleanup());
     }
   }
 });
