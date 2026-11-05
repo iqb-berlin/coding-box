@@ -24,6 +24,7 @@ import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
 import { getAuthProviderFailureCode } from './auth-provider-failure';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
+  SUPPRESS_FORBIDDEN_HTTP_ERROR,
   SUPPRESS_GLOBAL_HTTP_ERROR
 } from './http-error-context';
 import { AppService } from '../services/app.service';
@@ -169,7 +170,7 @@ function isCurrentProtectedBackendRequest(
 
 function shouldHandleAuthErrorGlobally(req: HttpRequest<unknown>, status: number): boolean {
   return !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT) &&
-    (status === 401 || (status === 403 && !req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)));
+    (status === 401 || (status === 403 && !req.context.get(SUPPRESS_FORBIDDEN_HTTP_ERROR)));
 }
 
 function addRequestId(

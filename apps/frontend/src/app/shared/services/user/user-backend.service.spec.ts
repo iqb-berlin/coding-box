@@ -4,7 +4,9 @@ import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http'
 import { UserBackendService } from './user-backend.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CreateUserDto } from '../../../../../../../api-dto/user/create-user-dto';
-import { SUPPRESS_AUTH_ERROR_REDIRECT, SUPPRESS_GLOBAL_HTTP_ERROR } from '../../../core/interceptors/http-error-context';
+import {
+  SUPPRESS_AUTH_ERROR_REDIRECT, SUPPRESS_FORBIDDEN_HTTP_ERROR, SUPPRESS_GLOBAL_HTTP_ERROR
+} from '../../../core/interceptors/http-error-context';
 
 describe('UserBackendService', () => {
   let service: UserBackendService;
@@ -48,6 +50,7 @@ describe('UserBackendService', () => {
       username: 'user', password: 'password', server: '1', url: ''
     });
     expect(request.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+    expect(request.request.context.get(SUPPRESS_FORBIDDEN_HTTP_ERROR)).toBe(true);
     expect(request.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(false);
     request.flush({ token: 'fixture-token' });
   });
