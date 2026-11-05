@@ -25,7 +25,7 @@ export class KappaPostgresFixture {
   calculator = Object.create(CodingStatisticsService.prototype) as CodingStatisticsService;
   statistics: CohensKappaStatisticsService;
 
-  async open(serverUrl: string): Promise<void> {
+  async open(serverUrl: string, beforeFile?: { file: string; seed: (db: DataSource) => Promise<void> }): Promise<void> {
     this.admin = await new DataSource({ type: 'postgres', url: serverUrl }).initialize();
     await this.admin.query(`CREATE DATABASE "${this.databaseName}"`);
     const url = new URL(serverUrl);
@@ -40,6 +40,7 @@ export class KappaPostgresFixture {
     const root = path.resolve('database/changelog');
     const changelog = readFileSync(path.join(root, 'coding-box.changelog-root.xml'), 'utf8');
     for (const [, file] of changelog.matchAll(/<include file="([^"]+)"/g)) {
+      if (beforeFile?.file === file) await beforeFile.seed(this.db);
       const input = readFileSync(path.join(root, file), 'utf8').split(/^-- changeset /m).slice(1).map(chunk => {
         const end = chunk.indexOf('\n');
         const statements = chunk.slice(end + 1);

@@ -311,20 +311,20 @@
       "file": {},
       "functions": {
         "class CoderTrainingMutationService#1/method createCoderTrainingJobs#1": {
-          "max-lines-per-function": 251
+          "max-lines-per-function": 231
         },
-        "class CoderTrainingMutationService#1/method createCoderTrainingJobs#1/anonymous:d87b855378e5e0c3#1": {
-          "complexity": 48,
+        "class CoderTrainingMutationService#1/method createCoderTrainingJobs#1/anonymous:411154c3a9328484#1": {
+          "complexity": 42,
           "max-depth": 5,
-          "max-lines-per-function": 220
+          "max-lines-per-function": 200
         },
         "class CoderTrainingMutationService#1/method updateCoderTraining#1": {
-          "max-lines-per-function": 365
+          "max-lines-per-function": 345
         },
-        "class CoderTrainingMutationService#1/method updateCoderTraining#1/anonymous:af2f9d15f411cf77#1": {
-          "complexity": 77,
+        "class CoderTrainingMutationService#1/method updateCoderTraining#1/anonymous:b7636e03c4e339ee#1": {
+          "complexity": 71,
           "max-depth": 6,
-          "max-lines-per-function": 339
+          "max-lines-per-function": 319
         }
       }
     },
@@ -332,7 +332,7 @@
       "file": {},
       "functions": {
         "class CoderTrainingResultsApplyService#1/method applyTrainingDiscussionResultsInPool#1": {
-          "max-lines-per-function": 182
+          "max-lines-per-function": 171
         },
         "class CoderTrainingResultsApplyService#1/method buildApplyContext#1": {
           "max-lines-per-function": 101
@@ -669,11 +669,11 @@
     },
     "apps/backend/src/app/database/services/coding/coding-progress.service.ts": {
       "file": {
-        "max-lines": 1591
+        "max-lines": 1547
       },
       "functions": {
         "class CodingProgressService#1/method getVariableCoverageOverview#1": {
-          "max-lines-per-function": 320
+          "max-lines-per-function": 293
         }
       }
     },
@@ -836,12 +836,12 @@
     },
     "apps/backend/src/app/database/services/coding/double-coding-review-query.service.ts": {
       "file": {
-        "max-lines": 1527
+        "max-lines": 1516
       },
       "functions": {
         "class DoubleCodingReviewQueryService#1/method getCodedVariablesForKappa#1": {
           "complexity": 31,
-          "max-lines-per-function": 237
+          "max-lines-per-function": 233
         },
         "class DoubleCodingReviewQueryService#1/method getDoubleCodedReviewData#1": {
           "complexity": 102,
@@ -1045,7 +1045,7 @@
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
           "complexity": 56,
-          "max-lines-per-function": 476
+          "max-lines-per-function": 384
         }
       }
     },
