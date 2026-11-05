@@ -245,6 +245,11 @@
           "command": "node tools/backend-vitest/run.mjs --scope=contracts"
         }
       }
+    },
+    "verify-testcenter-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/qa/verify-testcenter-live.cjs" }
     }
   }
 }

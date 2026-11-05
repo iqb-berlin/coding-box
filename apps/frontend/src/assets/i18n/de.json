@@ -4423,7 +4423,7 @@
       "use-instance-url": "Testcenter Instanz URL verwenden",
       "format-example": "Erwartetes Format z. B.:",
       "alternative": "oder",
-      "https-required": ". Die URL muss per HTTPS erreichbar sein."
+      "https-required": ". Diese genaue Basisadresse muss zuvor freigegeben sein."
     },
     "test-center-options-step": {
       "title": "Import-Optionen",
@@ -5469,6 +5469,48 @@
     },
     "validation-task-runner": {
       "unknown-status": "Unbekannter Task-Status"
+    },
+    "testcenter-instances": {
+      "title": "Freigegebene Testcenter",
+      "description": "Hier legen Systemadministratoren fest, aus welchen Testcentern Daten importiert werden dürfen. Neue Freigaben stehen sofort in der Testcenter-Auswahl zur Verfügung.",
+      "operator-hint": "Die IQB-Standardadressen und vom Betreiber konfigurierte Adressen sind hier schreibgeschützt. Weitere Instanzen benötigen HTTPS. Bei privaten Zertifikaten richtet der Betreiber zuerst das Zertifikatsvertrauen ein.",
+      "loading": "Testcenter werden geladen …",
+      "reload": "Liste erneut laden",
+      "load-failed": "Die Testcenter-Liste konnte nicht geladen werden.",
+      "selection-load-failed": "Zusätzliche freigegebene Testcenter konnten nicht geladen werden. Laden Sie die Liste erneut oder wenden Sie sich an die Systemadministration.",
+      "save-failed": "Die Freigabe konnte nicht gespeichert werden. Prüfen Sie Name und HTTPS-Basisadresse einschließlich Installationspfad. Adressen vom Betreiber können hier nicht geändert werden.",
+      "delete-failed": "Die Freigabe konnte nicht aufgehoben werden. Laden Sie die Liste erneut.",
+      "source": {
+        "standard": "IQB-Standardadresse",
+        "environment": "Vom Betreiber konfiguriert",
+        "administrator": "In der Systemadministration freigegeben"
+      },
+      "testing": "Verbindung wird geprüft …",
+      "test": "Verbindung prüfen",
+      "edit": "Name bearbeiten",
+      "edit-url-hint": "Die Basisadresse bleibt beim Umbenennen unverändert.",
+      "save-name": "Name speichern",
+      "cancel-edit": "Abbrechen",
+      "revoke": "Freigabe aufheben",
+      "test-scope": "Der Verbindungstest prüft Erreichbarkeit, Zertifikat und gemeldete Version. Anmeldung, Datenberechtigungen und ein vollständiger Import werden damit nicht geprüft.",
+      "name": "Name des Testcenters",
+      "url": "HTTPS-Basisadresse",
+      "url-hint": "Beispiel: https://testcenter.example.org/tci – ohne angehängten API-Pfad.",
+      "save": "Speichern und freigeben",
+      "reachable": "API erreichbar · gemeldete Testcenter-Version: {{version}}",
+      "connection-failed": "Die Testcenter-API ist nicht erreichbar oder liefert keine gültige Version. Prüfen Sie Adresse, Netzwerk und Zertifikatsvertrauen.",
+      "authenticating": "Anmeldung läuft …",
+      "login-error": {
+        "not-approved": "Diese Testcenter-Adresse ist noch nicht freigegeben. Bitten Sie die Systemadministration um Freigabe der genauen Basisadresse.",
+        "credentials": "Das Testcenter hat die Zugangsdaten abgelehnt. Prüfen Sie Benutzername und Kennwort.",
+        "rejected": "Das Testcenter hat die Anmeldung abgelehnt. Prüfen Sie Zugangsdaten und Anmeldeeinstellungen.",
+        "session-expired": "Ihre Kodierbox-Sitzung ist abgelaufen. Melden Sie sich erneut an der Kodierbox an.",
+        "access-denied": "Der Testcenter-Zugang hat keine ausreichenden Berechtigungen. Wenden Sie sich an die Testcenter-Administration.",
+        "rate-limited": "Es gab zu viele Anmeldeversuche. Warten Sie kurz und versuchen Sie es erneut.",
+        "unsupported": "Das Testcenter liefert eine ungültige oder nicht unterstützte Anmeldeantwort. Wenden Sie sich an die Systemadministration.",
+        "unavailable": "Das Testcenter ist nicht erreichbar. Prüfen Sie Adresse und Netzwerk; bei Zertifikatsproblemen hilft der Betreiber.",
+        "timeout": "Das Testcenter antwortet nicht rechtzeitig. Versuchen Sie die Anmeldung später erneut."
+      }
     }
   },
   "test-files": {

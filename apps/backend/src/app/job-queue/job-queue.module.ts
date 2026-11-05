@@ -1,5 +1,7 @@
 import { Module, Type } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { ContentPoolModule } from '../admin/content-pool/content-pool.module';
+import { ContentPoolProcessor } from './processors/content-pool.processor';
 import { JobQueueClientModule } from './job-queue-client.module';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
 import { CodingStatisticsProcessor } from './processors/coding-statistics.processor';
@@ -33,7 +35,8 @@ const processorProviders = {
   'validation-task': ValidationTaskProcessor,
   'response-analysis': CodingAnalysisProcessor,
   'variable-analysis': VariableAnalysisProcessor,
-  'external-coding-import': ExternalCodingImportProcessor
+  'external-coding-import': ExternalCodingImportProcessor,
+  'content-pool': ContentPoolProcessor
 } satisfies Record<string, Type<unknown>>;
 
 type JobQueueProcessorName = keyof typeof processorProviders;
@@ -51,6 +54,7 @@ export function getEnabledJobQueueProcessors(
 @Module({
   imports: [
     JobQueueClientModule,
+    ContentPoolModule,
     TypeOrmModule.forFeature([ResponseEntity, ValidationTask]),
     CodingModule,
     WorkspaceModule,

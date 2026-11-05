@@ -7,10 +7,12 @@ import {
   of
 } from 'rxjs';
 import type { RequestBody } from '../../../../../../../api-dto/request-contracts';
+import type { TestcenterInstanceDto } from '../../../../../../../api-dto/testcenter/testcenter-instance.dto';
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import { SERVER_URL } from '../../../injection-tokens';
 import { ServerResponse } from '../../../core/services/authentication.service';
+import { suppressGlobalAndForbiddenHttpErrorContext } from '../../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -18,6 +20,10 @@ import { ServerResponse } from '../../../core/services/authentication.service';
 export class UserBackendService {
   private readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+
+  getTestcenterInstances(): Observable<TestcenterInstanceDto[]> {
+    return this.http.get<TestcenterInstanceDto[]>(`${this.serverUrl}testcenter/instances`);
+  }
 
   getUsers(workspaceId: number): Observable<UserInListDto[]> {
     return this.http
@@ -111,6 +117,6 @@ export class UserBackendService {
         password,
         server,
         url
-      });
+      }, { context: suppressGlobalAndForbiddenHttpErrorContext() });
   }
 }

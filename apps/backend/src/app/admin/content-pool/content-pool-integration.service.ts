@@ -5,15 +5,24 @@ import {
   Injectable,
   InternalServerErrorException,
   NotFoundException,
-  UnauthorizedException
+  UnauthorizedException,
+  PayloadTooLargeException,
+  GatewayTimeoutException,
+  BadGatewayException
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { InjectRepository } from '@nestjs/typeorm';
 import { AxiosError } from 'axios';
-import { randomUUID } from 'crypto';
 // eslint-disable-next-line import/no-extraneous-dependencies
 import FormData from 'form-data';
-import { In, Repository } from 'typeorm';
+import { In, Raw, Repository } from 'typeorm';
+import { JobQueueService } from '../../job-queue/job-queue.service';
+import { requireJobId } from '../../job-queue/job-queue.util';
+import { ContentPoolJobData, ContentPoolJobResult, readContentPoolProgress } from './content-pool-job';
+import {
+  contentPoolRequestOptions, maxEncodedContentPoolBytes, CONTENT_POOL_MAX_FILE_BYTES, CONTENT_POOL_MAX_TRANSFER_BYTES, CONTENT_POOL_MAX_FILES
+} from './content-pool-http';
+
 import FileUpload from '../../database/entities/file_upload.entity';
 import { Setting } from '../../database/entities/setting.entity';
 import { WorkspaceFilesService } from '../../database/services/workspace';
@@ -193,19 +202,14 @@ export class ContentPoolIntegrationService {
 
   private readonly applicationTokenSettingKey = 'system-content-pool-application-token';
 
-  private readonly importJobTtlMs = 30 * 60 * 1000;
-
-  private readonly importJobs = new Map<string, ContentPoolImportJobProgress>();
-
-  private readonly uploadFilesJobs = new Map<string, ContentPoolUploadFilesJobProgress>();
-
   constructor(
     @InjectRepository(Setting)
     private readonly settingRepository: Repository<Setting>,
     @InjectRepository(FileUpload)
     private readonly fileUploadRepository: Repository<FileUpload>,
     private readonly httpService: HttpService,
-    private readonly workspaceFilesService: WorkspaceFilesService
+    private readonly workspaceFilesService: WorkspaceFilesService,
+    private readonly jobQueueService: JobQueueService
   ) {}
 
   async getSettings(): Promise<ContentPoolSettings> {
@@ -383,9 +387,9 @@ export class ContentPoolIntegrationService {
 
   async importAcpFilesToWorkspace(
     input: ImportAcpToWorkspaceInput,
-    reportProgress?: (update: ContentPoolImportProgressUpdate) => void
+    reportProgress?: (update: ContentPoolImportProgressUpdate) => Promise<void> | void
   ): Promise<TestFilesUploadResultDto> {
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'authenticating',
       message: 'Content-Pool-Verbindung wird vorbereitet...',
       progress: 5
@@ -399,7 +403,7 @@ export class ContentPoolIntegrationService {
     }
 
     const apiBaseUrl = this.normalizeApiBaseUrl(settings.baseUrl);
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'checking-acp',
       message: 'ACP-Zugriff wird geprüft...',
       progress: 12
@@ -413,7 +417,7 @@ export class ContentPoolIntegrationService {
       );
     }
 
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'loading-files',
       message: 'Dateiliste des ACP wird geladen...',
       progress: 18
@@ -423,7 +427,7 @@ export class ContentPoolIntegrationService {
       settings.applicationToken,
       input.acpId
     );
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'downloading-files',
       message: 'Dateien werden aus dem Content Pool geladen...',
       processedFiles: 0,
@@ -448,7 +452,7 @@ export class ContentPoolIntegrationService {
       };
     }
 
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'uploading-files',
       message: 'Dateien werden in die Testdateien-Abteilung übernommen...',
       processedFiles: fileIos.length,
@@ -465,54 +469,22 @@ export class ContentPoolIntegrationService {
     );
   }
 
-  startAcpImportToWorkspace(input: ImportAcpToWorkspaceInput): { jobId: string } {
-    this.cleanupImportJobs();
-
-    const now = new Date().toISOString();
-    const jobId = randomUUID();
-    this.importJobs.set(jobId, {
-      jobId,
-      status: 'pending',
-      phase: 'queued',
-      message: 'Import wird vorbereitet...',
-      processedFiles: 0,
-      totalFiles: 0,
-      progress: 0,
-      createdAt: now,
-      updatedAt: now
-    });
-
-    this.runAcpImportJob(jobId, input).catch(() => {
-      this.updateImportJob(jobId, {
-        status: 'failed',
-        phase: 'failed',
-        message: 'ACP-Import fehlgeschlagen.',
-        progress: 100,
-        error: 'ACP konnte nicht importiert werden.'
-      });
-    });
-
-    return { jobId };
+  async startAcpImportToWorkspace(input: ImportAcpToWorkspaceInput): Promise<{ jobId: string }> {
+    const job = await this.jobQueueService.addContentPoolJob({ operation: 'import-acp', ...input });
+    return { jobId: requireJobId(job) };
   }
 
-  getAcpImportProgress(jobId: string): ContentPoolImportJobProgress {
-    const job = this.importJobs.get(jobId);
-    if (!job) {
-      throw new NotFoundException('Import-Job wurde nicht gefunden.');
-    }
-
-    return { ...job };
+  async getAcpImportProgress(workspaceId: number, jobId: string): Promise<ContentPoolImportJobProgress> {
+    return this.getContentPoolProgress(workspaceId, jobId, 'import-acp') as Promise<ContentPoolImportJobProgress>;
   }
 
   async uploadWorkspaceFilesToAcp(
     input: UploadWorkspaceFilesToAcpInput,
-    reportProgress?: (update: ContentPoolUploadProgressUpdate) => void
+    reportProgress?: (update: ContentPoolUploadProgressUpdate) => Promise<void> | void
   ): Promise<ContentPoolUploadFilesResult> {
-    if (!input.fileIds?.length) {
-      throw new BadRequestException('Mindestens eine Datei ist erforderlich.');
-    }
+    this.validateUploadInput(input);
 
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'authenticating',
       message: 'Content-Pool-Verbindung wird vorbereitet...',
       progress: 5
@@ -521,11 +493,8 @@ export class ContentPoolIntegrationService {
     const settings = await this.getRuntimeSettings();
     this.assertFeatureEnabled(settings);
 
-    if (!input.acpId || !input.acpId.trim()) {
-      throw new BadRequestException('acpId ist erforderlich.');
-    }
-
     const workspaceFiles = await this.fileUploadRepository.find({
+      select: ['id', 'filename', 'workspace_id'],
       where: {
         id: In(input.fileIds),
         workspace_id: input.workspaceId
@@ -544,7 +513,7 @@ export class ContentPoolIntegrationService {
 
     const apiBaseUrl = this.normalizeApiBaseUrl(settings.baseUrl);
 
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'checking-acp',
       message: 'ACP-Zugriff wird geprüft...',
       progress: 12
@@ -558,7 +527,7 @@ export class ContentPoolIntegrationService {
       );
     }
 
-    reportProgress?.({
+    await reportProgress?.({
       phase: 'loading-files',
       message: 'Dateiliste des ACP wird geladen...',
       progress: 18
@@ -597,7 +566,7 @@ export class ContentPoolIntegrationService {
           filename: workspaceFile.filename,
           reason: 'Nur Kodierschemata (.vocs) können im Content Pool ersetzt werden.'
         });
-        this.reportUploadFileProgress(
+        await this.reportUploadFileProgress(
           reportProgress,
           workspaceFile.filename,
           processedFiles,
@@ -615,7 +584,7 @@ export class ContentPoolIntegrationService {
           filename: workspaceFile.filename,
           reason: 'Keine Datei mit gleichem Namen im ACP gefunden.'
         });
-        this.reportUploadFileProgress(
+        await this.reportUploadFileProgress(
           reportProgress,
           workspaceFile.filename,
           processedFiles,
@@ -636,7 +605,7 @@ export class ContentPoolIntegrationService {
           replacementPlan.map(plan => plan.workspaceFile.filename).join(', ')
         }`;
 
-      reportProgress?.({
+      await reportProgress?.({
         phase: 'replacing-files',
         message: 'Kodierschemata werden im Content Pool ersetzt...',
         processedFiles,
@@ -671,7 +640,7 @@ export class ContentPoolIntegrationService {
             fileId: plan.workspaceFile.id,
             filename: plan.workspaceFile.filename
           });
-          this.reportUploadFileProgress(
+          await this.reportUploadFileProgress(
             reportProgress,
             plan.workspaceFile.filename,
             processedFiles,
@@ -690,7 +659,7 @@ export class ContentPoolIntegrationService {
               'Datei konnte nicht in den Content Pool übertragen werden.'
             )
           });
-          this.reportUploadFileProgress(
+          await this.reportUploadFileProgress(
             reportProgress,
             plan.workspaceFile.filename,
             processedFiles,
@@ -703,180 +672,34 @@ export class ContentPoolIntegrationService {
     return result;
   }
 
-  startUploadWorkspaceFilesToAcp(
-    input: UploadWorkspaceFilesToAcpInput
-  ): { jobId: string } {
-    this.cleanupUploadFilesJobs();
-
-    const now = new Date().toISOString();
-    const jobId = randomUUID();
-    this.uploadFilesJobs.set(jobId, {
-      jobId,
-      status: 'pending',
-      phase: 'queued',
-      message: 'Upload wird vorbereitet...',
-      processedFiles: 0,
-      totalFiles: input.fileIds?.length || 0,
-      progress: 0,
-      createdAt: now,
-      updatedAt: now
-    });
-
-    this.runUploadFilesJob(jobId, input).catch(() => {
-      this.updateUploadFilesJob(jobId, {
-        status: 'failed',
-        phase: 'failed',
-        message: 'Upload in den Content Pool fehlgeschlagen.',
-        progress: 100,
-        error: 'Dateien konnten nicht in den Content Pool übertragen werden.'
-      });
-    });
-
-    return { jobId };
+  private validateUploadInput(input: UploadWorkspaceFilesToAcpInput): void {
+    if (!input.fileIds?.length) throw new BadRequestException('Mindestens eine Datei ist erforderlich.');
+    if (input.fileIds.length > CONTENT_POOL_MAX_FILES) throw new PayloadTooLargeException('Too many Content-Pool files');
+    if (!input.acpId?.trim()) throw new BadRequestException('acpId ist erforderlich.');
   }
 
-  getUploadWorkspaceFilesProgress(jobId: string): ContentPoolUploadFilesJobProgress {
-    const job = this.uploadFilesJobs.get(jobId);
-    if (!job) {
-      throw new NotFoundException('Upload-Job wurde nicht gefunden.');
-    }
-
-    return { ...job };
+  async startUploadWorkspaceFilesToAcp(input: UploadWorkspaceFilesToAcpInput): Promise<{ jobId: string }> {
+    const job = await this.jobQueueService.addContentPoolJob({ operation: 'upload-files', ...input });
+    return { jobId: requireJobId(job) };
   }
 
-  private async runAcpImportJob(
-    jobId: string,
-    input: ImportAcpToWorkspaceInput
-  ): Promise<void> {
-    this.updateImportJob(jobId, {
-      status: 'running'
-    });
-
-    try {
-      const result = await this.importAcpFilesToWorkspace(
-        input,
-        update => this.updateImportJob(jobId, {
-          status: 'running',
-          ...update
-        })
-      );
-
-      this.updateImportJob(jobId, {
-        status: 'completed',
-        phase: 'completed',
-        message: 'ACP-Import abgeschlossen.',
-        progress: 100,
-        result
-      });
-    } catch (error) {
-      this.updateImportJob(jobId, {
-        status: 'failed',
-        phase: 'failed',
-        message: 'ACP-Import fehlgeschlagen.',
-        progress: 100,
-        error: this.extractExceptionMessage(
-          error,
-          'ACP konnte nicht importiert werden.'
-        )
-      });
-    }
+  async getUploadWorkspaceFilesProgress(workspaceId: number, jobId: string): Promise<ContentPoolUploadFilesJobProgress> {
+    return this.getContentPoolProgress(workspaceId, jobId, 'upload-files') as Promise<ContentPoolUploadFilesJobProgress>;
   }
 
-  private updateImportJob(
-    jobId: string,
-    update: Partial<ContentPoolImportJobProgress>
-  ): void {
-    const job = this.importJobs.get(jobId);
-    if (!job) {
-      return;
-    }
-
-    this.importJobs.set(jobId, {
-      ...job,
-      ...update,
-      updatedAt: new Date().toISOString()
-    });
+  private async getContentPoolProgress(workspaceId: number, jobId: string, operation: ContentPoolJobData['operation']) {
+    return readContentPoolProgress(
+      () => this.jobQueueService.getWorkspaceJob<ContentPoolJobData, ContentPoolJobResult>(workspaceId, 'content-pool', jobId), operation
+    );
   }
 
-  private cleanupImportJobs(): void {
-    const now = Date.now();
-    for (const [jobId, job] of this.importJobs.entries()) {
-      if (now - Date.parse(job.updatedAt) > this.importJobTtlMs) {
-        this.importJobs.delete(jobId);
-      }
-    }
-  }
-
-  private async runUploadFilesJob(
-    jobId: string,
-    input: UploadWorkspaceFilesToAcpInput
-  ): Promise<void> {
-    this.updateUploadFilesJob(jobId, {
-      status: 'running'
-    });
-
-    try {
-      const result = await this.uploadWorkspaceFilesToAcp(
-        input,
-        update => this.updateUploadFilesJob(jobId, {
-          status: 'running',
-          ...update
-        })
-      );
-
-      this.updateUploadFilesJob(jobId, {
-        status: 'completed',
-        phase: 'completed',
-        message: 'Upload in den Content Pool abgeschlossen.',
-        progress: 100,
-        result
-      });
-    } catch (error) {
-      this.updateUploadFilesJob(jobId, {
-        status: 'failed',
-        phase: 'failed',
-        message: 'Upload in den Content Pool fehlgeschlagen.',
-        progress: 100,
-        error: this.extractExceptionMessage(
-          error,
-          'Dateien konnten nicht in den Content Pool übertragen werden.'
-        )
-      });
-    }
-  }
-
-  private updateUploadFilesJob(
-    jobId: string,
-    update: Partial<ContentPoolUploadFilesJobProgress>
-  ): void {
-    const job = this.uploadFilesJobs.get(jobId);
-    if (!job) {
-      return;
-    }
-
-    this.uploadFilesJobs.set(jobId, {
-      ...job,
-      ...update,
-      updatedAt: new Date().toISOString()
-    });
-  }
-
-  private cleanupUploadFilesJobs(): void {
-    const now = Date.now();
-    for (const [jobId, job] of this.uploadFilesJobs.entries()) {
-      if (now - Date.parse(job.updatedAt) > this.importJobTtlMs) {
-        this.uploadFilesJobs.delete(jobId);
-      }
-    }
-  }
-
-  private reportUploadFileProgress(
-    reportProgress: ((update: ContentPoolUploadProgressUpdate) => void) | undefined,
+  private async reportUploadFileProgress(
+    reportProgress: ((update: ContentPoolUploadProgressUpdate) => Promise<void> | void) | undefined,
     fileName: string,
     processedFiles: number,
     totalFiles: number
-  ): void {
-    reportProgress?.({
+  ): Promise<void> {
+    await reportProgress?.({
       phase: 'replacing-files',
       message: `Datei verarbeitet: ${fileName}`,
       processedFiles,
@@ -998,9 +821,9 @@ export class ContentPoolIntegrationService {
     try {
       response = await this.httpService.axiosRef.get(
         `${apiBaseUrl}/server/capabilities`,
-        {
+        contentPoolRequestOptions({
           headers: this.getApplicationTokenHeaders(token)
-        }
+        })
       );
     } catch (error) {
       if (this.getErrorHttpStatus(error) === 404) {
@@ -1066,12 +889,12 @@ export class ContentPoolIntegrationService {
 
     await this.assertScopeProbe(
       'files.read',
-      () => this.httpService.axiosRef.get(filesUrl, { headers }),
+      () => this.httpService.axiosRef.get(filesUrl, contentPoolRequestOptions({ headers })),
       { acceptsFallbackAcpNotFound: isFallbackProbe }
     );
     await this.assertScopeProbe(
       'files.write',
-      () => this.httpService.axiosRef.post(uploadUrl, null, { headers }),
+      () => this.httpService.axiosRef.post(uploadUrl, null, contentPoolRequestOptions({ headers })),
       {
         acceptsEmptyUploadRejection: true,
         acceptsFallbackAcpNotFound: isFallbackProbe
@@ -1192,9 +1015,9 @@ export class ContentPoolIntegrationService {
     try {
       const response = await this.httpService.axiosRef.get(
         `${apiBaseUrl}/server/acp`,
-        {
+        contentPoolRequestOptions({
           headers: this.getApplicationTokenHeaders(token)
-        }
+        })
       );
 
       if (!Array.isArray(response.data)) {
@@ -1232,9 +1055,9 @@ export class ContentPoolIntegrationService {
     try {
       const response = await this.httpService.axiosRef.get(
         `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/files`,
-        {
+        contentPoolRequestOptions({
           headers: this.getApplicationTokenHeaders(token)
-        }
+        })
       );
 
       if (!Array.isArray(response.data)) {
@@ -1261,15 +1084,17 @@ export class ContentPoolIntegrationService {
     token: string,
     acpId: string,
     files: Array<{ id: string; originalName: string }>,
-    reportProgress?: (update: ContentPoolImportProgressUpdate) => void
+    reportProgress?: (update: ContentPoolImportProgressUpdate) => Promise<void> | void
   ): Promise<FileIo[]> {
+    if (files.length > CONTENT_POOL_MAX_FILES) throw new PayloadTooLargeException('Too many Content-Pool files');
     const fileIos: FileIo[] = [];
+    let totalBytes = 0;
     let processedFiles = 0;
 
     for (const file of files) {
       if (!file.id || !file.originalName) {
         processedFiles += 1;
-        reportProgress?.({
+        await reportProgress?.({
           phase: 'downloading-files',
           processedFiles,
           totalFiles: files.length,
@@ -1278,7 +1103,7 @@ export class ContentPoolIntegrationService {
         continue;
       }
 
-      reportProgress?.({
+      await reportProgress?.({
         phase: 'downloading-files',
         message: `Datei wird geladen: ${file.originalName}`,
         processedFiles,
@@ -1288,14 +1113,19 @@ export class ContentPoolIntegrationService {
       });
 
       try {
+        if (totalBytes >= CONTENT_POOL_MAX_TRANSFER_BYTES) throw new PayloadTooLargeException('Content-Pool import is too large');
         const response = await this.httpService.axiosRef.get(
           `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/files/${encodeURIComponent(file.id)}/download`,
-          {
+          contentPoolRequestOptions({
             headers: this.getApplicationTokenHeaders(token),
             responseType: 'arraybuffer'
-          }
+          }, Math.min(CONTENT_POOL_MAX_FILE_BYTES, CONTENT_POOL_MAX_TRANSFER_BYTES - totalBytes))
         );
         const buffer = Buffer.from(response.data);
+        totalBytes += buffer.length;
+        if (buffer.length > CONTENT_POOL_MAX_FILE_BYTES || totalBytes > CONTENT_POOL_MAX_TRANSFER_BYTES) {
+          throw new PayloadTooLargeException('Content-Pool import is too large');
+        }
 
         fileIos.push({
           fieldname: 'files',
@@ -1309,7 +1139,7 @@ export class ContentPoolIntegrationService {
           size: buffer.length
         });
         processedFiles += 1;
-        reportProgress?.({
+        await reportProgress?.({
           phase: 'downloading-files',
           message: `Datei geladen: ${file.originalName}`,
           processedFiles,
@@ -1378,9 +1208,31 @@ export class ContentPoolIntegrationService {
       versionNumber?: number;
     };
   }> {
+    if (replacementPlan.length > CONTENT_POOL_MAX_FILES) throw new PayloadTooLargeException('Too many Content-Pool files');
     const formData = new FormData();
+    let totalBytes = 0;
     for (const plan of replacementPlan) {
-      formData.append('files', this.decodeStoredFileData(plan.workspaceFile.data), {
+      const stored = await this.fileUploadRepository.findOne({
+        select: ['data'],
+        where: {
+          id: plan.workspaceFile.id,
+          workspace_id: plan.workspaceFile.workspace_id,
+          data: Raw(column => `octet_length(${column}) <= :maxEncodedBytes`, {
+            maxEncodedBytes: maxEncodedContentPoolBytes(Math.min(CONTENT_POOL_MAX_FILE_BYTES, CONTENT_POOL_MAX_TRANSFER_BYTES - totalBytes))
+          })
+        }
+      });
+      if (!stored) throw new PayloadTooLargeException('Content-Pool file is unavailable or too large');
+      const encoded = stored.data;
+      if (Buffer.byteLength(encoded) > maxEncodedContentPoolBytes(CONTENT_POOL_MAX_FILE_BYTES)) {
+        throw new PayloadTooLargeException('Content-Pool file is too large');
+      }
+      const buffer = this.decodeStoredFileData(encoded);
+      totalBytes += buffer.length;
+      if (buffer.length > CONTENT_POOL_MAX_FILE_BYTES || totalBytes > CONTENT_POOL_MAX_TRANSFER_BYTES) {
+        throw new PayloadTooLargeException('Content-Pool upload is too large');
+      }
+      formData.append('files', buffer, {
         filename: plan.targetFileName,
         contentType: this.inferMimeType(plan.targetFileName)
       });
@@ -1391,13 +1243,12 @@ export class ContentPoolIntegrationService {
       const response = await this.httpService.axiosRef.post(
         `${apiBaseUrl}/server/acp/${encodeURIComponent(acpId)}/coding-schemes/replace`,
         formData,
-        {
+        contentPoolRequestOptions({
           headers: {
             ...this.getApplicationTokenHeaders(token),
             ...formData.getHeaders()
-          },
-          maxBodyLength: Infinity
-        }
+          }
+        })
       );
       return response.data || {};
     } catch (error) {
@@ -1425,12 +1276,19 @@ export class ContentPoolIntegrationService {
     fallbackMessage: string,
     DefaultErrorType: new (message?: string) => Error = InternalServerErrorException
   ): never {
+    if (error instanceof HttpException) throw error;
     if ((error as AxiosError)?.isAxiosError) {
       const axiosError = error as AxiosError<{
         message?: string | string[];
         error?: string;
         error_description?: string;
       }>;
+      if (['ECONNABORTED', 'ETIMEDOUT', 'ERR_CANCELED'].includes(axiosError.code || '')) {
+        throw new GatewayTimeoutException('Content-Pool request timed out');
+      }
+      if (axiosError.code === 'ERR_BAD_RESPONSE' && /maxContentLength/.test(axiosError.message)) {
+        throw new PayloadTooLargeException('Content-Pool response is too large');
+      }
       const status = axiosError.response?.status;
       const responseMessage = this.extractResponseMessage(axiosError.response?.data);
       const details = responseMessage ? ` (${responseMessage})` : '';
@@ -1448,7 +1306,7 @@ export class ContentPoolIntegrationService {
       if (status === 404) {
         throw new NotFoundException(fullMessage);
       }
-      throw new InternalServerErrorException(fullMessage);
+      throw new BadGatewayException(fallbackMessage);
     }
 
     throw new DefaultErrorType(fallbackMessage);
