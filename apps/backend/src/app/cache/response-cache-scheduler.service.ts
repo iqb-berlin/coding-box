@@ -2,6 +2,7 @@ import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../database/services/workspace/workspace-constants';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { CacheService } from './cache.service';
 import Persons from '../database/entities/persons.entity';
@@ -23,7 +24,7 @@ interface ResponseCacheWarmupItem {
 @Injectable()
 export class ResponseCacheSchedulerService {
   private readonly logger = new Logger(ResponseCacheSchedulerService.name);
-  private readonly responseCacheVersionSuffix = ':v6';
+  private readonly responseCacheVersionSuffix = REPLAY_RESPONSE_CACHE_SUFFIX;
   private cacheAllResponsesInFlight: Promise<void> | null = null;
 
   constructor(

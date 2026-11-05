@@ -859,6 +859,9 @@ describe('WorkspaceTestResultsService', () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
       qb.getQueryAndParameters
+        .mockReturnValueOnce(['SELECT 1', [1]])
+        .mockReturnValueOnce(['SELECT 1', [1]])
+        .mockReturnValueOnce(['SELECT 1', [1]])
         .mockReturnValueOnce([
           'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
           [1]
@@ -868,6 +871,9 @@ describe('WorkspaceTestResultsService', () => {
           [1]
         ]);
       (dataSource.query as jest.Mock)
+        .mockResolvedValueOnce([{ facet: 'codeRows', values: ['C'] }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
@@ -885,34 +891,31 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.where).not.toHaveBeenCalledWith('session.os IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
       );
 
-      expect(dataSource.query).toHaveBeenCalledTimes(2);
-      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+      expect(dataSource.query).toHaveBeenCalledTimes(5);
+      expect(result.codes).toEqual(['C']);
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain('filtered AS MATERIALIZED');
+      expect((dataSource.query as jest.Mock).mock.calls[3][0]).toContain(
         'LEFT JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[3][0]).toContain(
         'first_duration.duration_ms < $2'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
+      expect((dataSource.query as jest.Mock).mock.calls[3][1]).toEqual([
         1,
         60000
       ]);
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[4][0]).toContain(
         'CROSS JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[4][0]).toContain(
         'COUNT(DISTINCT progress_unit.id)'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect((dataSource.query as jest.Mock).mock.calls[4][1]).toEqual([1]);
       expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
       expect(result.unitProgresses).toEqual([
         'Vollständig',

@@ -4,6 +4,7 @@ import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusNumberToString, statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { queryFlatResponseFacets } from './flat-response-facets.util';
 import { applyExclusionsToQuery, createGeoGebraUnitExistsCondition, excludeAutocoderGeneratedResponses } from './test-results.util';
 
 @Injectable()
@@ -463,102 +464,10 @@ export class TestResultsFilterOptionsService {
 
     // Note: Session filters above are applied as separate EXISTS per dimension.
 
-    const [
-      codeRows,
-      groupRows,
-      loginRows,
-      bookletRows,
-      unitRows,
-      responseRows,
-      responseStatusRows,
-      tagRows,
-      sessionBrowserRows,
-      sessionOsRows,
-      sessionScreenRows,
-      sessionIdRows
-    ] = await Promise.all([
-      baseQb
-        .clone()
-        .select('DISTINCT person.code', 'v')
-        .orderBy('person.code', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT person.group', 'v')
-        .orderBy('person.group', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT person.login', 'v')
-        .orderBy('person.login', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT bookletinfo.name', 'v')
-        .orderBy('bookletinfo.name', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'v')
-        .orderBy('v', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT response.variableid', 'v')
-        .orderBy('response.variableid', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT response.status', 'v')
-        .orderBy('response.status', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string | number }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT unitTag.tag', 'v')
-        .andWhere('unitTag.tag IS NOT NULL')
-        .orderBy('unitTag.tag', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.browser', 'v')
-        .andWhere('session.browser IS NOT NULL')
-        .orderBy('session.browser', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.os', 'v')
-        .andWhere('session.os IS NOT NULL')
-        .orderBy('session.os', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.screen', 'v')
-        .andWhere('session.screen IS NOT NULL')
-        .orderBy('session.screen', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.id', 'v')
-        .andWhere('session.id IS NOT NULL')
-        .orderBy('session.id', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>()
-    ]);
+    const {
+      codeRows, groupRows, loginRows, bookletRows, unitRows, responseRows,
+      responseStatusRows, tagRows, sessionBrowserRows, sessionOsRows, sessionScreenRows, sessionIdRows
+    } = await queryFlatResponseFacets(baseQb, this.connection, MAX_OPTIONS);
 
     const [processingDurationRows, unitProgressRows] = await Promise.all([
       this.queryFlatResponseProcessingDurationOptions(
