@@ -195,7 +195,12 @@ test('the vendored lint adapter is locked and available before Docker dependency
   const replayDockerfile = readFileSync(join(workspace, 'scripts/e2e/replay/Dockerfile'), 'utf8');
   assert.match(replayDockerfile.split('npm ci')[0], /COPY vendor \.\/vendor/);
   const rootDockerfile = readFileSync(join(workspace, 'Dockerfile'), 'utf8');
-  assert.match(rootDockerfile.split('npm ci')[0], /COPY \. \./);
+  const install = rootDockerfile.indexOf('npm ci --prefer-offline');
+  assert.ok(install > 0);
+  assert.match(rootDockerfile.slice(0, install), /COPY package\.json package-lock\.json \.\//);
+  assert.match(rootDockerfile.slice(0, install), /COPY vendor \.\/vendor/);
+  assert.ok(rootDockerfile.indexOf('COPY . .') > install,
+    'Application source must not invalidate the dependency installation');
   const dockerignore = readFileSync(join(workspace, '.dockerignore'), 'utf8');
   assert.doesNotMatch(dockerignore, /^\/?vendor(?:\/|\s*$)/m);
 });
