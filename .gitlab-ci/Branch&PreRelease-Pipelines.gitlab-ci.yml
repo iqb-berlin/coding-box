@@ -313,9 +313,8 @@ build-db-image:
           --cache-from ${DB_IMAGE_NAME}:latest
           --file database/Postgres.Dockerfile
           --tag ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
-          --tag ${DB_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${DB_IMAGE_NAME}
+    - docker push -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
@@ -351,9 +350,8 @@ build-liquibase-image:
           --cache-from ${LIQUIBASE_IMAGE_NAME}:latest
           --file database/Liquibase.Dockerfile
           --tag ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
-          --tag ${LIQUIBASE_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
+    - docker push -q ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
@@ -378,6 +376,7 @@ build-app:
 
 test-backend-container:
   stage: test
+  timeout: 2h
   retry: *proxy_image_pull_retry
   interruptible: true
   allow_failure: false
@@ -396,9 +395,18 @@ test-backend-container:
     - timeout 120 sh -c 'until docker info; do sleep 2; done'
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then echo "${CI_DEPENDENCY_PROXY_PASSWORD}" | docker login -u "${CI_DEPENDENCY_PROXY_USER}" --password-stdin "${CI_DEPENDENCY_PROXY_SERVER}"; fi
   script:
-    # Build the actual production Dockerfiles; keep both images in this job.
-    - docker build --progress plain --pull --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
-    - docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    # Cold, unchanged and source-only measurements use one job-local daemon.
+    - . tools/docker-build-benchmark/measure.sh
+    - measure cold-builder docker build --progress plain --pull --no-cache --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
+    - measure cold-runtime-base-pull docker pull --platform linux/amd64 ${DOCKER_HUB_PROXY}node:24.22.1-bookworm-slim
+    - measure cold-production docker build --progress plain --no-cache --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    - capture_production_image
+    - measure warm-builder docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
+    - measure warm-production docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    - source_change
+    - measure source-builder docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
+    - measure source-production docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    - restore_benchmark_source
     - docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} --version
     - >-
       docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} -e
@@ -418,6 +426,7 @@ test-backend-container:
     paths:
       - container-startup.log
       - dist/backend-container-proof/
+      - dist/docker-build-benchmark/
 
 test-db:
   stage: test-db

@@ -4,6 +4,7 @@ ARG REGISTRY_PATH=""
 
 
 FROM ${REGISTRY_PATH}node:24.22.1-bookworm AS builder
+ENV NX_SKIP_NX_CACHE=true NX_DAEMON=false NX_NO_CLOUD=true
 
 # Use the same npm version for build and runtime dependency installation.
 RUN npm --version
