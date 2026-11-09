@@ -1,0 +1,52 @@
+{
+  "variable": {
+    "REGISTRY_PATH": {
+      "default": ""
+    },
+    "BACKEND_IMAGE": {
+      "default": "coding-box-backend:local"
+    },
+    "NX_SKIP_NX_CACHE": {
+      "default": "false"
+    }
+  },
+  "group": {
+    "default": {
+      "targets": [
+        "backend"
+      ]
+    }
+  },
+  "target": {
+    "builder": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "target": "builder",
+      "args": {
+        "REGISTRY_PATH": "${REGISTRY_PATH}",
+        "NX_SKIP_NX_CACHE": "${NX_SKIP_NX_CACHE}"
+      },
+      "output": [
+        "type=cacheonly"
+      ]
+    },
+    "backend": {
+      "context": ".",
+      "dockerfile": "apps/backend/Dockerfile",
+      "target": "prod",
+      "contexts": {
+        "coding-box-base": "target:builder"
+      },
+      "args": {
+        "REGISTRY_PATH": "${REGISTRY_PATH}",
+        "PROJECT": "backend"
+      },
+      "tags": [
+        "${BACKEND_IMAGE}"
+      ],
+      "output": [
+        "type=docker"
+      ]
+    }
+  }
+}

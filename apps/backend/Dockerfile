@@ -11,11 +11,16 @@ FROM base AS dev
 ENTRYPOINT ["npx", "nx"]
 
 
-# The full builder supplies Python/make/g++ when a native prebuild requires a
+# The full Node image supplies Python/make/g++ when a native prebuild requires a
 # newer glibc. Compile against Bookworm and keep the toolchain out of runtime.
-FROM base AS dependencies
+FROM ${REGISTRY_PATH}node:24.22.1-bookworm AS dependencies
 ARG PROJECT
 ENV NODE_ENV=production
+
+# Keep the native compiler toolchain, but do not inherit application source or
+# development node_modules. Otherwise every source edit reruns production npm ci.
+RUN --mount=type=cache,target=/root/.npm \
+    npm install -g --no-fund npm@11.19.1
 
 USER node
 
@@ -28,7 +33,7 @@ COPY --chown=node:node --from=base /usr/src/coding-box-base/package.json /usr/sr
 # npm validates local override/link targets even when dev dependencies are omitted.
 COPY --chown=node:node --from=base /usr/src/coding-box-base/vendor ./vendor
 RUN --mount=type=cache,target=/home/node/.npm,uid=1000,gid=1000 \
-    npm ci --omit=dev --no-fund
+    npm ci --omit=dev --prefer-offline --no-fund
 
 
 FROM ${REGISTRY_PATH}node:24.22.1-bookworm-slim AS build
@@ -37,7 +42,8 @@ ENV NODE_ENV=production
 
 RUN --mount=type=cache,target=/var/cache/apt \
     apt update && \
-    apt install -y --no-install-recommends tini
+    apt install -y --no-install-recommends tini && \
+    rm -rf /var/lib/apt/lists/*
 
 RUN --mount=type=cache,target=/root/.npm \
     npm install -g --no-fund npm@11.19.1

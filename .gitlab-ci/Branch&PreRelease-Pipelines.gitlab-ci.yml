@@ -209,10 +209,10 @@ install-dependencies:
   needs: []
   cache:
     key:
+      prefix: npm-downloads-v1
       files:
         - package-lock.json
     paths:
-      - node_modules
       - .npm/
   script:
     - npm ci --cache .npm --prefer-offline --no-fund
@@ -313,9 +313,8 @@ build-db-image:
           --cache-from ${DB_IMAGE_NAME}:latest
           --file database/Postgres.Dockerfile
           --tag ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
-          --tag ${DB_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${DB_IMAGE_NAME}
+    - docker push -q ${DB_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
@@ -351,9 +350,8 @@ build-liquibase-image:
           --cache-from ${LIQUIBASE_IMAGE_NAME}:latest
           --file database/Liquibase.Dockerfile
           --tag ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
-          --tag ${LIQUIBASE_IMAGE_NAME}:latest
         .
-    - docker push -q -a ${LIQUIBASE_IMAGE_NAME}
+    - docker push -q ${LIQUIBASE_IMAGE_NAME}:${CI_COMMIT_SHA}
   after_script:
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then docker logout "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - docker logout ${REGISTRY}
@@ -393,12 +391,21 @@ test-backend-container:
       alias: docker
   before_script:
     - docker --version
+    - docker buildx version
     - timeout 120 sh -c 'until docker info; do sleep 2; done'
     - if [ -n "${DOCKER_HUB_PROXY}" ]; then echo "${CI_DEPENDENCY_PROXY_PASSWORD}" | docker login -u "${CI_DEPENDENCY_PROXY_USER}" --password-stdin "${CI_DEPENDENCY_PROXY_SERVER}"; fi
   script:
-    # Build the actual production Dockerfiles; keep both images in this job.
-    - docker build --progress plain --pull --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --target builder --tag coding-box-base:ci-${CI_JOB_ID} .
-    - docker build --progress plain --platform linux/amd64 --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg BASE_IMAGE_NAME=coding-box-base:ci-${CI_JOB_ID} --build-arg PROJECT=backend --file apps/backend/Dockerfile --target prod --tag coding-box-backend:ci-${CI_JOB_ID} .
+    # Cold, unchanged and source-only measurements use one job-local daemon.
+    - . tools/docker-build-benchmark/measure.sh
+    - measure cold-production docker buildx bake --file docker-bake.json --progress plain --set '*.platform=linux/amd64' --set "*.args.REGISTRY_PATH=${DOCKER_HUB_PROXY}" --set "*.no-cache=${DOCKER_BUILD_BENCHMARK:-false}" --set '*.pull=true' --set backend.tags=coding-box-backend:ci-${CI_JOB_ID} backend
+    - |
+      if [ "${DOCKER_BUILD_BENCHMARK:-false}" = true ]; then
+        capture_production_image
+        measure warm-production docker buildx bake --file docker-bake.json --progress plain --set '*.platform=linux/amd64' --set "*.args.REGISTRY_PATH=${DOCKER_HUB_PROXY}" --set backend.tags=coding-box-backend:ci-${CI_JOB_ID} backend
+        source_change
+        measure source-production docker buildx bake --file docker-bake.json --progress plain --set '*.platform=linux/amd64' --set "*.args.REGISTRY_PATH=${DOCKER_HUB_PROXY}" --set backend.tags=coding-box-backend:ci-${CI_JOB_ID} backend
+        restore_benchmark_source
+      fi
     - docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} --version
     - >-
       docker run --rm --entrypoint node coding-box-backend:ci-${CI_JOB_ID} -e
@@ -418,6 +425,7 @@ test-backend-container:
     paths:
       - container-startup.log
       - dist/backend-container-proof/
+      - dist/docker-build-benchmark/
 
 test-db:
   stage: test-db

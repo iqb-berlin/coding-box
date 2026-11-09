@@ -1,6 +1,6 @@
 <div class="chart-scroll">
   <div class="canvas-container" [style.width.px]="width()" [style.height.px]="height()">
-    <canvas #canvas [attr.width]="width()" [attr.height]="height()" role="img"
+    <canvas #canvas role="img"
       [attr.aria-label]="xAxisLabel() + ': ' + yAxisLabel()"
       [attr.aria-describedby]="tableToggleId">
       {{ 'charts.show-data-table' | translate }}
