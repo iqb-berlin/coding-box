@@ -5,6 +5,12 @@ import { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { Repository } from 'typeorm';
 import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingProcessService } from './coding-process.service';
+import { AutocoderBatchDataService } from './autocoder-batch-data.service';
+import { AutocoderEngineService } from './autocoder-engine.service';
+import { AutocoderDerivedService } from './autocoder-derived.service';
+import { AutocoderSchemeService } from './autocoder-scheme.service';
+import { AutocoderResponseService } from './autocoder-response.service';
+
 import { JobQueueService } from '../../../job-queue/job-queue.service';
 
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
@@ -46,6 +52,10 @@ jest.mock('cheerio', () => ({
 
 describe('CodingProcessService', () => {
   let service: CodingProcessService;
+  let engine: AutocoderEngineService;
+  let derived: AutocoderDerivedService;
+  let schemes: AutocoderSchemeService;
+  let responseService: AutocoderResponseService;
   let personsRepository: Repository<Persons>;
   let bookletRepository: Repository<Booklet>;
   let unitRepository: Repository<Unit>;
@@ -261,6 +271,12 @@ describe('CodingProcessService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         CodingProcessService,
+        AutocoderBatchDataService,
+        AutocoderEngineService,
+        AutocoderDerivedService,
+        AutocoderSchemeService,
+        AutocoderResponseService,
+
         {
           provide: WorkspaceExclusionService,
           useValue: mockWorkspaceExclusionService
@@ -304,6 +320,10 @@ describe('CodingProcessService', () => {
     }).compile();
 
     service = module.get<CodingProcessService>(CodingProcessService);
+    engine = module.get(AutocoderEngineService);
+    derived = module.get(AutocoderDerivedService);
+    schemes = module.get(AutocoderSchemeService);
+    responseService = module.get(AutocoderResponseService);
     personsRepository = module.get<Repository<Persons>>(getRepositoryToken(Persons));
     bookletRepository = module.get<Repository<Booklet>>(getRepositoryToken(Booklet));
     unitRepository = module.get<Repository<Unit>>(getRepositoryToken(Unit));
@@ -588,9 +608,21 @@ describe('CodingProcessService', () => {
     });
 
     it.each<[string, number]>([
+      ['startup', 1],
+      ['person loading', 2],
+      ['booklet loading', 3],
+      ['unit loading', 4],
+      ['unit mapping', 5],
+      ['response loading', 6],
+      ['readiness filtering', 7],
+      ['response mapping', 8],
+      ['test file loading', 9],
       ['coding scheme extraction', 10],
+      ['coding scheme mapping', 11],
       ['coding scheme loading', 12],
-      ['response processing', 14]
+      ['coding scheme parsing', 13],
+      ['response processing', 14],
+      ['response processing completion', 15]
     ])('does not open a transaction when cancelled during %s', async (
       _stage,
       pauseOnCheck
@@ -1198,7 +1230,7 @@ describe('CodingProcessService', () => {
       generatedResponse.is_autocoder_generated = true;
       generatedResponse.status_v1 = 7;
       const isLegacyGeneratedInvalidDerivedResponse = (
-        service as unknown as {
+        derived as unknown as {
           isLegacyGeneratedInvalidDerivedResponse: (
             response: ResponseEntity,
             inputStatus: number,
@@ -1207,7 +1239,7 @@ describe('CodingProcessService', () => {
             variableCodings: object[]
           ) => boolean;
         }
-      ).isLegacyGeneratedInvalidDerivedResponse.bind(service);
+      ).isLegacyGeneratedInvalidDerivedResponse.bind(derived);
 
       expect(isLegacyGeneratedInvalidDerivedResponse(
         generatedResponse,
@@ -1773,7 +1805,7 @@ describe('CodingProcessService', () => {
       derivedResponse.code_v2 = 4;
       derivedResponse.score_v2 = 0;
       const warnSpy = jest.spyOn(
-        (service as unknown as {
+        (responseService as unknown as {
           logger: { warn: (message: string) => void };
         }).logger,
         'warn'
@@ -2360,7 +2392,7 @@ describe('CodingProcessService', () => {
       derivedResponse.code_v2 = null;
       derivedResponse.score_v2 = null;
       const warnSpy = jest.spyOn(
-        (service as unknown as {
+        (responseService as unknown as {
           logger: { warn: (message: string) => void };
         }).logger,
         'warn'
@@ -2571,13 +2603,13 @@ describe('CodingProcessService', () => {
 
     it('should scope coding scheme cache entries by workspace', async () => {
       const getCodingSchemesWithCache = (
-        service as unknown as {
+        schemes as unknown as {
           getCodingSchemesWithCache: (
             workspaceId: number,
             codingSchemeRefs: string[]
           ) => Promise<Map<string, unknown>>;
         }
-      ).getCodingSchemesWithCache.bind(service);
+      ).getCodingSchemesWithCache.bind(schemes);
 
       (fileUploadRepository.find as jest.Mock)
         .mockReset()
@@ -2798,7 +2830,7 @@ describe('CodingProcessService', () => {
         ['05', '09']
       ]);
       const resolveResponse = (
-        service as unknown as {
+        responseService as unknown as {
           findExistingResponseForAutocoderResult: (
             responses: ResponseEntity[],
             codedResultId: string,
@@ -2806,7 +2838,7 @@ describe('CodingProcessService', () => {
             technicalIdFallbackByAlias: Map<string, string>
           ) => ResponseEntity | undefined;
         }
-      ).findExistingResponseForAutocoderResult.bind(service);
+      ).findExistingResponseForAutocoderResult.bind(responseService);
       const responses = [
         response02,
         response04,
@@ -2842,7 +2874,7 @@ describe('CodingProcessService', () => {
         ['02', 'TECHNICAL_04']
       ]);
       const resolveResponse = (
-        service as unknown as {
+        responseService as unknown as {
           findExistingResponseForAutocoderResult: (
             responses: ResponseEntity[],
             codedResultId: string,
@@ -2850,7 +2882,7 @@ describe('CodingProcessService', () => {
             technicalIdFallbackByAlias: Map<string, string>
           ) => ResponseEntity | undefined;
         }
-      ).findExistingResponseForAutocoderResult.bind(service);
+      ).findExistingResponseForAutocoderResult.bind(responseService);
 
       expect(resolveResponse(
         [importedTechnicalIdCollision],
@@ -2867,7 +2899,7 @@ describe('CodingProcessService', () => {
     });
 
     it('excludes technical IDs that are also another output alias', () => {
-      const serviceInternals = service as unknown as {
+      const serviceInternals = responseService as unknown as {
         createUnambiguousTechnicalIdFallbacks: (
           variableCodings: Array<{ id: string; alias?: string }>
         ) => Map<string, string>;
@@ -2993,7 +3025,7 @@ describe('CodingProcessService', () => {
 
     it('rejects multiple autocoder results for the same persistence target', () => {
       const assertUniqueTargets = (
-        service as unknown as {
+        responseService as unknown as {
           assertUniqueAutocoderPersistenceTargets: (
             responses: Array<{
               id: number;
@@ -3004,7 +3036,7 @@ describe('CodingProcessService', () => {
             }>
           ) => void;
         }
-      ).assertUniqueAutocoderPersistenceTargets.bind(service);
+      ).assertUniqueAutocoderPersistenceTargets.bind(responseService);
 
       expect(() => assertUniqueTargets([
         { id: 10 },
@@ -3035,13 +3067,13 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<Record<string, unknown>>,
             variableCodings: VariableCodingData[]
           ) => Array<Record<string, unknown>>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const input = {
         id: 'public-alias',
         subform: 'part-a',
@@ -3080,13 +3112,13 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<Record<string, unknown>>,
             variableCodings: VariableCodingData[]
           ) => Array<Record<string, unknown>>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const result = codeResponses([{
         id: 'A', value, status: 'VALUE_CHANGED', subform: 'part-a'
       }], [
@@ -3123,7 +3155,7 @@ describe('CodingProcessService', () => {
 
     it('rejects genuinely duplicate output aliases before coding', () => {
       const createNamespace = (
-        service as unknown as {
+        engine as unknown as {
           createAutocoderNamespace: (
             variableCodings: Array<{
               id: string;
@@ -3132,7 +3164,7 @@ describe('CodingProcessService', () => {
             }>
           ) => unknown;
         }
-      ).createAutocoderNamespace.bind(service);
+      ).createAutocoderNamespace.bind(engine);
 
       expect(() => createNamespace([
         { id: 'technical-a', alias: 'DUPLICATE', sourceType: 'BASE' },
@@ -3143,12 +3175,12 @@ describe('CodingProcessService', () => {
 
     it('rewrites solver alias references to the canonical technical namespace', () => {
       const createNamespace = (
-        service as unknown as {
+        engine as unknown as {
           createAutocoderNamespace: (
             variableCodings: VariableCodingData[]
           ) => { variableCodings: VariableCodingData[] };
         }
-      ).createAutocoderNamespace.bind(service);
+      ).createAutocoderNamespace.bind(engine);
       const namespace = createNamespace([
         {
           id: 'text-field_1',
@@ -3188,13 +3220,13 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<Record<string, unknown>>,
             variableCodings: VariableCodingData[]
           ) => Array<Record<string, unknown>>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const variableCodings: VariableCodingData[] = [
         {
           id: 'text-field_1',
@@ -3283,13 +3315,13 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<Record<string, unknown>>,
             variableCodings: VariableCodingData[]
           ) => Array<Record<string, unknown>>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const variableCodings: VariableCodingData[] = [
         { id: '11a', sourceType: 'BASE' },
         { id: '11b', sourceType: 'BASE' },
@@ -3384,10 +3416,10 @@ describe('CodingProcessService', () => {
       ]
     ])('rejects unsafe BASE_NO_VALUE shadowing with %s', (_case, codings) => {
       const createNamespace = (
-        service as unknown as {
+        engine as unknown as {
           createAutocoderNamespace: (variableCodings: object[]) => unknown;
         }
-      ).createAutocoderNamespace.bind(service);
+      ).createAutocoderNamespace.bind(engine);
 
       expect(() => createNamespace(codings)).toThrow(
         'duplicate output alias "01"'
@@ -3524,7 +3556,7 @@ describe('CodingProcessService', () => {
       'rejects $description',
       ({ storedIds, generatedIds = storedIds, expectedEvidence }) => {
         const codeResponses = (
-          service as unknown as {
+          engine as unknown as {
             codeAutocoderResponses: (
               responses: Array<{
                 id: string;
@@ -3544,7 +3576,7 @@ describe('CodingProcessService', () => {
               }>
             ) => unknown;
           }
-        ).codeAutocoderResponses.bind(service);
+        ).codeAutocoderResponses.bind(engine);
         const responses = storedIds.map(id => ({
           id,
           value: `${id}-value`,
@@ -3572,7 +3604,7 @@ describe('CodingProcessService', () => {
 
     it('accepts a lone ambiguous generated UNSET placeholder', () => {
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<{
               id: string;
@@ -3594,7 +3626,7 @@ describe('CodingProcessService', () => {
             }>
           ) => unknown;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       (Autocoder.CodingSchemeFactory.code as jest.Mock).mockReturnValueOnce([]);
 
       expect(() => codeResponses([
@@ -3635,7 +3667,7 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementationOnce(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: Array<{
               id: string;
@@ -3657,7 +3689,7 @@ describe('CodingProcessService', () => {
             subform?: string;
           }>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
 
       const results = codeResponses([
         {
@@ -4039,7 +4071,7 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: object[],
             variableCodings: object[],
@@ -4051,7 +4083,7 @@ describe('CodingProcessService', () => {
             score?: number;
           }>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const variableCodings = [
         { id: '01a', sourceType: 'BASE' },
         {
@@ -4121,7 +4153,7 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: object[],
             variableCodings: object[]
@@ -4132,7 +4164,7 @@ describe('CodingProcessService', () => {
             score?: number;
           }>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const variableCodings = [
         ...['01a', '01b', '01c', '01d'].map(id => ({
           id,
@@ -4192,7 +4224,7 @@ describe('CodingProcessService', () => {
       (Autocoder.CodingSchemeFactory.code as jest.Mock)
         .mockImplementation(actualAutocoder.CodingSchemeFactory.code);
       const codeResponses = (
-        service as unknown as {
+        engine as unknown as {
           codeAutocoderResponses: (
             responses: object[],
             variableCodings: object[]
@@ -4203,7 +4235,7 @@ describe('CodingProcessService', () => {
             code?: number;
           }>;
         }
-      ).codeAutocoderResponses.bind(service);
+      ).codeAutocoderResponses.bind(engine);
       const derivedCoding = (
         id: string,
         alias: string,
@@ -4417,9 +4449,9 @@ describe('CodingProcessService', () => {
 
       await service.processTestPersonsBatch(workspaceId, personIds, autoCoderRun, progressCallback, jobId);
 
-      expect(progressCallback).toHaveBeenCalledWith(0);
-      // Validating just a few main points to ensure callback is called
-      expect(progressCallback).toHaveBeenCalledWith(100);
+      expect(progressCallback.mock.calls.map(([progress]) => progress)).toEqual([
+        0, 10, 20, 30, 40, 50, 60, 70, 80, 85, 90, 95, 100
+      ]);
     });
   });
 });
