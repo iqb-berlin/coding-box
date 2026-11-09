@@ -92,6 +92,7 @@ export class VerticalBarChartComponent {
           // The dialog supplies its observed dimensions. Explicit resizing also
           // gives scrollable charts a stable minimum category width.
           responsive: false,
+          maintainAspectRatio: false,
           color,
           font: { family: styles?.fontFamily || 'sans-serif' },
           animation: reducedMotion ? false : { duration: 500, easing: 'easeOutQuart' },
@@ -131,6 +132,10 @@ export class VerticalBarChartComponent {
           this.chart.resize(width, height);
           this.chart.update(reducedMotion ? 'none' : undefined);
         } else {
+          // Chart.js owns bitmap dimensions after initialization. Angular
+          // attribute bindings would clear the canvas during an animated resize.
+          canvas.width = width;
+          canvas.height = height;
           this.chart = new Chart(canvas, configuration);
         }
       });

@@ -83,6 +83,7 @@ describe('Chart.js bar charts without Zone or the Angular animations engine', ()
     const bar = instance.getDatasetMeta(0).data[0];
     expect(instance.data.datasets[0].data).toEqual([0.2, 0.1]);
     expect(instance.width).toBe(440);
+    expect(instance.height).toBe(380);
     fixture.componentRef.setInput('view', [900, 520]);
     await fixture.whenStable();
     expect(chart()).toBe(instance);
@@ -92,13 +93,19 @@ describe('Chart.js bar charts without Zone or the Angular animations engine', ()
   });
 
   it('uses measured tick spacing for 30 dates rather than forcing a colliding final tick', async () => {
+    const context = chart().ctx;
+    const metrics = context.measureText('');
+    // The canvas mock uses one pixel per character. Supply crowded labels so
+    // this test exercises tick skipping rather than depending on that shortcut.
+    jest.spyOn(context, 'measureText').mockImplementation(text => ({
+      ...metrics, width: text.length * 7
+    }));
     fixture.componentRef.setInput('results', Array.from({ length: 30 }, (_, index) => ({
       name: `2026-09-${String(index + 1).padStart(2, '0')}`, value: 4
     })));
     fixture.componentRef.setInput('view', [600, 460]);
     await fixture.whenStable();
     const axis = chart().scales.x;
-    const context = chart().ctx;
     context.font = '12px "Helvetica Neue", "Helvetica", "Arial", sans-serif';
     const boxes = axis.ticks.map(tick => ({
       center: axis.getPixelForValue(tick.value),

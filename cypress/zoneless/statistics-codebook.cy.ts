@@ -180,9 +180,22 @@ describe('Zoneless replay statistics and codebook export', () => {
       .should(canvas => { expectDrawnChart(canvas[0] as HTMLCanvasElement); });
     cy.get('@statisticsDialog').find('mat-dialog-actions button').click();
     cy.get('coding-box-replay-statistics-dialog').should('not.exist');
-    cy.get('coding-box-ws-settings .replay-statistics-actions button').click();
-    cy.get('coding-box-replay-statistics-dialog canvas').should('have.length', 1)
-      .should(canvas => { expectDrawnChart(canvas[0] as HTMLCanvasElement); });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      cy.get('coding-box-ws-settings .replay-statistics-actions button').click();
+      cy.wait('@finalStatistics');
+      cy.get('coding-box-replay-statistics-dialog canvas').should('have.length', 1)
+        .should(canvas => {
+          const element = canvas[0] as HTMLCanvasElement;
+          expectDrawnChart(element);
+          const pixel = element.getContext('2d')!.getImageData(
+            Math.floor(element.width / 2), Math.floor(element.height / 4), 1, 1
+          ).data;
+          expect([...pixel].slice(0, 3), 'Reopened bar reaches the upper chart area').to.deep.equal([100, 124, 138]);
+        });
+      if (attempt === 2) cy.screenshot('chartjs-replay-reopened', { capture: 'viewport' });
+      cy.get('coding-box-replay-statistics-dialog mat-dialog-actions button').click();
+      cy.get('coding-box-replay-statistics-dialog').should('not.exist');
+    }
   });
 
   for (const outcome of ['completed', 'failed']) {
