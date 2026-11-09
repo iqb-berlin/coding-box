@@ -395,7 +395,7 @@ describe('CodingStatisticsService', () => {
         .mockResolvedValue({ Unit1: ['var1'] });
     });
 
-    it.skip('should use COALESCE for v2 version query', async () => {
+    it('should use COALESCE for v2 version query', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -408,7 +408,7 @@ describe('CodingStatisticsService', () => {
       expect(queryCall[0]).toContain('code_v2');
     });
 
-    it.skip('should use v3 effective status expression', async () => {
+    it('should use v3 effective status expression', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);

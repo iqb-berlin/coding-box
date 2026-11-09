@@ -642,66 +642,86 @@ describe('Zoneless manual preparation workflows', () => {
     });
   }
 
-  it('filters delayed variable cards after debounce and saves precisely the selected filtered variable', () => {
-    setup();
-    cy.intercept('POST', '**/api/admin/workspace/5/variable-bundle', request => {
-      request.reply({ delay: 400, body: { ...request.body, id: 9, created_at: '2026-10-03', updated_at: '2026-10-03' } });
-    }).as('saveBundle');
-    openManual();
-    cy.contains('.manual-coding-tabs [role="tab"]', 'Vorbereitung').click();
-    cy.contains('.statistics-card > .header-row > .header-actions button', 'Aktualisieren').click();
-    const variablesGate = gate();
-    let requested = false;
-    cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables?*', async request => {
-      requested = true;
-      await variablesGate.wait;
-      request.reply({ body: variables });
-    }).as('bundleVariables');
-    cy.contains('coding-box-variable-bundle-manager button', 'Variablenbündel erstellen').click();
-    cy.wrap(null).should(() => { expect(requested).to.equal(true); });
-    cy.get('coding-box-variable-bundle-dialog').should('not.exist');
-    cy.then(() => variablesGate.release());
-    cy.wait('@bundleVariables');
-    cy.get('coding-box-variable-bundle-dialog').as('bundle');
-    // Let Material finish its initial focus before typing into another control.
-    cy.get('@bundle').find('input[formControlName="name"]').should('be.focused');
-    cy.get('@bundle').find('.variable-card').should('have.length', 3);
-    cy.get('@bundle').find('input[placeholder="Filter nach Aufgaben-ID"]').focus().type('UNIT_A');
-    cy.get('@bundle').find('input[placeholder="Filter nach Aufgaben-ID"]').should('have.value', 'UNIT_A');
-    cy.get('@bundle').find('.variable-card').should('have.length', 2);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 2');
-    cy.get('@bundle').find('input[placeholder="Filter nach Variablen-ID"]').focus().type('missing');
-    cy.get('@bundle').find('.variable-card').should('not.exist');
-    cy.get('@bundle').find('input[placeholder="Filter nach Variablen-ID"]').clear().type('VAR_2');
-    cy.get('@bundle').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_A_VAR_2')
-      .focus().should('have.focus');
-    cy.press(Cypress.Keyboard.Keys.ENTER);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
-    cy.press(Cypress.Keyboard.Keys.SPACE);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
-    cy.press(Cypress.Keyboard.Keys.SPACE);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
-    cy.get('@bundle').find('.variable-card input[type="checkbox"]').focus().should('have.focus');
-    cy.press(Cypress.Keyboard.Keys.SPACE);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
-    cy.press(Cypress.Keyboard.Keys.SPACE);
-    cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
-    cy.get('@bundle').find('input[formControlName="name"]').focus().clear().type('Filtered bundle');
-    cy.get('@bundle').contains('button', 'Filter zurücksetzen').click();
-    cy.get('@bundle').find('.variable-card').should('have.length', 3);
-    cy.get('@bundle').find('.variable-card.selected').should('have.length', 1);
-    cy.get('@bundle').find('.dialog-actions').should('be.visible');
-    cy.get('@bundle').find('.dialog-actions').contains('button', 'Erstellen').click();
-    cy.wait('@saveBundle').then(({ request, response }) => {
-      expect(response?.statusCode).to.equal(200);
-      expect(request.body.variables.map((variable: { unitName: string; variableId: string }) => ({
-        unitName: variable.unitName, variableId: variable.variableId
-      }))).to.deep.equal([{ unitName: 'UNIT_A', variableId: 'VAR_2' }]);
-      expect(request.body.name).to.equal('Filtered bundle');
+  function bundleInput(selector: string): Cypress.Chainable<JQuery<HTMLInputElement>> {
+    // Click the associated label as a user would, then wait for Material's floating
+    // label to leave the input center. focus() alone skips these actionability checks.
+    cy.get('@bundle').find(selector).closest('mat-form-field').find('label')
+      .click();
+    return cy.get('@bundle').find<HTMLInputElement>(selector).should('be.focused').should(inputs => {
+      const input = inputs[0];
+      const {
+        left, top, width, height
+      } = input.getBoundingClientRect();
+      expect(input.ownerDocument.elementFromPoint(left + width / 2, top + height / 2),
+        'input center is clear after the floating-label transition').to.equal(input);
     });
-    cy.get('coding-box-variable-bundle-dialog').should('not.exist');
-    cy.get('mat-snack-bar-container').should('contain.text', 'wurde erstellt');
-  });
+  }
+
+  for (const slowLabels of [false, true]) {
+    it(`filters delayed variable cards after debounce and saves precisely the selected filtered variable${slowLabels ? ' with slow floating labels' : ''}`, () => {
+      setup();
+      cy.intercept('POST', '**/api/admin/workspace/5/variable-bundle', request => {
+        request.reply({ delay: 400, body: { ...request.body, id: 9, created_at: '2026-10-03', updated_at: '2026-10-03' } });
+      }).as('saveBundle');
+      openManual();
+      cy.contains('.manual-coding-tabs [role="tab"]', 'Vorbereitung').click();
+      cy.contains('.statistics-card > .header-row > .header-actions button', 'Aktualisieren').click();
+      const variablesGate = gate();
+      let requested = false;
+      cy.intercept('GET', '**/api/admin/workspace/5/coding/incomplete-variables?*', async request => {
+        requested = true;
+        await variablesGate.wait;
+        request.reply({ body: variables });
+      }).as('bundleVariables');
+      cy.contains('coding-box-variable-bundle-manager button', 'Variablenbündel erstellen').click();
+      cy.wrap(null).should(() => { expect(requested).to.equal(true); });
+      cy.get('coding-box-variable-bundle-dialog').should('not.exist');
+      cy.then(() => variablesGate.release());
+      cy.wait('@bundleVariables');
+      cy.get('coding-box-variable-bundle-dialog').as('bundle');
+      // Let Material finish its initial focus before typing into another control.
+      cy.get('@bundle').find('input[formControlName="name"]').should('be.focused');
+      cy.get('@bundle').find('.variable-card').should('have.length', 3);
+      if (slowLabels) cy.get('@bundle').find('label').invoke('css', 'transition-duration', '800ms');
+      bundleInput('input[placeholder="Filter nach Aufgaben-ID"]').type('UNIT_A');
+      cy.get('@bundle').find('input[placeholder="Filter nach Aufgaben-ID"]').should('have.value', 'UNIT_A');
+      cy.get('@bundle').find('.variable-card').should('have.length', 2);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 2');
+      bundleInput('input[placeholder="Filter nach Variablen-ID"]').type('missing');
+      cy.get('@bundle').find('.variable-card').should('not.exist');
+      bundleInput('input[placeholder="Filter nach Variablen-ID"]').clear();
+      bundleInput('input[placeholder="Filter nach Variablen-ID"]').type('VAR_2');
+      cy.get('@bundle').find('.variable-card').should('have.length', 1).and('contain.text', 'UNIT_A_VAR_2')
+        .focus().should('have.focus');
+      cy.press(Cypress.Keyboard.Keys.ENTER);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
+      cy.press(Cypress.Keyboard.Keys.SPACE);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
+      cy.press(Cypress.Keyboard.Keys.SPACE);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
+      cy.get('@bundle').find('.variable-card input[type="checkbox"]').focus().should('have.focus');
+      cy.press(Cypress.Keyboard.Keys.SPACE);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '0 von 1');
+      cy.press(Cypress.Keyboard.Keys.SPACE);
+      cy.get('@bundle').find('.selection-count').should('contain.text', '1 von 1');
+      bundleInput('input[formControlName="name"]').clear();
+      bundleInput('input[formControlName="name"]').type('Filtered bundle');
+      cy.get('@bundle').contains('button', 'Filter zurücksetzen').click();
+      cy.get('@bundle').find('.variable-card').should('have.length', 3);
+      cy.get('@bundle').find('.variable-card.selected').should('have.length', 1);
+      cy.get('@bundle').find('.dialog-actions').should('be.visible');
+      cy.get('@bundle').find('.dialog-actions').contains('button', 'Erstellen').click();
+      cy.wait('@saveBundle').then(({ request, response }) => {
+        expect(response?.statusCode).to.equal(200);
+        expect(request.body.variables.map((variable: { unitName: string; variableId: string }) => ({
+          unitName: variable.unitName, variableId: variable.variableId
+        }))).to.deep.equal([{ unitName: 'UNIT_A', variableId: 'VAR_2' }]);
+        expect(request.body.name).to.equal('Filtered bundle');
+      });
+      cy.get('coding-box-variable-bundle-dialog').should('not.exist');
+      cy.get('mat-snack-bar-container').should('contain.text', 'wurde erstellt');
+    });
+  }
 
   function openBulk(): void {
     cy.contains('.manual-coding-tabs [role="tab"]', 'Planung').click();
