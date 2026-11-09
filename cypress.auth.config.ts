@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress';
+import { registerCypressReporting } from './scripts/qa/cypress-reporting.cjs';
 import { createReplayHarness } from './scripts/e2e/replay/harness.mjs';
 import { expireAuthSession, setAuthProviderAvailable } from './scripts/e2e/replay/auth-fixture.mjs';
 
@@ -13,7 +14,7 @@ export default defineConfig({
     baseUrl: process.env.REPLAY_E2E_BASE_URL,
     specPattern: 'cypress/auth/**/*.cy.ts',
     supportFile: 'cypress/support/replay-e2e.ts',
-    setupNodeEvents(on) {
+    setupNodeEvents(on, config) {
       const harness = createReplayHarness(process.env);
       on('task', {
         'coding:setup': () => harness.setup(),
@@ -23,7 +24,7 @@ export default defineConfig({
         'coding:set-provider-available': (available: boolean) => setAuthProviderAvailable(available),
         'coding:cleanup': () => harness.cleanup()
       });
-      on('after:run', () => harness.cleanup());
+      registerCypressReporting(on, config, 'auth-live', () => harness.cleanup());
     }
   }
 });

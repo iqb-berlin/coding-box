@@ -1,4 +1,5 @@
 import { defineConfig } from 'cypress';
+import { registerCypressReporting } from './scripts/qa/cypress-reporting.cjs';
 import { createReplayHarness } from './scripts/e2e/replay/harness.mjs';
 
 export default defineConfig({
@@ -17,14 +18,14 @@ export default defineConfig({
         'cypress/e2e/item-matrix-live.cy.ts'
       ],
     supportFile: 'cypress/support/replay-e2e.ts',
-    setupNodeEvents(on) {
+    setupNodeEvents(on, config) {
       const harness = createReplayHarness(process.env);
       on('task', {
         'replay:setup': () => harness.setup(),
         'item-matrix:verify': () => harness.verifyItemMatrix(),
         'replay:cleanup': () => harness.cleanup()
       });
-      on('after:run', () => harness.cleanup());
+      registerCypressReporting(on, config, 'replay-live', () => harness.cleanup());
     }
   }
 });

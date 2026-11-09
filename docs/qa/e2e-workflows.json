@@ -1,0 +1,237 @@
+{
+  "schemaVersion": 1,
+  "scope": "Versionierter Katalog zentraler Kodierbox-Abläufe; keine vollständige Inventur aller Funktionen, Rollen oder Varianten. Live-Nachweise können Browser-, API- und Datenbankprüfungen kombinieren.",
+  "workflows": [
+    {
+      "id": "WF-001",
+      "name": "Anmeldung und Sitzungserneuerung",
+      "priority": "critical",
+      "risk": "Eine gültige Anmeldung oder Erneuerung verliert Identität und Zugriff.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "renews a coding session from the expiry warning"
+        },
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "refreshes the browser session after token expiry without changing the actor"
+        }
+      ]
+    },
+    {
+      "id": "WF-002",
+      "name": "Wiederanmeldung mit ungespeichertem Entwurf",
+      "priority": "critical",
+      "risk": "Ein Sitzungsablauf verliert Kodierung oder Kommentar.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "restores an unsaved draft after revoked authentication and re-login"
+        }
+      ]
+    },
+    {
+      "id": "WF-003",
+      "name": "Ausfall des Anmeldedienstes und Wiederholung",
+      "priority": "critical",
+      "risk": "Ein vorübergehender Provider-Ausfall verwirft einen Entwurf oder schreibt doppelt.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "preserves and saves a draft after a real provider outage"
+        }
+      ]
+    },
+    {
+      "id": "WF-004",
+      "name": "Workspace- und Administrationsrechte",
+      "priority": "critical",
+      "risk": "Ein angemeldeter Benutzer greift auf fremde Verwaltung zu.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "rejects an authenticated user without workspace or administration permission"
+        }
+      ]
+    },
+    {
+      "id": "WF-005",
+      "name": "Antwortimport bis zum gespeicherten Kodierergebnis",
+      "priority": "critical",
+      "risk": "Importierte Antworten fehlen oder werden dem falschen Fall zugeordnet.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "imports in the browser, persists coding across reload, submits and exports the same result"
+        }
+      ]
+    },
+    {
+      "id": "WF-006",
+      "name": "Kodieren, Notizen, Fallnavigation und Abschluss",
+      "priority": "critical",
+      "risk": "Gespeicherte Codes oder Notizen gehen beim Neuladen oder Fallwechsel verloren.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "persists codes and notes across reload, navigates cases and completes the job"
+        },
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "persists the latest code while a progress write is held"
+        }
+      ]
+    },
+    {
+      "id": "WF-007",
+      "name": "Kodierauftrag anlegen, bearbeiten, prüfen und anwenden",
+      "priority": "critical",
+      "risk": "Die Übergänge bis zur Übernahme liefern einen falschen Status oder Code.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "creates, codes, reviews and applies a manual coding job"
+        }
+      ]
+    },
+    {
+      "id": "WF-008",
+      "name": "Fachlicher CSV-Export",
+      "priority": "critical",
+      "risk": "Der heruntergeladene Export enthält andere Werte als die gespeicherte Bewertung.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "imports in the browser, persists coding across reload, submits and exports the same result"
+        }
+      ]
+    },
+    {
+      "id": "WF-009",
+      "name": "Zuständigkeit und historische Aufträge",
+      "priority": "critical",
+      "risk": "Eigentümerrechte blockieren berechtigte Kodierer oder erlauben fremde Änderungen.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/coding-ownership.cy.ts",
+          "title": "denies manager actions while preserving assigned-coder writes on a legacy job"
+        },
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/coding-ownership.cy.ts",
+          "title": "creates all four resources as Level 2 and preserves creator inheritance"
+        }
+      ]
+    },
+    {
+      "id": "WF-010",
+      "name": "Verona-Replay und Personenwechsel",
+      "priority": "critical",
+      "risk": "Replay zeigt falsche Person, Seite, Alias oder Antwort.",
+      "tests": [
+        {
+          "suite": "replay-live",
+          "spec": "cypress/e2e/replay-live.cy.ts",
+          "title": "replays two people, two pages, aliases, anchors and the typed negative response"
+        }
+      ]
+    },
+    {
+      "id": "WF-011",
+      "name": "Journal und atomare Löschung",
+      "priority": "critical",
+      "risk": "Löschung und Audit werden getrennt gespeichert oder das Journal exportiert falsche Identität.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "persists manual notes with trusted identity and exports formula-safe journal CSV"
+        },
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "rolls back a real PostgreSQL deletion when its audit fails, then commits both together"
+        }
+      ]
+    },
+    {
+      "id": "WF-012",
+      "name": "Isolation von Hintergrundaufträgen",
+      "priority": "critical",
+      "risk": "Fremde Nutzer verändern Jobs oder lesen deren Statistiken.",
+      "tests": [
+        {
+          "suite": "workflows-live",
+          "spec": "cypress/workflows/core-workflows.cy.ts",
+          "title": "rejects foreign queue mutations and statistics reads while preserving owner results"
+        }
+      ]
+    },
+    {
+      "id": "WF-013",
+      "name": "Einstellungen und Datenbankexport",
+      "priority": "critical",
+      "risk": "Einstellungen werden nicht gespeichert oder ein Hintergrundexport beendet sich nicht.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "persists further settings and completes a background database export"
+        }
+      ]
+    },
+    {
+      "id": "WF-014",
+      "name": "Item-Matrix-Fehler und Diagnoseexport",
+      "priority": "critical",
+      "risk": "Ein fehlgeschlagener Analysejob erscheint erfolgreich oder liefert keine Diagnose.",
+      "tests": [
+        {
+          "suite": "replay-live",
+          "spec": "cypress/e2e/item-matrix-live.cy.ts",
+          "title": "keeps score and code jobs failed and delivers the confirmed diagnostic ZIP"
+        }
+      ]
+    },
+    {
+      "id": "WF-015",
+      "name": "Workspace-Verwaltung und Systemhinweise",
+      "priority": "critical",
+      "risk": "Administration zeigt nach bestätigten Änderungen veraltete Daten.",
+      "tests": [
+        {
+          "suite": "auth-live",
+          "spec": "cypress/auth/coding-session.cy.ts",
+          "title": "updates administration and manual coding views from the real backend"
+        }
+      ]
+    },
+    {
+      "id": "WF-016",
+      "name": "Import aus einem externen Testcenter",
+      "priority": "important",
+      "risk": "Authentifizierung und Importvertrag unterscheiden sich vom simulierten Testcenter.",
+      "tests": [],
+      "gap": "Browser- und Komponententests mit simuliertem Testcenter sind vorhanden; ein vollständiger Live-Ablauf gegen einen externen Testcenter fehlt."
+    },
+    {
+      "id": "WF-017",
+      "name": "Dateiaustausch mit externem Content Pool",
+      "priority": "important",
+      "risk": "Die reale Gegenstelle akzeptiert Konfiguration oder Dateiaustausch nicht.",
+      "tests": [],
+      "gap": "Lokale Konfiguration und Rechte sind geprüft; ein Austausch gegen einen realen externen Content Pool fehlt."
+    }
+  ]
+}

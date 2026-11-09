@@ -131,7 +131,11 @@
     ],
     "frontendE2e": [
       "{workspaceRoot}/cypress*.config.ts",
-      "{workspaceRoot}/cypress/**/*"
+      "{workspaceRoot}/cypress/**/*",
+      "{workspaceRoot}/scripts/qa/cypress-reporting.cjs",
+      "{workspaceRoot}/scripts/qa/e2e*.mjs",
+      "{workspaceRoot}/docs/qa/e2e-workflows.json",
+      { "env": "CI_PIPELINE_ID" }
     ],
     "production": [
       "default"

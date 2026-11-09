@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { prepareAuthEnvironment } from './auth-environment.mjs';
 import { startLoopbackForwarders } from './loopback-forwarders.mjs';
 import { waitForHttp } from './http-readiness.mjs';
+import { clearCypressReports } from '../../qa/cypress-reporting.cjs';
 import {
   cleanupReplayWorkspaceFromState,
   waitForBackendAuthentication,
@@ -24,6 +25,8 @@ const artifactDir = path.join(repoDir, 'tmp', 'replay-e2e-artifacts', runId);
 const composeFile = path.join(scriptDir, 'docker-compose.replay.yml');
 const workflowMode = process.argv.includes('--workflows');
 const authMode = process.argv.includes('--auth') || workflowMode;
+// A failed stack startup must not leave a previous successful run as evidence.
+clearCypressReports(repoDir, workflowMode ? 'workflows-live' : authMode ? 'auth-live' : 'replay-live');
 const production = process.argv.includes('--production');
 const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
 const connectHost = '127.0.0.1';
