@@ -3,12 +3,12 @@
   "files": {
     "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts": {
       "file": {
-        "max-lines": 1181
+        "max-lines": 1174
       },
       "functions": {
         "class ContentPoolIntegrationService#1/method uploadWorkspaceFilesToAcp#1": {
           "complexity": 23,
-          "max-lines-per-function": 176
+          "max-lines-per-function": 163
         }
       }
     },

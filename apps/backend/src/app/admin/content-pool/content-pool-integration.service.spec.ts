@@ -4,7 +4,10 @@ import {
   BadGatewayException,
   NotFoundException
 } from '@nestjs/common';
+import { Job } from 'bullmq';
 import { ContentPoolIntegrationService } from './content-pool-integration.service';
+import { ContentPoolJobData, ContentPoolJobResult } from './content-pool-job';
+import { ContentPoolProcessor } from '../../job-queue/processors/content-pool.processor';
 import { WorkspaceFilesService } from '../../database/services/workspace';
 
 type HttpServiceMock = {
@@ -515,6 +518,66 @@ describe('ContentPoolIntegrationService.importAcpFilesToWorkspace', () => {
 });
 
 describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
+  it.each([1, 2])('preserves every successful replacement when Redis rejects progress for file %s', async failedProgressFile => {
+    const httpService = createHttpServiceMock();
+    const files = [
+      { id: 11, filename: 'first.vocs', workspace_id: 123 },
+      { id: 12, filename: 'second.vocs', workspace_id: 123 }
+    ];
+    const service = new ContentPoolIntegrationService(
+      createEnabledSettings() as never,
+      { find: jest.fn().mockResolvedValue(files), findOne: jest.fn().mockResolvedValue({ data: '{}' }) } as never,
+      httpService as never,
+      {} as never,
+      {} as never
+    );
+    httpService.axiosRef.get
+      .mockResolvedValueOnce({ data: [{ id: 'acp-1' }] })
+      .mockResolvedValueOnce({ data: files.map(file => ({ id: String(file.id), originalName: file.filename })) });
+    let transferred = false;
+    httpService.axiosRef.post.mockImplementation(async () => {
+      transferred = true;
+      return { data: { snapshot: { id: 'snapshot-1', versionNumber: 7 } } };
+    });
+    let rejectedProgress = false;
+    const updateProgress = jest.fn(async (progress: { phase: string; processedFiles: number }) => {
+      if (transferred && !rejectedProgress && progress.phase === 'replacing-files' && progress.processedFiles === failedProgressFile) {
+        rejectedProgress = true;
+        throw new Error('Synthetic transient Redis write failure');
+      }
+    });
+    const job = {
+      id: 'upload-job',
+      timestamp: Date.now(),
+      updateProgress,
+      data: {
+        operation: 'upload-files', workspaceId: 123, acpId: 'acp-1', fileIds: [11, 12], changelog: 'reviewed changes'
+      }
+    } as unknown as Job<ContentPoolJobData, ContentPoolJobResult>;
+
+    const result = await new ContentPoolProcessor(service).processWorkspaceJob(job);
+
+    expect(rejectedProgress).toBe(true);
+    expect(httpService.axiosRef.post).toHaveBeenCalledTimes(1);
+    expect(result).toEqual({
+      acpId: 'acp-1',
+      total: 2,
+      replaced: 2,
+      skipped: 0,
+      failed: 0,
+      replacedFiles: files.map(file => ({ fileId: file.id, filename: file.filename })),
+      skippedFiles: [],
+      failedFiles: [],
+      snapshotId: 'snapshot-1',
+      versionNumber: 7,
+      changelog: 'reviewed changes'
+    });
+    expect(updateProgress).toHaveBeenLastCalledWith(expect.objectContaining({
+      status: 'completed', phase: 'completed', processedFiles: 2, totalFiles: 2, progress: 100
+    }));
+    expect(updateProgress.mock.calls.every(([progress]) => progress.processedFiles <= files.length)).toBe(true);
+  });
+
   it('does not send an upload when the bounded database lookup refuses its file body', async () => {
     const httpService = createHttpServiceMock();
     const files = {

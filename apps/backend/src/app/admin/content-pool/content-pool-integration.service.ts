@@ -3,6 +3,7 @@ import {
   ForbiddenException,
   HttpException,
   Injectable,
+  Logger,
   InternalServerErrorException,
   NotFoundException,
   UnauthorizedException,
@@ -192,6 +193,8 @@ type ContentPoolUploadProgressUpdate = Partial<
 
 @Injectable()
 export class ContentPoolIntegrationService {
+  private readonly logger = new Logger(ContentPoolIntegrationService.name);
+
   private readonly requiredCodingBoxScopes = ['acp.read', 'files.read', 'files.write'];
 
   private readonly scopeProbeAcpId = '00000000-0000-4000-8000-000000000000';
@@ -617,6 +620,7 @@ export class ContentPoolIntegrationService {
         )
       });
 
+      let failureReason: string | undefined;
       try {
         const replacement = await this.replaceCodingSchemeFiles(
           apiBaseUrl,
@@ -632,40 +636,26 @@ export class ContentPoolIntegrationService {
           Number(replacement.snapshot?.versionNumber) :
           undefined;
         result.changelog = changelog;
-
-        for (const plan of replacementPlan) {
-          processedFiles += 1;
-          result.replaced += 1;
-          result.replacedFiles.push({
-            fileId: plan.workspaceFile.id,
-            filename: plan.workspaceFile.filename
-          });
-          await this.reportUploadFileProgress(
-            reportProgress,
-            plan.workspaceFile.filename,
-            processedFiles,
-            orderedWorkspaceFiles.length
-          );
-        }
       } catch (error) {
-        for (const plan of replacementPlan) {
-          processedFiles += 1;
+        failureReason = this.extractExceptionMessage(error, 'Datei konnte nicht in den Content Pool übertragen werden.');
+      }
+
+      for (const plan of replacementPlan) {
+        processedFiles += 1;
+        const fileResult = { fileId: plan.workspaceFile.id, filename: plan.workspaceFile.filename };
+        if (failureReason !== undefined) {
           result.failed += 1;
-          result.failedFiles.push({
-            fileId: plan.workspaceFile.id,
-            filename: plan.workspaceFile.filename,
-            reason: this.extractExceptionMessage(
-              error,
-              'Datei konnte nicht in den Content Pool übertragen werden.'
-            )
-          });
-          await this.reportUploadFileProgress(
-            reportProgress,
-            plan.workspaceFile.filename,
-            processedFiles,
-            orderedWorkspaceFiles.length
-          );
+          result.failedFiles.push({ ...fileResult, reason: failureReason });
+        } else {
+          result.replaced += 1;
+          result.replacedFiles.push(fileResult);
         }
+        await this.reportUploadFileProgress(
+          reportProgress,
+          plan.workspaceFile.filename,
+          processedFiles,
+          orderedWorkspaceFiles.length
+        );
       }
     }
 
@@ -699,14 +689,20 @@ export class ContentPoolIntegrationService {
     processedFiles: number,
     totalFiles: number
   ): Promise<void> {
-    await reportProgress?.({
-      phase: 'replacing-files',
-      message: `Datei verarbeitet: ${fileName}`,
-      processedFiles,
-      totalFiles,
-      currentFileName: fileName,
-      progress: this.calculateUploadFilesProgress(processedFiles, totalFiles)
-    });
+    try {
+      await reportProgress?.({
+        phase: 'replacing-files',
+        message: `Datei verarbeitet: ${fileName}`,
+        processedFiles,
+        totalFiles,
+        currentFileName: fileName,
+        progress: this.calculateUploadFilesProgress(processedFiles, totalFiles)
+      });
+    } catch {
+      // A processed file's outcome must survive a failed intermediate progress write.
+      // The processor still requires persistence of the terminal job status/result.
+      this.logger.warn('Could not store Content-Pool upload progress; preserving the transfer result.');
+    }
   }
 
   private calculateUploadFilesProgress(
