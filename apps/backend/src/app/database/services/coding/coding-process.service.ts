@@ -7,7 +7,6 @@ import {
 } from 'typeorm';
 import { VariableCodingData, CodingScheme } from '@iqbspecs/coding-scheme';
 import * as Autocoder from '@iqb/responses';
-import * as cheerio from 'cheerio';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 
@@ -53,6 +52,7 @@ import {
 import { RuntimeConfigService } from '../../../config/runtime-config.service';
 import { applyAutocoderSchemaValidationMode } from './autocoder-schema-validation.util';
 import { CodingSchemeFactory as CompatibleCodingSchemeFactory } from './generated/autocoder-compatibility-engine';
+import { getUnitCodingSchemeReference, requireUsableCodingScheme } from './coding-scheme-resolution.util';
 
 // Use the installed engine's contract here. The application's persistence and
 // manual-coding contract remains response 1.5.1, including legacy status 13.
@@ -569,19 +569,10 @@ export class CodingProcessService {
       }
 
       // Step 4: Process units and build maps - 40% progress
-      const unitIds = new Set<number>();
-      const unitAliasesSet = new Set<string>();
-
-      for (const unit of units) {
-        unitIds.add(unit.id);
-        const unitFileId = this.getUnitFileId(unit);
-        if (unitFileId) {
-          unitAliasesSet.add(unitFileId);
-        }
-      }
-
-      const unitIdsArray = Array.from(unitIds);
-      const unitAliasesArray = Array.from(unitAliasesSet);
+      const unitIdsArray = Array.from(new Set(units.map(unit => unit.id)));
+      const unitAliasesArray = Array.from(new Set(units
+        .map(unit => this.getUnitFileId(unit))
+        .filter((id): id is string => id !== null)));
 
       // Report progress after step 4
       if (progressCallback) {
@@ -701,7 +692,7 @@ export class CodingProcessService {
         unitToCodingSchemeRefMap
       } =
         await this.extractCodingSchemeReferences(
-          units,
+          units.filter(unit => unitToResponsesMap.has(unit.id)),
           fileIdToTestFileMap,
           jobId
         );
@@ -753,7 +744,7 @@ export class CodingProcessService {
       // Step 11: Process and code responses - 95% progress
       const processingStart = Date.now();
 
-      const { allCodedResponses } = await this.processAndCodeResponses(
+      const { allCodedResponses, processedUnitIds } = await this.processAndCodeResponses(
         workspace_id,
         units,
         unitToResponsesMap,
@@ -779,12 +770,17 @@ export class CodingProcessService {
         return statistics;
       }
 
+      if (processedUnitIds.length === 0) {
+        this.logger.log('No units with a referenced coding scheme were processed.');
+        return statistics;
+      }
+
       if (options.persist === false) {
         options.capturePlan?.({
           workspaceId: workspace_id,
           codedResponses: allCodedResponses,
           statistics,
-          unitIds: unitIdsArray,
+          unitIds: processedUnitIds,
           autoCoderRun: resolvedAutoCoderRun,
           freshnessSourceRevision
         });
@@ -810,7 +806,7 @@ export class CodingProcessService {
           progressCallback,
           metrics,
           {
-            unitIds: unitIdsArray,
+            unitIds: processedUnitIds,
             autoCoderRun: resolvedAutoCoderRun,
             markCurrentVersion: resolvedAutoCoderRun === 2 ? 'v3' : 'v1',
             expectedSourceRevision: freshnessSourceRevision
@@ -1184,13 +1180,13 @@ export class CodingProcessService {
       this.fileUploadRepository;
     const now = Date.now();
     const result = new Map<string, CodingScheme>();
-    const emptyScheme = new CodingScheme({});
 
     const missingSchemeRefs = codingSchemeRefs.filter(ref => {
       const cacheEntry = this.codingSchemeCache.get(
         this.codingSchemeCacheKey(workspaceId, ref)
       );
       if (cacheEntry && now - cacheEntry.timestamp < this.SCHEME_CACHE_TTL_MS) {
+        requireUsableCodingScheme(workspaceId, ref, cacheEntry.scheme);
         result.set(ref, cacheEntry.scheme);
         return false;
       }
@@ -1214,18 +1210,22 @@ export class CodingProcessService {
       try {
         const data =
           typeof file.data === 'string' ? JSON.parse(file.data) : file.data;
-        const scheme = new CodingScheme(data);
+        const scheme = requireUsableCodingScheme(workspaceId, file.file_id, new CodingScheme(data));
         result.set(file.file_id, scheme);
         this.codingSchemeCache.set(
           this.codingSchemeCacheKey(workspaceId, file.file_id),
           { scheme, timestamp: now }
         );
       } catch (error) {
-        this.logger.error(
-          `--- Fehler beim Verarbeiten des Kodierschemas ${file.filename}: ${getErrorMessage(error)}`
+        throw new Error(
+          `Autocoder could not load coding scheme "${file.file_id}" ` +
+          `(${file.filename}) in workspace ${workspaceId}: ${getErrorMessage(error)}`
         );
-        result.set(file.file_id, emptyScheme);
       }
+    });
+
+    missingSchemeRefs.forEach(ref => {
+      requireUsableCodingScheme(workspaceId, ref, result.get(ref));
     });
 
     return result;
@@ -1311,13 +1311,14 @@ export class CodingProcessService {
     preflightManager?: EntityManager
   ): Promise<{
     allCodedResponses: CodedResponse[];
+    processedUnitIds: number[];
     statistics: CodingStatistics;
   }> {
     const allCodedResponses: CodedResponse[] = [];
+    const processedUnitIds = new Set<number>();
     const persistenceSources: AutocoderPersistenceSource[] = [];
     let responseIndex = 0;
     const batchSize = 50;
-    const emptyScheme = new CodingScheme({});
     const codingSchemeValidations = preflightContext?.codingSchemeValidations ||
       new Map<string, Promise<void>>();
 
@@ -1328,35 +1329,29 @@ export class CodingProcessService {
         const unitResponses = unitToResponsesMap.get(unit.id) || [];
         if (unitResponses.length === 0) continue;
         const codingSchemeRef = unitToCodingSchemeRefMap.get(unit.id);
-        const scheme = codingSchemeRef ?
-          fileIdToCodingSchemeMap.get(codingSchemeRef) || emptyScheme :
-          emptyScheme;
+        if (!codingSchemeRef) continue;
+        const scheme = requireUsableCodingScheme(workspaceId, codingSchemeRef, fileIdToCodingSchemeMap.get(codingSchemeRef));
         const responses = omitShadowedGeneratedSourcePlaceholders(
           unitResponses,
           scheme.variableCodings || []
         );
         statistics.totalResponses += responses.length;
 
-        if (codingSchemeRef) {
-          const unitFileId = this.getUnitFileId(unit);
-          const validationKey = [
+        const unitFileId = this.getUnitFileId(unit);
+        const validationKey = [codingSchemeRef, unitFileId || unit.id].join(':');
+        let validation = codingSchemeValidations.get(validationKey);
+        if (!validation) {
+          validation = this.validateCodingSchemeForUnit(
+            workspaceId,
             codingSchemeRef,
-            unitFileId || unit.id
-          ].join(':');
-          let validation = codingSchemeValidations.get(validationKey);
-          if (!validation) {
-            validation = this.validateCodingSchemeForUnit(
-              workspaceId,
-              codingSchemeRef,
-              unitFileId ?? undefined,
-              unit,
-              scheme,
-              preflightManager
-            );
-            codingSchemeValidations.set(validationKey, validation);
-          }
-          await validation;
+            unitFileId ?? undefined,
+            unit,
+            scheme,
+            preflightManager
+          );
+          codingSchemeValidations.set(validationKey, validation);
         }
+        await validation;
 
         const technicalIdFallbackByAlias =
           this.createUnambiguousTechnicalIdFallbacks(
@@ -1649,13 +1644,16 @@ export class CodingProcessService {
           });
           responseIndex += 1;
         }
+        // Cleanup and freshness must cover only units whose referenced schema
+        // was actually executed, including valid schemas with no output rows.
+        processedUnitIds.add(unit.id);
       }
 
       if (jobId && (await this.isJobCancelled(jobId))) {
         this.logger.log(
           `Job ${jobId} was cancelled or paused during response processing`
         );
-        return { allCodedResponses, statistics };
+        return { allCodedResponses, processedUnitIds: [...processedUnitIds], statistics };
       }
     }
 
@@ -1668,7 +1666,7 @@ export class CodingProcessService {
       progressCallback(95);
     }
 
-    return { allCodedResponses, statistics };
+    return { allCodedResponses, processedUnitIds: [...processedUnitIds], statistics };
   }
 
   private async validateCodingSchemeForUnit(
@@ -2823,31 +2821,18 @@ export class CodingProcessService {
 
       for (const unit of unitBatch) {
         const unitFileId = this.getUnitFileId(unit);
-        if (!unitFileId) {
-          this.logger.warn(
-            `Skipping coding scheme lookup for unit ${unit.id}: missing unit alias and name.`
+        const reference = getUnitCodingSchemeReference(
+          unit.id, unitFileId, unitFileId ? fileIdToTestFileMap.get(unitFileId) : undefined
+        );
+        if (reference) {
+          codingSchemeRefs.add(reference);
+          unitToCodingSchemeRefMap.set(unit.id, reference);
+          this.logger.debug(
+            `Extracted coding scheme mapping: unitId=${unit.id}, unitFileId=${unitFileId}, codingSchemeRef=${reference}`
           );
-          continue;
-        }
-
-        const testFile = fileIdToTestFileMap.get(unitFileId);
-        if (!testFile) continue;
-
-        try {
-          const $ = cheerio.load(testFile.data);
-          const codingSchemeRefText = $('codingSchemeRef').text();
-          if (codingSchemeRefText) {
-            const codingSchemeRefUpper = codingSchemeRefText.toUpperCase();
-            codingSchemeRefs.add(codingSchemeRefUpper);
-            unitToCodingSchemeRefMap.set(unit.id, codingSchemeRefUpper);
-            this.logger.debug(
-              `Extracted coding scheme mapping: unitId=${unit.id
-              }, unitFileId=${unitFileId}, codingSchemeRef=${codingSchemeRefUpper}`
-            );
-          }
-        } catch (error) {
-          this.logger.error(
-            `--- Fehler beim Verarbeiten der Datei ${testFile.filename}: ${getErrorMessage(error)}`
+        } else {
+          this.logger.log(
+            `Skipping auto-coding for unit "${unit.name}" (${unit.id}): no coding scheme is referenced.`
           );
         }
       }

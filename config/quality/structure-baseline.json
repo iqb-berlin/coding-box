@@ -638,7 +638,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-process.service.ts": {
       "file": {
-        "max-lines": 2546
+        "max-lines": 2531
       },
       "functions": {
         "class CodingProcessService#1/method codeAutocoderResponses#1": {
@@ -651,16 +651,16 @@
           "complexity": 21
         },
         "class CodingProcessService#1/method processAndCodeResponses#1": {
-          "complexity": 67,
+          "complexity": 65,
           "max-depth": 5,
-          "max-lines-per-function": 351
+          "max-lines-per-function": 347
         },
         "class CodingProcessService#1/method processAndCodeResponses#1/anonymous:d7e78c5373b31530#1": {
           "complexity": 25
         },
         "class CodingProcessService#1/method processTestPersonsBatchInternal#1": {
-          "complexity": 62,
-          "max-lines-per-function": 329
+          "complexity": 61,
+          "max-lines-per-function": 326
         },
         "class CodingProcessService#1/method recalculateCompleteDerivedResults#1": {
           "max-lines-per-function": 204
@@ -679,7 +679,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-readiness.service.ts": {
       "file": {
-        "max-lines": 1048
+        "max-lines": 1044
       },
       "functions": {}
     },

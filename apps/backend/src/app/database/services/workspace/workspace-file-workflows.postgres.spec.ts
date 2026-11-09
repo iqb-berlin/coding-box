@@ -99,7 +99,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const exclusions = new WorkspaceExclusionService(db.getRepository(Workspace), repository, cache);
     const metadata = new WorkspaceFileMetadataService(repository, cache, exclusions);
     const freshness = new CodingFreshnessService(
-      db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, exclusions), new CodingJobFreshnessService(db)
+      db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, repository, exclusions), new CodingJobFreshnessService(db)
     );
     const statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
     const resultsCache = new TestResultsCacheService({} as never, new WorkspaceStatsCacheService(cache), statistics);
