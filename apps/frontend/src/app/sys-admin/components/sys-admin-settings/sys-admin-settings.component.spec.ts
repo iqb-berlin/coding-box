@@ -10,6 +10,7 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { of, Subject } from 'rxjs';
 import applicationTranslations from '../../../../assets/i18n/de.json';
+import { TestcenterInstancesService } from '../../../core/services/testcenter-instances.service';
 import { SysAdminSettingsComponent } from './sys-admin-settings.component';
 import { SERVER_URL } from '../../../injection-tokens';
 import { SystemSettingsService } from '../../../core/services/system-settings.service';
@@ -67,6 +68,7 @@ describe('SysAdminSettingsComponent', () => {
     await TestBed.configureTestingModule({
       providers: [
         provideZonelessChangeDetection(),
+        { provide: TestcenterInstancesService, useValue: { getInstances: () => of([]) } },
         provideHttpClient(),
         provideHttpClientTesting(),
         {

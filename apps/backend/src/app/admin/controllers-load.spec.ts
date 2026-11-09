@@ -1,3 +1,4 @@
+import 'reflect-metadata';
 import * as fs from 'fs';
 import * as path from 'path';
 import { PATH_METADATA } from '@nestjs/common/constants';

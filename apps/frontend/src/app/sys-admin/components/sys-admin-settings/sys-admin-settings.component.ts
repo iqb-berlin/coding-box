@@ -21,6 +21,7 @@ import { AppLogoDto } from '../../../../../../../api-dto/app-logo-dto';
 import { defaultLegalNoticeHtml } from '../../../../../../../api-dto/legal-notice/default-legal-notice-html';
 import { DatabaseExportService } from '../../../shared/services/database-export.service';
 import { extractHttpErrorMessage } from '../../../shared/utils/http-error-message.util';
+import { TestcenterSettingsComponent } from '../testcenter-settings/testcenter-settings.component';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -30,6 +31,7 @@ import { extractHttpErrorMessage } from '../../../shared/utils/http-error-messag
   standalone: true,
   providers: [DatabaseExportService],
   imports: [
+    TestcenterSettingsComponent,
     TranslateModule,
     FormsModule,
     MatButtonModule,

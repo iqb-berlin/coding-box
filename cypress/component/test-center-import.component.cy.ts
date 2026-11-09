@@ -24,7 +24,9 @@ describe('Testcenter interrupted import feedback', () => {
     providers: [provideHttpClient(),
       { provide: MAT_DIALOG_DATA, useValue: { importType: 'testResults' } },
       { provide: MatDialogRef, useValue: { close: cy.stub().as('closeDialog') } },
-      { provide: UserBackendService, useValue: {} },
+      { provide: UserBackendService, useValue: {
+        getTestcenterInstances: () => of([{ label: 'Testcenter 1', baseUrl: 'https://iqb-testcenter1.de', source: 'standard' as const }])
+      } satisfies Pick<UserBackendService, 'getTestcenterInstances'> },
       { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
       { provide: ImportService, useValue: { importWorkspaceFiles, getImportWorkspaceFilesProgress: getProgress,
         importTestcenterGroups: () => of(groups()), getTestGroupsLoadProgress: () => of(null) } },
