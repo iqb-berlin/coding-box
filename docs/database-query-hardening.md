@@ -97,6 +97,22 @@ Rollback deshalb im Wartungsfenster mit wiederherstellbarer Sicherung durchführ
 
 ## Wirksame Konfiguration und SQL-Messung
 
+`POSTGRES_SHM_SIZE` setzt die Größe von `/dev/shm` im PostgreSQL-Container
+(Standard: `512m`). Der frühere Docker-Standard von 64 MiB führte im isolierten
+Lasttest schon während der Aufwärmung mit zehn Nutzern zu
+`could not resize shared memory segment ... No space left on device` und
+HTTP-500-Antworten. Das betraf dynamischen Shared Memory bei parallelen
+Abfragen, nicht den freien Platz des Datenbankvolumes. Der anschließende
+Dauerlauf wird mit 512 MiB separat qualifiziert; dieser Wert ist keine
+allgemeine Kapazitätsgarantie.
+
+Die Einstellung gilt für die gemeinsame Compose-Basis und damit auch für das
+Produktions- und PostgreSQL-17-Overlay. Ein laufender Container übernimmt sie
+erst beim Neuerstellen. `shared_buffers`, `work_mem` und ein gegebenenfalls
+gesetztes Container-Speicherlimit müssen weiterhin zusammen geplant werden.
+Quellen: [Docker-Laufzeitoptionen](https://docs.docker.com/engine/containers/run/),
+[PostgreSQL-Ressourcenkonfiguration](https://www.postgresql.org/docs/14/runtime-config-resource.html).
+
 `POSTGRES_SLOW_QUERY_MS` setzt die Schwelle für langsame SQL-Anweisungen
 (Standard: 1.000 ms). Das Protokoll enthält Laufzeit und einen SQL-Fingerprint,
 keine SQL-Texte, Bindewerte oder Antwortinhalte. HTTP-Laufzeit und Poolbelegung
