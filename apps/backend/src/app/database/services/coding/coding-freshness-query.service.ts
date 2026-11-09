@@ -7,12 +7,14 @@ import {
 } from 'typeorm';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import FileUpload from '../../entities/file_upload.entity';
 import { applyResolvedExclusionsToQuery, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import {
   CodingFreshnessImpactDto, CodingFreshnessGroupDto, CodingFreshnessScopeDto, CodingFreshnessState, CodingFreshnessSummaryDto, CodingFreshnessVersion
 } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { getCodingVariableIdCandidateSql } from './coding-response-candidate.util';
+import { excludeUnitsWithoutCodingScheme } from './coding-freshness-schema-scope.util';
 import {
   UnitCodingPresence, FreshnessSummaryRow, FreshnessScopeRow, ImportedResponseScopeRow, DeleteImpactRow
 } from './coding-freshness.types';
@@ -31,6 +33,8 @@ export class CodingFreshnessQueryService {
     @InjectRepository(ResponseEntity)
     private readonly responseRepository: Repository<ResponseEntity>,
     private readonly connection: DataSource,
+    @InjectRepository(FileUpload)
+    private readonly fileRepository: Repository<FileUpload>,
     @Optional()
     @Inject(WorkspaceExclusionService)
     private readonly workspaceExclusionService?: WorkspaceExclusionService
@@ -55,6 +59,7 @@ export class CodingFreshnessQueryService {
       .addOrderBy('freshness.state', 'ASC');
 
     await this.applyWorkspaceExclusions(workspaceId, query);
+    await excludeUnitsWithoutCodingScheme(workspaceId, query, this.fileRepository);
 
     const rows = await query.getRawMany<FreshnessSummaryRow>();
 
@@ -100,6 +105,7 @@ export class CodingFreshnessQueryService {
       .andWhere('freshness.state IN (:...states)', { states: filteredStates });
 
     await this.applyWorkspaceExclusions(workspaceId, query);
+    await excludeUnitsWithoutCodingScheme(workspaceId, query, this.fileRepository);
 
     const rows = await query.getRawMany<FreshnessScopeRow>();
     const unitIds = uniquePositiveIds(rows.map(row => Number(row.unitId)));

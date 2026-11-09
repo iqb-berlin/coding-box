@@ -268,7 +268,7 @@ describe('CodingVersionService', () => {
       const responseRepository = {} as Repository<ResponseEntity>;
       const connection = {} as DataSource;
       const realFreshnessService = new CodingFreshnessService(
-        freshnessRepository, responseRepository, connection, new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection), new CodingJobFreshnessService(connection)
+        freshnessRepository, responseRepository, connection, new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection, {} as never), new CodingJobFreshnessService(connection)
       );
       let transactionCount = 0;
       Object.assign(mockResponseRepository, {

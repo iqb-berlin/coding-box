@@ -1,4 +1,4 @@
-export const CODING_READINESS_CACHE_PREFIX = 'coding_readiness:v2';
+export const CODING_READINESS_CACHE_PREFIX = 'coding_readiness:v3';
 
 export function getCodingReadinessCacheKey(
   workspaceId: number,

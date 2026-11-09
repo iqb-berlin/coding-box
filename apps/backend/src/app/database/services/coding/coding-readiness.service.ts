@@ -6,7 +6,6 @@ import {
   Brackets, EntityManager, In, Repository, SelectQueryBuilder
 } from 'typeorm';
 import { createHash } from 'crypto';
-import * as cheerio from 'cheerio';
 import { CodingScheme } from '@iqbspecs/coding-scheme';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -37,6 +36,7 @@ import {
   getCodingReadinessCachePattern,
   getCodingReadinessCacheVersionKey
 } from './coding-readiness-cache-key.util';
+import { assertCodingFilesAvailable, extractCodingSchemeRef } from './coding-scheme-resolution.util';
 
 export type AutocodingReadinessOptions = {
   personIds?: string[];
@@ -257,6 +257,13 @@ export class CodingReadinessService {
       manager
     );
 
+    assertCodingFilesAvailable(
+      workspaceId,
+      unitFileDiagnostics.missingUnitFiles,
+      codingSchemeDiagnostics.missingCodingSchemes,
+      codingSchemeDiagnostics.invalidCodingSchemes
+    );
+
     return variableDiagnostics.validResponses.filter(
       response => codingSchemeDiagnostics.unitHasCodingScheme.get(response.unitid) === true
     );
@@ -279,18 +286,16 @@ export class CodingReadinessService {
       .reduce((sum, item) => sum + item.responseCount, 0);
     const candidateUnits = this.getUnitsWithCandidateCounts(units, candidateVariableCounts);
     const candidateUnitFileIds = this.uniqueUnitFileIds(candidateUnits);
-    const unitFileDiagnostics = await this.getUnitFileDiagnostics(
-      workspaceId,
-      candidateUnitFileIds
-    );
     const variableDiagnostics = await this.filterCandidateVariableCountsWithDiagnostics(
       workspaceId,
       candidateVariableCounts,
       candidateUnits
     );
+    const codeableCandidateUnits = this.getUnitsWithCandidateCounts(units, variableDiagnostics.validCandidateCounts);
+    const unitFileDiagnostics = await this.getUnitFileDiagnostics(workspaceId, this.uniqueUnitFileIds(codeableCandidateUnits));
     const codingSchemeDiagnostics = await this.getCodingSchemeDiagnostics(
       workspaceId,
-      candidateUnits,
+      codeableCandidateUnits,
       unitFileDiagnostics.unitFileMap
     );
     const codeableResponses = variableDiagnostics.validCandidateCounts
@@ -574,7 +579,7 @@ export class CodingReadinessService {
         return;
       }
 
-      const codingSchemeRef = this.extractCodingSchemeRef(unitFile.data);
+      const codingSchemeRef = extractCodingSchemeRef(unitFile.data);
       if (codingSchemeRef) {
         unitToSchemeRef.set(unit.id, codingSchemeRef);
         schemeRefs.add(codingSchemeRef);
@@ -634,15 +639,6 @@ export class CodingReadinessService {
         `Error parsing coding scheme ${file.filename} for readiness check: ${message}`
       );
       return false;
-    }
-  }
-
-  private extractCodingSchemeRef(data: string): string {
-    try {
-      const $ = cheerio.load(data);
-      return $('codingSchemeRef').text().trim().toUpperCase();
-    } catch {
-      return '';
     }
   }
 
@@ -830,16 +826,16 @@ export class CodingReadinessService {
     if (input.rawResponsesWithRelevantStatus > 0 && input.validResponses === 0) {
       blockers.push('NO_VALID_VARIABLE_MATCHES');
     }
+    if (input.missingUnitFiles.length > 0) {
+      blockers.push('MISSING_UNIT_FILES');
+    }
+    if (input.missingCodingSchemes.length > 0) {
+      blockers.push('MISSING_CODING_SCHEMES');
+    }
+    if (input.invalidCodingSchemes.length > 0) {
+      blockers.push('INVALID_CODING_SCHEMES');
+    }
     if (input.rawResponsesWithRelevantStatus > 0 && input.codeableResponses === 0) {
-      if (input.missingUnitFiles.length > 0) {
-        blockers.push('MISSING_UNIT_FILES');
-      }
-      if (input.missingCodingSchemes.length > 0) {
-        blockers.push('MISSING_CODING_SCHEMES');
-      }
-      if (input.invalidCodingSchemes.length > 0) {
-        blockers.push('INVALID_CODING_SCHEMES');
-      }
       blockers.push('NO_CODEABLE_RESPONSES');
     }
     return blockers;

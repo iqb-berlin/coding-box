@@ -9,6 +9,7 @@ import { CacheService } from '../cache/cache.service';
 import { CodingUnitFreshness } from '../database/entities/coding-unit-freshness.entity';
 import { CodingFreshnessService } from '../database/services/coding/coding-freshness.service';
 import { CodingFreshnessModule } from './coding-freshness.module';
+import { NO_CODING_SCHEME_REF_NORMALIZED } from '../database/entities/file_upload.entity';
 
 const describePostgres = process.env.POSTGRES_INTEGRATION_TESTS === 'true' ? describe : describe.skip;
 
@@ -214,6 +215,88 @@ describePostgres('Standalone coding freshness module with PostgreSQL', () => {
     expect(await jobState(f.job)).toMatchObject({
       freshness_status: 'stale_source', freshness_reason: 'RESULT_ADDED', freshness_affected_responses: 1
     });
+  });
+
+  it.each([
+    { normalizedRef: NO_CODING_SCHEME_REF_NORMALIZED, reference: '', alias: ' \t\n' },
+    { normalizedRef: null, reference: '<CodingSchemeRef> \n\t </CodingSchemeRef>', alias: ' \tno_schema\n' }
+  ])('allows run 2 after run 1 while preserving skipped tasks ($normalizedRef)', async ({ normalizedRef, reference, alias }) => {
+    const f = await fixture();
+    const skipped = await insert('unit', { bookletid: f.booklet, name: 'NO_SCHEMA', alias });
+    const response = await insert('response', {
+      unitid: skipped, variableid: 'VAR', status: 3, value: 'untouched', status_v2: 4, code_v2: 7, score_v2: 2
+    });
+    const file = await insert('file_upload', {
+      workspace_id: f.workspace,
+      file_id: 'NO_SCHEMA',
+      file_type: 'Unit',
+      filename: 'NO_SCHEMA.xml',
+      data: `<Unit>${reference}</Unit>`,
+      coding_scheme_ref_normalized: normalizedRef
+    });
+    await service.markUnitsPendingAfterImport(f.workspace, [f.unit, skipped]);
+    const originalResponse = await db.query('SELECT * FROM response WHERE id=$1', [response]);
+    expect((await service.getScope(f.workspace, ['v1'], ['PENDING'])).unitIds).toEqual([f.unit]);
+
+    // The executor persists only the first task's plan; the schema-free task is deliberately skipped.
+    await db.query('UPDATE response SET status_v1=4,code_v1=1,score_v1=1 WHERE id=$1', [f.response]);
+    await service.markVersionCurrent(f.workspace, [f.unit], 'v1');
+    await db.query("UPDATE coding_job SET freshness_status='current' WHERE id=$1", [f.job]);
+    await db.getRepository(CodingUnitFreshness).insert([
+      {
+        workspace_id: f.workspace, unit_id: skipped, version: 'v3', state: 'PENDING', reason: 'RESULT_ADDED'
+      },
+      {
+        workspace_id: f.workspace, unit_id: skipped, version: 'v2', state: 'MANUAL_REVIEW_REQUIRED', reason: 'RESULT_ADDED'
+      }
+    ]);
+
+    const summary = await service.getSummary(f.workspace);
+    expect(summary.items).toEqual(expect.arrayContaining([
+      expect.objectContaining({ version: 'v1', state: 'CURRENT', unitCount: 1 }),
+      expect.objectContaining({ version: 'v2', state: 'MANUAL_REVIEW_REQUIRED', unitCount: 1 })
+    ]));
+    expect(summary.items.some(item => item.version !== 'v2' && item.state === 'PENDING')).toBe(false);
+    expect((await service.getScope(f.workspace, ['v1', 'v3'], ['PENDING'])).unitIds).toEqual([]);
+    expect((await service.getScope(f.workspace, ['v2'], ['MANUAL_REVIEW_REQUIRED'])).unitIds).toEqual([skipped]);
+    await expect(service.assertAutoCodingRunCanStart(f.workspace, 2)).resolves.toBeUndefined();
+    expect(await db.getRepository(CodingUnitFreshness).findOneBy({ unit_id: skipped, version: 'v1' }))
+      .toMatchObject({ state: 'PENDING', coded_revision: null });
+    expect(await db.query('SELECT * FROM response WHERE id=$1', [response])).toEqual(originalResponse);
+
+    // Introducing a real reference makes the existing pending row relevant again, even with stale metadata.
+    await db.query('UPDATE file_upload SET data=$1 WHERE id=$2', ['<Unit><CodingSchemeRef>MISSING.VOCS</CodingSchemeRef></Unit>', file]);
+    expect((await service.getScope(f.workspace, ['v1'], ['PENDING'])).unitIds).toEqual([skipped]);
+    await expect(service.assertAutoCodingRunCanStart(f.workspace, 2)).rejects.toThrow('Auto-Coding 1');
+  });
+
+  it('keeps missing files and preferred aliases with declared references pending', async () => {
+    const f = await fixture();
+    await insert('file_upload', {
+      workspace_id: f.workspace,
+      file_id: 'UNIT',
+      file_type: 'Unit',
+      filename: 'UNIT.xml',
+      data: '<Unit/>',
+      coding_scheme_ref_normalized: NO_CODING_SCHEME_REF_NORMALIZED
+    });
+    await insert('file_upload', {
+      workspace_id: f.workspace,
+      file_id: 'DECLARED',
+      file_type: 'Unit',
+      filename: 'DECLARED.xml',
+      data: '<Unit><CodingSchemeRef>MISSING.VOCS</CodingSchemeRef></Unit>',
+      coding_scheme_ref_normalized: null
+    });
+    const preferred = await insert('unit', { bookletid: f.booklet, name: 'UNIT', alias: ' declared ' });
+    const missing = await insert('unit', { bookletid: f.booklet, name: 'UNIT', alias: 'MISSING_FILE' });
+    for (const unitid of [preferred, missing]) await insert('response', { unitid, variableid: 'VAR', status: 3 });
+    await service.markUnitsPendingAfterImport(f.workspace, [f.unit, preferred, missing]);
+
+    expect((await service.getScope(f.workspace, ['v1'], ['PENDING'])).unitIds.sort()).toEqual([preferred, missing].sort());
+    expect((await service.getSummary(f.workspace)).items).toEqual([
+      expect.objectContaining({ version: 'v1', state: 'PENDING', unitCount: 2 })
+    ]);
   });
 
   it('gates the second autocoder run on source coding, job freshness and pending result application', async () => {

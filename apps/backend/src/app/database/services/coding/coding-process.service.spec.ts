@@ -166,6 +166,14 @@ describe('CodingProcessService', () => {
     filename: `${fileId}.xml`
   });
 
+  const createMockCodingScheme = (fileId: string) => createMockFileUpload(
+    fileId,
+    JSON.stringify({
+      version: '3.4',
+      variableCodings: ['var1', 'var2'].map(id => ({ id, alias: id, sourceType: 'BASE' }))
+    })
+  );
+
   interface MockQueryBuilder {
     select: jest.Mock;
     addSelect: jest.Mock;
@@ -449,15 +457,11 @@ describe('CodingProcessService', () => {
       );
 
       fileUploadRepository.find = jest.fn()
-        .mockResolvedValueOnce([ // coding schemes
-          createMockFileUpload('SCHEME_1', '<codingScheme><variableCodings><variableCoding id="var1"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>'),
-          createMockFileUpload('SCHEME_2', '<codingScheme><variableCodings><variableCoding id="var2"><codes><code id="1">VALUE_PROVIDED</code></codes></variableCoding></variableCodings></codingScheme>')
-        ])
         .mockResolvedValueOnce([ // test files
-          createMockFileUpload('ALIAS_1', '<xml><codingSchemeRef>SCHEME_1</codingSchemeRef></xml>'),
-          createMockFileUpload('ALIAS_2', '<xml><codingSchemeRef>SCHEME_2</codingSchemeRef></xml>')
+          createMockFileUpload('ALIAS_1', '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>'),
+          createMockFileUpload('ALIAS_2', '<xml><codingSchemeRef>TEST-SCHEME-REF</codingSchemeRef></xml>')
         ])
-        .mockResolvedValueOnce([]); // coding schemes again
+        .mockResolvedValueOnce([createMockCodingScheme('TEST-SCHEME-REF')]);
 
       fileUploadRepository.findOne = jest.fn().mockImplementation(options => {
         if (options.where.file_id === 'SCHEME_1') {
@@ -2582,10 +2586,10 @@ describe('CodingProcessService', () => {
       (fileUploadRepository.find as jest.Mock)
         .mockReset()
         .mockResolvedValueOnce([
-          createMockFileUpload('SHARED_SCHEME', JSON.stringify({ variableCodings: [] }))
+          createMockCodingScheme('SHARED_SCHEME')
         ])
         .mockResolvedValueOnce([
-          createMockFileUpload('SHARED_SCHEME', JSON.stringify({ variableCodings: [] }))
+          createMockCodingScheme('SHARED_SCHEME')
         ]);
 
       await getCodingSchemesWithCache(1, ['SHARED_SCHEME']);
@@ -2615,7 +2619,9 @@ describe('CodingProcessService', () => {
 
     it('should use the unit name as file id fallback when alias is missing', async () => {
       const unitWithoutAlias = createMockUnit(1, 1, 'TEST_UNIT_1', null as unknown as string);
-      (fileUploadRepository.find as jest.Mock).mockReset().mockResolvedValue([]);
+      (fileUploadRepository.find as jest.Mock).mockReset()
+        .mockResolvedValueOnce([createMockFileUpload('TEST_UNIT_1', '<Unit><CodingSchemeRef>TEST-SCHEME-REF</CodingSchemeRef></Unit>')])
+        .mockResolvedValueOnce([createMockCodingScheme('TEST-SCHEME-REF')]);
       mockQueryBuilder.getMany
         .mockResolvedValueOnce([unitWithoutAlias])
         .mockResolvedValueOnce([mockResponses[0]]);
@@ -2643,7 +2649,9 @@ describe('CodingProcessService', () => {
 
     it('should use the unit name as file id fallback when alias is blank', async () => {
       const unitWithBlankAlias = createMockUnit(1, 1, 'TEST_UNIT_1', '   ');
-      (fileUploadRepository.find as jest.Mock).mockReset().mockResolvedValue([]);
+      (fileUploadRepository.find as jest.Mock).mockReset()
+        .mockResolvedValueOnce([createMockFileUpload('TEST_UNIT_1', '<Unit><CodingSchemeRef>TEST-SCHEME-REF</CodingSchemeRef></Unit>')])
+        .mockResolvedValueOnce([createMockCodingScheme('TEST-SCHEME-REF')]);
       mockQueryBuilder.getMany
         .mockResolvedValueOnce([unitWithBlankAlias])
         .mockResolvedValueOnce([mockResponses[0]]);

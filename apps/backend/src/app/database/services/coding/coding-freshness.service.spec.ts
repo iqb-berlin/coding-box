@@ -5,6 +5,7 @@ import { CodingJobFreshnessService } from './coding-job-freshness.service';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { ResponseEntity } from '../../entities/response.entity';
+import FileUpload from '../../entities/file_upload.entity';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 
 const queryBuilder = (overrides: Record<string, jest.Mock> = {}) => ({
@@ -30,13 +31,15 @@ describe('CodingFreshnessService', () => {
   let connection: DataSource;
   let service: CodingFreshnessService;
   let queries: CodingFreshnessQueryService;
+  let fileRepository: Repository<FileUpload>;
 
   const createService = (exclusions?: WorkspaceExclusionService): CodingFreshnessService => {
-    queries = new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection, exclusions);
+    queries = new CodingFreshnessQueryService(freshnessRepository, responseRepository, connection, fileRepository, exclusions);
     return new CodingFreshnessService(freshnessRepository, responseRepository, connection, queries, new CodingJobFreshnessService(connection));
   };
 
   beforeEach(() => {
+    fileRepository = { find: jest.fn().mockResolvedValue([]) } as unknown as Repository<FileUpload>;
     freshnessRepository = {
       createQueryBuilder: jest.fn(),
       find: jest.fn().mockResolvedValue([]),

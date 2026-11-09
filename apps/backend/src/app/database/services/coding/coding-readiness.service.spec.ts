@@ -149,9 +149,8 @@ const createService = (
   };
   const fileUploadRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(fileRevisionQuery),
-    find: jest.fn()
-      .mockResolvedValueOnce(fixture.unitFiles)
-      .mockResolvedValueOnce(fixture.codingSchemeFiles || [])
+    find: jest.fn(async (options: { where: { file_id: { value: string[] } } }) => [...fixture.unitFiles, ...(fixture.codingSchemeFiles || [])]
+      .filter(file => options.where.file_id.value.includes(file.file_id)))
   };
   const workspaceFilesService = {
     getUnitVariableMap: jest.fn().mockResolvedValue(fixture.unitVariableMap),
@@ -511,7 +510,7 @@ describe('CodingReadinessService', () => {
     expect(cacheService.set).not.toHaveBeenCalled();
   });
 
-  it('keeps missing files as diagnostics without blocking partially codeable data', async () => {
+  it('blocks missing files even when some responses are codeable', async () => {
     const service = createService({
       units: [
         createUnit(1, 'UNIT_OK'),
@@ -536,10 +535,10 @@ describe('CodingReadinessService', () => {
 
     const readiness = await service.getReadiness(1, { forceRefresh: true });
 
-    expect(readiness.readiness).toBe('READY');
+    expect(readiness.readiness).toBe('BLOCKED');
     expect(readiness.codeableResponses).toBe(1);
     expect(readiness.missingUnitFiles).toEqual(['UNIT_MISSING']);
-    expect(readiness.blockers).not.toContain('MISSING_UNIT_FILES');
+    expect(readiness.blockers).toContain('MISSING_UNIT_FILES');
     expect(readiness.blockers).not.toContain('NO_CODEABLE_RESPONSES');
   });
 
@@ -631,38 +630,51 @@ describe('CodingReadinessService', () => {
     expect(readiness.validResponses).toBe(1);
   });
 
-  it('filters out valid-variable responses without usable coding scheme', async () => {
+  it.each([
+    { data: undefined, blocker: 'MISSING_CODING_SCHEMES', message: 'is missing' },
+    { data: '{not valid json', blocker: 'INVALID_CODING_SCHEMES', message: 'is not usable' },
+    { data: JSON.stringify({ variableCodings: [] }), blocker: 'INVALID_CODING_SCHEMES', message: 'is not usable' }
+  ])('blocks mixed batches consistently for $blocker ($data)', async ({ data, blocker, message }) => {
     const units = [
       createUnit(1, 'UNIT_OK'),
       createUnit(2, 'UNIT_MISSING_SCHEME')
     ];
-    const service = createService({
+    const fixture: ReadinessFixture = {
       units,
-      rawResponsesTotal: 0,
-      candidateRows: [],
+      rawResponsesTotal: 2,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 },
+        { unitid: 2, variableid: 'var2', response_count: 1 }
+      ],
       unitFiles: [
         createFile('UNIT_OK', '<Unit><codingSchemeRef>SCHEME_OK</codingSchemeRef></Unit>'),
         createFile('UNIT_MISSING_SCHEME', '<Unit><codingSchemeRef>SCHEME_MISSING</codingSchemeRef></Unit>')
       ],
       codingSchemeFiles: [
-        createFile('SCHEME_OK', createCodingScheme('var1'))
+        createFile('SCHEME_OK', createCodingScheme('var1')),
+        ...(data === undefined ? [] : [createFile('SCHEME_MISSING', data)])
       ],
       unitVariableMap: new Map([
         ['UNIT_OK', new Set(['var1'])],
         ['UNIT_MISSING_SCHEME', new Set(['var2'])]
       ])
-    });
+    };
 
-    const filteredResponses = await service.filterResponsesCodeable(
+    const readiness = await createService(fixture).getReadiness(1, { forceRefresh: true });
+    expect(readiness.readiness).toBe('BLOCKED');
+    expect(readiness.codeableResponses).toBe(1);
+    expect(readiness.blockers).toEqual([blocker]);
+    await expect(createService(fixture).assertAutoCodingCanProcess(1))
+      .rejects.toThrow('kann nicht gestartet werden');
+
+    await expect(createService(fixture).filterResponsesCodeable(
       1,
       [
         createResponse(1, 1, 'var1'),
         createResponse(2, 2, 'var2')
       ],
       units
-    );
-
-    expect(filteredResponses.map(response => response.id)).toEqual([1]);
+    )).rejects.toThrow(`Referenced coding scheme "SCHEME_MISSING" ${message}`);
   });
 
   it('filters helper responses but keeps valid empty responses before autocoding', async () => {
@@ -764,7 +776,7 @@ describe('CodingReadinessService', () => {
     ]));
   });
 
-  it('filters out valid-variable responses with unusable coding scheme files', async () => {
+  it('rejects unusable referenced schemes even when another task can be coded', async () => {
     const units = [
       createUnit(1, 'UNIT_OK'),
       createUnit(2, 'UNIT_INVALID_SCHEME')
@@ -787,15 +799,77 @@ describe('CodingReadinessService', () => {
       ])
     });
 
-    const filteredResponses = await service.filterResponsesCodeable(
+    await expect(service.filterResponsesCodeable(
       1,
       [
         createResponse(1, 1, 'var1'),
         createResponse(2, 2, 'var2')
       ],
       units
-    );
+    )).rejects.toThrow('Referenced coding scheme "SCHEME_INVALID" is not usable');
+  });
 
-    expect(filteredResponses.map(response => response.id)).toEqual([1]);
+  it.each(['', '<CodingSchemeRef> \n\t </CodingSchemeRef>'])(
+    'keeps intentional schema omissions separate from missing referenced files (%s)',
+    async reference => {
+      const units = [createUnit(1, 'UNIT_OK'), createUnit(2, 'UNIT_WITHOUT_SCHEME')];
+      const fixture: ReadinessFixture = {
+        units,
+        rawResponsesTotal: 2,
+        candidateRows: [
+          { unitid: 1, variableid: 'var1', response_count: 1 },
+          { unitid: 2, variableid: 'var2', response_count: 1 }
+        ],
+        unitFiles: [
+          createFile('UNIT_OK', '<Unit><CodingSchemeRef> \n scheme_ok\t </CodingSchemeRef></Unit>'),
+          createFile('UNIT_WITHOUT_SCHEME', `<Unit>${reference}</Unit>`)
+        ],
+        codingSchemeFiles: [createFile('SCHEME_OK', createCodingScheme('var1'))],
+        unitVariableMap: new Map([
+          ['UNIT_OK', new Set(['var1'])],
+          ['UNIT_WITHOUT_SCHEME', new Set(['var2'])]
+        ])
+      };
+
+      const readiness = await createService(fixture).getReadiness(1, { forceRefresh: true });
+      expect(readiness.readiness).toBe('READY');
+      expect(readiness.blockers).toEqual([]);
+      expect(readiness.codeableResponses).toBe(1);
+
+      const rows = await createService(fixture).filterResponsesCodeable(
+        1, [createResponse(1, 1, 'var1'), createResponse(2, 2, 'var2')], units
+      );
+
+      expect(rows.map(row => row.id)).toEqual([1]);
+    }
+  );
+
+  it('ignores file errors on units without valid candidate variables in both checks and execution', async () => {
+    const units = [createUnit(1, 'UNIT_OK'), createUnit(2, 'UNIT_HELPERS'), createUnit(3, 'UNIT_UNKNOWN')];
+    const fixture: ReadinessFixture = {
+      units,
+      rawResponsesTotal: 3,
+      candidateRows: [
+        { unitid: 1, variableid: 'var1', response_count: 1 },
+        { unitid: 2, variableid: 'image_1', response_count: 1 },
+        { unitid: 3, variableid: 'unknown', response_count: 1 }
+      ],
+      unitFiles: [
+        createFile('UNIT_OK', '<Unit><CodingSchemeRef>SCHEME_OK</CodingSchemeRef></Unit>'),
+        createFile('UNIT_HELPERS', '<Unit><CodingSchemeRef>MISSING</CodingSchemeRef></Unit>')
+      ],
+      codingSchemeFiles: [createFile('SCHEME_OK', createCodingScheme('var1'))],
+      unitVariableMap: new Map([
+        ['UNIT_OK', new Set(['var1'])], ['UNIT_HELPERS', new Set(['image_1'])], ['UNIT_UNKNOWN', new Set(['var3'])]
+      ])
+    };
+    const readiness = await createService(fixture).getReadiness(1, { forceRefresh: true });
+    expect(readiness.readiness).toBe('READY');
+    expect(readiness.blockers).toEqual([]);
+    expect(readiness.missingUnitFiles).toEqual([]);
+    expect(readiness.missingCodingSchemes).toEqual([]);
+    await expect(createService(fixture).filterResponsesCodeable(1, [
+      createResponse(1, 1, 'var1'), createResponse(2, 2, 'image_1'), createResponse(3, 3, 'unknown')
+    ], units)).resolves.toEqual([createResponse(1, 1, 'var1')]);
   });
 });

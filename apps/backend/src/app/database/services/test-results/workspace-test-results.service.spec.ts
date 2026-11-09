@@ -28,6 +28,7 @@ import { CacheService } from '../../../cache/cache.service';
 import { CodingListService } from '../coding/coding-list.service';
 import { CodingValidationService } from '../coding/coding-validation.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
+import { getCodingReadinessCachePattern, getCodingReadinessCacheVersionKey } from '../coding/coding-readiness-cache-key.util';
 import { WorkspaceCoreService } from '../workspace/workspace-core.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
@@ -2914,8 +2915,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(getCodingReadinessCacheVersionKey(workspaceId));
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(getCodingReadinessCachePattern(workspaceId));
     });
 
     it('deleteUnit should invalidate cache', async () => {
@@ -2941,8 +2942,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(getCodingReadinessCacheVersionKey(workspaceId));
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(getCodingReadinessCachePattern(workspaceId));
     });
 
     it('deleteResponse should invalidate cache', async () => {
@@ -2981,8 +2982,8 @@ describe('WorkspaceTestResultsService', () => {
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
       expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`flat-frequencies-${workspaceId}-*`);
-      expect(cacheService.incr).toHaveBeenCalledWith(`coding_readiness:v2:version:${workspaceId}`);
-      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(`coding_readiness:v2:${workspaceId}:*`);
+      expect(cacheService.incr).toHaveBeenCalledWith(getCodingReadinessCacheVersionKey(workspaceId));
+      expect(cacheService.deleteByPattern).toHaveBeenCalledWith(getCodingReadinessCachePattern(workspaceId));
     });
   });
 
