@@ -1,6 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
+import { GermanTranslationsTestingModule } from '../../../../../testing/german-translations';
 import {
   ResetVersionDialogComponent,
   ResetVersionDialogData
@@ -18,45 +18,13 @@ describe('ResetVersionDialogComponent', () => {
     await TestBed.configureTestingModule({
       imports: [
         ResetVersionDialogComponent,
-        TranslateModule.forRoot()
+        GermanTranslationsTestingModule
       ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRefMock },
         { provide: MAT_DIALOG_DATA, useValue: data }
       ]
     }).compileComponents();
-
-    const translate = TestBed.inject(TranslateService);
-    translate.setTranslation('de', {
-      'coding-management': {
-        'reset-dialog': {
-          title: 'Kodierversion zurücksetzen',
-          'warning-message': 'Warnung',
-          'version-to-reset': 'Zu resettierende Version',
-          'result-impact-title': 'Welche Ergebnisse werden zurückgesetzt?',
-          'result-impact': {
-            v1: 'Der erste Autocoder-Lauf wird zurückgesetzt.',
-            v2: 'Die manuelle Kodierung wird zurückgesetzt.',
-            v3: 'Nur der zweite Autocoder-Lauf wird zurückgesetzt.'
-          },
-          'technical-fields': 'Technisch geleert werden die Ergebnisfelder',
-          'jobs-preserved-title': 'Was bleibt erhalten?',
-          'jobs-preserved-text': 'Bestehende Kodierjobs, Zuweisungen und Joblisten werden dadurch nicht gelöscht.',
-          'cascade-warning': 'Kaskade',
-          'cascade-versions': 'Folgende Versionen werden ebenfalls gelöscht',
-          'cascade-explanation': 'Kaskadenerklärung',
-          'irreversible-warning': 'Irreversibel',
-          'cancel-button': 'Abbrechen',
-          'confirm-button': 'Ja, zurücksetzen'
-        },
-        statistics: {
-          'first-autocode-run': '1 Autocoder Lauf',
-          'second-autocode-run': '2 Autocoder Lauf',
-          'manual-coding-run': 'Manuelle Kodierung'
-        }
-      }
-    });
-    translate.use('de');
 
     const fixture = TestBed.createComponent(ResetVersionDialogComponent);
     const component = fixture.componentInstance;
@@ -112,8 +80,8 @@ describe('ResetVersionDialogComponent', () => {
     expect(text).toContain('score_v3');
   });
 
-  it('closes with true when confirmed', async () => {
-    const { component } = await setup({
+  it('confirms the global scope with empty filters', async () => {
+    const { component, fixture } = await setup({
       version: 'v2',
       versionLabel: 'coding-management.statistics.manual-coding-run',
       cascadeVersions: ['v3']
@@ -121,6 +89,96 @@ describe('ResetVersionDialogComponent', () => {
 
     component.onConfirm();
 
-    expect(dialogRefMock.close).toHaveBeenCalledWith(true);
+    expect(fixture.nativeElement.querySelector('.confirmation-footer .scope-summary').textContent).toContain('gesamter Arbeitsbereich');
+    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Reset: v2 · Kaskade: v3');
+    expect(fixture.nativeElement.querySelector('.confirm-button').textContent).toContain('Gesamten Arbeitsbereich zurücksetzen');
+    expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: [] });
+  });
+
+  async function selectScope(fixture: ComponentFixture<ResetVersionDialogComponent>, scope: string): Promise<void> {
+    fixture.nativeElement.querySelector(`input[value="${scope}"]`).click();
+    await fixture.whenStable();
+  }
+
+  async function enterFilter(fixture: ComponentFixture<ResetVersionDialogComponent>, kind: string, value: string): Promise<void> {
+    const input: HTMLTextAreaElement = fixture.nativeElement.querySelector(`[data-cy="reset-${kind}-filters"]`);
+    input.value = value;
+    input.dispatchEvent(new Event('input'));
+    await fixture.whenStable();
+  }
+
+  it('blocks an empty filtered reset, including separators and whitespace', async () => {
+    const { component, fixture } = await setup({ version: 'v1', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+
+    expect(fixture.nativeElement.querySelector('.confirm-button').disabled).toBe(true);
+    await enterFilter(fixture, 'unit', ' , ;\n ');
+    await enterFilter(fixture, 'variable', ' ; ,\r\n');
+    component.onConfirm();
+
+    expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('mindestens einen Unit-Namen');
+    expect(fixture.nativeElement.querySelector('.confirm-button').disabled).toBe(true);
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+  });
+
+  it('confirms DHB003 only and shows that all its variables are included', async () => {
+    const { fixture } = await setup({ version: 'v1', versionLabel: '', cascadeVersions: ['v2', 'v3'] });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', ' DHB003; DHB003\n');
+
+    const summary = fixture.nativeElement.querySelector('.scope-summary').textContent;
+    expect(summary).toContain('Gefilterter Reset');
+    expect(summary).toContain('Units: DHB003');
+    expect(summary).toContain('alle Variablen der betroffenen Units');
+    expect(summary).toContain('Reset: v1 · Kaskade: v2, v3');
+    expect(fixture.nativeElement.querySelector('.filter-fields').textContent).toContain('Kaskade gilt nur für den angegebenen Bereich');
+    expect(fixture.nativeElement.querySelector('.confirm-button').textContent).toContain('Gefilterten Bereich zurücksetzen');
+    fixture.nativeElement.querySelector('.confirm-button').click();
+
+    expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: ['DHB003'], variableFilters: [] });
+  });
+
+  it('normalizes both filters without changing names, case or embedded spaces', async () => {
+    const { component, fixture } = await setup({ version: 'v2', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', ' DHB003,Unit with spaces;DHB003\nOtherUnit');
+    await enterFilter(fixture, 'variable', ' V1; V2\nV1, v1 ');
+
+    expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('Variablen: V1, V2, v1');
+    component.onConfirm();
+
+    expect(dialogRefMock.close).toHaveBeenCalledWith({
+      unitFilters: ['DHB003', 'Unit with spaces', 'OtherUnit'], variableFilters: ['V1', 'V2', 'v1']
+    });
+  });
+
+  it('allows a variable-only scope and makes the inclusion of all units clear', async () => {
+    const { component, fixture } = await setup({ version: 'v3', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'variable', 'V1');
+
+    expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('Units: alle Units im Arbeitsbereich');
+    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Reset: v3 · keine Kaskade');
+    component.onConfirm();
+
+    expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: ['V1'] });
+  });
+
+  it('discards entered filters when confirming a global reset', async () => {
+    const { component, fixture } = await setup({ version: 'v1', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', 'DHB003');
+    await enterFilter(fixture, 'variable', 'V1');
+    await selectScope(fixture, 'global');
+    component.onConfirm();
+
+    expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: [] });
+  });
+
+  it('cancels without returning a reset request', async () => {
+    const { fixture } = await setup({ version: 'v1', versionLabel: '' });
+    fixture.nativeElement.querySelector('.cancel-button').click();
+
+    expect(dialogRefMock.close).toHaveBeenCalledWith();
   });
 });
