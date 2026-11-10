@@ -4,7 +4,7 @@ import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusNumberToString, statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-import { queryFlatResponseFacets } from './flat-response-facets.util';
+import { queryFlatResponseFacets, settleFacetQueries } from './flat-response-facets.util';
 import { applyExclusionsToQuery, createGeoGebraUnitExistsCondition, excludeAutocoderGeneratedResponses } from './test-results.util';
 
 @Injectable()
@@ -469,7 +469,7 @@ export class TestResultsFilterOptionsService {
       responseStatusRows, tagRows, sessionBrowserRows, sessionOsRows, sessionScreenRows, sessionIdRows
     } = await queryFlatResponseFacets(baseQb, this.connection, MAX_OPTIONS);
 
-    const [processingDurationRows, unitProgressRows] = await Promise.all([
+    const [processingDurationRows, unitProgressRows] = await settleFacetQueries([
       this.queryFlatResponseProcessingDurationOptions(
         baseQb,
         MAX_OPTIONS,

@@ -53,6 +53,12 @@ export function parsePostgresPoolMax(value: string | number | undefined, fallbac
   return parsePositiveInteger(value, fallback);
 }
 
+export function parsePostgresPoolAcquireTimeout(value: string | number | undefined): number {
+  const parsed = Number(value);
+  // pg uses Node timers for pool acquisition as well as establishing a connection.
+  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 2_147_483_647 ? parsed : 10_000;
+}
+
 export function parsePostgresIdleInTransactionTimeout(
   value: string | number | undefined,
   fallback = 15 * 60_000
@@ -140,6 +146,9 @@ export function buildPostgresConnectionOptions(
         maxQueryExecutionTime: parsePositiveInteger(configService.get('POSTGRES_SLOW_QUERY_MS'), 1000),
         extra: {
           max: runtimeConfig.postgresPoolMax,
+          connectionTimeoutMillis: parsePostgresPoolAcquireTimeout(
+            configService.get('POSTGRES_POOL_ACQUIRE_TIMEOUT_MS')
+          ),
           options: buildPostgresConnectionOptions(
             configService.get<string>('PGOPTIONS'),
             configService.get<string>('POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS')

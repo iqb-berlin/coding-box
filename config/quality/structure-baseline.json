@@ -191,8 +191,8 @@
       "file": {},
       "functions": {
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponseFilterOptions#1": {
-          "complexity": 29,
-          "max-lines-per-function": 128
+          "complexity": 27,
+          "max-lines-per-function": 110
         },
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponses#1": {
           "max-lines-per-function": 109

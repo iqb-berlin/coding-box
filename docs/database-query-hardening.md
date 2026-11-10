@@ -118,6 +118,32 @@ Quellen: [Docker-Laufzeitoptionen](https://docs.docker.com/engine/containers/run
 keine SQL-Texte, Bindewerte oder Antwortinhalte. HTTP-Laufzeit und Poolbelegung
 bleiben zusätzlich verfügbar.
 
+`POSTGRES_POOL_ACQUIRE_TIMEOUT_MS` begrenzt die Wartezeit auf eine freie oder
+neu aufgebaute PostgreSQL-Verbindung (Standard: 10.000 ms, positive ganze
+Millisekunden). Ohne diese Grenze konnte ein abgebrochener HTTP-Aufruf weiter
+auf den Pool warten und bei wiederholten Aufrufen einen langen Rückstau
+verursachen. Die Grenze gilt auch für die getrennten Lock-Sessions und den
+Export-Worker; sie beendet keine bereits laufende SQL-Anweisung und ist kein
+Antwortzeitziel. Abgelaufene Pool-Anforderungen führen zu HTTP 503. Sie sind
+weiterhin fehlgeschlagene Aufrufe und dürfen nicht als Performanceerfolg zählen.
+
+Ungefilterte Filteroptionen teilen innerhalb eines Prozesses eine laufende
+Berechnung pro Workspace, Cache-Version und Schwellenwert. HTTP-Aufrufe und
+der Filteroptionen-Queueprozessor verwenden denselben Cachepfad. Eine
+Invalidierung erzeugt einen neuen Schlüssel; eine ältere Berechnung schreibt
+ausschließlich unter ihrer ursprünglichen Version. Zwischen mehreren
+API-Prozessen erfolgt keine gemeinsame Berechnungssperre. Bei einem SQL-Fehler
+bleibt die Berechnung bis zum Ende aller bereits gestarteten Teilabfragen aktiv,
+damit ein sofortiger Wiederholungsversuch diese nicht zusätzlich vervielfacht.
+
+Antwortlisten verwenden für Tagfilter ein `EXISTS` und berechnen die
+Tagaggregation in einer korrelierten Projektion statt einer Gruppierung aller
+Antworten vor dem Seitenlimit. Die bisherigen Filter, ausschließlich passende
+Tags und die Begrenzung der Antwortwerte bleiben erhalten. Die Antwort-ID ist
+der letzte Sortierschlüssel, damit identische sichtbare Schlüssel bei der
+Seitennavigation eine feste Reihenfolge haben. Der tatsächliche Ausführungsplan
+und die Auswirkungen unter Last werden gesondert nachgeprüft.
+
 Der neue Nx-Aufruf ist ausschließlich lesend und benötigt explizite
 `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` und gegebenenfalls
 `POSTGRES_PASSWORD` für die beabsichtigte Instanz:

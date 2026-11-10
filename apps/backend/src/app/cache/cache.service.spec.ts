@@ -32,6 +32,41 @@ describe('CacheService', () => {
     await expect(service.getStrict('artifact')).rejects.toThrow('redis unavailable');
   });
 
+  it('shares one computation between concurrent cache misses', async () => {
+    redis.get.mockResolvedValue(null);
+    let resolve!: (value: { codes: string[] }) => void;
+    const compute = jest.fn(() => new Promise<{ codes: string[] }>(done => { resolve = done; }));
+    const requests = Array.from({ length: 20 }, () => service.getOrCompute('facets:v1', compute, 0));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(compute).toHaveBeenCalledTimes(1);
+    resolve({ codes: ['code'] });
+    expect(await Promise.all(requests)).toEqual(Array(20).fill({ codes: ['code'] }));
+    expect(redis.set).toHaveBeenCalledTimes(1);
+    expect(redis.set).toHaveBeenCalledWith('facets:v1', JSON.stringify({ codes: ['code'] }));
+  });
+
+  it('retries after a failed computation without caching its error', async () => {
+    redis.get.mockResolvedValue(null);
+    const compute = jest.fn().mockRejectedValueOnce(new Error('SQL timeout')).mockResolvedValueOnce({ ok: true });
+    const first = await Promise.allSettled([
+      service.getOrCompute('facets:v1', compute),
+      service.getOrCompute('facets:v1', compute)
+    ]);
+    expect(first.every(result => result.status === 'rejected')).toBe(true);
+    expect(redis.set).not.toHaveBeenCalled();
+    await expect(service.getOrCompute('facets:v1', compute)).resolves.toEqual({ ok: true });
+    expect(compute).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps valid falsy cache entries without recomputing them', async () => {
+    redis.get.mockResolvedValue('0');
+    const compute = jest.fn();
+    await expect(service.getOrCompute('zero', compute)).resolves.toBe(0);
+    expect(compute).not.toHaveBeenCalled();
+  });
+
   it('reads numbers and falls back on invalid values or redis errors', async () => {
     redis.get
       .mockResolvedValueOnce('42')

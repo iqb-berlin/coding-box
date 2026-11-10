@@ -23,12 +23,20 @@ const facetGroups = [
 ] as const;
 type Facet = typeof facetGroups[number][number][0];
 
+/** Do not release a shared computation while its other SQL queries are still running. */
+export async function settleFacetQueries<T>(queries: Promise<T>[]): Promise<T[]> {
+  const settled = await Promise.allSettled(queries);
+  const failed = settled.find(result => result.status === 'rejected');
+  if (failed?.status === 'rejected') throw failed.reason;
+  return settled.flatMap(result => (result.status === 'fulfilled' ? [result.value] : []));
+}
+
 /** Three narrow projections avoid twelve joins and a wide, repeatedly scanned CTE. */
 export async function queryFlatResponseFacets(
   baseQuery: SelectQueryBuilder<ResponseEntity>, connection: DataSource, maxOptions: number
 ): Promise<Record<Facet, Array<{ v: string }>>> {
   if (!Number.isSafeInteger(maxOptions) || maxOptions < 1) throw new Error('Invalid facet limit');
-  const groups = await Promise.all(facetGroups.map(async group => {
+  const groups = await settleFacetQueries(facetGroups.map(async group => {
     const query = baseQuery.clone();
     if (group === facetGroups[2]) query.leftJoin('bookletEntity.sessions', 'session');
     const [sql, parameters] = query.select(group.map(([, expression, column]) => `${expression} AS "${column}"`))

@@ -10,7 +10,28 @@ export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
   private readonly DEFAULT_TTL = 86400; // 24 Stunden in Sekunden
+  private readonly computations = new Map<string, Promise<unknown>>();
   constructor(@InjectRedis() private readonly redis: Redis) {}
+
+  /** Coalesce cache misses within this process; versioned keys isolate concurrent invalidations. */
+  async getOrCompute<T>(key: string, compute: () => Promise<T>, ttl?: number): Promise<T> {
+    const active = this.computations.get(key);
+    if (active) return active as Promise<T>;
+
+    const computation = (async () => {
+      const cached = await this.get<T>(key);
+      if (cached !== null) return cached;
+      const value = await compute();
+      await this.set(key, value, ttl);
+      return value;
+    })();
+    this.computations.set(key, computation);
+    try {
+      return await computation;
+    } finally {
+      if (this.computations.get(key) === computation) this.computations.delete(key);
+    }
+  }
 
   async getNumber(key: string, fallback: number): Promise<number> {
     try {

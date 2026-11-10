@@ -45,15 +45,13 @@ export class FlatResponseFilterOptionsProcessor extends WorkspaceWorkerHost {
         threshold
       );
 
-    const result =
-      await this.workspaceTestResultsService.findFlatResponseFilterOptions(
+    await this.cacheService.getOrCompute(cacheKey, () => (
+      this.workspaceTestResultsService.findFlatResponseFilterOptions(
         workspaceId,
         {
           processingDurationThresholdMs: String(threshold)
         }
-      );
-
-    await this.cacheService.set(cacheKey, result, 0);
+      )), 0);
 
     await job.updateProgress(100);
     this.logger.log(

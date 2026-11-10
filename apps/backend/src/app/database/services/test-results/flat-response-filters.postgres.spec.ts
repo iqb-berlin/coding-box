@@ -147,6 +147,27 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ tags: 'review', page: 3, limit: 2 }, [5], 5);
   });
 
+  it('returns only the matching tags and preserves empty tags on other units', async () => {
+    const matching = await expectResponses({ tags: 'review-alpha' }, [1, 2, 3, 4, 5]);
+    expect(matching.every(row => row.tags.join(',') === 'review-alpha')).toBe(true);
+    const rows = await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(rows[0].tags).toEqual(['review-alpha', 'review-beta']);
+    expect(rows.find(row => row.responseId === 7)?.tags).toEqual([]);
+  });
+
+  it('paginates equal display keys by response identity and retains the value prefix limit', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id,unitid,variableid,status,value)
+      VALUES (20,1,'A',3,$1),(21,1,'A',3,'second')`, ['x'.repeat(2500)]);
+    try {
+      for (const [page, id] of [[1, 1], [2, 20], [3, 21]] as const) {
+        const rows = await expectResponses({ response: '"A"', page, limit: 1 }, [id], 3);
+        if (id === 20) expect(rows[0].responseValue).toBe('x'.repeat(2000));
+      }
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id IN (20,21)`);
+    }
+  });
+
   it('combines value, duration, session and tag filters in the real queries', async () => {
     await expectResponses({
       hasValue: 'true',
