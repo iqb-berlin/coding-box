@@ -42,7 +42,15 @@ describeRedis('authentication counters against isolated Redis', () => {
   it('expires counters and permits requests after the block period', async () => {
     expect((await stores[0].increment('expiring', 100, 1, 100, 'default')).isBlocked).toBe(false);
     expect((await stores[1].increment('expiring', 100, 1, 100, 'default')).isBlocked).toBe(true);
-    await new Promise(resolve => { setTimeout(resolve, 150); });
+    // Redis and the test process can run on different hosts/VM clocks. Observe
+    // actual key expiry instead of assuming a host timer advances Redis by 150 ms.
+    const deadline = performance.now() + 2000;
+    let remaining = await clients[0].pttl('default:expiring');
+    while (remaining >= 0 && performance.now() < deadline) {
+      await new Promise(resolve => { setTimeout(resolve, 10); });
+      remaining = await clients[0].pttl('default:expiring');
+    }
+    expect(remaining).toBe(-2);
     const nextWindow = await stores[0].increment('expiring', 100, 1, 100, 'default');
     expect(nextWindow).toMatchObject({ totalHits: 1, isBlocked: false });
   });
