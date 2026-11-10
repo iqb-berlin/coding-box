@@ -1,3 +1,6 @@
+import type { VariableCodingData } from '@iqbspecs/coding-scheme';
+import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingSchemeFactory } from './generated/autocoder-compatibility-engine';
 import { ItemDatasetCellResolver, ItemDatasetColumn, ItemDatasetProfile } from './item-dataset-cell-resolver';
 import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
 
@@ -134,5 +137,86 @@ describe('item dataset MNR ordering', () => {
       [activity.key, { status: 5, code: 1, score: 1 }]
     ]), profile(), new Map([[first.key, [sourceKey]], [second.key, [sourceKey]]]), { variablePositions: positions });
     expect(cells.map(cell => cell.code)).toEqual([-99, -99, 1]);
+  });
+
+  describe.each(['testlet', 'booklet'] as const)('partial aggregates with %s scope', notReachedScope => {
+    it.each(['D', 'CHAIN'])(
+      'does not count the computed %s result as later participant activity', target => {
+        const scheme: VariableCodingData[] = [
+          { id: 'A', sourceType: 'BASE', codes: [] },
+          { id: 'B', sourceType: 'BASE', codes: [] },
+          { id: 'C', sourceType: 'BASE', codes: [] },
+          {
+            id: 'D',
+            sourceType: 'SUM_SCORE',
+            deriveSources: ['A', 'B'],
+            sourceParameters: { processing: ['TAKE_DISPLAYED_AS_ZERO_IF_PARTIAL'] },
+            codes: [{
+              id: 1, type: 'RESIDUAL_AUTO', score: 1, ruleSets: []
+            }]
+          },
+          {
+            id: 'CHAIN',
+            sourceType: 'COPY_VALUE',
+            deriveSources: ['D'],
+            codes: [{
+              id: 1, type: 'RESIDUAL_AUTO', score: 1, ruleSets: []
+            }]
+          }
+        ];
+        const responses = CodingSchemeFactory.code([
+          {
+            id: 'A', value: 1, status: 'CODING_COMPLETE', code: 3, score: 3
+          },
+          { id: 'B', value: null, status: 'DISPLAYED' }
+        ], scheme);
+        expect(responses.find(response => response.id === target))
+          .toMatchObject({ status: 'CODING_COMPLETE', code: 1, score: 1 });
+        const responseValues = new Map(responses.map(response => [
+          `UNIT\u001F${response.id}`,
+          {
+            code: response.code ?? null,
+            score: response.score ?? null,
+            status: statusStringToNumber(response.status)
+          }
+        ]));
+        const source = column('2', 'A', 1, 'UNIT');
+        const omission = column('3', 'B', 2, 'UNIT');
+        const derived: ItemDatasetColumn = {
+          ...column('1', target, 0, 'UNIT'),
+          isDerived: true,
+          sourceType: target === 'D' ? 'SUM_SCORE' : 'COPY_VALUE'
+        };
+        const exportColumns = [derived, source, omission];
+        const sources = new Map([
+          ['UNIT\u001FD', ['UNIT\u001FA', 'UNIT\u001FB']],
+          ['UNIT\u001FCHAIN', ['UNIT\u001FD']]
+        ]);
+        const { positions } = buildItemDatasetVariablePositions('UNIT', [
+          { id: 'A', page: '0' }, { id: 'B', page: '1' }, { id: 'C', page: '2' }
+        ], undefined, JSON.stringify({ variableCodings: scheme }));
+        const bookletDesign = {
+          units: new Map([['UNIT', { unitId: 'UNIT', order: 0, testletKey: 'T1' }]])
+        };
+        const resolve = (recodeTrailingOmissions: boolean, selectedColumns = exportColumns) => resolver.resolve(
+          selectedColumns,
+          bookletDesign,
+          responseValues,
+          profile(),
+          sources,
+          { notReachedScope, recodeTrailingOmissions, variablePositions: positions }
+        );
+
+        // With CHAIN exported, the calculated SUM_SCORE source is hidden.
+        expect(resolve(true).map(cell => cell.code)).toEqual([1, 3, -96]);
+        expect(resolve(false).map(cell => cell.code)).toEqual([1, 3, -99]);
+
+        // Actual later work must still prevent trailing-omission recoding.
+        const laterActivity = column('4', 'C', 3, 'UNIT');
+        responseValues.set(laterActivity.key, { status: 5, code: 1, score: 1 });
+        expect(resolve(true, [...exportColumns, laterActivity]).map(cell => cell.code))
+          .toEqual([1, 3, -99, 1]);
+      }
+    );
   });
 });

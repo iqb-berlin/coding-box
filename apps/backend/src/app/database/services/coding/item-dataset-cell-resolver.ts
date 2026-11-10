@@ -585,7 +585,9 @@ export class ItemDatasetCellResolver {
         }
         for (const cellIndex of positionIndexes) {
           yield* this.checkpoint(operationCounter);
-          if (cells[cellIndex].activity) {
+          // Calculated results do not prove that a later response was seen or answered.
+          // Their actual source responses participate at their own positions.
+          if (!columns[cellIndex].isDerived && cells[cellIndex].activity) {
             laterActivity = true;
             break;
           }

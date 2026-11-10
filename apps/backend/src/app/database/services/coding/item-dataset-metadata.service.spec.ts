@@ -96,7 +96,10 @@ describe('ItemDatasetMetadataService variable positions', () => {
         [columns[2].key, { status: 5, code: 1, score: 1 }]
       ]), profile, new Map([[columns[2].key, [columns[1].key]]]), { variablePositions, notReachedScope });
 
-      expect(cells.map(cell => cell.code)).toEqual([-99, -99, 1]);
+      // The calculated D result is not participant activity after A or B.
+      expect(cells.map(cell => cell.code)).toEqual([-96, -96, 1]);
+      expect(variablePositions.get('UNIT\u001FB')).toBeLessThan(variablePositions.get(columns[0].key)!);
+      expect(variablePositions.get(columns[0].key)).toBeLessThan(variablePositions.get(columns[2].key)!);
       expect(warnings).toEqual([expect.objectContaining({
         code: 'variable-order-fallback',
         variableId: 'D',
