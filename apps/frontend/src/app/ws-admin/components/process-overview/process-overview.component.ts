@@ -94,6 +94,10 @@ const STATUS_PRESENTATIONS: Record<ProcessStatus, ProcessStatusPresentation> = {
 };
 
 const QUEUE_PRESENTATIONS: Record<string, QueuePresentation> = {
+  'content-pool': {
+    labelKey: 'process-overview.queues.content-pool.label',
+    descriptionKey: 'process-overview.queues.content-pool.description'
+  },
   'test-person-coding': {
     labelKey: 'process-overview.queues.test-person-coding.label',
     descriptionKey: 'process-overview.queues.test-person-coding.description'
@@ -145,6 +149,9 @@ const QUEUE_PRESENTATIONS: Record<string, QueuePresentation> = {
 };
 
 const DETAIL_LABEL_KEYS: Record<string, string> = {
+  operation: 'process-overview.details.operation',
+  acpId: 'process-overview.details.acpId',
+  fileCount: 'process-overview.details.fileCount',
   taskId: 'process-overview.details.taskId',
   resultType: 'process-overview.details.resultType',
   overwriteExisting: 'process-overview.details.overwriteExisting',
@@ -477,7 +484,8 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           DETAIL_LABEL_KEYS[key] || 'process-overview.details.unknown-key',
           { key }
         ),
-        value: this.formatDetailValue(value)
+        value: key === 'operation' && ['import-acp', 'upload-files'].includes(String(value)) ?
+          this.translateService.instant(`process-overview.content-pool-operations.${value}`) : this.formatDetailValue(value)
       }));
   }
 

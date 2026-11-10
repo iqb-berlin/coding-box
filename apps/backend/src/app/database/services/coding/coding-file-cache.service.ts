@@ -5,17 +5,7 @@ import { getErrorMessage } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
 import { LRUCache } from '../shared';
-
-interface VocsVariableCoding {
-  id?: unknown;
-  alias?: unknown;
-  page?: unknown;
-  sourceType?: unknown;
-}
-
-interface VocsScheme {
-  variableCodings?: VocsVariableCoding[];
-}
+import { codingSchemePageOverrides, parseCodingSchemeVariables } from '../../../utils/voud/coding-scheme-metadata.util';
 
 /**
  * Service responsible for loading, parsing, and caching VOUD and VOCS files.
@@ -113,9 +103,6 @@ export class CodingFileCacheService {
     unitName: string,
     workspaceId: number
   ): Promise<Map<string, string>> {
-    const idPageOverrides = new Map<string, string>();
-    const aliasPageOverrides = new Map<string, string>();
-
     const vocsFile = await this.fileUploadRepository.findOne({
       where: {
         workspace_id: workspaceId,
@@ -129,67 +116,14 @@ export class CodingFileCacheService {
     }
 
     try {
-      const scheme = this.parseVocsScheme(vocsFile.data);
-      const vars = Array.isArray(scheme?.variableCodings) ?
-        scheme.variableCodings :
-        [];
-
-      for (const variableCoding of vars) {
-        const normalizedPage = this.toVeronaPageIndex(variableCoding?.page);
-        if (normalizedPage === null) {
-          continue;
-        }
-
-        this.addPageOverride(idPageOverrides, variableCoding?.id, normalizedPage);
-        this.addPageOverride(
-          aliasPageOverrides,
-          variableCoding?.alias,
-          normalizedPage
-        );
-      }
+      return codingSchemePageOverrides(parseCodingSchemeVariables(vocsFile.data));
     } catch (error) {
       this.logger.debug(
         `Error parsing VOCS page overrides for unit ${unitName}: ${getErrorMessage(error)}`
       );
     }
 
-    return new Map<string, string>([
-      ...idPageOverrides.entries(),
-      ...aliasPageOverrides.entries()
-    ]);
-  }
-
-  private parseVocsScheme(data: unknown): VocsScheme {
-    return (typeof data === 'string' ? JSON.parse(data) : data) as VocsScheme;
-  }
-
-  private toVeronaPageIndex(page: unknown): string | null {
-    if (page === null || page === undefined) {
-      return null;
-    }
-
-    const pageText = String(page).trim();
-    if (!pageText) {
-      return null;
-    }
-
-    const pageNumber = Number(pageText);
-    if (!Number.isInteger(pageNumber) || pageNumber < 0) {
-      return null;
-    }
-
-    return String(Math.max(0, pageNumber - 1));
-  }
-
-  private addPageOverride(
-    pageOverrides: Map<string, string>,
-    variableId: unknown,
-    page: string
-  ): void {
-    const normalizedVariableId = String(variableId || '').trim();
-    if (normalizedVariableId) {
-      pageOverrides.set(normalizedVariableId, page);
-    }
+    return new Map();
   }
 
   /**
@@ -245,10 +179,7 @@ export class CodingFileCacheService {
 
     if (vocsFile) {
       try {
-        const scheme = this.parseVocsScheme(vocsFile.data);
-        const vars = Array.isArray(scheme?.variableCodings) ?
-          scheme.variableCodings :
-          [];
+        const vars = parseCodingSchemeVariables(vocsFile.data);
 
         for (const vc of vars) {
           const variableId = String(vc?.id || '').trim();

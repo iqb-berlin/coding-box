@@ -13,7 +13,8 @@ export const JOB_QUEUE_NAMES = [
   'response-analysis',
   'variable-analysis',
   'external-coding-import',
-  'database-export'
+  'database-export',
+  'content-pool'
 ] as const;
 
 export function createJobQueueOptions(config: ConfigService): BullRootModuleOptions {

@@ -659,8 +659,11 @@ test('CI selects coverage, rejects empty suites, and publishes reports as a requ
   assert.match(job, /allow_failure: false/);
   assert.match(job, /frontend:test --configuration=ci/);
   assert.match(job, /frontend:test-quality-gates/);
-  assert.match(job, /frontend:zoneless-approval/);
-  assert.match(job, /frontend:zoneless-inventory-test/);
+  assert.match(job, /frontend:e2e-coverage/);
+  assert.doesNotMatch(job, /frontend:zoneless-/);
+  for (const target of ['zoneless-inventory', 'zoneless-inventory-test', 'zoneless-approval', 'zoneless-exhaustive-approval']) {
+    assert.equal(project.targets[target], undefined);
+  }
   assert.doesNotMatch(job, /frontend:lint|nx build frontend|frontend:test-zoneless/);
   assert.doesNotMatch(ci, /\ntest-(?:frontend-zoneless|zoneless-approval|browser-zoneless|browser-production):/);
   const backend = ci.split('\ntest-backend:\n')[1].split('\ntest-frontend:\n')[0];

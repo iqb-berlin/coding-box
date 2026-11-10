@@ -22,6 +22,7 @@ import {
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
+import { UserBackendService } from '../../shared/services/user/user-backend.service';
 
 describe('authInterceptor', () => {
   let http: HttpClient;
@@ -297,6 +298,33 @@ describe('authInterceptor', () => {
     expect(snackBar.open).not.toHaveBeenCalled();
   });
 
+  it.each([400, 403, 422, 429, 500, 502, 503, 504])('leaves Testcenter HTTP %s failures to the login view without a second error message', async status => {
+    TestBed.inject(UserBackendService).authenticate('testcenter-user', 'invalid', '1', '')
+      .subscribe({ error: () => undefined });
+    await Promise.resolve();
+
+    const request = httpMock.expectOne('api/tc_authentication');
+    expect(request.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
+    request.flush({ message: 'Invalid Testcenter credentials' }, {
+      status, statusText: 'Testcenter failure'
+    });
+
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.setBackendUnavailable).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
+  it('still requires application reauthentication for HTTP 401 on a locally handled Testcenter login', async () => {
+    TestBed.inject(UserBackendService).authenticate('testcenter-user', 'password', '1', '')
+      .subscribe({ error: () => undefined });
+    await Promise.resolve();
+    httpMock.expectOne('api/tc_authentication').flush({}, { status: 401, statusText: 'Unauthorized' });
+    expect(appService.requireReAuthentication).toHaveBeenCalledWith('/home');
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+    expect(snackBar.open).not.toHaveBeenCalled();
+  });
+
   it.each([500, 504, 999])('leaves a locally handled HTTP %s failure to the requesting view', async status => {
     const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
 
@@ -342,6 +370,24 @@ describe('authInterceptor', () => {
       status: 403, statusText: 'Forbidden'
     });
 
+    expect(snackBar.open).toHaveBeenCalledWith(expected, 'Schließen', expect.objectContaining({ duration: 5000 }));
+    expect(appService.requireReAuthentication).not.toHaveBeenCalled();
+    expect(appService.addErrorMessage).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['Forbidden', 'Sie haben keine Berechtigung für diese Aktion'],
+    ['Access level too low', 'Sie haben nicht die erforderliche Zugriffsberechtigung für diese Aktion']
+  ])('keeps permission feedback for a replay request suppressing general errors: %s', async (message, expected) => {
+    const context = new HttpContext().set(SUPPRESS_GLOBAL_HTTP_ERROR, true);
+    http.get('/api/wsg-admin/workspace/12/coding-job/100/replay-session', { context })
+      .subscribe({ error: jest.fn() });
+    await Promise.resolve();
+    httpMock.expectOne('/api/wsg-admin/workspace/12/coding-job/100/replay-session').flush({ message }, {
+      status: 403, statusText: 'Forbidden'
+    });
+
+    expect(snackBar.open).toHaveBeenCalledTimes(1);
     expect(snackBar.open).toHaveBeenCalledWith(expected, 'Schließen', expect.objectContaining({ duration: 5000 }));
     expect(appService.requireReAuthentication).not.toHaveBeenCalled();
     expect(appService.addErrorMessage).not.toHaveBeenCalled();

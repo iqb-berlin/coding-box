@@ -354,6 +354,8 @@ build-main-pr-backend-image:
       artifacts: false
     - job: test-workflows-live
       artifacts: false
+    - job: test-e2e-report
+      artifacts: false
     - job: test-main-pr-backend
       artifacts: false
     - job: test-main-pr-frontend
@@ -419,6 +421,8 @@ build-main-pr-frontend-image:
     - job: test-auth-live
       artifacts: false
     - job: test-workflows-live
+      artifacts: false
+    - job: test-e2e-report
       artifacts: false
     - job: test-main-pr-backend
       artifacts: false
@@ -895,6 +899,8 @@ build-main-commit-backend-image:
       artifacts: false
     - job: test-workflows-live
       artifacts: false
+    - job: test-e2e-report
+      artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
   services:
@@ -949,6 +955,8 @@ build-main-commit-frontend-image:
     - job: test-auth-live
       artifacts: false
     - job: test-workflows-live
+      artifacts: false
+    - job: test-e2e-report
       artifacts: false
     - build-main-commit-base-image
   image: ${DOCKER_IMAGE}
@@ -1293,6 +1301,8 @@ build-release:
     - job: test-auth-live
       artifacts: false
     - job: test-workflows-live
+      artifacts: false
+    - job: test-e2e-report
       artifacts: false
     - job: scan-main-commit-db-image
       artifacts: false

@@ -73,6 +73,18 @@ CA-Datei den Backend-Prozess neu starten: Node liest zusätzliche CAs nur beim
 Prozessstart. Bei lokalem Backend ohne Docker ist `NODE_EXTRA_CA_CERTS` vor dem
 Start auf den absoluten lokalen Dateipfad zu setzen, nicht auf den Containerpfad.
 
+## Freigabe der Instanz
+
+Die genaue Basisadresse muss zusätzlich freigegeben sein. Systemadministratoren
+können neue HTTP- und HTTPS-Instanzen in **Administration → Einstellungen → Freigegebene
+Testcenter** mit einem Namen hinterlegen. Diese Freigaben gelten ohne Neustart.
+Die IQB-Adressen sind anfangs freigegeben und können in der Verwaltung auch
+aufgehoben oder umbenannt werden; der Betreiber kann
+weitere Adressen über `TESTCENTER_ALLOWED_URLS` ergänzen. Die Einrichtung einer
+privaten CA ersetzt die URL-Freigabe nicht.
+
+[Schrittweise Anleitung und Verbindungstest](testcenter-instances-de.md).
+
 ## Verbindung prüfen
 
 1. Im neu erstellten Backend prüfen, dass `NODE_EXTRA_CA_CERTS` auf die lesbare

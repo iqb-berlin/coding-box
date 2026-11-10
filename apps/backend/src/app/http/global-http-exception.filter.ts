@@ -11,6 +11,7 @@ import {
 import { Response } from 'express';
 import { MulterError } from 'multer';
 import { AuthFailureException } from '../auth/auth-failure.exception';
+import { TestcenterConnectionException, TestcenterConnectionErrorCode } from '../testcenter/testcenter-connection-error';
 import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 import {
   REQUEST_ID_HEADER,
@@ -22,7 +23,7 @@ interface ErrorResponseBody {
   statusCode: number;
   message: string | string[];
   error?: string;
-  code?: AuthErrorCode;
+  code?: AuthErrorCode | TestcenterConnectionErrorCode;
   requestId: string;
   timestamp: string;
   path: string;
@@ -109,6 +110,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
         code: exception.code,
         message: exception.message
       };
+    }
+
+    if (exception instanceof TestcenterConnectionException) {
+      return { ...baseBody, code: exception.diagnostic, message: 'Testcenter connection failed' };
     }
 
     if (status >= HttpStatus.INTERNAL_SERVER_ERROR) {

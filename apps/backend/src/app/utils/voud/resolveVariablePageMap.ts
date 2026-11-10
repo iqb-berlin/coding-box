@@ -1,25 +1,6 @@
+import { parseUnitDefinition } from './parse-unit-definition.util';
+
 type JsonObject = Record<string, unknown>;
-
-function removeControlChars(value: string): string {
-  let cleanedValue = '';
-
-  for (const character of value) {
-    const charCode = character.charCodeAt(0);
-    if ((charCode > 0x1F && charCode < 0x7F) || charCode > 0x9F) {
-      cleanedValue += character;
-    }
-  }
-
-  return cleanedValue;
-}
-
-function parseDefinition(definition: string): unknown {
-  try {
-    return JSON.parse(definition);
-  } catch (_error) {
-    return JSON.parse(removeControlChars(definition));
-  }
-}
 
 function asJsonObject(value: unknown): JsonObject | null {
   return typeof value === 'object' && value !== null && !Array.isArray(value) ?
@@ -88,7 +69,11 @@ function getPageVariableRefs(page: unknown): string[] {
 }
 
 export function resolveVariablePageMap(definition: string): Map<string, string> {
-  const unitDefinition = asJsonObject(parseDefinition(definition));
+  return resolveVariablePageMapFromDefinition(parseUnitDefinition(definition));
+}
+
+export function resolveVariablePageMapFromDefinition(definition: unknown): Map<string, string> {
+  const unitDefinition = asJsonObject(definition);
   const pages = unitDefinition && Array.isArray(unitDefinition.pages) ?
     unitDefinition.pages :
     [];

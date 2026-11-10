@@ -1,0 +1,139 @@
+# Disposable local test fixtures. Credentials below are synthetic and bind only to loopback.
+services:
+  mysql:
+    image: mysql:8.4@sha256:a81d043930e51745522bd5c430961cf8286f0a23f0a9a2a6e0108f7ea71b0902
+    healthcheck:
+      test: ['CMD', 'mysqladmin', 'ping', '--silent']
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    command: ["--sql-mode=PIPES_AS_CONCAT,ONLY_FULL_GROUP_BY,STRICT_TRANS_TABLES,NO_ZERO_IN_DATE,NO_ZERO_DATE,ERROR_FOR_DIVISION_BY_ZERO,NO_ENGINE_SUBSTITUTION"]
+    environment:
+      MYSQL_DATABASE: tc17
+      MYSQL_USER: testcenter
+      MYSQL_PASSWORD: fixture-only-password
+      MYSQL_ROOT_PASSWORD: fixture-only-password
+    volumes:
+      - ./mysql-init.sql:/docker-entrypoint-initdb.d/fixture.sql:ro
+    tmpfs:
+      - /var/lib/mysql
+    mem_limit: 700m
+  postgres:
+    image: postgres:18.4@sha256:a02db8cac496f15b094798a38254f14d6e00741f709360e5e00bb6668ea31636
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-U', 'testcenter', '-d', 'tc19', '-h', '127.0.0.1']
+      interval: 2s
+      timeout: 2s
+      retries: 60
+    environment:
+      POSTGRES_DB: tc19
+      POSTGRES_USER: testcenter
+      POSTGRES_PASSWORD: fixture-only-password
+    tmpfs:
+      - /var/lib/postgresql
+    mem_limit: 400m
+  redis:
+    image: redis:7.4-alpine@sha256:6ba19c50b56777f5c11c58eff8ddb69d0d5f27ba131cffb63f180ccfd43c66af
+    command: ['redis-server', '--requirepass', 'fixture-only-password', '--save', '', '--appendonly', 'no']
+    mem_limit: 100m
+  tc17:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    image: iqbberlin/testcenter-backend:17.6.1@sha256:d36fe2969ed87c9b16f6dab2e1324f90725b169ed23545dcb5d5f56ecb9c9803
+    platform: linux/amd64
+    tmpfs:
+      - /var/www/testcenter/data:mode=1777
+    mem_limit: 400m
+    environment:
+
+      PASSWORD_SALT: fixture-only-salt
+      PASSWORD_MIN_LENGTH: '6'
+      PASSWORD_PATTERN: '.*'
+      ADMIN_INIT_PASSWORD: fixture-only-password
+      BROADCASTER_ENABLED: 'false'
+      FILE_SERVER_ENABLED: 'false'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: fixture-only-password
+      REDIS_CACHE_FILES: 'false'
+      SERVER_KEY: fixture-only-server-key
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: tc17
+      MYSQL_USER: testcenter
+      MYSQL_PASSWORD: fixture-only-password
+  tc18:
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    image: iqbberlin/testcenter-backend:18.3.1@sha256:b2dd6b525d97dbdc5195e6289b9450eeb9514587ff036a253e85bb88715057dd
+    platform: linux/amd64
+    tmpfs:
+      - /var/www/testcenter/data:mode=1777
+    mem_limit: 400m
+    environment:
+
+      PASSWORD_SALT: fixture-only-salt
+      PASSWORD_MIN_LENGTH: '6'
+      PASSWORD_PATTERN: '.*'
+      ADMIN_INIT_PASSWORD: fixture-only-password
+      BROADCASTER_ENABLED: 'false'
+      FILE_SERVER_ENABLED: 'false'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: fixture-only-password
+      REDIS_CACHE_FILES: 'false'
+      SERVER_KEY: fixture-only-server-key
+      MYSQL_HOST: mysql
+      MYSQL_PORT: '3306'
+      MYSQL_DATABASE: tc18
+      MYSQL_USER: testcenter
+      MYSQL_PASSWORD: fixture-only-password
+      BRUTE_FORCE_PROTECTION: 'admin login person'
+  tc19:
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    image: iqbberlin/testcenter-backend:19.0.1@sha256:abcc547ab79011b8608788485e29ee3353dea240061c99b40711a6707cd0f71e
+    platform: linux/amd64
+    tmpfs:
+      - /var/www/testcenter/data:mode=1777
+    mem_limit: 400m
+    environment:
+
+      PASSWORD_SALT: fixture-only-salt
+      PASSWORD_MIN_LENGTH: '6'
+      PASSWORD_PATTERN: '.*'
+      ADMIN_INIT_PASSWORD: fixture-only-password
+      BROADCASTER_ENABLED: 'false'
+      FILE_SERVER_ENABLED: 'false'
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      REDIS_PASSWORD: fixture-only-password
+      REDIS_CACHE_FILES: 'false'
+      SERVER_KEY: fixture-only-server-key
+      BRUTE_FORCE_PROTECTION: 'admin login person'
+      DB_HOST: postgres
+      DB_PORT: '5432'
+      DB_DATABASE: tc19
+      DB_USER: testcenter
+      DB_PASSWORD: fixture-only-password
+      REQUIRE_LOGIN_PASSWORD: 'false'
+      XML_SCHEMA_VALIDATION: 'false'
+    entrypoint: ['/bin/sh', '-c']
+    command: ['php /var/www/testcenter/backend/initialize.php && exec apache2-foreground']
+  gateway:
+    depends_on: [tc17, tc18, tc19]
+    image: nginx:stable-alpine@sha256:0e52bd054126cdc040b1276c0af347aeb02a41b9cfe305d6094767ac30e97949
+    ports:
+      - '127.0.0.1:${TESTCENTER_FIXTURE_PORT:-43154}:8080'
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    mem_limit: 80m

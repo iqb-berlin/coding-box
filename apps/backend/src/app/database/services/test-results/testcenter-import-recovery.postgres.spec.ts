@@ -1,6 +1,7 @@
 import { createServer, Server } from 'node:http';
 import { createMock } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
 import { DataSource, In } from 'typeorm';
 import Workspace from '../../entities/workspace.entity';
 import Persons from '../../entities/persons.entity';
@@ -63,7 +64,7 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
       repo(Persons), repo(Booklet), repo(Unit), repo(ResponseEntity), repo(BookletLog), createMock<WorkspaceExclusionService>()
     );
     return new TestcenterService(
-      new PersonService(query, persistence), new HttpService(), createMock<WorkspaceFilesService>(), createMock<CacheService>({ get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(false) }), createMock<WorkspaceTestResultsService>(), connection
+      new PersonService(query, persistence), new HttpService(), createMock<WorkspaceFilesService>(), createMock<CacheService>({ get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(false) }), createMock<WorkspaceTestResultsService>(), connection, undefined, undefined, new ConfigService({ TESTCENTER_ALLOWED_URLS: upstreamUrl })
     );
   };
 

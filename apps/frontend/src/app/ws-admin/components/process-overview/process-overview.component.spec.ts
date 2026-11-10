@@ -119,7 +119,9 @@ describe('ProcessOverviewComponent', () => {
           finished: 'Beendet',
           duration: 'Dauer'
         },
+        'content-pool-operations': { 'import-acp': 'Testdateien aus dem Content Pool importieren', 'upload-files': 'Kodierschemata im Content Pool ersetzen' },
         queues: {
+          'content-pool': { label: 'Content-Pool-Übertragung', description: 'Dateien übertragen' },
           'test-person-coding': {
             label: 'Auto-Kodierung',
             description: 'Automatisches Kodieren von Testpersonen-Antworten'
@@ -139,6 +141,9 @@ describe('ProcessOverviewComponent', () => {
         },
         details: {
           none: 'Keine Details',
+          operation: 'Vorgang',
+          acpId: 'Paket-ID im Content Pool',
+          fileCount: 'Ausgewählte Dateien',
           'unknown-key': '{{key}}',
           exportType: 'Exporttyp',
           fileName: 'Datei',
@@ -187,6 +192,28 @@ describe('ProcessOverviewComponent', () => {
     fixture = TestBed.createComponent(ProcessOverviewComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('shows Content-Pool job type, percentage, operation and package details', () => {
+    const process: ProcessDto = {
+      id: 'cp-1',
+      queueName: 'content-pool',
+      status: 'active',
+      progress: 45,
+      timestamp: 1,
+      data: { operation: 'upload-files', acpId: 'fixture-package', fileCount: 2 }
+    };
+    processesService.getProcesses.mockReturnValue(of([process]));
+    component.ngOnInit();
+    fixture.detectChanges();
+    const text = fixture.nativeElement.textContent;
+    expect(text).toContain('Content-Pool-Übertragung');
+    expect(text).toContain('45 %');
+    expect(component.getProcessDetailItems(process)).toEqual(expect.arrayContaining([
+      { label: 'Vorgang', value: 'Kodierschemata im Content Pool ersetzen' },
+      { label: 'Paket-ID im Content Pool', value: 'fixture-package' },
+      { label: 'Ausgewählte Dateien', value: '2' }
+    ]));
   });
 
   it('confirms and deletes a removable process', () => {

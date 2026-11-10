@@ -1,9 +1,13 @@
   <div class="auth-section">
+    @if (instancesError()) {
+      <p role="alert">{{ 'ui-text.testcenter-instances.selection-load-failed' | translate }}</p>
+      <button mat-stroked-button type="button" (click)="reloadInstances.emit()">{{ 'ui-text.testcenter-instances.reload' | translate }}</button>
+    }
     <form class="auth-form" [formGroup]="form()" (ngSubmit)="submitted.emit()">
       <div class="form-fields">
         <mat-form-field appearance="outline">
           <mat-label>{{ 'home.user-name' | translate }}</mat-label>
-          <input matInput formControlName="name" (keyup.enter)="pw.focus()" />
+          <input matInput formControlName="name" [readonly]="authenticating()" (keyup.enter)="pw.focus()" />
           <mat-icon matSuffix>person</mat-icon>
         </mat-form-field>
 
@@ -14,6 +18,7 @@
             #pw
             type="password"
             formControlName="pw"
+            [readonly]="authenticating()"
             (keyup.enter)="submitted.emit()"
           />
           <mat-icon matSuffix>lock</mat-icon>
@@ -37,7 +42,7 @@
 
         <mat-form-field appearance="outline">
           <mat-label>{{ 'ui-text.test-center-login-step.use-instance-url' | translate }}</mat-label>
-          <input formControlName="testCenterIndividual" matInput type="text" />
+          <input formControlName="testCenterIndividual" matInput type="text" [readonly]="authenticating()" />
           <mat-icon matSuffix>link</mat-icon>
           <mat-hint>
             {{ 'ui-text.test-center-login-step.format-example' | translate }}
@@ -51,18 +56,18 @@
         <button
           mat-raised-button
           type="submit"
-          [disabled]="form().invalid"
+          [disabled]="form().invalid || authenticating()"
           color="primary"
         >
           <mat-icon>login</mat-icon>
-          {{ 'login' | translate }}
+          {{ (authenticating() ? 'ui-text.testcenter-instances.authenticating' : 'login') | translate }}
         </button>
       </div>
 
       @if (authenticationError()){
-      <div class="error-message">
+      <div class="error-message" role="alert">
         <mat-icon>error</mat-icon>
-        <span>{{ 'login-error' | translate }}</span>
+        <span>{{ authenticationMessage() || ('login-error' | translate) }}</span>
       </div>
       }
     </form>

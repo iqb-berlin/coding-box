@@ -1,0 +1,59 @@
+<mat-card>
+  <mat-card-header><mat-card-title>{{ 'ui-text.testcenter-instances.title' | translate }}</mat-card-title></mat-card-header>
+  <mat-card-content>
+    <p>{{ 'ui-text.testcenter-instances.description' | translate }}</p>
+    <p>{{ 'ui-text.testcenter-instances.operator-hint' | translate }}</p>
+    @if (loading()) { <p role="status">{{ 'ui-text.testcenter-instances.loading' | translate }}</p> }
+    @if (error()) {
+      <p role="alert">{{ error() }}</p>
+      <button mat-stroked-button type="button" (click)="load()" [disabled]="operationPending()">{{ 'ui-text.testcenter-instances.reload' | translate }}</button>
+    }
+    <form (ngSubmit)="save()" #instanceForm="ngForm">
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'ui-text.testcenter-instances.name' | translate }}</mat-label>
+        <input matInput name="name" [ngModel]="name()" (ngModelChange)="name.set($event)" [readonly]="operationPending()" required maxlength="80">
+      </mat-form-field>
+      <mat-form-field appearance="outline">
+        <mat-label>{{ 'ui-text.testcenter-instances.url' | translate }}</mat-label>
+        <input matInput name="baseUrl" [ngModel]="baseUrl()" (ngModelChange)="baseUrl.set($event)" [readonly]="editingUrl() !== null || operationPending()" required maxlength="2048" pattern="[hH][tT][tT][pP][sS]?://.+">
+        <mat-hint>{{ (editingUrl() !== null ? 'ui-text.testcenter-instances.edit-url-hint' : 'ui-text.testcenter-instances.url-hint') | translate }}</mat-hint>
+      </mat-form-field>
+      @if (isHttpUrl(editingUrl() ?? baseUrl())) {
+        <p class="http-warning" role="status">
+          <strong>{{ 'ui-text.testcenter-instances.http-warning-title' | translate }}</strong>
+          {{ 'ui-text.testcenter-instances.http-warning' | translate }}
+        </p>
+      }
+      <button mat-raised-button type="submit" [disabled]="instanceForm.invalid || operationPending()">{{ (editingUrl() !== null ? 'ui-text.testcenter-instances.save-name' : 'ui-text.testcenter-instances.save') | translate }}</button>
+      @if (editingUrl() !== null) {
+        <button mat-button type="button" (click)="resetForm()" [disabled]="operationPending()">{{ 'ui-text.testcenter-instances.cancel-edit' | translate }}</button>
+      }
+    </form>
+    <ul class="instances">
+      @for (instance of displayedInstances(); track instance.baseUrl) {
+        <li>
+          <div><strong>{{ instance.label }}</strong><br><span class="address">{{ instance.baseUrl }}</span><br>
+            <small>{{ sourceLabels[instance.source] | translate }}</small>
+            @if (isHttpUrl(instance.baseUrl)) {
+              <p class="http-warning">
+                <strong>{{ 'ui-text.testcenter-instances.http-warning-title' | translate }}</strong>
+                {{ 'ui-text.testcenter-instances.http-warning' | translate }}
+              </p>
+            }
+          </div>
+          <div class="actions">
+            <button mat-stroked-button type="button" (click)="test(instance)" [disabled]="operationPending()">
+              {{ (testingUrl() === instance.baseUrl ? 'ui-text.testcenter-instances.testing' : 'ui-text.testcenter-instances.test') | translate }}
+            </button>
+            @if (instance.source !== 'environment') {
+              <button mat-button type="button" (click)="edit(instance)" [disabled]="operationPending()">{{ 'ui-text.testcenter-instances.edit' | translate }}</button>
+              <button mat-button type="button" (click)="remove(instance)" [disabled]="operationPending()">{{ 'ui-text.testcenter-instances.revoke' | translate }}</button>
+            }
+          </div>
+          @if (checks()[instance.baseUrl]) { <p role="status">{{ checks()[instance.baseUrl] }}</p> }
+        </li>
+      }
+    </ul>
+    <p>{{ 'ui-text.testcenter-instances.test-scope' | translate }}</p>
+  </mat-card-content>
+</mat-card>

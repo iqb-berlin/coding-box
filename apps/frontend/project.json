@@ -126,6 +126,7 @@
     },
     "e2e": {
       "executor": "@nx/cypress:cypress",
+      "outputs": ["{workspaceRoot}/coverage/cypress/browser"],
       "inputs": [
         "default",
         "^production",
@@ -159,7 +160,8 @@
       ],
       "outputs": [
         "{workspaceRoot}/cypress/component-screenshots",
-        "{workspaceRoot}/cypress/component-videos"
+        "{workspaceRoot}/cypress/component-videos",
+        "{workspaceRoot}/coverage/cypress/component"
       ],
       "options": {
         "cypressConfig": "cypress.config.ts",
@@ -172,7 +174,7 @@
       "executor": "nx:run-commands",
       "cache": false,
       "options": {
-        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs scripts/qa/functional-quality-gates.test.mjs scripts/qa/junit-reporter.test.cjs scripts/qa/structure-rules.test.cjs scripts/qa/translation-catalog.test.mjs"
+        "command": "node --test scripts/qa/frontend-quality-gates.test.mjs scripts/qa/functional-quality-gates.test.mjs scripts/qa/junit-reporter.test.cjs scripts/qa/structure-rules.test.cjs scripts/qa/translation-catalog.test.mjs scripts/qa/e2e-quality.test.mjs"
       }
     },
     "test-dependency-patches": {
@@ -220,33 +222,20 @@
         }
       }
     },
-    "zoneless-inventory": {
+    "e2e-coverage": {
       "executor": "nx:run-commands",
       "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs"
-      }
+      "options": { "command": "node scripts/qa/e2e-report.mjs --plan" }
     },
-    "zoneless-approval": {
+    "e2e-report": {
       "executor": "nx:run-commands",
       "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs --require-risk-coverage"
-      }
+      "options": { "command": "node scripts/qa/e2e-report.mjs" }
     },
-    "zoneless-exhaustive-approval": {
+    "test-e2e-quality": {
       "executor": "nx:run-commands",
       "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs --require-complete"
-      }
-    },
-    "zoneless-inventory-test": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
-      }
+      "options": { "command": "node --test scripts/qa/e2e-quality.test.mjs" }
     },
     "serve-static": {
       "executor": "@nx/web:file-server",

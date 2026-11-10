@@ -61,6 +61,13 @@ import { CodingJobSchemeService } from '../database/services/coding/coding-job-s
 import { CodingJobReplayService } from '../database/services/coding/coding-job-replay.service';
 import { CodingJobAggregationService } from '../database/services/coding/coding-job-aggregation.service';
 import { CodingJobService } from '../database/services/coding/coding-job.service';
+import { CodingProcessService } from '../database/services/coding/coding-process.service';
+import { AutocoderBatchDataService } from '../database/services/coding/autocoder-batch-data.service';
+import { AutocoderSchemeService } from '../database/services/coding/autocoder-scheme.service';
+import { AutocoderResponseService } from '../database/services/coding/autocoder-response.service';
+import { AutocoderEngineService } from '../database/services/coding/autocoder-engine.service';
+import { AutocoderDerivedService } from '../database/services/coding/autocoder-derived.service';
+import { CODING_PROCESS_CACHE_INVALIDATOR } from '../database/services/coding/coding-process-cache-invalidator.token';
 import { WorkspaceFileQueryService } from '../database/services/workspace/workspace-file-query.service';
 import { WorkspaceFileMutationService } from '../database/services/workspace/workspace-file-mutation.service';
 import { WorkspaceFileUploadService } from '../database/services/workspace/workspace-file-upload.service';
@@ -143,7 +150,7 @@ async function createApplication(): Promise<TestingModule> {
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',
-    'response-analysis', 'variable-analysis', 'external-coding-import', 'database-export'
+    'response-analysis', 'variable-analysis', 'external-coding-import', 'database-export', 'content-pool'
   ];
   queues.forEach(name => builder.overrideProvider(getQueueToken(name)).useValue({}));
 
@@ -172,6 +179,17 @@ describe('CodingModule', () => {
 
     const module = await createApplication();
     try {
+      const codingProcess = module.get(CodingProcessService);
+      expect(module.get(CODING_PROCESS_CACHE_INVALIDATOR)).toBe(codingProcess);
+      for (const [field, provider] of [
+        ['data', AutocoderBatchDataService], ['schemes', AutocoderSchemeService],
+        ['responses', AutocoderResponseService]
+      ] as const) expect(Reflect.get(codingProcess, field)).toBe(module.get(provider));
+      const responseCoding = module.get(AutocoderResponseService);
+      expect(Reflect.get(responseCoding, 'schemes')).toBe(module.get(AutocoderSchemeService));
+      expect(Reflect.get(responseCoding, 'engine')).toBe(module.get(AutocoderEngineService));
+      expect(Reflect.get(responseCoding, 'derived')).toBe(module.get(AutocoderDerivedService));
+      expect(Reflect.get(module.get(AutocoderDerivedService), 'engine')).toBe(module.get(AutocoderEngineService));
       const freshness = module.select(CodingFreshnessModule);
       const freshnessFacade = freshness.get(CodingFreshnessService, { strict: true });
       const freshnessQueries = freshness.get(CodingFreshnessQueryService, { strict: true });

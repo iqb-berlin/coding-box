@@ -3,7 +3,7 @@
 For frontend changes in feature branches and pull requests targeting `develop`,
 the required GitLab job `test-frontend` runs the complete frontend unit suite in
 one native zoneless environment, with coverage, quality-gate regression tests,
-and the existing risk-based inventory approval. It rejects failures and publishes
+and the E2E workflow plan check. It rejects failures and publishes
 JUnit and Cobertura reports even when tests fail.
 
 `test-backend` runs every test target except the frontend, independently of the
@@ -35,6 +35,10 @@ project bot has no group Dependency Proxy access. Regular branch pipelines retai
 the proxy. Project registry images and all checks stay enabled.
 Live Replay and Keycloak authentication remain separate integration jobs and
 exercise the production frontend with their disposable backend environments.
+All Cypress suites now publish JUnit and JSON results. The required
+`test-e2e-report` job combines the three live suites before publication. The
+workflow catalog, execution criteria, local commands and known gaps are described
+in [E2E coverage](e2e-coverage.md).
 
 For pull requests targeting `main`, `test-main-pr-frontend` enables the same
 zoneless coverage gate inside the existing test image and copies reports from the
@@ -46,8 +50,7 @@ Run the same frontend checks locally, sequentially, with `.nvmrc`'s Node version
 npx nx run frontend:test-quality-gates
 npx nx lint frontend
 npx nx run frontend:test --configuration=ci --maxWorkers=2
-npx nx run frontend:zoneless-inventory-test
-npx nx run frontend:zoneless-approval
+npx nx run frontend:e2e-coverage
 npx nx build frontend --configuration=production
 npx nx run frontend:e2e --configuration=ci --browser=electron
 npx nx run frontend:component-test --browser=electron
@@ -69,9 +72,12 @@ seven days in GitLab.
 The former generic prototype smoke suite is removed because it swallowed method
 and callback failures while increasing coverage. Its three concrete review
 regressions now run with the actual component in Angular TestBed.
-The generated zoneless inventory is refreshed for changed template bindings and
-outputs. Existing review evidence remains on unchanged fingerprints; the
-existing risk-based approval check remains in force.
+The generated migration inventory and its fingerprint checks were retired on
+2026-11-09. They recorded source changes without executing behavior tests and
+required updates after routine UI changes. The historical migration audit and
+risk matrix remain documentation; the normal unit, component, browser and live
+suites enforce the regression checks. New source changes no longer require an
+inventory refresh or an individual migration approval.
 
 `apps/frontend/.eslintrc.cjs` retains the repository's TypeScript rules and adds
 Angular rules plus syntax, control flow, and accessibility checks for external and
