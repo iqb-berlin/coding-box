@@ -185,6 +185,20 @@ Variable und Antwort-ID. Liefern leere oder ausschließlich automatisch erzeugte
 Units zu wenige Antworten, wird die vollständige Seitenabfrage verwendet.
 Gefilterte Suchpfade behalten ihren bisherigen SQL-Vertrag.
 
+Gesamtzahl und vorausgewählte Unit-IDs entstehen in derselben SQL-Abfrage aus
+einem gemeinsamen materialisierten Unit-Bereich. Die eigentliche Seitenabfrage
+verwendet diese IDs, statt den großen Bereich nochmals aufzubauen. Es wird
+weiterhin vollständig gezählt; die Gesamtzahl wird nicht zwischengespeichert
+oder aus Tabellenstatistiken geschätzt. Ein übergebener QueryRunner gilt für
+beide Abfragen und den gegebenenfalls notwendigen vollständigen Rückfallpfad.
+
+Die Kodierstatistik behält ihren exakten Unit-Variablen-Paarfilter und ergänzt
+eine Einschränkung auf die zugehörigen Unit-Namen. Damit kann PostgreSQL bereits
+vor dem Antwort-Join eingrenzen. Enthalten Metadaten den historischen
+Paartrenner U+001F, bleibt die bisherige Abfrage erhalten, damit auch deren
+mehrdeutige Paar-Schlüssel unverändert behandelt werden. Statusversionen,
+automatisch erzeugte Antworten und Workspace-Ausschlüsse bleiben identisch.
+
 Ungefilterte Facetten bestimmen Antwortexistenz auf Unit-Ebene und berechnen
 Metadaten sowie Dauer/Fortschritt auf Booklet-Ebene. Die 14 Dimensionen,
 Sortierungen und 500-Werte-Grenzen bleiben erhalten. Die PostgreSQL-Regressionen

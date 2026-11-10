@@ -715,7 +715,7 @@
       "file": {},
       "functions": {
         "class CodingStatisticsService#1/method getCodingStatistics#1": {
-          "max-lines-per-function": 127
+          "max-lines-per-function": 126
         }
       }
     },

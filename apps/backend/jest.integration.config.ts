@@ -7,7 +7,7 @@ import backend from './jest.config';
 export default {
   ...backend,
   displayName: 'backend-integration',
-  testMatch: ['<rootDir>/src/**/*.postgres.spec.ts', '<rootDir>/src/**/bullmq.integration.spec.ts', '<rootDir>/src/**/*.redis.integration.spec.ts'],
+  testMatch: ['<rootDir>/src/**/*.postgres.spec.ts', '<rootDir>/src/**/*bullmq.integration.spec.ts', '<rootDir>/src/**/*.redis.integration.spec.ts'],
   collectCoverage: false,
   coverageThreshold: {},
   reporters: [

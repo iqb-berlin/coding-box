@@ -156,12 +156,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         variableId => this.toVariablePairKey(unitName, variableId)
       ));
       const validVariablePairKeySet = new Set(validVariablePairKeys);
-      const derivedVariablePairKeys = Object.entries(derivedVariables)
-        .filter(([unitName]) => !globalIgnoredSet.has(unitName.toUpperCase()))
-        .flatMap(([unitName, variableIds]) => variableIds.map(
-          variableId => this.toVariablePairKey(unitName, variableId)
-        ))
-        .filter(pairKey => validVariablePairKeySet.has(pairKey));
+      const derivedVariablePairKeys = this.getDerivedVariablePairKeys(derivedVariables, globalIgnoredSet, validVariablePairKeySet);
       statistics.derivedVariableCount = derivedVariablePairKeys.length;
 
       if (validVariablePairKeys.length === 0) {
@@ -216,6 +211,11 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
           return condition;
         }).join(' AND ');
         whereCondition += ` AND (${conditions})`;
+      }
+
+      if (this.hasUnambiguousVariablePairKeys(validVariablePairKeys)) {
+        whereCondition += ` AND unit.name = ANY($${paramIndex}::text[])`;
+        queryParams.push(unitsWithVariables);
       }
 
       const statusCountResults: { statusValue: string | number; isDerived: boolean | string; count: string }[] = await this.responseRepository.query(`
@@ -290,6 +290,21 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
 
   private toVariablePairKey(unitName: string, variableId: string): string {
     return `${unitName}\u001F${variableId}`;
+  }
+
+  // Expose unit names to the planner only when the original pair keys have a
+  // unique split. Separator-bearing legacy names must keep their old semantics.
+  private hasUnambiguousVariablePairKeys(keys: string[]): boolean {
+    return keys.every(key => key.indexOf('\u001F') === key.lastIndexOf('\u001F'));
+  }
+
+  private getDerivedVariablePairKeys(
+    derivedVariables: Record<string, string[]>, ignoredUnits: Set<string>, validPairKeys: Set<string>
+  ): string[] {
+    return Object.entries(derivedVariables)
+      .filter(([unitName]) => !ignoredUnits.has(unitName.toUpperCase()))
+      .flatMap(([unitName, variableIds]) => variableIds.map(variableId => this.toVariablePairKey(unitName, variableId)))
+      .filter(pairKey => validPairKeys.has(pairKey));
   }
 
   private normalizeStatistics(statistics: CodingStatistics): CodingStatistics {

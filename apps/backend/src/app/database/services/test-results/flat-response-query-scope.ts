@@ -31,32 +31,36 @@ export function createFlatResponseUnitScope(
   return query;
 }
 
-export async function countUnfilteredFlatResponses(
-  connection: DataSource, units: SelectQueryBuilder<Unit>, queryRunner?: QueryRunner
-): Promise<number> {
-  const result = await connection.createQueryBuilder(queryRunner)
-    .addCommonTableExpression(units.clone().select('unit.id', 'id'), 'flat_response_count_units', { materialized: true })
+export async function findUnfilteredFlatResponseScope(
+  connection: DataSource, units: SelectQueryBuilder<Unit>,
+  candidateUnits: number | undefined, queryRunner?: QueryRunner
+): Promise<{ total: number; pageUnitIds?: number[] }> {
+  const scope = units.clone().select('unit.id', 'id');
+  if (candidateUnits !== undefined) {
+    scope.addSelect('person.code', 'sort_code')
+      .addSelect('bookletinfo.name', 'sort_booklet')
+      .addSelect('unit.alias', 'sort_alias');
+  }
+  const countQuery = connection.createQueryBuilder(queryRunner)
+    .addCommonTableExpression(scope, 'flat_response_count_units', { materialized: true })
     .select('COUNT(*)', 'cnt')
     .from(ResponseEntity, 'counted_response')
     .where('counted_response.unitid = ANY(ARRAY(SELECT id FROM flat_response_count_units))')
-    .andWhere('counted_response.is_autocoder_generated IS NOT TRUE')
-    .getRawOne<{ cnt: string }>();
-  return Number(result?.cnt || 0);
+    .andWhere('counted_response.is_autocoder_generated IS NOT TRUE');
+  if (candidateUnits !== undefined) {
+    countQuery.addSelect(`ARRAY(SELECT id FROM flat_response_count_units
+      ORDER BY sort_code ASC, sort_booklet ASC, sort_alias ASC
+      FETCH FIRST :flatResponseCandidateUnits ROWS WITH TIES)`, 'pageUnitIds')
+      .setParameter('flatResponseCandidateUnits', candidateUnits);
+  }
+  const result = await countQuery.getRawOne<{ cnt: string; pageUnitIds?: number[] }>();
+  return { total: Number(result?.cnt || 0), pageUnitIds: result?.pageUnitIds };
 }
 
 /** Every tied unit must survive: variable/response ordering spans equal prefixes. */
 export function withFlatResponsePageUnits(
-  query: SelectQueryBuilder<ResponseEntity>, units: SelectQueryBuilder<Unit>, count: number
+  query: SelectQueryBuilder<ResponseEntity>, unitIds: number[]
 ): SelectQueryBuilder<ResponseEntity> {
-  const prefix = units.clone().select('unit.id', 'id')
-    .orderBy('person.code', 'ASC').addOrderBy('bookletinfo.name', 'ASC')
-    .addOrderBy('unit.alias', 'ASC');
   return query.clone()
-    .addCommonTableExpression(
-      `${prefix.getQuery()} FETCH FIRST :flatResponseCandidateUnits ROWS WITH TIES`,
-      'flat_response_page_units',
-      { materialized: true }
-    )
-    .setParameters({ ...prefix.getParameters(), flatResponseCandidateUnits: count })
-    .andWhere('unit.id IN (SELECT id FROM flat_response_page_units)');
+    .andWhere('unit.id = ANY(:flatResponsePageUnitIds::int[])', { flatResponsePageUnitIds: unitIds });
 }

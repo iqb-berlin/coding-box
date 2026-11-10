@@ -32,7 +32,7 @@ import {
   applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 import {
-  countUnfilteredFlatResponses, createFlatResponseUnitScope, isUnfilteredFlatResponseQuery, withFlatResponsePageUnits
+  findUnfilteredFlatResponseScope, createFlatResponseUnitScope, isUnfilteredFlatResponseQuery, withFlatResponsePageUnits
 } from './flat-response-query-scope';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
@@ -132,24 +132,25 @@ export class TestResultsResponsesService {
       return query;
     };
     const qb = createQuery();
+    const validPage = Math.max(1, Number(options.page || 1));
+    const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
+    const candidateUnits = validPage * validLimit;
+    const useUnitPrefix = Number.isSafeInteger(candidateUnits);
     const units = isUnfilteredFlatResponseQuery(filters) ?
       createFlatResponseUnitScope(this.connection, workspaceId, exclusions, queryRunner) : undefined;
-    const total = units ? await countUnfilteredFlatResponses(this.connection, units, queryRunner) : await createQuery()
+    const scope = units ? await findUnfilteredFlatResponseScope(
+      this.connection, units, useUnitPrefix ? candidateUnits : undefined, queryRunner
+    ) : undefined;
+    const total = scope ? scope.total : await createQuery()
       .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
-    const validPage = Math.max(1, Number(options.page || 1));
-    const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const candidateUnits = validPage * validLimit;
-    const useUnitPrefix = units !== undefined && Number.isSafeInteger(candidateUnits);
-    const pageQuery = useUnitPrefix && units ? withFlatResponsePageUnits(
-      qb, units, candidateUnits
-    ) : qb;
+    const pageQuery = scope?.pageUnitIds ? withFlatResponsePageUnits(qb, scope.pageUnitIds) : qb;
     let raw = await this.selectFlatResponseRows(pageQuery, validPage, validLimit, filters.tags);
     // Empty/auto-generated-only units can exhaust the prefix before a whole page.
     // In that case use the complete scope instead of silently dropping later rows.
-    if (useUnitPrefix && raw.length < validLimit) {
+    if (scope?.pageUnitIds && raw.length < validLimit) {
       raw = await this.selectFlatResponseRows(qb, validPage, validLimit, filters.tags);
     }
 
