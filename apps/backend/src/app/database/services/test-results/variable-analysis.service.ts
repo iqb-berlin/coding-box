@@ -8,6 +8,8 @@ import {
 import { randomUUID } from 'crypto';
 import ExcelJS from 'exceljs';
 import * as fastCsv from 'fast-csv';
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
+import { isEmptyVariableAnalysisValue } from '../../../../../../../api-dto/coding/variable-analysis-rules';
 import { requireJobId, numericJobProgress } from '../../../job-queue/job-queue.util';
 import {
   VariableAnalysisResultDto,
@@ -26,6 +28,7 @@ import {
 import { VariableFrequencyDto } from '../../../admin/variable-analysis/dto/variable-frequency.dto';
 import { VariableAnalysisJobDto } from '../../../admin/variable-analysis/dto/variable-analysis-job.dto';
 import { CacheService } from '../../../cache/cache.service';
+import { VARIABLE_ANALYSIS_EXPORT_COLUMNS, VariableAnalysisExportCell, VariableAnalysisExportRow } from './variable-analysis-export-columns';
 
 interface NormalizedVariableAnalysisPaging {
   page: number;
@@ -66,43 +69,6 @@ type VariableAnalysisSortBy =
   | 'emptyPercentage'
   | 'statusSummary';
 
-const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
-  { header: 'Unit-ID', key: 'unitId', width: 12 },
-  { header: 'Unit-Name', key: 'unitName', width: 24 },
-  { header: 'Variablen-ID', key: 'variableId', width: 22 },
-  { header: 'Wert', key: 'value', width: 36 },
-  { header: 'Label', key: 'label', width: 36 },
-  { header: 'Wert ist leer', key: 'isEmptyValue', width: 14 },
-  { header: 'Anzahl', key: 'count', width: 12 },
-  { header: 'Gültige Anzahl', key: 'validOccurrenceCount', width: 16 },
-  { header: 'Anteil gesamt (%)', key: 'percentageTotal', width: 18 },
-  { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
-  { header: 'Antworten gesamt', key: 'totalCount', width: 18 },
-  { header: 'Antworten gültig', key: 'validCount', width: 18 },
-  { header: 'Fehlend/ungültig', key: 'invalidCount', width: 18 },
-  { header: 'Leere Werte', key: 'emptyCount', width: 14 },
-  { header: 'Leere Werte (%)', key: 'emptyPercentage', width: 18 },
-  { header: 'Unterschiedliche Werte', key: 'distinctValueCount', width: 22 },
-  { header: 'Weitere Werte nicht enthalten', key: 'hiddenValueCount', width: 28 },
-  { header: 'Antwortstatus', key: 'statusSummary', width: 42 },
-  { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
-  { header: 'Code-PBC', key: 'codePbc', width: 14 },
-  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 },
-  { header: 'Score', key: 'score', width: 12 },
-  { header: 'Zuordnung aus Kodierschema', key: 'isFromSchema', width: 28 },
-  { header: 'Code', key: 'code', width: 14 }
-] as const;
-
-type VariableAnalysisExportColumnKey =
-  typeof VARIABLE_ANALYSIS_EXPORT_COLUMNS[number]['key'];
-
-type VariableAnalysisExportCell = string | number;
-
-type VariableAnalysisExportRow = Record<
-  VariableAnalysisExportColumnKey,
-  VariableAnalysisExportCell
->;
-
 @Injectable()
 export class VariableAnalysisService {
   private readonly logger = new Logger(VariableAnalysisService.name);
@@ -141,8 +107,17 @@ export class VariableAnalysisService {
   async createAnalysisJob(
     workspaceId: number,
     unitId?: number,
-    variableId?: string
+    variableId?: string,
+    options: VariableAnalysisOptions = {}
   ): Promise<VariableAnalysisJobDto> {
+    if (options.analysisMode !== undefined && !['values', 'codes'].includes(options.analysisMode)) {
+      throw new BadRequestException('analysisMode must be values or codes');
+    }
+    if (options.codingVersion !== undefined && !['v1', 'v2', 'v3'].includes(options.codingVersion)) {
+      throw new BadRequestException('codingVersion must be v1, v2 or v3');
+    }
+    const analysisMode = options.analysisMode ?? 'values';
+    const codingVersion = analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined;
     const existingJobs = await this.getAnalysisJobs(workspaceId);
     const hasActiveJob = existingJobs.some(
       j => j.status === 'pending' || j.status === 'processing'
@@ -159,6 +134,8 @@ export class VariableAnalysisService {
       workspaceId,
       unitId,
       variableId,
+      analysisMode,
+      codingVersion,
       cacheKey: this.createResultCacheKey(workspaceId)
     };
 
@@ -171,6 +148,8 @@ export class VariableAnalysisService {
       workspaceId,
       unitId,
       variableId,
+      analysisMode,
+      codingVersion,
       status: 'pending', // Initial status
       progress: 0,
       timestamp: Date.now()
@@ -199,6 +178,8 @@ export class VariableAnalysisService {
       workspaceId: job.data.workspaceId,
       unitId: job.data.unitId,
       variableId: job.data.variableId,
+      analysisMode: job.data.analysisMode,
+      codingVersion: job.data.codingVersion,
       status: state === 'active' ? 'processing' : state, // Map 'active' to 'processing' to match previous enum if needed
       progress,
       error: job.failedReason,
@@ -382,6 +363,8 @@ export class VariableAnalysisService {
           workspaceId: job.data.workspaceId,
           unitId: job.data.unitId,
           variableId: job.data.variableId,
+          analysisMode: job.data.analysisMode,
+          codingVersion: job.data.codingVersion,
           status: state === 'active' ? 'processing' : state,
           progress,
           error: job.failedReason,
@@ -999,12 +982,12 @@ export class VariableAnalysisService {
     const totalCount = combo.totalCount ?? this.sumCounts(rows);
     const validCount = combo.validCount ??
       Math.max(0, totalCount - (combo.emptyCount ?? this.sumCounts(
-        rows.filter(frequency => frequency.value === '')
+        rows.filter(frequency => frequency.isEmptyValue ?? isEmptyVariableAnalysisValue(frequency.value))
       )));
     const invalidCount = combo.invalidCount ??
       Math.max(0, totalCount - validCount);
     const emptyCount = combo.emptyCount ?? this.sumCounts(
-      rows.filter(frequency => frequency.value === '')
+      rows.filter(frequency => frequency.isEmptyValue ?? isEmptyVariableAnalysisValue(frequency.value))
     );
     const emptyPercentage = combo.emptyPercentage ??
       this.calculatePercentage(emptyCount, totalCount);
@@ -1012,17 +995,14 @@ export class VariableAnalysisService {
     const displayedObservedValueCount = rows.filter(
       frequency => !frequency.isSchemaOnly
     ).length;
-    const hiddenValueCount = Math.max(
-      0,
-      distinctValueCount - displayedObservedValueCount
-    );
+    const hiddenValueCount = Math.max(0, distinctValueCount - displayedObservedValueCount);
     const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
 
     const toTableRow = (
       row: VariableFrequencyDto
     ): VariableAnalysisTableRowDto => {
       const validOccurrenceCount = row.validOccurrenceCount ??
-        (row.value === '' ? 0 : row.count);
+        ((row.isEmptyValue ?? isEmptyVariableAnalysisValue(row.value)) ? 0 : row.count);
       const percentageTotal = row.percentageTotal ??
         row.percentage ??
         this.calculatePercentage(row.count, totalCount);
@@ -1041,7 +1021,10 @@ export class VariableAnalysisService {
         sourceType: combo.sourceType,
         isDerived: combo.isDerived,
         hasCodingScheme: combo.hasCodingScheme,
+        analysisMode: combo.analysisMode,
+        codingVersion: combo.codingVersion,
         value: row.value,
+        isEmptyValue: row.isEmptyValue ?? isEmptyVariableAnalysisValue(row.value),
         label: row.label,
         score: row.score,
         code: row.code,
@@ -1213,6 +1196,7 @@ export class VariableAnalysisService {
         unitName: row.unitName,
         variableId: row.variableId,
         value: row.value,
+        isEmptyValue: row.isEmptyValue,
         label: row.label,
         score: row.score,
         code: row.code,
@@ -1262,90 +1246,38 @@ export class VariableAnalysisService {
   private createExportRows(
     result: VariableAnalysisResultDto
   ): VariableAnalysisExportRow[] {
-    const rows: VariableAnalysisExportRow[] = [];
-
-    result.variableCombos.forEach(combo => {
-      const comboKey = this.getComboKey(combo);
-      const frequencies = result.frequencies[comboKey] || [];
-      const totalCount = combo.totalCount ?? this.sumCounts(frequencies);
-      const emptyCount = combo.emptyCount ?? this.sumCounts(
-        frequencies.filter(frequency => frequency.value === '')
-      );
-      const validCount = combo.validCount ??
-        Math.max(0, totalCount - emptyCount);
-      const invalidCount = combo.invalidCount ??
-        Math.max(0, totalCount - validCount);
-      const emptyPercentage = combo.emptyPercentage ??
-        this.calculatePercentage(emptyCount, totalCount);
-      const distinctValueCount =
-        combo.distinctValueCount ?? frequencies.length;
-      const displayedObservedValueCount = frequencies.filter(
-        frequency => !frequency.isSchemaOnly
-      ).length;
-      const hiddenValueCount = Math.max(
-        0,
-        distinctValueCount - displayedObservedValueCount
-      );
-      const statusSummary = this.formatStatusSummary(combo.statusCounts || []);
-
-      const visibleFrequencies: VariableFrequencyDto[] = frequencies.length > 0 ?
-        frequencies :
-        [{
-          unitId: combo.unitId,
-          unitName: combo.unitName,
-          variableId: combo.variableId,
-          value: '',
-          count: 0,
-          validOccurrenceCount: 0,
-          percentage: 0,
-          percentageTotal: 0,
-          percentageValid: validCount > 0 ? 0 : null,
-          isSchemaOnly: true
-        }];
-
-      visibleFrequencies.forEach(frequency => {
-        const validOccurrenceCount = frequency.validOccurrenceCount ??
-          (frequency.value === '' ? 0 : frequency.count);
-        const percentageTotal = frequency.percentageTotal ??
-          frequency.percentage ??
-          this.calculatePercentage(frequency.count, totalCount);
-        const percentageValid = frequency.percentageValid ??
-          (validCount > 0 ?
-            this.calculatePercentage(validOccurrenceCount, validCount) :
-            null);
-
-        rows.push({
-          unitId: combo.unitId,
-          unitName: combo.unitName,
-          variableId: combo.variableId,
-          value: frequency.value,
-          label: frequency.label || '',
-          score: frequency.score ?? '',
-          code: frequency.code ?? '',
-          isFromSchema: frequency.isFromSchema ? 'ja' : 'nein',
-          isEmptyValue: frequency.value === '' ? 'ja' : 'nein',
-          count: frequency.count,
-          validOccurrenceCount,
-          percentageTotal: this.roundPercentage(percentageTotal),
-          percentageValid: percentageValid === null ?
-            '' :
-            this.roundPercentage(percentageValid),
-          totalCount,
-          validCount,
-          invalidCount,
-          emptyCount,
-          emptyPercentage: this.roundPercentage(emptyPercentage),
-          distinctValueCount,
-          hiddenValueCount,
-          statusSummary,
-          pointBiserial: this.formatOptionalMetric(frequency.pointBiserial),
-          codePbc: this.formatOptionalMetric(frequency.codePbc),
-          categoryPbc: this.formatOptionalMetric(frequency.categoryPbc)
-        });
-      });
+    return result.variableCombos.flatMap(combo => {
+      const frequencies = result.frequencies[this.getComboKey(combo)] || [];
+      return this.createTableRowsForCombo(combo, frequencies).map(row => ({
+        unitId: row.unitId,
+        unitName: row.unitName,
+        variableId: row.variableId,
+        value: row.value,
+        label: row.label || '',
+        analysisMode: row.analysisMode === 'codes' ? 'Codes' : 'Antwortwerte',
+        codingVersion: row.analysisMode === 'codes' ? row.codingVersion ?? 'v1' : '',
+        score: row.score ?? '',
+        isEmptyValue: row.isEmptyValue ? 'ja' : 'nein',
+        code: row.code ?? '',
+        isFromSchema: row.isFromSchema ? 'ja' : 'nein',
+        count: row.count,
+        validOccurrenceCount: row.validOccurrenceCount ?? 0,
+        percentageTotal: this.roundPercentage(row.percentageTotal ?? row.percentage),
+        percentageValid: row.percentageValid === null || row.percentageValid === undefined ?
+          '' : this.roundPercentage(row.percentageValid),
+        totalCount: row.totalCount,
+        validCount: row.validCount ?? 0,
+        invalidCount: row.invalidCount ?? 0,
+        emptyCount: row.emptyCount,
+        emptyPercentage: this.roundPercentage(row.emptyPercentage),
+        distinctValueCount: row.distinctValueCount,
+        hiddenValueCount: row.hiddenValueCount,
+        statusSummary: row.statusSummary,
+        pointBiserial: this.formatOptionalMetric(row.pointBiserial),
+        codePbc: this.formatOptionalMetric(row.codePbc),
+        categoryPbc: this.formatOptionalMetric(row.categoryPbc)
+      }));
     });
-
-    return rows;
   }
 
   private toCsvExportRow(

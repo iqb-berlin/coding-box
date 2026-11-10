@@ -3,6 +3,8 @@ export class VariableFrequencyDto {
   unitName?: string;
   variableId: string;
   value: string;
+  /** Emptiness of the complete analysis value, before preview truncation. */
+  isEmptyValue?: boolean;
   label?: string;
   score?: number;
   code?: number | string;

@@ -1,5 +1,7 @@
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
+import { isEmptyVariableAnalysisValue, isValidVariableAnalysisRawValue } from '../../../../../../../api-dto/coding/variable-analysis-rules';
 import { VariableAnalysisTableRowDto } from '../../../shared/services/response/variable-analysis.service';
-import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
+import { getResponseStatusLabel, getResponseStatusMetadata } from '../../../shared/utils/response-status-metadata.util';
 import { UiTranslator } from '../../../shared/utils/ui-translator';
 
 export interface VariableFrequency {
@@ -7,6 +9,7 @@ export interface VariableFrequency {
   unitName?: string;
   variableid: string;
   value: string;
+  isEmptyValue?: boolean;
   label?: string;
   score?: number;
   code?: number | string;
@@ -30,7 +33,7 @@ export interface VariableStatusCount {
   percentage: number;
 }
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;
@@ -67,44 +70,27 @@ export function variableStatusSummary(statusCounts: VariableStatusCount[], trans
     return translate('variable-analysis.no-status-data');
   }
 
-  const visibleItems = statusCounts.slice(0, 3).map(item => {
+  const visibleItems = statusCounts.map(item => {
     const status = getResponseStatusLabel(item.status);
     return `${status}: ${item.count} (${`${item.percentage.toFixed(1)}%`})`;
   });
-  const remainingCount = statusCounts.length - visibleItems.length;
-
-  return remainingCount > 0 ?
-    `${visibleItems.join(', ')} +${remainingCount}` :
-    visibleItems.join(', ');
+  return visibleItems.join(', ');
 }
 
 export function variableComboSummary(combo: VariableCombo, frequenciesByCombo: Record<string, VariableFrequency[]>, translate: UiTranslator): VariableComboSummary {
-  const frequencies = frequenciesByCombo[variableComboKey(combo)] || [];
-  const totalCount =
-    combo.totalCount ??
-      frequencies.reduce((sum, item) => sum + item.count, 0);
-  const emptyCount =
-    combo.emptyCount ??
-      frequencies
-        .filter(item => item.value === '')
-        .reduce((sum, item) => sum + item.count, 0);
-  const emptyPercentage =
-    combo.emptyPercentage ??
-      (totalCount > 0 ? (emptyCount / totalCount) * 100 : 0);
-  const validCount = combo.validCount ??
-      Math.max(0, totalCount - emptyCount);
+  const summary = withVariableComboSummary(combo, frequenciesByCombo);
 
   return {
-    totalCount,
-    validCount,
-    invalidCount: combo.invalidCount ?? Math.max(0, totalCount - validCount),
-    emptyCount,
-    emptyPercentage,
+    totalCount: summary.totalCount,
+    validCount: summary.validCount,
+    invalidCount: summary.invalidCount,
+    emptyCount: summary.emptyCount,
+    emptyPercentage: summary.emptyPercentage,
     statusSummary: variableStatusSummary(combo.statusCounts || [], translate)
   };
 }
 
-export function withVariableComboSummary(combo: VariableCombo, frequenciesByCombo: Record<string, VariableFrequency[]>): VariableCombo {
+export function withVariableComboSummary(combo: VariableCombo, frequenciesByCombo: Record<string, VariableFrequency[]>): VariableCombo & Omit<VariableComboSummary, 'statusSummary'> {
   const frequencies = frequenciesByCombo[variableComboKey(combo)] || [];
   const totalCount =
     combo.totalCount ??
@@ -112,7 +98,7 @@ export function withVariableComboSummary(combo: VariableCombo, frequenciesByComb
   const emptyCount =
     combo.emptyCount ??
       frequencies
-        .filter(item => item.value === '')
+        .filter(item => item.isEmptyValue ?? isEmptyVariableAnalysisValue(item.value))
         .reduce((sum, item) => sum + item.count, 0);
   const validCount = combo.validCount ??
       Math.max(0, totalCount - emptyCount);
@@ -169,7 +155,7 @@ export function createVariableAnalysisRows(
 
     return visibleFrequencies.map(frequency => {
       const validOccurrenceCount = frequency.validOccurrenceCount ??
-          (frequency.value === '' ? 0 : frequency.count);
+          ((frequency.isEmptyValue ?? isEmptyVariableAnalysisValue(frequency.value)) ? 0 : frequency.count);
       const percentageTotal = frequency.percentageTotal ??
           frequency.percentage;
       const percentageValid = frequency.percentageValid ??
@@ -187,7 +173,10 @@ export function createVariableAnalysisRows(
         sourceType: combo.sourceType,
         isDerived: combo.isDerived,
         hasCodingScheme: combo.hasCodingScheme,
+        analysisMode: combo.analysisMode,
+        codingVersion: combo.codingVersion,
         value: frequency.value,
+        isEmptyValue: frequency.isEmptyValue ?? isEmptyVariableAnalysisValue(frequency.value),
         label: frequency.label,
         score: frequency.score,
         code: frequency.code,
@@ -215,4 +204,66 @@ export function createVariableAnalysisRows(
       };
     });
   });
+}
+
+export function summarizeVariableAnalysisResponses(
+  responses: readonly { variableid: string; value: string; status: string | number }[]
+): {
+  responsesByVariable: Record<string, Record<string, number>>;
+  validCountsByVariable: Map<string, Map<string, number>>;
+  comboSummaries: Map<string, VariableCombo>;
+} {
+  const responsesByVariable: Record<string, Record<string, number>> = {};
+  const validCountsByVariable = new Map<string, Map<string, number>>();
+  const comboSummaries = new Map<string, VariableCombo>();
+  responses.forEach(response => {
+    if (!responsesByVariable[response.variableid]) {
+      responsesByVariable[response.variableid] = {};
+    }
+
+    const value = response.value || '';
+    if (!responsesByVariable[response.variableid][value]) {
+      responsesByVariable[response.variableid][value] = 0;
+    }
+
+    responsesByVariable[response.variableid][value] += 1;
+
+    const comboKey = `0:${response.variableid}`;
+    const summary = comboSummaries.get(comboKey) || {
+      unitId: 0,
+      unitName: 'Unknown',
+      variableId: response.variableid,
+      totalCount: 0,
+      validCount: 0,
+      emptyCount: 0,
+      emptyPercentage: 0,
+      distinctValueCount: 0,
+      statusCounts: []
+    };
+    summary.totalCount = (summary.totalCount || 0) + 1;
+    const isEmpty = isEmptyVariableAnalysisValue(value);
+    const numericStatus = getResponseStatusMetadata(response.status)?.numeric ?? 0;
+    const isValid = isValidVariableAnalysisRawValue(value, numericStatus);
+    if (isEmpty) summary.emptyCount = (summary.emptyCount || 0) + 1;
+    if (isValid) {
+      summary.validCount = (summary.validCount || 0) + 1;
+      const validCounts = validCountsByVariable.get(response.variableid) ?? new Map<string, number>();
+      validCounts.set(value, (validCounts.get(value) ?? 0) + 1);
+      validCountsByVariable.set(response.variableid, validCounts);
+    }
+
+    const status = response.status;
+    const statusCounts = summary.statusCounts || [];
+    const existingStatus = statusCounts.find(
+      item => item.status === status
+    );
+    if (existingStatus) {
+      existingStatus.count += 1;
+    } else {
+      statusCounts.push({ status, count: 1, percentage: 0 });
+    }
+    summary.statusCounts = statusCounts;
+    comboSummaries.set(comboKey, summary);
+  });
+  return { responsesByVariable, validCountsByVariable, comboSummaries };
 }

@@ -1133,7 +1133,7 @@
     },
     "apps/backend/src/app/database/services/test-results/variable-analysis.service.ts": {
       "file": {
-        "max-lines": 1393
+        "max-lines": 1334
       },
       "functions": {}
     },
@@ -1268,7 +1268,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1213
+        "max-lines": 1206
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1308,20 +1308,14 @@
     },
     "apps/backend/src/app/job-queue/processors/variable-analysis.processor.ts": {
       "file": {
-        "max-lines": 1324
+        "max-lines": 1192
       },
       "functions": {
-        "class VariableAnalysisProcessor#1/method addSchemaCodeFrequencies#1/anonymous:bd215c4ecc32cb4e#1/anonymous:a8ab5e2242c4a7eb#1": {
-          "complexity": 29
-        },
-        "class VariableAnalysisProcessor#1/method getAnalysisScope#1": {
-          "max-lines-per-function": 108
-        },
         "class VariableAnalysisProcessor#1/method processWorkspaceJob#1": {
-          "max-lines-per-function": 197
+          "max-lines-per-function": 194
         },
         "class VariableAnalysisProcessor#1/method recalculateMultipleVariableFrequencies#1": {
-          "max-lines-per-function": 132
+          "max-lines-per-function": 128
         }
       }
     },
@@ -1662,11 +1656,11 @@
     },
     "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.ts": {
       "file": {
-        "max-lines": 1188
+        "max-lines": 1142
       },
       "functions": {
         "class VariableAnalysisDialogComponent#1/method analyzeVariables#1": {
-          "max-lines-per-function": 174
+          "max-lines-per-function": 121
         }
       }
     },
