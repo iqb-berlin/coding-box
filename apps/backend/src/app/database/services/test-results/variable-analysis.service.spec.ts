@@ -81,7 +81,7 @@ describe('VariableAnalysisService', () => {
     expect(cacheService.get).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, 4, 5, 6, 7, 8].flatMap(resultVersion => ([
+  it.each([undefined, 4, 5, 6, 7, 8, 9].flatMap(resultVersion => ([
     'getAnalysisResults', 'getAnalysisResultsPage', 'exportAnalysisResultsAsCsv', 'exportAnalysisResultsAsXlsx'
   ] as const).map(method => ({ method, resultVersion }))))('$method requires recalculation of results from version $resultVersion', async ({ method, resultVersion }) => {
     jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ data: { workspaceId: 1, resultVersion } }));

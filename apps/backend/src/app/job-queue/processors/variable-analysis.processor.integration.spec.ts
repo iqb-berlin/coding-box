@@ -354,6 +354,98 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     });
   });
 
+  it.each([0, 4])('enriches manually assigned intended-incomplete code %i in v2 without an unobserved status duplicate', async code => {
+    const variableId = `MANUAL_FALLBACK_${code}`;
+    await client.query(`INSERT INTO analysis_response
+      (id, unitid, variableid, subform, value, status, code_v2, status_v2, score_v2)
+      VALUES (500, 1, $1, '', 'manual', 3, $2, 5, 2),
+        (501, 2, $1, '', 'other', 3, 1, 5, 0)`, [variableId, code]);
+    const options = { analysisMode: 'codes' as const, codingVersion: 'v2' as const };
+    const combo: VariableCombo = {
+      ...options, unitId: 1, unitName: 'UNIT', variableId
+    };
+    const entry = {
+      ...getVariableAnalysisMetadata({
+        id: variableId,
+        alias: variableId,
+        type: 'string',
+        hasCodingScheme: true,
+        codes: [
+          {
+            id: code, label: 'Manuelle Restkategorie', score: 2, type: 'INTENDED_INCOMPLETE', manualInstruction: 'Sonstige Antwort'
+          },
+          { id: 1, label: 'Andere Antwort', score: 0 },
+          { id: 99, label: 'Unbeobachtet', score: 3 }
+        ]
+      }, options),
+      combo,
+      comboKey: `1:${variableId}`,
+      logicalKey: `UNIT\u001F${variableId}`
+    };
+    const query = {
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      clone: () => createQuery()
+    };
+    const cached = new Map<string, unknown>();
+    const cache = {
+      set: async (key: string, value: unknown) => { cached.set(key, value); return true; },
+      get: async (key: string) => cached.get(key)
+    };
+    const worker = new VariableAnalysisProcessor({
+      createQueryBuilder: () => query,
+      query: async (sql: string, parameters: unknown[]) => (await client.query(sql, parameters)).rows
+    } as unknown as Repository<ResponseEntity>, cache as never, {
+      resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+    } as never, {} as never);
+    jest.spyOn(worker as unknown as { getAnalysisScope(): Promise<typeof entry[]> }, 'getAnalysisScope').mockResolvedValue([entry]);
+    // Code 4 falls outside this ranking limit and must retain its actual count via supplementation.
+    Object.defineProperty(worker, 'MAX_VALUES_PER_VARIABLE', { value: 1 });
+    const job = {
+      id: `manual-fallback-${code}`,
+      data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION, ...options },
+      updateProgress: jest.fn()
+    } as unknown as Job<VariableAnalysisJobData>;
+    const result = await worker.processWorkspaceJob(job);
+    const service = new VariableAnalysisService({
+      getVariableAnalysisJob: async () => ({ data: job.data, getState: async () => 'completed', returnvalue: result })
+    } as never, cache as never);
+    const expected = {
+      value: String(code),
+      label: 'Manuelle Restkategorie',
+      score: 2,
+      count: 1,
+      validOccurrenceCount: 1,
+      percentageTotal: 50,
+      percentageValid: 50,
+      totalCount: 2,
+      validCount: 2,
+      invalidCount: 0,
+      hiddenValueCount: 0
+    };
+    const page = await service.getAnalysisResultsPage(job.id!, 1);
+    expect(page.rows).toHaveLength(2);
+    expect(page.rows).toContainEqual(expect.objectContaining(expected));
+    const withUnobserved = await service.getAnalysisResultsPage(job.id!, 1, { includeSchemaCodes: true });
+    expect(withUnobserved.rows).toHaveLength(3);
+    expect(withUnobserved.rows).toContainEqual(expect.objectContaining(expected));
+    expect(withUnobserved.rows).toContainEqual(expect.objectContaining({ value: '99', count: 0, isSchemaOnly: true }));
+
+    const columns = ['Antwortwert/Kategorie oder Code', 'Label', 'Score', 'Anzahl Antworten', 'Anzahl gültiger Antworten', 'Anteil gesamt (%)', 'Anteil gültig (%)'];
+    const expectedExport = [String(code), 'Manuelle Restkategorie', 2, 1, 1, 50, 50];
+    const csv = await service.exportAnalysisResultsAsCsv(job.id!, 1, { includeSchemaCodes: true });
+    const [headers, ...csvRows] = csv.trim().split(/\r?\n/).map(row => row.split(';'));
+    expect(csvRows).toHaveLength(3);
+    expect(csvRows.map(row => columns.map(header => row[headers.indexOf(header)]))).toContainEqual(expectedExport.map(String));
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(await service.exportAnalysisResultsAsXlsx(job.id!, 1, { includeSchemaCodes: true }) as unknown as ExcelJS.Buffer);
+    const sheet = workbook.getWorksheet('Antwortwerte')!;
+    const xlsxHeaders = sheet.getRow(1).values as string[];
+    expect(sheet.rowCount).toBe(4);
+    expect(sheet.getRows(2, 3)!.map(row => columns.map(header => row.getCell(xlsxHeaders.indexOf(header)).value))).toContainEqual(expectedExport);
+  });
+
   it.each(['v1', 'v2', 'v3'] as const)('separates special zero codes through SQL, the result page and CSV/XLSX for %s', async codingVersion => {
     const variableId = `SPECIAL_${codingVersion}`;
     const coding = {

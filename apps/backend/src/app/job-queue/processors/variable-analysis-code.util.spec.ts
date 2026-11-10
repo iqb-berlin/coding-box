@@ -41,6 +41,29 @@ describe('Assigned-code analysis metadata', () => {
     expect(metadata.categoryDefinitions).toEqual([
       {
         value: `12:${id}`, label: 'Restkategorie', score: 2, order: 0
+      },
+      {
+        value: `5:${id}`, label: 'Restkategorie', score: 2, order: 0, isObservedOnly: true
+      }
+    ]);
+  });
+
+  it.each([0, 4])('uses the completed tuple for manual fallback code %i while retaining observed status 12', id => {
+    const metadata = getVariableAnalysisMetadata({
+      id: 'VAR',
+      alias: 'VAR',
+      type: 'string',
+      hasCodingScheme: true,
+      codes: [{
+        id, label: 'Restkategorie', score: 2, type: 'INTENDED_INCOMPLETE'
+      }]
+    }, { analysisMode: 'codes', codingVersion: 'v2' });
+    expect(metadata.categoryDefinitions).toEqual([
+      {
+        value: `5:${id}`, label: 'Restkategorie', score: 2, order: 0
+      },
+      {
+        value: `12:${id}`, label: 'Restkategorie', score: 2, order: 0, isObservedOnly: true
       }
     ]);
   });
@@ -59,8 +82,31 @@ describe('Assigned-code analysis metadata', () => {
       ]
     }, { analysisMode: 'codes' });
     expect(metadata.categoryDefinitions).toEqual([
-      { value: '12:0', order: 0 }
+      { value: '12:0', order: 0 },
+      {
+        value: '5:0', label: 'Restkategorie', score: 2, order: 0, isObservedOnly: true
+      }
     ]);
+  });
+
+  it.each([false, true])('keeps a shared status-12 tuple ambiguous and visible regardless of definition order (%s)', specialFirst => {
+    const codes = [
+      {
+        id: 0, label: 'Restkategorie', score: 2, type: 'INTENDED_INCOMPLETE'
+      },
+      { id: 'INTENDED_INCOMPLETE', label: 'Sonderfall' }
+    ];
+    const metadata = getVariableAnalysisMetadata({
+      id: 'VAR',
+      alias: 'VAR',
+      type: 'string',
+      hasCodingScheme: true,
+      codes: specialFirst ? codes.reverse() : codes
+    }, { analysisMode: 'codes', codingVersion: 'v2' });
+    expect(metadata.categoryDefinitions).toContainEqual({ value: '12:0', order: 0 });
+    expect(metadata.categoryDefinitions).toContainEqual(expect.objectContaining({
+      value: '5:0', label: 'Restkategorie', score: 2
+    }));
   });
 });
 

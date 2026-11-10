@@ -67,7 +67,12 @@ Code und Kodierstatus bestimmen gemeinsam die Häufigkeitszeile. Regulärer Code
 und `0 (INVALID)`. Die Sondercodes `INTENDED_INCOMPLETE` und `INVALID` aus dem
 Schema werden mit dem tatsächlich gespeicherten Code 0 und Score 0 zugeordnet.
 Numerische Restkategorien vom Typ `INTENDED_INCOMPLETE` behalten ihre eigene
-Code-ID und ihren Schema-Score. Können mehrere Schema-Definitionen dieselbe
+Code-ID und ihren Schema-Score. Bei manueller Vergabe werden sie mit
+`CODING_COMPLETE` gespeichert und erhalten auch für diese Kombination Label und Score.
+Beobachtete Kombinationen mit `INTENDED_INCOMPLETE` bleiben getrennt erhalten.
+Nicht beobachtete Restcodes werden in v2 als manuell abgeschlossene Codes ergänzt,
+in v1 und v3 mit `INTENDED_INCOMPLETE`; der jeweils andere Status erzeugt keine
+zusätzliche Nullzeile. Können mehrere Schema-Definitionen dieselbe
 gespeicherte Kombination aus Code und Status erzeugen, bleibt die gemeinsame
 Häufigkeit erhalten; Label und Score bleiben dann leer. Diese Darstellung gilt
 auch für CSV und XLSX. Ergebnisse älterer Berechnungsversionen müssen neu berechnet werden.
@@ -125,7 +130,7 @@ Die Leerwertkennzeichnung jeder Zeile wird vor dem Kürzen langer Antwortwerte
 gespeichert und für Oberfläche sowie CSV/XLSX übernommen. Auch mehr als 500
 Leerzeichen bleiben damit als leer erkennbar; führende Leerzeichen allein machen
 eine ansonsten gefüllte Antwort nicht leer.
-Berechnungsversion 9 erfordert eine neue Analyse auch für Ergebnisse der Version 8.
+Berechnungsversion 10 erfordert eine neue Analyse auch für Ergebnisse der Version 9.
 
 Codeanalysen gruppieren intern nach einem Schlüssel aus Kodierstatus und Code.
 Erst nach Schema-Ergänzung und Prozentberechnung entsteht daraus der sichtbare

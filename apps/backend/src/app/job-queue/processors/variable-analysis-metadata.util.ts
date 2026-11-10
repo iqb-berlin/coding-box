@@ -16,7 +16,7 @@ export function getVariableAnalysisMetadata(
   options: VariableAnalysisOptions = {}
 ): VariableAnalysisMetadata {
   const categoryDefinitions = options.analysisMode === 'codes' ?
-    getAssignedCodeDefinitions(variable.codes || []) : getExplicitSchemaValues(variable);
+    getAssignedCodeDefinitions(variable.codes || [], options.codingVersion) : getExplicitSchemaValues(variable);
   const seenValues = new Set(categoryDefinitions.map(definition => definition.value));
 
   if (options.analysisMode === 'codes') {

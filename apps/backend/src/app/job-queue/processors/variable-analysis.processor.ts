@@ -1204,8 +1204,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       schemaCodes.forEach(schemaValue => {
         const observedCounts = observedCountsForCombo.get(schemaValue.value);
         const count = typeof observedCounts === 'number' ?
-          observedCounts :
-          observedCounts?.count || 0;
+          observedCounts : observedCounts?.count || 0;
+        if (schemaValue.isObservedOnly && count === 0) return;
         const definition = this.resolveObservedSchemaValue(
           schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
         );

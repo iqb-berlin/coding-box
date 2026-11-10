@@ -1,8 +1,10 @@
 import { CodeInfo } from '../../models/unit-variable-details.dto';
+import { VariableAnalysisCodingVersion } from '../../../../../../api-dto/coding/variable-analysis-options';
 import { statusStringToNumber } from '../../database/utils/response-status-converter';
 import { SchemaValueDefinition } from './variable-analysis-schema.util';
 
 const completeStatus = statusStringToNumber('CODING_COMPLETE');
+const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
 const specialCodeIds = ['INVALID', 'INTENDED_INCOMPLETE'] as const;
 
 function assignedCodeKey(code: string | number, status: number): string {
@@ -21,21 +23,37 @@ export function formatAssignedCodeKey(key: string): string {
 }
 
 /** Internal keys describe persisted status/code tuples; special string IDs use code zero. */
-export function getAssignedCodeDefinitions(codes: CodeInfo[]): SchemaValueDefinition[] {
+export function getAssignedCodeDefinitions(
+  codes: CodeInfo[],
+  codingVersion: VariableAnalysisCodingVersion = 'v1'
+): SchemaValueDefinition[] {
   const definitions = new Map<string, SchemaValueDefinition>();
-  codes.forEach(code => {
+  codes.forEach((code, order) => {
     const specialId = specialCodeIds.find(id => id === code.id);
-    const status = statusStringToNumber(specialId ?? (code.type === 'INTENDED_INCOMPLETE' ? code.type : 'CODING_COMPLETE'));
-    const value = assignedCodeKey(specialId ? 0 : code.id, status);
-    const existing = definitions.get(value);
-    if (existing) {
-      // The stored tuple cannot distinguish these definitions. Do not invent a match.
-      delete existing.label;
-      delete existing.score;
-      return;
+    const isNumericIncomplete = typeof code.id === 'number' && code.type === 'INTENDED_INCOMPLETE';
+    // Manual assignment completes numeric fallback codes; autocoding retains status 12.
+    let statuses = [statusStringToNumber(specialId ?? 'CODING_COMPLETE')];
+    if (isNumericIncomplete) {
+      statuses = codingVersion === 'v2' ?
+        [completeStatus, intendedIncompleteStatus] : [intendedIncompleteStatus, completeStatus];
     }
-    definitions.set(value, {
-      value, label: code.label, score: specialId ? 0 : code.score, order: definitions.size
+    statuses.forEach((status, index) => {
+      const value = assignedCodeKey(specialId ? 0 : code.id, status);
+      const existing = definitions.get(value);
+      if (existing) {
+        // The stored tuple cannot distinguish these definitions. Do not invent a match.
+        delete existing.label;
+        delete existing.score;
+        if (index === 0) delete existing.isObservedOnly;
+        return;
+      }
+      definitions.set(value, {
+        value,
+        label: code.label,
+        score: specialId ? 0 : code.score,
+        order,
+        ...(index > 0 ? { isObservedOnly: true } : {})
+      });
     });
   });
   return [...definitions.values()];
