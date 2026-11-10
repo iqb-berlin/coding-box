@@ -83,7 +83,7 @@ Liquibase-Transaktion; Constraints werden erst danach angebunden.
    dieser gezielte Nachtest betrifft das bisher unvollständige Mehrzeilenlesen.
 5. Such- und Löschpläne sowie Index-/WAL-Wachstum auf derselben Datenkopie erfassen.
 
-Die Pflichtmigration enthält 14 Changesets. Beim Teil-Rollback des
+Die Pflichtmigration enthält 16 Changesets. Beim Teil-Rollback des
 Constraint-Changesets werden die vier zuvor angelegten Unique-Indizes wieder
 hergestellt. Damit ist sowohl ein erneutes Anwenden ab dieser Grenze als auch
 anschließendes vollständiges Zurückrollen möglich. Der Wiederaufbau dieser
@@ -305,3 +305,27 @@ Primärquellen:
 [PostgreSQL-Support](https://www.postgresql.org/support/versioning/),
 [PostgreSQL-Hauptversionswechsel](https://www.postgresql.org/docs/17/upgrading.html),
 [TypeORM-Migrationsleitfaden](https://typeorm.io/docs/releases/1.0/upgrading-from-0.3/).
+
+
+### Kalte Facetten und Zählung
+
+Der vollständige HTTP-Anlauf am Stand `217505c47` ergab trotz schnellerer warmer
+Aufrufe noch 57,5 Sekunden für kalte Facetten. Der nachfolgende lesende Plan
+zeigte 25.801 Heap-/Indexblöcke bei der Existenzprüfung und 11.070 Blöcke beim
+Lesen der Controller-Zeitstempel. Eine bloße Reduktion der Query-Anzahl beseitigt
+diese kalten Einzelzugriffe nicht.
+
+Die Existenzprüfung zählt deshalb über den partiellen Antwortindex; der neue
+Index `idx_bookletlog_controller_covering` ergänzt dessen bisherige Suchspalten
+um `INCLUDE(ts)`. Der alte Controller-Index entfällt, sein Rollback stellt ihn
+wieder her. Im isolierten Prototyp belegt der neue Index 2.859.008 Bytes und beide
+Zugriffe verwenden Index-only-Scans. Die Sichtbarkeitsinformationen der Tabellen
+bestimmen weiterhin mögliche Heap-Fetches; ein Index garantiert keine unveränderte
+Antwortzeit auf beliebigen Datenständen. Die Zählung verwendet außerdem eine
+intern erzeugte Integer-Array-Menge der berechtigten Unit-IDs statt eines eigenen
+Aggregats pro Unit. Der QueryRunner und sämtliche Workspace-Ausschlüsse bleiben
+wirksam; Unit-IDs werden nicht als SQL-Text interpoliert.
+
+Eine zusätzliche Multirange-Variante wurde nur isoliert geprüft und nicht
+übernommen. Das technische Archiv behält auch diese Versuche und die kalten
+Fehlnachweise. Der vollständige HTTP-Dauerlastnachweis bleibt ein eigener Schritt.

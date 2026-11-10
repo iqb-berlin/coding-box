@@ -254,4 +254,29 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await db.query('DELETE FROM response WHERE unitid BETWEEN 1000 AND 1509; DELETE FROM unit WHERE id BETWEEN 1000 AND 1509; DELETE FROM booklet WHERE id BETWEEN 1000 AND 1509; DELETE FROM persons WHERE id BETWEEN 1000 AND 1509;');
     }
   });
+
+  it('returns zero and empty facets for a workspace with no eligible units', async () => {
+    await expect(service.findFlatResponses(44, { page: 1, limit: 50 })).resolves.toEqual([[], 0]);
+    const options = await filterOptionsService.findFlatResponseFilterOptions(44, {});
+    expect(Object.keys(options)).toHaveLength(14);
+    expect(Object.values(options)).toEqual(Array(14).fill([]));
+  });
+
+  it('reads the array count and page through the supplied transaction connection', async () => {
+    const runner = db.createQueryRunner();
+    await runner.connect();
+    await runner.startTransaction();
+    try {
+      await runner.query("INSERT INTO response VALUES (30,1,'Z',3,'not committed',NULL)");
+      const [rows, total] = await service.findFlatResponses(42, { page: 1, limit: 50 }, runner);
+      expect(total).toBe(9);
+      expect(rows.map(row => row.responseId)).toEqual([1, 2, 3, 4, 30, 5, 6, 7, 8]);
+      const [outsideRows, outsideTotal] = await service.findFlatResponses(42, { page: 1, limit: 50 });
+      expect(outsideTotal).toBe(8);
+      expect(outsideRows.map(row => row.responseId)).not.toContain(30);
+    } finally {
+      await runner.rollbackTransaction();
+      await runner.release();
+    }
+  });
 });

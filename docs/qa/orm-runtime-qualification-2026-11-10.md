@@ -272,3 +272,55 @@ unterschiedliche Cachetemperaturen erlauben daraus keine isolierte Aussage
 TypeORM-Konfiguration, ersetzt nur den Metadaten-Cache und erhebt keinen
 HTTP-/Mehrnutzer-Kapazitätsanspruch. Der nachfolgende HTTP-Nachweis nutzt echtes
 Redis und den gesonderten Exportworker.
+
+
+## Kurzer HTTP-Vergleich r14 und gezielte kalte Nachbesserung
+
+Der vollständig mit develop integrierte Vorherstand `a70d2bda5` und der SQL-Stand
+`217505c47` wurden auf demselben zurückgesetzten Datenstand mit Schema 183 und
+identischen Pool-/Zeitgrenzen geprüft. Jeweils 152 Aufrufe mit 1/2/5/10/20
+synthetischen Nutzern: vorher zwei HTTP-503-Antworten in der 20-Nutzer-Stufe,
+nachher null Fehler; beide Umgebungen erholten sich. Die HTTP-Inhaltsprüfsummen
+für Listen, beide Kappa-Varianten und Facetten waren identisch.
+
+Die Liste benötigte beim ersten Aufruf 20,246 Sekunden vorher und 10,102
+Sekunden nachher. Bei der synchronen 20-Nutzer-Anlaufstufe lagen die jeweiligen
+Listen-p95-Werte bei 26,140 und 9,123 Sekunden. Diese kurzen synchronen Anläufe
+sind kein Ersatz für den vereinbarten gemischten 30-Minuten-Dauerlasttest.
+Kalte Facetten verfehlten das Ziel in beiden Ständen: 52,480 bzw. 57,516 Sekunden.
+Der schnellere warme Servicevergleich hebt diesen negativen Nachweis nicht auf.
+
+Die anschließende isolierte Plananalyse lokalisierte teure kalte Heap-Zugriffe
+bei der Antwort-Existenzprüfung und beim Lesen der Controller-Zeitstempel.
+Der Folgestand verwendet eine indexgedeckte Aggregatprüfung und ersetzt den
+bisherigen Controller-Index durch denselben Suchschlüssel mit `INCLUDE(ts)`.
+Ein zusätzlich geprüfter Integer-Array-Count erhält den vollständigen
+Workspace-Scope und die übergebene Transaktionsverbindung. Eine Multirange-Idee
+wurde ausschließlich als Prototyp geprüft und nicht übernommen.
+
+Der private Prototyp lieferte identische Facetten; die relevanten Antwort- und
+Controller-Zugriffe waren Index-only-Scans. Der neue Controller-Index belegte
+2.859.008 Bytes. Warme Facetten wurden dabei etwas langsamer (1,25 auf 1,64
+Sekunden); dies wird als bewusster Prüfpunkt für den angestrebten Wegfall kalter
+Heap-Zugriffe festgehalten. Eine neue Migrations- und Dauerlastqualifizierung des
+Folgestands ist vor dessen Freigabe erforderlich. Die r14-Artefakte bleiben
+unverändert erhalten; kein alter Lauf wird diesem Folgestand zugerechnet.
+
+
+Der vollständige Backend-Nachlauf dieser kalten Nachbesserung bestand mit 4.469
+Tests und null Fehlern. Typprüfung, Lint und Produktionsbuild bestanden. Das
+verpflichtende PostgreSQL-/Redis-Gate führte 188 Tests in 24 Suites erfolgreich
+aus. Nach vollständigem Suite-/Namensabgleich wurden 171 der 172 im Unitlauf
+nicht aktivierten Fälle tatsächlich ausgeführt und bestanden; ausschließlich
+der optionale Kappa-Benchmark bleibt offen. Die beiden neuen Fälle für leere
+Workspaces und die übergebene Transaktionsverbindung bestanden dabei ebenfalls.
+Die vorherigen 3.886 Frontendtests sowie Lint, Qualitätsgate und Produktionsbuild
+bleiben anwendbar, weil Frontend und gemeinsame DTOs unverändert sind.
+
+Die Indexanlage und das anschließende Entfernen des ersetzten Index sind getrennte
+nichttransaktionale Changesets. Insgesamt enthält die Pflichtmigration damit
+16 Changesets. Die eigenständige große Migrationsprüfung betrifft Schema
+183 → 185 → 183 → 185 einschließlich wiederhergestelltem Altindex beim Rollback.
+Ihr Ergebnis sowie der anschließende HTTP-Dauerlastlauf werden im gesonderten
+technischen Ergebnisbericht und in der PR-Beschreibung zugeordnet; die früheren
+negativen Anläufe bleiben gültig.

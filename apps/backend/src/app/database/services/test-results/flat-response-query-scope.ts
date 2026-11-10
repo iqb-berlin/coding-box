@@ -36,10 +36,10 @@ export async function countUnfilteredFlatResponses(
 ): Promise<number> {
   const result = await connection.createQueryBuilder(queryRunner)
     .addCommonTableExpression(units.clone().select('unit.id', 'id'), 'flat_response_count_units', { materialized: true })
-    .select(`COALESCE(SUM((SELECT COUNT(*) FROM response counted_response
-      WHERE counted_response.unitid = counted_units.id
-        AND counted_response.is_autocoder_generated IS NOT TRUE)), 0)`, 'cnt')
-    .from('flat_response_count_units', 'counted_units')
+    .select('COUNT(*)', 'cnt')
+    .from(ResponseEntity, 'counted_response')
+    .where('counted_response.unitid = ANY(ARRAY(SELECT id FROM flat_response_count_units))')
+    .andWhere('counted_response.is_autocoder_generated IS NOT TRUE')
     .getRawOne<{ cnt: string }>();
   return Number(result?.cnt || 0);
 }

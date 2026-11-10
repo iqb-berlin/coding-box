@@ -20,8 +20,10 @@ export async function queryUnfilteredFlatResponseFacets(
   if (!Number.isSafeInteger(maxOptions) || maxOptions < 1) throw new Error('Invalid facet limit');
   const [scope, parameters] = units.clone()
     .select(['unit.id AS id', 'unit.bookletid AS bookletid', 'COALESCE(unit.alias, unit.name) AS unit'])
-    .andWhere(`EXISTS (SELECT 1 FROM response eligible_response
-      WHERE eligible_response.unitid = unit.id AND eligible_response.is_autocoder_generated IS NOT TRUE)`)
+    // EXISTS chose a heap scan per unit on the full-data copy. The aggregate
+    // uses the manual-response covering index, avoiding those cold heap reads.
+    .andWhere(`(SELECT COUNT(*) FROM response eligible_response
+      WHERE eligible_response.unitid = unit.id AND eligible_response.is_autocoder_generated IS NOT TRUE) > 0`)
     .getQueryAndParameters();
   const threshold = `$${parameters.length + 1}`;
   // Identifiers come exclusively from the fixed tuples above. Values stay bound.

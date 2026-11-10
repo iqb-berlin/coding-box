@@ -96,6 +96,10 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     const responseCover = indexes.find(index => index.indexname === 'idx_response_manual_unit_variable');
     expect(responseCover?.indexdef).toContain('(unitid, variableid, id) INCLUDE (status)');
     expect(responseCover?.indexdef).toContain('is_autocoder_generated IS NOT TRUE');
+    const controllerCover = indexes.find(index => index.indexname === 'idx_bookletlog_controller_covering');
+    expect(controllerCover?.indexdef).toContain('(bookletid, parameter, id) INCLUDE (ts)');
+    expect(controllerCover?.indexdef).toContain("key = 'CONTROLLER'");
+    expect(names).not.toContain('idx_bookletlog_controller_booklet_parameter_id');
   });
 
   it('restores prerequisite indexes on partial primary-key rollback and can reapply it', async () => {
