@@ -93,6 +93,9 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
       'idx_coding_freshness_unit', 'idx_bookletlog_booklet_id']) {
       expect(names).toContain(name);
     }
+    const responseCover = indexes.find(index => index.indexname === 'idx_response_manual_unit_variable');
+    expect(responseCover?.indexdef).toContain('(unitid, variableid, id) INCLUDE (status)');
+    expect(responseCover?.indexdef).toContain('is_autocoder_generated IS NOT TRUE');
   });
 
   it('restores prerequisite indexes on partial primary-key rollback and can reapply it', async () => {

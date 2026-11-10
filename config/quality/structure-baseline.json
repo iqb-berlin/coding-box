@@ -1012,7 +1012,7 @@
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
           "complexity": 56,
-          "max-lines-per-function": 384
+          "max-lines-per-function": 379
         }
       }
     },

@@ -83,7 +83,7 @@ Liquibase-Transaktion; Constraints werden erst danach angebunden.
    dieser gezielte Nachtest betrifft das bisher unvollständige Mehrzeilenlesen.
 5. Such- und Löschpläne sowie Index-/WAL-Wachstum auf derselben Datenkopie erfassen.
 
-Die Pflichtmigration enthält 13 Changesets. Beim Teil-Rollback des
+Die Pflichtmigration enthält 14 Changesets. Beim Teil-Rollback des
 Constraint-Changesets werden die vier zuvor angelegten Unique-Indizes wieder
 hergestellt. Damit ist sowohl ein erneutes Anwenden ab dieser Grenze als auch
 anschließendes vollständiges Zurückrollen möglich. Der Wiederaufbau dieser
@@ -167,6 +167,29 @@ Tags und die Begrenzung der Antwortwerte bleiben erhalten. Die Antwort-ID ist
 der letzte Sortierschlüssel, damit identische sichtbare Schlüssel bei der
 Seitennavigation eine feste Reihenfolge haben. Der tatsächliche Ausführungsplan
 und die Auswirkungen unter Last werden gesondert nachgeprüft.
+
+Ungefilterte Listen zählen Antworten über die zulässigen Units statt über einen
+Scan aller Workspaces. Der zusätzliche partielle Index
+`idx_response_manual_unit_variable` enthält `unitid`, `variableid`, `id` und
+`status` ausschließlich für `is_autocoder_generated IS NOT TRUE`; historische
+NULL-Werte bleiben eingeschlossen. Antwortwerte werden nicht in diesen Index
+aufgenommen. Der Index benötigt zusätzlichen Platz und Schreibarbeit. Im
+isolierten Bestandsdaten-Probelauf belegte er rund 293 MiB; der Aufbau auf der
+externen HDD dauerte rund 106 Sekunden. Das ist keine Laufzeitzusage für andere
+Instanzen und kein HTTP-Antwortzeitziel.
+
+Für die ungefilterte Seite werden Units nach denselben ersten drei
+Sortierschlüsseln vorausgewählt. `FETCH FIRST ... WITH TIES` erhält alle Units
+mit gleichem Code, Bookletnamen und Alias; anschließend sortieren weiterhin
+Variable und Antwort-ID. Liefern leere oder ausschließlich automatisch erzeugte
+Units zu wenige Antworten, wird die vollständige Seitenabfrage verwendet.
+Gefilterte Suchpfade behalten ihren bisherigen SQL-Vertrag.
+
+Ungefilterte Facetten bestimmen Antwortexistenz auf Unit-Ebene und berechnen
+Metadaten sowie Dauer/Fortschritt auf Booklet-Ebene. Die 14 Dimensionen,
+Sortierungen und 500-Werte-Grenzen bleiben erhalten. Die PostgreSQL-Regressionen
+vergleichen diesen Pfad mit der vollständigen gefilterten Abfrage und prüfen
+Sortiergleichstände, leere Units und historische NULL-Werte.
 
 Der neue Nx-Aufruf ist ausschließlich lesend und benötigt explizite
 `POSTGRES_HOST`, `POSTGRES_PORT`, `POSTGRES_DB`, `POSTGRES_USER` und gegebenenfalls

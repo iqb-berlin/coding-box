@@ -34,6 +34,7 @@ import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding
 import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 
 const mockQueryBuilder = () => ({
+  addCommonTableExpression: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
   addSelect: jest.fn().mockReturnThis(),
   from: jest.fn().mockReturnThis(),

@@ -31,6 +31,9 @@ import { FlatResponseOptions, FlatResponseResult, LogAnomalySummary } from './wo
 import {
   applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
+import {
+  countUnfilteredFlatResponses, createFlatResponseUnitScope, isUnfilteredFlatResponseQuery, withFlatResponsePageUnits
+} from './flat-response-query-scope';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
 
@@ -129,15 +132,26 @@ export class TestResultsResponsesService {
       return query;
     };
     const qb = createQuery();
-    const countQb = createQuery();
-    const total = await countQb
+    const units = isUnfilteredFlatResponseQuery(filters) ?
+      createFlatResponseUnitScope(this.connection, workspaceId, exclusions, queryRunner) : undefined;
+    const total = units ? await countUnfilteredFlatResponses(this.connection, units, queryRunner) : await createQuery()
       .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const raw = await this.selectFlatResponseRows(qb, validPage, validLimit, filters.tags);
+    const candidateUnits = validPage * validLimit;
+    const useUnitPrefix = units !== undefined && Number.isSafeInteger(candidateUnits);
+    const pageQuery = useUnitPrefix && units ? withFlatResponsePageUnits(
+      qb, units, candidateUnits
+    ) : qb;
+    let raw = await this.selectFlatResponseRows(pageQuery, validPage, validLimit, filters.tags);
+    // Empty/auto-generated-only units can exhaust the prefix before a whole page.
+    // In that case use the complete scope instead of silently dropping later rows.
+    if (useUnitPrefix && raw.length < validLimit) {
+      raw = await this.selectFlatResponseRows(qb, validPage, validLimit, filters.tags);
+    }
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');

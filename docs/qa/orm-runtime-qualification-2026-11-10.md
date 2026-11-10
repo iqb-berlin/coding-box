@@ -3,10 +3,12 @@
 ## Entscheidung und Reichweite
 
 **Keine Merge- oder Performancefreigabe aus dieser Prüfung. Kein Deployment.**
-Die vereinbarten Ziele für Listen und kalte Filteroptionen sind in der verfügbaren
-Umgebung verfehlt. Die vollständige Lastspitze und Erholung sind nicht abgeschlossen.
-Eine gefundene Cache-Race wird mit diesem Änderungsstand korrigiert; die Messungen
-am vorherigen Stand werden dadurch nicht zum Nachweis für den neuen Stand.
+Die vollständigen Folgeläufe r12 und r13 einschließlich Lastspitze und Erholung
+verfehlten die vereinbarten Ziele in der verfügbaren Umgebung. Cache- und
+Importkorrekturen bestanden ihre gezielten Nachweise. Der aktuelle Folgestand
+integriert develop `a76f7e6f8` und optimiert Listen, Zählung und ungefilterte
+Facetten. Die bisherigen HTTP-Messungen werden dadurch nicht zum Nachweis für
+diesen neuen SQL- und Indexstand; dessen Dauerlastqualifizierung steht aus.
 
 Die vollständige Offline-Kopie umfasst 1.928 Dateien und 16.602.145.818 Bytes.
 Jede Datei wurde kopiert, synchronisiert und per SHA-256 nachgelesen. Die
@@ -187,3 +189,86 @@ belegen vor der Korrektur das Überspringen bzw. den übersehenen Fehlerwert.
 Die Warnung bei unzuverlässiger Statistik und der Erhalt gespeicherter Daten
 bleiben bestehen. Die Ergebnisse von r12 werden dem Vorgänger zugerechnet; der
 Folgestand benötigt seinen eigenen Nachweis unter dem korrigierten Lastprofil.
+
+## Vollständiger Vorgängerlauf r13 und anschließende Optimierung
+
+Am Stand `5ff4b9818` wurden 30 Minuten mit zehn Nutzern, fünf Minuten mit 20
+und fünf Minuten Erholung vollständig durchgeführt: 3.457 Aufrufe, 35 Fehler
+ausschließlich in der Lastspitze. Die Zehn-Nutzer-Phase enthielt 2.477 Aufrufe
+ohne Fehler; Listen-p95 lag bei 18,326 Sekunden. Unter 20 Nutzern scheiterten
+35 von 420 Aufrufen, Listen-p95 lag bei 30,002 Sekunden. Die erste kalte
+Facettenberechnung brauchte 45,916 Sekunden. Erholung, Queues, abschließender
+Export, ursprüngliche Inhaltsprüfsummen und alle drei neuen Importgruppen
+bestanden. Dieser Nachweis gilt für den Vorgänger, nicht für den aktuellen SQL-Stand.
+
+Nach Integration der 19 develop-Commits werden zuerst isolierte Einzelabfragen
+und vollständige Ergebnismengen verglichen. Bei gleichem Indexbestand ergaben
+warme Einzelmessungen für die Seite rund 0,961 gegenüber 0,265 Sekunden und für
+die 14 Facetten rund 6,083 gegenüber 1,365 Sekunden. Die neue Unit-Zählung lag
+bei rund 0,485 gegenüber 0,837 Sekunden mit demselben neuen Index. Die
+Ergebnisprüfsummen und Reihenfolgen waren jeweils identisch. Kalte, früher
+ausgeführte Abfragen bleiben separat dokumentiert und werden nicht mit warmen
+Nachläufen zu einer Beschleunigungsaussage vermischt.
+
+Der neue partielle Response-Index ergänzt die bisherigen 13 Changesets um einen
+weiteren Aufbau. Migrations-, Rückroll-, Schreib- und Lastnachweise für diesen
+Index bleiben von den historischen Nachweisen der unveränderten 13 Changesets
+getrennt. Ein Datenbank-SQL-Testlimit wird weiterhin nicht als fachliches
+Antwortzeitziel verwendet.
+
+
+## Validierung des mit develop integrierten SQL-Folgestands
+
+Die Integration von develop `a76f7e6f8` erfolgt vor der erneuten Laufzeitprüfung.
+Typprüfung einschließlich nativer Entity-Metadaten, Backend-Lint und
+Produktionsbuild bestanden. Der vollständige Backendlauf bestand mit 4.469
+Tests und null Fehlern. Seine 170 nicht aktivierten Fälle wurden nach Suite und
+Testname abgeglichen: 169 bestanden im verpflichtenden PostgreSQL-/Redis-Gate,
+das insgesamt 186 Tests ohne Fehler ausführte. Genau ein optionaler
+Kappa-Benchmark bleibt nicht ausgeführt; kein Skip ist unzugeordnet.
+
+Ein erster Gesamtlauf fand zusätzlich eine zeitabhängige Assertion im
+Redis-Ratelimit-Test: Ein fester 150-ms-Wartewert garantierte in der lokalen VM
+kein abgelaufenes Redis-Fenster. Der Test beobachtet jetzt mit einer begrenzten
+Wartezeit die tatsächliche Schlüsselablaufzeit und prüft anschließend weiterhin
+Zählerstand 1 und eine erlaubte Anfrage. Das 100-ms-Fenster und die
+Produktionslogik bleiben unverändert. Der fehlgeschlagene Versuch ist im Archiv
+erhalten; die oben genannten Gesamtläufe stammen aus dem korrigierten Stand.
+
+Sechs zusätzliche echte PostgreSQL-Fälle prüfen gleiche Sortierpräfixe über
+Personen und Booklets hinweg, leere/automatisch erzeugte Units, historische
+NULL-Werte, alle 14 Facettengruppen einschließlich numerischer Sessionreihenfolge
+und den geordneten 500-Werte-Grenzwert. Ungefilterte und bestehende gefilterte
+Pfade liefern in diesen Fixtures dieselben Ergebnisse. Große Datenvergleiche und
+Migrationsnachweise werden getrennt vom noch ausstehenden HTTP-Dauerlastnachweis
+bewertet.
+
+
+Auf der frisch zurückgesetzten vollständigen Datenkopie bestand anschließend die
+reale Liquibase-4.28-Prüfung des zusätzlichen 14. Changesets: Validierung,
+Anwendung von Schema 182 auf 183, Rücknahme nur dieses Changesets auf 182 und
+Wiederanwendung auf 183. Anwendung und Wiederanwendung dauerten 116,462 bzw.
+75,584 Sekunden, die Rücknahme 3,294 Sekunden. Alte Migrationsprüfsummen und
+Zeilenzahlen blieben in allen drei Schritten gleich (7.629.509 Antworten,
+677.990 Units, 1.319.408 Chunks, 1.427.647 Zustandszeilen); ungültige Indizes: null.
+Der zusätzliche Index belegt 306.741.248 Bytes, seine erstmalige Anlage erzeugte
+278.800.168 Bytes WAL. Das sind gemessene Kosten dieser Datenkopie, keine
+zugesicherte Migrationsdauer auf dem Zielserver. Ein erster Container-Aufruf
+scheiterte an einem nicht eingebundenen Hostpfad, bevor Liquibase bzw. SQL startete;
+der erfolgreiche Lauf übertrug ausschließlich die Changelog-Dateien in den
+entbehrlichen Prüfcontainer.
+
+
+Der anschließende Vergleich der tatsächlich gebauten Serviceklassen auf identischem
+Schema 183 bestand: Beide Listen-Tupel (50 Zeilen und Gesamtzahl) sowie alle
+14 Facettengruppen waren einschließlich Reihenfolge und serialisierter Inhalte
+identisch. Der Stand vor der Query-Optimierung erhielt ebenfalls den neuen Index.
+In der warmen Wiederholung benötigte die vollständige Listenmethode 2.035,677 ms
+vorher und 798,313 ms nachher, die Facettenmethode 6.002,445 bzw. 1.346,234 ms.
+Die jeweils ersten Messungen (Liste 31.087,970/3.147,553 ms, Facetten
+44.105,902/2.764,038 ms) bleiben als sequenzielle Anlaufwerte erhalten;
+unterschiedliche Cachetemperaturen erlauben daraus keine isolierte Aussage
+über den Faktor kalter Beschleunigung. Der Servicevergleich verwendet die echte
+TypeORM-Konfiguration, ersetzt nur den Metadaten-Cache und erhebt keinen
+HTTP-/Mehrnutzer-Kapazitätsanspruch. Der nachfolgende HTTP-Nachweis nutzt echtes
+Redis und den gesonderten Exportworker.

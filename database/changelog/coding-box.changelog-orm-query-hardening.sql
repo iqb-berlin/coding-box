@@ -76,3 +76,10 @@ DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_statistics_covering;
 DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_status_codedstatus_unitid;
 -- rollback CREATE INDEX CONCURRENTLY idx_response_status_codedstatus_unitid ON public.response(status, status_v1, unitid) WHERE status::text = 'VALUE_CHANGED';
 -- rollback CREATE INDEX CONCURRENTLY idx_response_statistics_covering ON public.response(status, unitid, status_v1, id) WHERE status::text = 'VALUE_CHANGED';
+
+-- changeset iqb:orm-manual-response-covering-index runInTransaction:false
+-- comment: Scoped counts and facets read narrow index entries instead of response/value heap pages.
+CREATE INDEX CONCURRENTLY idx_response_manual_unit_variable
+  ON public.response(unitid, variableid, id) INCLUDE (status)
+  WHERE is_autocoder_generated IS NOT TRUE;
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_manual_unit_variable;

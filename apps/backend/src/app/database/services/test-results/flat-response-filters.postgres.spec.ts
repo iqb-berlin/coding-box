@@ -2,6 +2,7 @@ import { createMock } from '@golevelup/ts-jest';
 import { DataSource } from 'typeorm';
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import Workspace from '../../entities/workspace.entity';
@@ -24,6 +25,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   const schema = `flat_response_filters_${process.pid}_${Date.now()}`;
   let db: DataSource;
   let service: TestResultsResponsesService;
+  let filterOptionsService: TestResultsFilterOptionsService;
 
   beforeAll(async () => {
     db = new DataSource({
@@ -91,6 +93,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     });
     const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusions);
     service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusions, anomalies);
+    filterOptionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusions);
   });
 
   afterAll(async () => {
@@ -178,5 +181,77 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }, [4, 5]);
     await expectResponses({ hasValue: 'true', sessionIds: '101' }, [4]);
     await expectResponses({ sessionIds: '999' }, []);
+  });
+
+  it('keeps all equal sort prefixes across persons, booklets and units before response pagination', async () => {
+    await db.query(`INSERT INTO persons VALUES (20,42,true,'A','tie-person','group');
+      INSERT INTO bookletinfo VALUES (20,'BOOKLET_A'); INSERT INTO booklet VALUES (20,20,20);
+      INSERT INTO unit SELECT i,CASE WHEN i % 2 = 0 THEN 1 ELSE 20 END,'tie-' || i,'UNIT_A'
+        FROM generate_series(20,35) i;
+      INSERT INTO response (id,unitid,variableid,status,value)
+        SELECT 120-i,i,'A',3,'tie' FROM generate_series(20,35) i;`);
+    try {
+      for (const [page, id] of [[1, 1], [2, 85], [3, 86], [4, 87]] as const) {
+        await expectResponses({ page, limit: 1 }, [id], 24);
+      }
+    } finally {
+      await db.query('DELETE FROM response WHERE unitid BETWEEN 20 AND 35; DELETE FROM unit WHERE id BETWEEN 20 AND 35; DELETE FROM booklet WHERE id=20; DELETE FROM bookletinfo WHERE id=20; DELETE FROM persons WHERE id=20;');
+    }
+  });
+
+  it('falls back to the full scope when empty and generated-only units consume the prefix', async () => {
+    await db.query(`INSERT INTO unit VALUES (20,1,'EMPTY','000'),(21,1,'GENERATED','001');
+      INSERT INTO response VALUES (30,21,'0',3,'generated',true);`);
+    try {
+      await expectResponses({ page: 1, limit: 1 }, [1], 8);
+      await expectResponses({ page: 2, limit: 1 }, [2], 8);
+    } finally {
+      await db.query('DELETE FROM response WHERE id=30; DELETE FROM unit WHERE id IN (20,21);');
+    }
+  });
+
+  it('retains NULL alias ordering and counts nullable legacy generation flags', async () => {
+    await db.query(`INSERT INTO unit VALUES (20,1,'A',NULL);
+      INSERT INTO response VALUES (30,20,'0',3,'legacy',NULL);`);
+    try {
+      await expectResponses({}, [1, 2, 3, 4, 30, 5, 6, 7, 8]);
+      await expectResponses({ page: 5, limit: 1 }, [30], 9);
+    } finally {
+      await db.query('DELETE FROM response WHERE id=30; DELETE FROM unit WHERE id=20;');
+    }
+  });
+
+  it.each([60000, 61001])('keeps all fourteen unfiltered facets equal to the complete filtered scope at threshold %i', async threshold => {
+    await db.query(`INSERT INTO session VALUES (2,1,'Edge','Linux','small',100),(20,1,NULL,NULL,NULL,100);
+      INSERT INTO bookletlog VALUES (40,2,'CURRENT_UNIT_ID','UNIT_B',1);
+      UPDATE response SET is_autocoder_generated=NULL WHERE id=8;`);
+    try {
+      const options = { processingDurationThresholdMs: threshold };
+      const actual = await filterOptionsService.findFlatResponseFilterOptions(42, options);
+      // '%' matches every non-null code in this fixture and exercises the existing filtered path.
+      const expected = await filterOptionsService.findFlatResponseFilterOptions(42, { ...options, code: '%' });
+      expect(actual).toEqual(expected);
+      expect(Object.keys(actual)).toHaveLength(14);
+      expect(actual.sessionIds.slice(0, 2)).toEqual(['2', '20']);
+      expect(actual.unitProgresses).toEqual(['Vollständig', 'Unvollständig']);
+      expect(actual.units).not.toContain('IGNORED');
+    } finally {
+      await db.query('DELETE FROM session WHERE id IN (2,20); DELETE FROM bookletlog WHERE id=40; UPDATE response SET is_autocoder_generated=false WHERE id=8;');
+    }
+  });
+
+  it('preserves the ordered 500-value facet cap at high cardinality', async () => {
+    await db.query(`INSERT INTO persons SELECT i,42,true,'code-' || i,'login-' || i,'bulk' FROM generate_series(1000,1509) i;
+      INSERT INTO booklet SELECT i,i,1 FROM generate_series(1000,1509) i;
+      INSERT INTO unit SELECT i,i,'name-' || i,'unit-' || i FROM generate_series(1000,1509) i;
+      INSERT INTO response (id,unitid,variableid,status,value) SELECT i,i,'variable-' || i,3,'value' FROM generate_series(1000,1509) i;`);
+    try {
+      const actual = await filterOptionsService.findFlatResponseFilterOptions(42, {});
+      const expected = await filterOptionsService.findFlatResponseFilterOptions(42, { code: '%' });
+      expect(actual).toEqual(expected);
+      for (const values of [actual.codes, actual.logins, actual.units, actual.responses]) expect(values).toHaveLength(500);
+    } finally {
+      await db.query('DELETE FROM response WHERE unitid BETWEEN 1000 AND 1509; DELETE FROM unit WHERE id BETWEEN 1000 AND 1509; DELETE FROM booklet WHERE id BETWEEN 1000 AND 1509; DELETE FROM persons WHERE id BETWEEN 1000 AND 1509;');
+    }
   });
 });
