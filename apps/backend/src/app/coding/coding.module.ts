@@ -69,6 +69,12 @@ import { CodingResultsService } from '../database/services/coding/coding-results
 import { EmptyResponseSelectionService } from '../database/services/coding/empty-response-selection.service';
 import { CodingExportService } from '../database/services/coding/coding-export.service';
 import { CodingProcessService } from '../database/services/coding/coding-process.service';
+import { AutocoderBatchDataService } from '../database/services/coding/autocoder-batch-data.service';
+import { AutocoderEngineService } from '../database/services/coding/autocoder-engine.service';
+import { AutocoderDerivedService } from '../database/services/coding/autocoder-derived.service';
+import { AutocoderSchemeService } from '../database/services/coding/autocoder-scheme.service';
+import { AutocoderResponseService } from '../database/services/coding/autocoder-response.service';
+
 import { CodingReplayAnchorService } from '../database/services/coding/coding-replay-anchor.service';
 import { CoderTrainingService } from '../database/services/coding/coder-training.service';
 import { CoderTrainingResultsApplyService } from '../database/services/coding/coder-training-results-apply.service';
@@ -180,6 +186,11 @@ import { UserModule } from '../user/user.module';
     EmptyResponseSelectionService,
     CodingResultsService,
     CodingExportService,
+    AutocoderBatchDataService,
+    AutocoderEngineService,
+    AutocoderDerivedService,
+    AutocoderSchemeService,
+    AutocoderResponseService,
     CodingProcessService,
     CodingReplayAnchorService,
     CodingValidationService,

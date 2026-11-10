@@ -1,0 +1,11 @@
+:host { display: block; margin-block: 24px; }
+mat-card-content { padding-top: 16px; }
+.instances { padding: 0; list-style: none; }
+li { border-bottom: 1px solid currentColor; padding-block: 16px; }
+.address { overflow-wrap: anywhere; }
+.actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+form { display: flex; flex-wrap: wrap; align-items: start; gap: 16px; margin-block: 24px; }
+mat-form-field { flex: 1 1 240px; }
+.http-warning { padding: 12px; border-inline-start: 4px solid #d97706; background: rgb(217 119 6 / 12%); }
+.http-warning strong { display: block; margin-bottom: 4px; }
+form .http-warning { flex-basis: 100%; margin: 0; }

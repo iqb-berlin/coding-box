@@ -3,12 +3,12 @@
   "files": {
     "apps/backend/src/app/admin/content-pool/content-pool-integration.service.ts": {
       "file": {
-        "max-lines": 1302
+        "max-lines": 1174
       },
       "functions": {
         "class ContentPoolIntegrationService#1/method uploadWorkspaceFilesToAcp#1": {
-          "complexity": 27,
-          "max-lines-per-function": 180
+          "complexity": 23,
+          "max-lines-per-function": 163
         }
       }
     },
@@ -636,37 +636,6 @@
         }
       }
     },
-    "apps/backend/src/app/database/services/coding/coding-process.service.ts": {
-      "file": {
-        "max-lines": 2546
-      },
-      "functions": {
-        "class CodingProcessService#1/method codeAutocoderResponses#1": {
-          "max-lines-per-function": 162
-        },
-        "class CodingProcessService#1/method codeAutocoderResponses#1/anonymous:ea19593328e51dfe#1": {
-          "complexity": 32
-        },
-        "class CodingProcessService#1/method getCompleteDerivedTuple#1": {
-          "complexity": 21
-        },
-        "class CodingProcessService#1/method processAndCodeResponses#1": {
-          "complexity": 67,
-          "max-depth": 5,
-          "max-lines-per-function": 351
-        },
-        "class CodingProcessService#1/method processAndCodeResponses#1/anonymous:d7e78c5373b31530#1": {
-          "complexity": 25
-        },
-        "class CodingProcessService#1/method processTestPersonsBatchInternal#1": {
-          "complexity": 62,
-          "max-lines-per-function": 329
-        },
-        "class CodingProcessService#1/method recalculateCompleteDerivedResults#1": {
-          "max-lines-per-function": 204
-        }
-      }
-    },
     "apps/backend/src/app/database/services/coding/coding-progress.service.ts": {
       "file": {
         "max-lines": 1591
@@ -1114,7 +1083,7 @@
     },
     "apps/backend/src/app/database/services/test-results/testcenter.service.ts": {
       "file": {
-        "max-lines": 1456
+        "max-lines": 1424
       },
       "functions": {
         "class TestcenterService#1/method executeWorkspaceImport#1": {
@@ -1122,14 +1091,11 @@
           "max-lines-per-function": 186
         },
         "class TestcenterService#1/method importFiles#1": {
-          "complexity": 41,
-          "max-lines-per-function": 257
+          "complexity": 40,
+          "max-lines-per-function": 256
         },
         "class TestcenterService#1/method importResponses#1": {
-          "max-lines-per-function": 115
-        },
-        "class TestcenterService#1/method importResponses#1/anonymous:48014e85ffd4804d#1": {
-          "max-depth": 5
+          "max-lines-per-function": 102
         }
       }
     },
@@ -1303,7 +1269,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1273
+        "max-lines": 1213
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1555,17 +1521,6 @@
         }
       }
     },
-    "apps/frontend/src/app/core/interceptors/auth.interceptor.ts": {
-      "file": {},
-      "functions": {
-        "function authInterceptor : HttpInterceptorFn#1": {
-          "max-lines-per-function": 105
-        },
-        "function authInterceptor : HttpInterceptorFn#1/anonymous:f6c33ebbbbbf99e5#1/function error#1": {
-          "complexity": 32
-        }
-      }
-    },
     "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
       "file": {
         "max-lines": 1398
@@ -1641,7 +1596,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-center-import/test-center-import.component.ts": {
       "file": {
-        "max-lines": 959
+        "max-lines": 956
       },
       "functions": {
         "class TestCenterImportComponent#1/method continueTestResultsImport#1": {

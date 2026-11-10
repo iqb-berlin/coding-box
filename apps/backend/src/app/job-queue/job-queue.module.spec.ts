@@ -8,7 +8,7 @@ import { DatabaseExportProcessor } from '../admin/database/database-export.proce
 describe('JobQueueModule processor selection', () => {
   it('registers every processor, including database exports, as a BullMQ worker host', () => {
     const processors = [...getEnabledJobQueueProcessors('all', undefined), DatabaseExportProcessor];
-    expect(processors).toHaveLength(12);
+    expect(processors).toHaveLength(13);
     processors.forEach(processor => {
       expect(processor.prototype).toBeInstanceOf(WorkerHost);
       expect(processor.prototype).toBeInstanceOf(WorkspaceWorkerHost);

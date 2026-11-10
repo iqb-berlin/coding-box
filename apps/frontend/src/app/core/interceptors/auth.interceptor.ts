@@ -24,6 +24,7 @@ import { AuthRefreshUnavailableError } from './auth-refresh-unavailable.error';
 import { getAuthProviderFailureCode } from './auth-provider-failure';
 import {
   SUPPRESS_AUTH_ERROR_REDIRECT,
+  SUPPRESS_FORBIDDEN_HTTP_ERROR,
   SUPPRESS_GLOBAL_HTTP_ERROR
 } from './http-error-context';
 import { AppService } from '../services/app.service';
@@ -37,6 +38,12 @@ const AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN = [
   '/auth/logout',
   '/auth/profile'
 ];
+
+type AuthResponseSession = {
+  requestGeneration: number;
+  currentGeneration: number;
+  token: string | null;
+};
 
 export const authInterceptor: HttpInterceptorFn = (
   req: HttpRequest<unknown>,
@@ -70,12 +77,12 @@ export const authInterceptor: HttpInterceptorFn = (
               error: error => {
                 httpErrorInfo = new AppHttpError(error);
                 const suppressBackendLoginAuthDataError = shouldSuppressBackendLoginAuthDataError(req, error, appService);
-                const currentToken = authService.getToken();
-                const staleSessionAuthError = isBackendRequest(req.url, serverUrl) &&
-                  (error.status === 401 || error.status === 403) &&
-                  (sessionGeneration !== authService.getSessionGeneration() ||
-                    (error.status === 401 && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
-                      modifiedReq.headers.get('Authorization') !== (currentToken ? `Bearer ${currentToken}` : null)));
+                const session: AuthResponseSession = {
+                  requestGeneration: sessionGeneration,
+                  currentGeneration: authService.getSessionGeneration(),
+                  token: authService.getToken()
+                };
+                const staleSessionAuthError = isStaleSessionAuthError(req, modifiedReq, error.status, serverUrl, session);
                 suppressGlobalErrorMessage = req.context.get(SUPPRESS_GLOBAL_HTTP_ERROR) ||
                   suppressBackendLoginAuthDataError || staleSessionAuthError;
 
@@ -85,10 +92,7 @@ export const authInterceptor: HttpInterceptorFn = (
                 }
 
                 const providerFailureCode = getAuthProviderFailureCode(error);
-                if (providerFailureCode && isBackendRequest(req.url, serverUrl) &&
-                  !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
-                  sessionGeneration === authService.getSessionGeneration() && currentToken &&
-                  modifiedReq.headers.get('Authorization') === `Bearer ${currentToken}`) {
+                if (providerFailureCode && isCurrentProtectedBackendRequest(req, modifiedReq, serverUrl, session)) {
                   if (!appService.isBackendLoginRunning()) {
                     appService.recordAuthProviderFailure(providerFailureCode, httpErrorInfo.requestId);
                   }
@@ -107,10 +111,7 @@ export const authInterceptor: HttpInterceptorFn = (
                       panelClass: ['error-snackbar']
                     }
                   );
-                } else if (
-                  (error.status === 401 || error.status === 403) &&
-                  !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)
-                ) {
+                } else if (shouldHandleAuthErrorGlobally(req, error.status)) {
                   suppressGlobalErrorMessage = true;
                   const errorMessage = error.error?.message || error.message || '';
 
@@ -149,6 +150,28 @@ export const authInterceptor: HttpInterceptorFn = (
       })
     );
 };
+
+function isStaleSessionAuthError(
+  req: HttpRequest<unknown>, modifiedReq: HttpRequest<unknown>, status: number, serverUrl: string, session: AuthResponseSession
+): boolean {
+  return isBackendRequest(req.url, serverUrl) && (status === 401 || status === 403) &&
+    (session.requestGeneration !== session.currentGeneration ||
+      (status === 401 && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+        modifiedReq.headers.get('Authorization') !== (session.token ? `Bearer ${session.token}` : null)));
+}
+
+function isCurrentProtectedBackendRequest(
+  req: HttpRequest<unknown>, modifiedReq: HttpRequest<unknown>, serverUrl: string, session: AuthResponseSession
+): boolean {
+  return isBackendRequest(req.url, serverUrl) && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+    session.requestGeneration === session.currentGeneration && !!session.token &&
+    modifiedReq.headers.get('Authorization') === `Bearer ${session.token}`;
+}
+
+function shouldHandleAuthErrorGlobally(req: HttpRequest<unknown>, status: number): boolean {
+  return !req.context.get(SUPPRESS_AUTH_ERROR_REDIRECT) &&
+    (status === 401 || (status === 403 && !req.context.get(SUPPRESS_FORBIDDEN_HTTP_ERROR)));
+}
 
 function addRequestId(
   req: HttpRequest<unknown>,

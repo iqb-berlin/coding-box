@@ -351,6 +351,10 @@
       "database-export": {
         "label": "Datenbankexport",
         "description": "Export der Arbeitsbereichsdatenbank"
+      },
+      "content-pool": {
+        "label": "Content-Pool-Übertragung",
+        "description": "Import von Testdateien oder Übertragung von Kodierschemata zwischen Content Pool und Arbeitsbereich"
       }
     },
     "details": {
@@ -387,7 +391,10 @@
       "jobDefinitionCount": "Jobdefinitionen",
       "coderTrainingCount": "Trainings",
       "coderCount": "Kodierer:innen",
-      "matchingFlagCount": "Matching-Flags"
+      "matchingFlagCount": "Matching-Flags",
+      "operation": "Vorgang",
+      "acpId": "Paket-ID im Content Pool",
+      "fileCount": "Ausgewählte Dateien"
     },
     "actions": {
       "not-safe": "Für diesen Status oder Prozesstyp gibt es keine sichere Aktion.",
@@ -421,6 +428,10 @@
     "values": {
       "yes": "Ja",
       "no": "Nein"
+    },
+    "content-pool-operations": {
+      "import-acp": "Testdateien aus dem Content Pool importieren",
+      "upload-files": "Kodierschemata im Content Pool ersetzen"
     }
   },
   "status-cancelled": "Abgebrochen",
@@ -4423,7 +4434,7 @@
       "use-instance-url": "Testcenter Instanz URL verwenden",
       "format-example": "Erwartetes Format z. B.:",
       "alternative": "oder",
-      "https-required": ". Die URL muss per HTTPS erreichbar sein."
+      "https-required": ". Diese genaue Basisadresse muss zuvor freigegeben sein."
     },
     "test-center-options-step": {
       "title": "Import-Optionen",
@@ -5469,6 +5480,65 @@
     },
     "validation-task-runner": {
       "unknown-status": "Unbekannter Task-Status"
+    },
+    "testcenter-instances": {
+      "title": "Freigegebene Testcenter",
+      "description": "Hier legen Systemadministratoren fest, aus welchen Testcentern Daten importiert werden dürfen. Neue Freigaben stehen sofort in der Testcenter-Auswahl zur Verfügung.",
+      "operator-hint": "Die IQB-Adressen sind anfangs freigegeben und können wie eigene Instanzen umbenannt oder aufgehoben werden. Nur ausdrücklich vom Betreiber konfigurierte Adressen sind hier schreibgeschützt. Weitere Instanzen können HTTP oder HTTPS verwenden. Bei HTTP werden Zugangsdaten und Testdaten unverschlüsselt übertragen; private HTTPS-Zertifikate richtet der Betreiber ein.",
+      "loading": "Testcenter werden geladen …",
+      "reload": "Liste erneut laden",
+      "load-failed": "Die Testcenter-Liste konnte nicht geladen werden.",
+      "selection-load-failed": "Zusätzliche freigegebene Testcenter konnten nicht geladen werden. Laden Sie die Liste erneut oder wenden Sie sich an die Systemadministration.",
+      "save-failed": "Die Freigabe konnte nicht gespeichert werden. Prüfen Sie Name und HTTP- oder HTTPS-Basisadresse einschließlich Installationspfad. Adressen vom Betreiber können hier nicht geändert werden.",
+      "delete-failed": "Die Freigabe konnte nicht aufgehoben werden. Laden Sie die Liste erneut.",
+      "source": {
+        "standard": "Anfangs freigegebene IQB-Adresse",
+        "environment": "Vom Betreiber konfiguriert",
+        "administrator": "In der Systemadministration freigegeben"
+      },
+      "testing": "Verbindung wird geprüft …",
+      "test": "Verbindung prüfen",
+      "edit": "Name bearbeiten",
+      "edit-url-hint": "Die Basisadresse bleibt beim Umbenennen unverändert.",
+      "save-name": "Name speichern",
+      "cancel-edit": "Abbrechen",
+      "revoke": "Freigabe aufheben",
+      "test-scope": "Der Verbindungstest prüft Erreichbarkeit und gemeldete Version, bei HTTPS zusätzlich das Zertifikat. HTTP bleibt unverschlüsselt. Anmeldung, Datenberechtigungen und ein vollständiger Import werden damit nicht geprüft.",
+      "name": "Name des Testcenters",
+      "url": "Basisadresse (HTTP oder HTTPS)",
+      "url-hint": "Beispiel: https://testcenter.example.org/tci oder http://testcenter.intern:8080/tci – ohne angehängten API-Pfad.",
+      "http-warning-title": "Unverschlüsselte Übertragung (HTTP)",
+      "http-warning": "Kennwort, Sitzungstoken und Testdaten werden zwischen Kodierbox und Testcenter unverschlüsselt übertragen und können mitgelesen oder verändert werden. Verwenden Sie HTTP nur in einer entsprechend abgesicherten Umgebung. Eine HTTPS-Verbindung zur Kodierbox schützt diese Übertragung nicht.",
+      "save": "Speichern und freigeben",
+      "reachable": "API erreichbar · gemeldete Testcenter-Version: {{version}}",
+      "connection-failed": "Die Testcenter-API ist nicht erreichbar oder liefert keine gültige Version. Prüfen Sie Adresse, Netzwerk und Zertifikatsvertrauen.",
+      "authenticating": "Anmeldung läuft …",
+      "login-error": {
+        "not-approved": "Diese Testcenter-Adresse ist noch nicht freigegeben. Bitten Sie die Systemadministration um Freigabe der genauen Basisadresse.",
+        "credentials": "Das Testcenter hat die Zugangsdaten abgelehnt. Prüfen Sie Benutzername und Kennwort.",
+        "rejected": "Das Testcenter hat die Anmeldung abgelehnt. Prüfen Sie Zugangsdaten und Anmeldeeinstellungen.",
+        "session-expired": "Ihre Kodierbox-Sitzung ist abgelaufen. Melden Sie sich erneut an der Kodierbox an.",
+        "access-denied": "Der Testcenter-Zugang hat keine ausreichenden Berechtigungen. Wenden Sie sich an die Testcenter-Administration.",
+        "rate-limited": "Es gab zu viele Anmeldeversuche. Warten Sie kurz und versuchen Sie es erneut.",
+        "unsupported": "Das Testcenter liefert eine ungültige oder nicht unterstützte Anmeldeantwort. Wenden Sie sich an die Systemadministration.",
+        "unavailable": "Das Testcenter ist nicht erreichbar. Prüfen Sie Adresse und Netzwerk; bei Zertifikatsproblemen hilft der Betreiber.",
+        "timeout": "Das Testcenter antwortet nicht rechtzeitig. Versuchen Sie die Anmeldung später erneut."
+      },
+      "revoke-title": "Testcenter für alle Arbeitsbereiche sperren?",
+      "revoke-content": "Die Freigabe für „{{name}}“ ({{url}}) wird für die gesamte Kodierbox aufgehoben. Weitere Anmeldungen und Importanfragen werden auch in bereits geöffneten Dialogen gesperrt. Bereits laufende HTTP-Anfragen werden nicht abgebrochen. Importierte Daten bleiben erhalten. Die Adresse kann später erneut freigegeben werden.",
+      "errors": {
+        "operator-managed": "Diese Adresse wird vom Betreiber konfiguriert. Eine Änderung oder Sperre muss der Betreiber in TESTCENTER_ALLOWED_URLS vornehmen.",
+        "instance-limit": "Es sind bereits 100 zusätzliche Testcenter freigegeben. Heben Sie zuerst eine nicht mehr benötigte zusätzliche Freigabe auf.",
+        "invalid-input": "Geben Sie einen Namen mit höchstens 80 Zeichen und eine Basisadresse mit höchstens 2048 Zeichen ein.",
+        "invalid-url": "Die Basisadresse ist ungültig. Verwenden Sie die genaue HTTP- oder HTTPS-Adresse mit Installationspfad, ohne Zugangsdaten, Suchparameter oder angehängten API-Pfad.",
+        "invalid-version": "Der Server antwortet, liefert aber keine gültige Testcenter-Version. Prüfen Sie die Basisadresse und den Installationspfad ohne /api.",
+        "connection-timeout": "Der Verbindungstest hat nach zehn Sekunden keine Antwort erhalten. Prüfen Sie die Erreichbarkeit oder versuchen Sie es später erneut.",
+        "certificate-error": "Das HTTPS-Zertifikat konnte nicht geprüft werden. Der Betreiber muss Gültigkeit, Hostnamen und Zertifikatsvertrauen prüfen.",
+        "connection-failed": "Es konnte keine Verbindung zum Testcenter hergestellt werden. Prüfen Sie Adresse, Netzwerk und Serververfügbarkeit.",
+        "no-longer-approved": "Diese Adresse ist nicht mehr freigegeben. Laden Sie die Liste erneut; geben Sie die Adresse bei Bedarf wieder frei.",
+        "admin-required": "Für diese Aktion sind Rechte der Systemadministration erforderlich. Prüfen Sie Ihren Zugang.",
+        "backend-unavailable": "Die Kodierbox ist nicht erreichbar. Prüfen Sie Ihre Verbindung und versuchen Sie es erneut."
+      }
     }
   },
   "test-files": {

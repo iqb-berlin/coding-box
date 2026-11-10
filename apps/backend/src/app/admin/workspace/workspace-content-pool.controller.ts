@@ -78,8 +78,8 @@ export class WorkspaceContentPoolController {
   @ApiOperation({
     summary: 'Read progress of a Content-Pool ACP import job'
   })
-  async getImportAcpProgress(@Param('job_id') jobId: string) {
-    return this.contentPoolIntegrationService.getAcpImportProgress(jobId);
+  async getImportAcpProgress(@Param('workspace_id', ParseIntPipe) workspaceId: number, @Param('job_id') jobId: string) {
+    return this.contentPoolIntegrationService.getAcpImportProgress(workspaceId, jobId);
   }
 
   @Post('upload-files/start')
@@ -104,7 +104,7 @@ export class WorkspaceContentPoolController {
   @ApiOperation({
     summary: 'Read progress of a Content-Pool file upload job'
   })
-  async getUploadFilesToAcpProgress(@Param('job_id') jobId: string) {
-    return this.contentPoolIntegrationService.getUploadWorkspaceFilesProgress(jobId);
+  async getUploadFilesToAcpProgress(@Param('workspace_id', ParseIntPipe) workspaceId: number, @Param('job_id') jobId: string) {
+    return this.contentPoolIntegrationService.getUploadWorkspaceFilesProgress(workspaceId, jobId);
   }
 }
