@@ -374,21 +374,7 @@ export class ItemDatasetMetadataService {
     const unitMetadata = await this.getUnitPositionMetadata(workspaceId, new Set(
       [...units.keys()].map(normalizeItemDatasetUnitId)
     ), checkCancellation);
-    const fileIds = new Set<string>();
-    for (const unitName of units.keys()) {
-      const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
-      if (metadata?.definition === undefined) {
-        fileIds.add(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`));
-      }
-      for (const fileId of this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)) {
-        fileIds.add(fileId);
-      }
-    }
-    const files = await this.fileUploadRepository.find({
-      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
-      select: ['file_id', 'data']
-    });
-    const byId = new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
+    const byId = await this.getVariableOrderResources(workspaceId, units.keys(), unitMetadata);
     const result = new Map<string, number>();
     const warnings: ItemDatasetMappingWarningDto[] = [];
     for (const [unitName, unitColumns] of units) {
@@ -411,11 +397,12 @@ export class ItemDatasetMetadataService {
         positions.forEach((position, key) => result.set(key, position));
         for (const diagnostic of diagnostics) {
           const column = unitColumns.find(entry => entry.sourceVariableId === diagnostic.variableId);
+          const variableId = column?.variableId || diagnostic.variableId;
           warnings.push({
             code: 'variable-order-fallback',
             unitId: normalizeItemDatasetUnitId(unitName),
-            variableId: column?.variableId || diagnostic.variableId,
-            message: `${unitName}/${column?.variableId || diagnostic.variableId}: ${variableOrderFallbackMessages[diagnostic.reason]}`,
+            variableId,
+            message: `${unitName}/${variableId}: ${variableOrderFallbackMessages[diagnostic.reason]}`,
             suggestedAction: 'Seitenangaben und Quellvariablen in den Aufgaben- und Kodierschemadaten prüfen. Die MNR-Zuordnung kann von der tatsächlichen Testreihenfolge abweichen.'
           });
         }
@@ -430,6 +417,28 @@ export class ItemDatasetMetadataService {
       await this.yieldToEventLoop();
     }
     return { positions: result, warnings: this.uniqueWarnings(warnings) };
+  }
+
+  private async getVariableOrderResources(
+    workspaceId: number,
+    unitNames: Iterable<string>,
+    unitMetadata: Map<string, UnitPositionMetadata>
+  ): Promise<Map<string, string>> {
+    const fileIds = new Set<string>();
+    for (const unitName of unitNames) {
+      const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
+      if (metadata?.definition === undefined) {
+        fileIds.add(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`));
+      }
+      for (const fileId of this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)) {
+        fileIds.add(fileId);
+      }
+    }
+    const files = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
+      select: ['file_id', 'data']
+    });
+    return new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
   }
 
   private async getUnitPositionMetadata(

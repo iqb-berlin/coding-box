@@ -209,19 +209,7 @@ export class ItemDatasetCellResolver {
         recursion,
         operationCounter
       );
-      const isPartialMissingResponse =
-        partialInvalidMissingSourceTypes.has(column.sourceType || '') &&
-        // A valid aggregate with both answered and missing sources has no
-        // numeric target to export. Preserve that partial response as MIR;
-        // source errors and design conflicts carry a failure reason and must
-        // remain unresolved.
-        derivedResolution.state === 'valid' &&
-        derivedResolution.hasResolvedSource === true &&
-        (
-          derivedResolution.hasOmittedSource === true ||
-          derivedResolution.hasIneligibleSource === true
-        ) &&
-        !derivedResolution.failureReason;
+      const isPartialMissingResponse = this.isPartialMissingResponse(column, derivedResolution);
       if (isPartialMissingResponse) {
         cells[index] = this.fromMissing(profile.byId.get('mir')!);
       } else if (
@@ -243,6 +231,20 @@ export class ItemDatasetCellResolver {
       cellsByResponseKey.set(column.key, cells[index]);
     }
     return cells;
+  }
+
+  private isPartialMissingResponse(
+    column: ItemDatasetColumn,
+    resolution: DerivedStateResolution
+  ): boolean {
+    // A valid aggregate with both answered and missing sources has no
+    // numeric target to export. Preserve that partial response as MIR;
+    // source errors and design conflicts must remain unresolved.
+    return partialInvalidMissingSourceTypes.has(column.sourceType || '') &&
+      resolution.state === 'valid' &&
+      resolution.hasResolvedSource === true &&
+      (resolution.hasOmittedSource === true || resolution.hasIneligibleSource === true) &&
+      !resolution.failureReason;
   }
 
   getExportValue(

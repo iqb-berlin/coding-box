@@ -35,12 +35,12 @@ import {
   ResolvedMissingValue
 } from './missings-profiles.service';
 import {
-  ItemDatasetBookletDesign,
+  ItemDatasetBookletDesign as BookletDesign,
   ItemDatasetCellResolver,
-  ItemDatasetColumn,
-  ItemDatasetProfile,
-  ItemDatasetResponseValue,
-  ResolvedItemDatasetCell
+  ItemDatasetColumn as MatrixColumn,
+  ItemDatasetProfile as ProfileDefinitions,
+  ItemDatasetResponseValue as ResponseValue,
+  ResolvedItemDatasetCell as ResolvedCell
 } from './item-dataset-cell-resolver';
 import {
   ItemDatasetCellExportError,
@@ -63,8 +63,6 @@ export interface ItemMatrixExportConfiguration {
   recodeTrailingOmissions?: boolean;
   items?: ItemDatasetSelection[];
 }
-
-type MatrixColumn = ItemDatasetColumn;
 
 interface MatrixRow {
   bookletId: number;
@@ -94,14 +92,6 @@ interface RawResponseValueRow {
   codeV3: number | string | null;
   scoreV3: number | string | null;
 }
-
-type ResponseValue = ItemDatasetResponseValue;
-
-type BookletDesign = ItemDatasetBookletDesign;
-
-type ProfileDefinitions = ItemDatasetProfile;
-
-type ResolvedCell = ResolvedItemDatasetCell;
 
 interface MatrixContext {
   rows: MatrixRow[];
@@ -519,11 +509,7 @@ export class CodingItemMatrixExportService {
     selection?: ItemDatasetSelection[],
     checkCancellation?: () => Promise<void>
   ): Promise<ItemDatasetColumnResolution> {
-    return this.metadataService.buildColumns(
-      workspaceId,
-      selection,
-      checkCancellation
-    );
+    return this.metadataService.buildColumns(workspaceId, selection, checkCancellation);
   }
 
   private filterColumns(
@@ -632,12 +618,11 @@ export class CodingItemMatrixExportService {
             `Booklet-Struktur für Itemdatensatz nicht gefunden: ${row.bookletName}`
           );
         }
-        const responseValues = valuesByBooklet.get(row.bookletId) || new Map();
         const analysisColumns = context.analysisColumns || context.columns;
         const cells = await this.resolveRowCells(
           analysisColumns,
           design,
-          responseValues,
+          valuesByBooklet.get(row.bookletId) || new Map(),
           context.profile,
           context.derivedSources,
           configuration,
