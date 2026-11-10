@@ -96,7 +96,8 @@ describe('ItemDatasetMappingDiagnosticsDialogComponent', () => {
           'item-dataset-diagnostic-column': 'Spalte',
           'item-dataset-diagnostic-code': {
             'vomd-fallback-ignored': 'Redundanter Fallback ignoriert',
-            'vomd-fallback-used': 'Eindeutiger Fallback verwendet'
+            'vomd-fallback-used': 'Eindeutiger Fallback verwendet',
+            'variable-order-fallback': 'Geschätzte Variablenreihenfolge'
           },
           'item-dataset-diagnostics-csv': {
             severity: 'Schweregrad',
@@ -207,5 +208,26 @@ describe('ItemDatasetMappingDiagnosticsDialogComponent', () => {
   it('closes the dialog', () => {
     component.close();
     expect(closeDialog).toHaveBeenCalled();
+  });
+
+  it('displays and exports estimated variable order as a non-blocking warning', () => {
+    data.diagnostics.push({
+      code: 'variable-order-fallback',
+      unitId: 'DLB004',
+      variableId: '10',
+      message: 'Keine Seitenposition verfügbar; Reihenfolge geschätzt.',
+      suggestedAction: 'Seitenangaben prüfen.'
+    });
+    const warningFixture = TestBed.createComponent(ItemDatasetMappingDiagnosticsDialogComponent);
+    const warningComponent = warningFixture.componentInstance;
+    warningComponent.selectedCode = 'variable-order-fallback';
+    warningComponent.onFiltersChange();
+    warningFixture.detectChanges();
+
+    expect(warningComponent.filteredCount).toBe(1);
+    expect(warningFixture.nativeElement.textContent).toContain('Geschätzte Variablenreihenfolge');
+    expect(warningComponent.buildCsv()).toContain('"Warnung";"Geschätzte Variablenreihenfolge"');
+    expect(warningComponent.buildCsv()).toContain('"DLB004";"";"10"');
+    warningFixture.destroy();
   });
 });

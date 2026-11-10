@@ -849,8 +849,7 @@
           "max-lines-per-function": 153
         },
         "class ItemDatasetCellResolver#1/method resolveIncrementally#1": {
-          "complexity": 25,
-          "max-lines-per-function": 111
+          "max-lines-per-function": 105
         },
         "class ItemDatasetCellResolver#1/method resolveInitialCell#1": {
           "complexity": 26

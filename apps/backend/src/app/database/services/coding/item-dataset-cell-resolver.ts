@@ -16,6 +16,7 @@ import type {
 import type { IqbStandardMissingId } from './missings-profiles.service';
 import { ItemDatasetCellExportError } from './item-dataset-cell-export-error';
 import { mapCodeForExport } from '../../../utils/coding-utils';
+import { compareItemDatasetVariableNames } from './item-dataset-variable-positions.util';
 
 export interface ItemDatasetColumn {
   key: string;
@@ -62,6 +63,8 @@ export interface ItemDatasetProfile {
 export interface ItemDatasetCellResolutionConfiguration {
   notReachedScope?: ItemDatasetNotReachedScope;
   recodeTrailingOmissions?: boolean;
+  /** Unit metadata positions, calculated once before expanding to people. */
+  variablePositions?: ReadonlyMap<string, number>;
 }
 
 export interface ResolvedItemDatasetCell {
@@ -150,7 +153,8 @@ export class ItemDatasetCellResolver {
     const sourceColumns = yield* this.getDerivedSourceColumns(
       columns,
       derivedSources,
-      operationCounter
+      operationCounter,
+      configuration.variablePositions
     );
     const sourceCells: ResolvedItemDatasetCell[] = [];
     for (const column of sourceColumns) {
@@ -170,7 +174,8 @@ export class ItemDatasetCellResolver {
       profile,
       configuration.notReachedScope || 'unit',
       configuration.recodeTrailingOmissions === true,
-      operationCounter
+      operationCounter,
+      configuration.variablePositions
     );
     const cells = resolutionCells.slice(0, columns.length);
     const cellsByResponseKey = new Map<string, ResolvedItemDatasetCell>();
@@ -204,19 +209,7 @@ export class ItemDatasetCellResolver {
         recursion,
         operationCounter
       );
-      const isPartialMissingResponse =
-        partialInvalidMissingSourceTypes.has(column.sourceType || '') &&
-        // A valid aggregate with both answered and missing sources has no
-        // numeric target to export. Preserve that partial response as MIR;
-        // source errors and design conflicts carry a failure reason and must
-        // remain unresolved.
-        derivedResolution.state === 'valid' &&
-        derivedResolution.hasResolvedSource === true &&
-        (
-          derivedResolution.hasOmittedSource === true ||
-          derivedResolution.hasIneligibleSource === true
-        ) &&
-        !derivedResolution.failureReason;
+      const isPartialMissingResponse = this.isPartialMissingResponse(column, derivedResolution);
       if (isPartialMissingResponse) {
         cells[index] = this.fromMissing(profile.byId.get('mir')!);
       } else if (
@@ -238,6 +231,20 @@ export class ItemDatasetCellResolver {
       cellsByResponseKey.set(column.key, cells[index]);
     }
     return cells;
+  }
+
+  private isPartialMissingResponse(
+    column: ItemDatasetColumn,
+    resolution: DerivedStateResolution
+  ): boolean {
+    // A valid aggregate with both answered and missing sources has no
+    // numeric target to export. Preserve that partial response as MIR;
+    // source errors and design conflicts must remain unresolved.
+    return partialInvalidMissingSourceTypes.has(column.sourceType || '') &&
+      resolution.state === 'valid' &&
+      resolution.hasResolvedSource === true &&
+      (resolution.hasOmittedSource === true || resolution.hasIneligibleSource === true) &&
+      !resolution.failureReason;
   }
 
   getExportValue(
@@ -295,7 +302,8 @@ export class ItemDatasetCellResolver {
   private* getDerivedSourceColumns(
     columns: ItemDatasetColumn[],
     derivedSources: Map<string, string[]>,
-    operationCounter: { value: number }
+    operationCounter: { value: number },
+    variablePositions?: ReadonlyMap<string, number>
   ): Generator<void, ItemDatasetColumn[], void> {
     const directColumns = new Map<string, ItemDatasetColumn | null>();
     const registerDirectColumn = (
@@ -336,6 +344,7 @@ export class ItemDatasetCellResolver {
       const existing = sourceAnchors.get(sourceKey);
       if (
         existing &&
+        !variablePositions?.has(sourceKey) &&
         ItemDatasetSelectionKey.from(
           existing.unitId,
           existing.itemId
@@ -492,8 +501,21 @@ export class ItemDatasetCellResolver {
     profile: ItemDatasetProfile,
     scope: ItemDatasetNotReachedScope,
     recodeTrailingOmissions: boolean,
-    operationCounter: { value: number }
+    operationCounter: { value: number },
+    variablePositions?: ReadonlyMap<string, number>
   ): Generator<void, void, void> {
+    const getPosition = (column: ItemDatasetColumn): number => (
+      variablePositions?.get(column.key) ??
+      variablePositions?.get(ItemDatasetResponseKey.from(column.unitName, column.sourceVariableId).toString()) ??
+      Infinity
+    );
+    const compareVariables = (left: ItemDatasetColumn, right: ItemDatasetColumn): number => {
+      const leftPosition = getPosition(left);
+      const rightPosition = getPosition(right);
+      return leftPosition === Infinity && rightPosition === Infinity ?
+        compareItemDatasetVariableNames(left.variableId, right.variableId) :
+        leftPosition - rightPosition;
+    };
     const groups = new Map<string, number[]>();
     for (let index = 0; index < columns.length; index += 1) {
       yield* this.checkpoint(operationCounter);
@@ -519,7 +541,7 @@ export class ItemDatasetCellResolver {
         const rightPosition = design.units.get(columns[right].unitId)!;
         return (
           leftPosition.order - rightPosition.order ||
-          columns[left].itemOrder - columns[right].itemOrder
+          compareVariables(columns[left], columns[right])
         );
       });
       let laterActivity = false;
@@ -530,7 +552,6 @@ export class ItemDatasetCellResolver {
         const referencePosition = design.units.get(
           columns[referenceIndex].unitId
         )!;
-        const itemOrder = columns[referenceIndex].itemOrder;
         let firstAtPosition = position;
         while (firstAtPosition > 0) {
           yield* this.checkpoint(operationCounter);
@@ -540,7 +561,7 @@ export class ItemDatasetCellResolver {
           )!;
           if (
             previousPosition.order !== referencePosition.order ||
-            columns[previousIndex].itemOrder !== itemOrder
+            compareVariables(columns[previousIndex], columns[referenceIndex]) !== 0
           ) {
             break;
           }
@@ -564,7 +585,9 @@ export class ItemDatasetCellResolver {
         }
         for (const cellIndex of positionIndexes) {
           yield* this.checkpoint(operationCounter);
-          if (cells[cellIndex].activity) {
+          // Calculated results do not prove that a later response was seen or answered.
+          // Their actual source responses participate at their own positions.
+          if (!columns[cellIndex].isDerived && cells[cellIndex].activity) {
             laterActivity = true;
             break;
           }

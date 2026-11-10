@@ -54,7 +54,8 @@ const DIAGNOSTIC_CODE_TRANSLATION_KEYS: Record<string, string> = {
   'column-name-collision': 'column-name-collision',
   'unknown-selection': 'unknown-selection',
   'vomd-fallback-used': 'vomd-fallback-used',
-  'vomd-fallback-ignored': 'vomd-fallback-ignored'
+  'vomd-fallback-ignored': 'vomd-fallback-ignored',
+  'variable-order-fallback': 'variable-order-fallback'
 };
 
 @Component({
