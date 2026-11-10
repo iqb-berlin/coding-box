@@ -55,6 +55,11 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
         (7,5,'A',3,5,6,7,false),(8,1,'A',0,5,6,7,false),
         (9,1,'A',3,NULL,NULL,NULL,false),(10,1,'A',3,0,0,0,false);
     `);
+    // Keep planner estimates representative of this tiny fixture, including its
+    // empty job tables, instead of paying for speculative large-table/JIT plans.
+    for (const table of ['persons', 'bookletinfo', 'booklet', 'unit', 'response', 'coding_job', 'coding_job_unit']) {
+      await db.query(`ANALYZE "${schema}"."${table}"`);
+    }
   });
 
   afterAll(async () => {
