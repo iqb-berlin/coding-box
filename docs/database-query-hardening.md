@@ -147,6 +147,19 @@ alter und neuer Cache-Protokolle ist nicht qualifiziert. Die verpflichtenden
 Redis-Integrationstests prüfen parallele API-/Worker-Aufrufe, Importinvalidierung
 über eine zweite Serviceinstanz und das verspätete Ende alter Berechnungen.
 
+CSV-Importe invalidieren Ergebnis- und Facetten-Caches nach Abschluss der
+Schreibvorgänge auch dann, wenn eine optionale Statistikabfrage fehlgeschlagen ist.
+Der Hinweis `overviewPending` darf diese Pflichtaktion nicht überspringen. Ein
+explizites `false` der Invalidierung führt ebenfalls zum bestehenden Warnhinweis;
+bereits gespeicherte Importdaten bleiben erhalten.
+
+Beim Rollback auf eine Anwendung mit numerischen Facetten-Zählern zunächst alle
+API- und Workerprozesse anhalten. Vor deren Neustart ausschließlich die
+Facetten-Versionen und Facettenwerte mit dem logischen Präfix
+`flat_response_filter_options:` im konfigurierten Anwendungs-Cache-Namespace
+entfernen. Die zufälligen Generationen sind für alte `INCR`-Aufrufe ungeeignet.
+Dafür keine gesamte Redis-Datenbank und keine Queue-Daten leeren.
+
 Antwortlisten verwenden für Tagfilter ein `EXISTS` und berechnen die
 Tagaggregation in einer korrelierten Projektion statt einer Gruppierung aller
 Antworten vor dem Seitenlimit. Die bisherigen Filter, ausschließlich passende

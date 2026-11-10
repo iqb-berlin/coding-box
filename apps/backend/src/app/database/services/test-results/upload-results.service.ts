@@ -112,7 +112,7 @@ export class UploadResultsService {
     issues: TestResultsUploadIssueDto[]
   ): Promise<boolean> {
     try {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
+      if (await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId) === false) throw new Error('Cache invalidation failed');
       return false;
     } catch (error) {
       const detail = error instanceof Error ? error.message : 'Unknown error';
@@ -845,8 +845,8 @@ export class UploadResultsService {
       });
     }
 
-    overviewPending = overviewPending ||
-      await this.invalidateWorkspaceOverviewCache(workspaceId, issues);
+    const invalidationPending = await this.invalidateWorkspaceOverviewCache(workspaceId, issues);
+    overviewPending = overviewPending || invalidationPending;
 
     const afterStats = await this.readWorkspaceUploadStats(workspaceId, 'after', issues);
     const after = afterStats.stats;

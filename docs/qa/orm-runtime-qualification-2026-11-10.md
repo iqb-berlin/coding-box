@@ -162,3 +162,28 @@ Zugangsdaten und Rohdaten werden nicht in diesem Bericht veröffentlicht.
 4. Deployment, Wartungsfenster und fachliche Abnahme separat entscheiden.
    PostgreSQL-/TypeORM-Hauptversionswechsel und historische Nullbarkeitsabweichungen
    bleiben eigene Architekturarbeiten.
+
+## Zusätzlicher Befund aus dem vollständigen Lauf r12
+
+Der produktionskonform konfigurierte Lauf am Vorgänger `9d18415d0` wurde vollständig
+ausgeführt: 30 Minuten mit zehn Nutzern, fünf Minuten mit 20 Nutzern und fünf
+Minuten Erholung. 3.454 Aufrufe enthielten 39 Fehler, alle in der Lastspitze.
+Listen-p95: 18,060 Sekunden bei zehn Nutzern, 30,005 Sekunden in der Spitze. Die
+vereinbarten Ziele wurden damit verfehlt. Datenbank und alle zusätzlich erfassten
+Queuezustände erholten sich; der vollständige Export und die ursprünglichen
+Inhaltsprüfsummen blieben korrekt.
+
+Nach dem Spitzenlast-Import fehlte dessen neue Gruppe in den Filteroptionen,
+obwohl alle Fixture-Zeilen gespeichert waren. Der Lasttest protokollierte zuvor
+einen Pool-Wartezeitfehler beim Lesen der optionalen Vorher-Statistik. Dadurch war
+`overviewPending` bereits wahr; `overviewPending || await invalidate(...)`
+übersprang anschließend die notwendige Invalidierung vollständig. Dieser Fehler
+besteht bereits am PR-Basisstand und ist kein durch die Cache-Generationen
+eingeführter Fehler.
+
+Dieser Änderungsstand ruft die Invalidierung unabhängig vom Statistik-Warnstatus
+auf und berücksichtigt auch deren expliziten Fehlerwert. Zwei Regressionen
+belegen vor der Korrektur das Überspringen bzw. den übersehenen Fehlerwert.
+Die Warnung bei unzuverlässiger Statistik und der Erhalt gespeicherter Daten
+bleiben bestehen. Die Ergebnisse von r12 werden dem Vorgänger zugerechnet; der
+Folgestand benötigt seinen eigenen Nachweis unter dem korrigierten Lastprofil.
