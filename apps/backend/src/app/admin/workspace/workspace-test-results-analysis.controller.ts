@@ -325,20 +325,7 @@ export class WorkspaceTestResultsAnalysisController {
     );
 
     if (isNoFilterRequest) {
-      const versionKey =
-        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-          workspace_id
-        );
-      const version = await this.cacheService.getNumber(versionKey, 1);
-      const cacheKey =
-        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
-          workspace_id,
-          version,
-          threshold
-        );
-      // Keep the version captured before computation. Publishing under a newer
-      // version could make a result from before an import appear current.
-      return this.cacheService.getOrCompute(cacheKey, compute, 0);
+      return this.cacheService.getOrComputeFlatResponseFilterOptions(workspace_id, threshold, compute);
     }
 
     return compute();

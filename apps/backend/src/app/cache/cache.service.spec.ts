@@ -67,6 +67,23 @@ describe('CacheService', () => {
     expect(compute).not.toHaveBeenCalled();
   });
 
+  it('computes independently when Redis cannot establish a filter-options generation', async () => {
+    redis.eval.mockRejectedValue(new Error('Redis unavailable'));
+    const compute = jest.fn().mockResolvedValue({ codes: ['fresh'] });
+    await expect(service.getOrComputeFlatResponseFilterOptions(1, 60000, compute)).resolves.toEqual({ codes: ['fresh'] });
+    expect(compute).toHaveBeenCalledTimes(1);
+    expect(redis.get).not.toHaveBeenCalled();
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
+  it('returns computed filter options when conditional Redis publication fails', async () => {
+    redis.get.mockResolvedValue(null);
+    redis.eval.mockResolvedValueOnce('g2-test').mockRejectedValueOnce(new Error('Redis unavailable'));
+    await expect(service.getOrComputeFlatResponseFilterOptions(1, 60000, async () => ({ codes: ['fresh'] })))
+      .resolves.toEqual({ codes: ['fresh'] });
+    expect(redis.set).not.toHaveBeenCalled();
+  });
+
   it('reads numbers and falls back on invalid values or redis errors', async () => {
     redis.get
       .mockResolvedValueOnce('42')

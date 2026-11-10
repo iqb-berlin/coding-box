@@ -8,15 +8,14 @@ describe('WorkspaceTestCenterController import completion', () => {
     };
     const service = { importWorkspaceFiles: jest.fn().mockResolvedValue(result) };
     const cache = {
-      generateFlatResponseFilterOptionsVersionKey: jest.fn().mockReturnValue('key'),
-      incr: jest.fn().mockRejectedValue(new Error('Redis unavailable'))
+      invalidateFlatResponseFilterOptions: jest.fn().mockRejectedValue(new Error('Redis unavailable'))
     };
     const controller = new WorkspaceTestCenterController(service as never, cache as never, {} as never);
     const actual = await controller.importWorkspaceFiles(
       '1', '1', '', 'tc', 'token', 'false', 'true', 'false', 'false', 'false', 'false', 'false', 'g1', 'false', 'false', '', true, 'run', 'skip'
     );
     expect(actual.success).toBe(success);
-    expect(cache.incr).toHaveBeenCalled();
+    expect(cache.invalidateFlatResponseFilterOptions).toHaveBeenCalledWith(1);
     expect(actual.issues).toEqual([expect.objectContaining({ level: 'warning', message: expect.stringContaining('Antwortfilter') })]);
   });
 });

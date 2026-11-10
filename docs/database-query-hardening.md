@@ -128,13 +128,24 @@ Antwortzeitziel. Abgelaufene Pool-Anforderungen führen zu HTTP 503. Sie sind
 weiterhin fehlgeschlagene Aufrufe und dürfen nicht als Performanceerfolg zählen.
 
 Ungefilterte Filteroptionen teilen innerhalb eines Prozesses eine laufende
-Berechnung pro Workspace, Cache-Version und Schwellenwert. HTTP-Aufrufe und
-der Filteroptionen-Queueprozessor verwenden denselben Cachepfad. Eine
-Invalidierung erzeugt einen neuen Schlüssel; eine ältere Berechnung schreibt
-ausschließlich unter ihrer ursprünglichen Version. Zwischen mehreren
+Berechnung pro Workspace, Cache-Generation und Schwellenwert. HTTP-Aufrufe und
+der Filteroptionen-Queueprozessor verwenden denselben Cachepfad. Die Generation
+hat eine zufällige Identität. Ein fehlender oder gelöschter Versionsschlüssel
+erzeugt atomar eine neue Identität, statt den bisherigen Standardwert 1
+wiederzuverwenden. Dadurch kann ein Aufruf nach einem abgeschlossenen Import
+keine noch laufende Berechnung vor dem Import übernehmen. Alte Berechnungen
+dürfen nur dann im Cache veröffentlichen, wenn ihre Generation noch aktuell ist;
+Prüfung und Schreiben erfolgen in einem Redis-Lua-Aufruf. Die bereits laufende
+alte Anfrage darf ihr ursprüngliches Ergebnis noch erhalten. Zwischen mehreren
 API-Prozessen erfolgt keine gemeinsame Berechnungssperre. Bei einem SQL-Fehler
 bleibt die Berechnung bis zum Ende aller bereits gestarteten Teilabfragen aktiv,
 damit ein sofortiger Wiederholungsversuch diese nicht zusätzlich vervielfacht.
+Bei einem Redis-Fehler wird ohne Cache gerechnet. Die neue Cache-Generation
+ersetzt historische numerische Zähler. Anwendung und Queue-Worker deshalb im
+vorgesehenen Wartungsfenster gemeinsam aktualisieren; ein gemischter Betrieb
+alter und neuer Cache-Protokolle ist nicht qualifiziert. Die verpflichtenden
+Redis-Integrationstests prüfen parallele API-/Worker-Aufrufe, Importinvalidierung
+über eine zweite Serviceinstanz und das verspätete Ende alter Berechnungen.
 
 Antwortlisten verwenden für Tagfilter ein `EXISTS` und berechnen die
 Tagaggregation in einer korrelierten Projektion statt einer Gruppierung aller

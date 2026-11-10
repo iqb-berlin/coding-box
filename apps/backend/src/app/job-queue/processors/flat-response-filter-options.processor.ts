@@ -33,25 +33,11 @@ export class FlatResponseFilterOptionsProcessor extends WorkspaceWorkerHost {
 
     await job.updateProgress(0);
 
-    const versionKey =
-      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-        workspaceId
-      );
-    const cacheVersion = await this.cacheService.getNumber(versionKey, 1);
-    const cacheKey =
-      this.cacheService.generateFlatResponseFilterOptionsCacheKey(
-        workspaceId,
-        cacheVersion,
-        threshold
-      );
-
-    await this.cacheService.getOrCompute(cacheKey, () => (
+    await this.cacheService.getOrComputeFlatResponseFilterOptions(workspaceId, threshold, () => (
       this.workspaceTestResultsService.findFlatResponseFilterOptions(
-        workspaceId,
-        {
-          processingDurationThresholdMs: String(threshold)
-        }
-      )), 0);
+        workspaceId, { processingDurationThresholdMs: String(threshold) }
+      )
+    ));
 
     await job.updateProgress(100);
     this.logger.log(
