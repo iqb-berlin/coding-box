@@ -64,3 +64,41 @@ export function withFlatResponsePageUnits(
   return query.clone()
     .andWhere('unit.id = ANY(:flatResponsePageUnitIds::int[])', { flatResponsePageUnitIds: unitIds });
 }
+
+export async function findValueFilteredFlatResponsePage(
+  connection: DataSource, filtered: SelectQueryBuilder<ResponseEntity>,
+  projected: SelectQueryBuilder<ResponseEntity>, page: { number: number; size: number },
+  queryRunner?: QueryRunner
+) {
+  const matches = filtered.select('response.id', 'id')
+    .addSelect('person.code', 'sort_code')
+    .addSelect('bookletinfo.name', 'sort_booklet')
+    .addSelect('unit.alias', 'sort_alias')
+    .addSelect('response.variableid', 'sort_variable');
+  const pageRows = projected
+    .innerJoin('flat_response_value_page', 'value_page', 'value_page.id = response.id')
+    .addSelect('unit.alias', 'sortAlias');
+
+  // Count and page use the same snapshot and search. Fetch payload only for the page IDs.
+  const result = await connection.createQueryBuilder(queryRunner)
+    .addCommonTableExpression(matches, 'flat_response_value_matches', { materialized: true })
+    .addCommonTableExpression(`SELECT id FROM flat_response_value_matches
+      ORDER BY sort_code ASC, sort_booklet ASC, sort_alias ASC, sort_variable ASC, id ASC
+      LIMIT :flatValuePageSize OFFSET :flatValuePageOffset`, 'flat_response_value_page')
+    .select('page_rows.*')
+    .addSelect('totals.cnt', 'cnt')
+    .from('(SELECT COUNT(*) AS cnt FROM flat_response_value_matches)', 'totals')
+    .leftJoin(`(${pageRows.getQuery()})`, 'page_rows', 'TRUE')
+    .setParameters({
+      ...pageRows.getParameters(),
+      flatValuePageSize: page.size,
+      flatValuePageOffset: (page.number - 1) * page.size
+    })
+    .orderBy('page_rows.code', 'ASC')
+    .addOrderBy('page_rows.booklet', 'ASC')
+    .addOrderBy('page_rows."sortAlias"', 'ASC')
+    .addOrderBy('page_rows.response', 'ASC')
+    .addOrderBy('page_rows."responseId"', 'ASC')
+    .getRawMany();
+  return { total: Number(result[0]?.cnt || 0), raw: result.filter(row => row.responseId !== null) };
+}

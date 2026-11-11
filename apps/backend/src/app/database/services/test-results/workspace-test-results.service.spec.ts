@@ -1832,12 +1832,14 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
-    it('should apply a timeout and search the displayed response value prefix', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
+    it('should retain the response value prefix and timeout on the shared page query', async () => {
+      const matches = mockQueryBuilder();
+      const projection = mockQueryBuilder();
+      const page = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+        .mockReturnValueOnce(matches)
+        .mockReturnValueOnce(projection);
+      (dataSource.createQueryBuilder as jest.Mock).mockReturnValue(page);
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1850,25 +1852,13 @@ describe('WorkspaceTestResultsService', () => {
       expect(queryRunner.query).toHaveBeenCalledWith(
         "SET LOCAL statement_timeout = '15000ms'"
       );
-      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
-        1,
-        'response',
-        queryRunner
+      expect(dataSource.createQueryBuilder).toHaveBeenCalledWith(queryRunner);
+      expect(matches.andWhere).toHaveBeenCalledWith(
+        'LEFT(response.value, 2000) ILIKE :responseValue',
+        { responseValue: '%needle%' }
       );
-      [dataQb, countQb].forEach(qb => {
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'LEFT(response.value, 2000) ILIKE :responseValue',
-          { responseValue: '%needle%' }
-        );
-        expect(qb.andWhere).not.toHaveBeenCalledWith(
-          expect.stringContaining('LENGTH(response.value)'),
-          expect.anything()
-        );
-      });
-      expect(countQb.select).toHaveBeenCalledWith(
-        'COUNT(response.id)',
-        'cnt'
-      );
+      expect(projection.andWhere).not.toHaveBeenCalled();
+      expect(page.getRawMany).toHaveBeenCalledTimes(1);
     });
 
     it.each([

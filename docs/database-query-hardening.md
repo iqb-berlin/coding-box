@@ -321,6 +321,14 @@ Primärquellen:
 [TypeORM-Migrationsleitfaden](https://typeorm.io/docs/releases/1.0/upgrading-from-0.3/).
 
 
+### Antwortwertsuche
+
+Bei aktivem Antwortwertfilter ermittelt eine materialisierte, schmale
+Treffermenge die exakte Gesamtzahl und die geordneten Seiten-IDs in derselben
+SQL-Anweisung. Die Abfrage lädt Antwortwerte und Tags nur für die Seiten-IDs.
+Auch leere Seiten außerhalb der Treffermenge behalten die korrekte Gesamtzahl.
+Suchpräfix, Ausschlüsse, Filterkombinationen und SQL-Zeitlimits gelten weiterhin.
+
 ### Kalte Facetten und Zählung
 
 Der vollständige HTTP-Anlauf am Stand `217505c47` ergab trotz schnellerer warmer

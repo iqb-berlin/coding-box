@@ -171,6 +171,42 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
+  it('shares the exact value-search total across pages, including an empty page', async () => {
+    await expectResponses({ responseValue: 'ANSWER', page: 1, limit: 2 }, [4, 5], 3);
+    await expectResponses({ responseValue: 'answer', page: 2, limit: 2 }, [6], 3);
+    await expectResponses({ responseValue: 'answer', page: 3, limit: 2 }, [], 3);
+    await expectResponses({ responseValue: 'no-such-value' }, []);
+    await expectResponses({ responseValue: '%' }, [2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('combines value search with regex, tags and log-derived filters without duplicating rows', async () => {
+    const rows = await expectResponses({
+      responseValue: 'answer',
+      regexSearch: true,
+      unit: '^UNIT_[AB]$',
+      tags: 'review',
+      processingDurationMax: '01:00'
+    }, [4, 5]);
+    expect(rows[0].tags.sort()).toEqual(['review-alpha', 'review-beta']);
+    expect(rows[1].tags).toEqual(['review-alpha']);
+  });
+
+  it('searches and returns the same value prefix while ordering tied rows by response ID', async () => {
+    const prefix = `${'x'.repeat(1994)}needle`;
+    await db.query(`INSERT INTO response (id,unitid,variableid,status,value)
+      VALUES (20,1,'A',3,$1),(21,1,'A',3,$2),(22,1,'A',3,$3)`, [
+      `${prefix}tail`, 'needle second', `${'x'.repeat(2000)}needle`
+    ]);
+    try {
+      const rows = await expectResponses({ responseValue: 'needle', limit: 1 }, [20], 2);
+      expect(rows[0].responseValue).toBe(prefix);
+      await expectResponses({ responseValue: 'needle', page: 2, limit: 1 }, [21], 2);
+      await expectResponses({ responseValue: 'needle', page: 3, limit: 1 }, [], 2);
+    } finally {
+      await db.query('DELETE FROM response WHERE id IN (20,21,22)');
+    }
+  });
+
   it('combines value, duration, session and tag filters in the real queries', async () => {
     await expectResponses({
       hasValue: 'true',
@@ -271,6 +307,12 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       const [rows, total] = await service.findFlatResponses(42, { page: 1, limit: 50 }, runner);
       expect(total).toBe(9);
       expect(rows.map(row => row.responseId)).toEqual([1, 2, 3, 4, 30, 5, 6, 7, 8]);
+      const [valueRows, valueTotal] = await service.findFlatResponses(42, {
+        page: 1, limit: 50, responseValue: 'not committed'
+      }, runner);
+      expect(valueTotal).toBe(1);
+      expect(valueRows.map(row => row.responseId)).toEqual([30]);
+      await expectResponses({ responseValue: 'not committed' }, []);
       const [outsideRows, outsideTotal] = await service.findFlatResponses(42, { page: 1, limit: 50 });
       expect(outsideTotal).toBe(8);
       expect(outsideRows.map(row => row.responseId)).not.toContain(30);
