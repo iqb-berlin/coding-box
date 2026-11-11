@@ -6,6 +6,7 @@ import {
   In, IsNull, Not,
   Repository
 } from 'typeorm';
+import { toTrainingBundle, toTrainingCoder, toTrainingVariable } from './training-selection-entities.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity';
 import { CoderTrainingCoder } from '../../entities/coder-training-coder.entity';
@@ -145,35 +146,15 @@ export class CoderTrainingMutationService {
         const trainingId = savedTraining.id;
 
         // Save selected variables, including variables that came from bundles.
-        for (const variable of trainingVariableSelections) {
-          const trainingVariable = new CoderTrainingVariable();
-          trainingVariable.coder_training_id = trainingId;
-          trainingVariable.variable_id = variable.variableId;
-          trainingVariable.unit_name = variable.unitName;
-          trainingVariable.sample_count = variable.sampleCount || 10;
-          trainingVariable.include_derive_error = variable.includeDeriveError === true;
-          await coderTrainingVariableRepository.save(trainingVariable);
-        }
+        await coderTrainingVariableRepository.save(trainingVariableSelections.map(toTrainingVariable.bind(null, trainingId)), { chunk: 500 });
 
         // Save assigned bundles
         if (assignedVariableBundles) {
-          for (const bundle of assignedVariableBundles) {
-            const trainingBundle = new CoderTrainingBundle();
-            trainingBundle.coder_training_id = trainingId;
-            trainingBundle.variable_bundle_id = bundle.id;
-            trainingBundle.sample_count = bundle.sampleCount || 10;
-            trainingBundle.case_ordering_mode = bundle.caseOrderingMode || null;
-            await coderTrainingBundleRepository.save(trainingBundle);
-          }
+          await coderTrainingBundleRepository.save(assignedVariableBundles.map(toTrainingBundle.bind(null, trainingId)), { chunk: 500 });
         }
 
         // Save assigned coders
-        for (const coder of selectedCoders) {
-          const trainingCoder = new CoderTrainingCoder();
-          trainingCoder.coder_training_id = trainingId;
-          trainingCoder.user_id = coder.id;
-          await coderTrainingCoderRepository.save(trainingCoder);
-        }
+        await coderTrainingCoderRepository.save(selectedCoders.map(toTrainingCoder.bind(null, trainingId)), { chunk: 500 });
 
         this.logger.log(`Created coder training ${trainingId} with label '${trainingLabel}' and configuration`);
 
@@ -573,31 +554,11 @@ export class CoderTrainingMutationService {
           await coderTrainingCoderRepository.delete({ coder_training_id: trainingId });
 
           // Save new configuration relations
-          for (const variable of effectiveTrainingVariables) {
-            const trainingVariable = new CoderTrainingVariable();
-            trainingVariable.coder_training_id = trainingId;
-            trainingVariable.variable_id = variable.variableId;
-            trainingVariable.unit_name = variable.unitName;
-            trainingVariable.sample_count = variable.sampleCount || 10;
-            trainingVariable.include_derive_error = variable.includeDeriveError === true;
-            await coderTrainingVariableRepository.save(trainingVariable);
-          }
+          await coderTrainingVariableRepository.save(effectiveTrainingVariables.map(toTrainingVariable.bind(null, trainingId)), { chunk: 500 });
 
-          for (const bundle of effectiveAssignedVariableBundles) {
-            const trainingBundle = new CoderTrainingBundle();
-            trainingBundle.coder_training_id = trainingId;
-            trainingBundle.variable_bundle_id = bundle.id;
-            trainingBundle.sample_count = bundle.sampleCount || 10;
-            trainingBundle.case_ordering_mode = bundle.caseOrderingMode ?? null;
-            await coderTrainingBundleRepository.save(trainingBundle);
-          }
+          await coderTrainingBundleRepository.save(effectiveAssignedVariableBundles.map(toTrainingBundle.bind(null, trainingId)), { chunk: 500 });
 
-          for (const coder of selectedCoders) {
-            const trainingCoder = new CoderTrainingCoder();
-            trainingCoder.coder_training_id = trainingId;
-            trainingCoder.user_id = coder.id;
-            await coderTrainingCoderRepository.save(trainingCoder);
-          }
+          await coderTrainingCoderRepository.save(selectedCoders.map(toTrainingCoder.bind(null, trainingId)), { chunk: 500 });
           this.logger.log(`Configuration changed for training ${trainingId}. Recreating jobs.`);
 
           // Delete existing jobs and their associations

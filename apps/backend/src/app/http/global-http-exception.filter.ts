@@ -83,6 +83,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
       return exception.getStatus();
     }
 
+    if (exception instanceof Error && exception.message === 'timeout exceeded when trying to connect') {
+      return HttpStatus.SERVICE_UNAVAILABLE;
+    }
+
     return HttpStatus.INTERNAL_SERVER_ERROR;
   }
 

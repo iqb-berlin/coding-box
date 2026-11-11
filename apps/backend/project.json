@@ -157,6 +157,16 @@
         "command": "node scripts/e2e/codebook/verify-live.mjs"
       }
     },
+    "typeorm-upgrade-inventory": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/quality/typeorm-upgrade-inventory.mjs" }
+    },
+    "database-diagnostics": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/qa/inspect-postgres.mjs" }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": false,

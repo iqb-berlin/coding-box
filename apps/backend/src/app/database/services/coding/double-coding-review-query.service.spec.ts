@@ -26,6 +26,14 @@ jest.mock('../workspace/workspace-exclusion.service', () => ({
   WorkspaceExclusionService: jest.fn()
 }));
 
+// Unit cases exercise grouping; real cursor/snapshot behavior is checked in orm-schema.postgres.spec.ts.
+jest.mock('../shared/postgres-query-batches.util', () => ({
+  readPostgresQueryBatches: async function* readBatches(query, batchSize, prepareSnapshot) {
+    await prepareSnapshot?.({});
+    yield await query.limit(batchSize).getRawMany();
+  }
+}));
+
 describe('DoubleCodingReviewQueryService', () => {
   const workspaceId = 123;
   const emptyExclusions = {
@@ -74,6 +82,7 @@ describe('DoubleCodingReviewQueryService', () => {
     getSelectableReviewCodeForUnit: jest.Mock;
   };
   let defaultMissingsProfilesService: {
+    getMissingResolverForSnapshot: jest.Mock;
     getMissingByIdForProfileOrDefault: jest.Mock;
     getMissingByCodeForProfileOrDefault: jest.Mock;
   };
@@ -221,6 +230,12 @@ describe('DoubleCodingReviewQueryService', () => {
       )
     };
     defaultMissingsProfilesService = {
+      getMissingResolverForSnapshot: jest.fn().mockResolvedValue((_profileId, selector) => ({
+        id: selector.id ?? String(selector.code),
+        label: 'Missing',
+        code: selector.code ?? (selector.id === 'mir' ? -3 : -4),
+        score: null
+      })),
       getMissingByIdForProfileOrDefault: jest.fn().mockImplementation(
         async (_workspaceId: number, _profileId: number | null, missingId: string) => ({
           id: missingId,
@@ -1394,7 +1409,7 @@ describe('DoubleCodingReviewQueryService', () => {
     } else {
       expect(queryBuilder.andWhere).not.toHaveBeenCalledWith('cju.variable_id = :kappaVariableId', expect.anything());
     }
-    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.offset).not.toHaveBeenCalled();
     expect(queryBuilder.limit).toHaveBeenCalledWith(5000);
   });
 
@@ -1514,7 +1529,7 @@ describe('DoubleCodingReviewQueryService', () => {
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('cj.training_id IS NULL');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cju.id', 'ASC');
     expect(queryBuilder.addOrderBy).toHaveBeenCalledWith('cjc.id', 'ASC');
-    expect(queryBuilder.offset).toHaveBeenCalledWith(0);
+    expect(queryBuilder.offset).not.toHaveBeenCalled();
     expect(queryBuilder.limit).toHaveBeenCalledWith(5000);
     expect(applyResolvedExclusionsToQuery).toHaveBeenCalledWith(queryBuilder, emptyExclusions, {
       unitNameExpression: 'cju.unit_name',
@@ -1583,22 +1598,22 @@ describe('DoubleCodingReviewQueryService', () => {
   });
 
   it('normalizes general missing codes before filtering score-level kappa data', async () => {
-    const missingsProfilesService = {
-      getMissingByIdForProfileOrDefault: jest.fn()
-        .mockImplementation(async (_workspaceId: number, _profileId: number | null, missingId: string) => (
-          missingId === 'mir' ?
-            {
-              id: 'mir', label: 'Missing invalid response', code: -98, score: 0
-            } :
-            {
-              id: 'mci', label: 'Missing coding impossible', code: -97, score: null
-            }
-        )),
-      getMissingByCodeForProfileOrDefault: jest.fn()
-        .mockResolvedValue({
-          id: 'mbi_mbo', label: 'Missing by omission', code: -99, score: 0
-        })
-    };
+    const resolveMissing = jest.fn().mockImplementation((_profileId, selector) => {
+      if (selector.id === 'mir') {
+        return {
+          id: 'mir', label: 'Missing invalid response', code: -98, score: 0
+        };
+      }
+      if (selector.id === 'mci') {
+        return {
+          id: 'mci', label: 'Missing coding impossible', code: -97, score: null
+        };
+      }
+      return {
+        id: 'mbi_mbo', label: 'Missing by omission', code: -99, score: 0
+      };
+    });
+    const missingsProfilesService = { getMissingResolverForSnapshot: jest.fn().mockResolvedValue(resolveMissing) };
     service = new DoubleCodingReviewQueryService(
       codingJobUnitRepository as never,
       jobDefinitionRepository as never,
@@ -1695,12 +1710,10 @@ describe('DoubleCodingReviewQueryService', () => {
       'score'
     );
 
-    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
-      .toHaveBeenCalledWith(workspaceId, 77, 'mir');
-    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
-      .toHaveBeenCalledWith(workspaceId, 77, 'mci');
-    expect(missingsProfilesService.getMissingByCodeForProfileOrDefault)
-      .toHaveBeenCalledWith(workspaceId, 77, -99);
+    expect(resolveMissing).toHaveBeenCalledWith(77, { id: 'mir' });
+    expect(resolveMissing).toHaveBeenCalledWith(77, { id: 'mci' });
+    expect(resolveMissing).toHaveBeenCalledWith(77, { code: -99 });
+    expect(missingsProfilesService.getMissingResolverForSnapshot).toHaveBeenCalledTimes(1);
     expect(result).toEqual([
       expect.objectContaining({
         responseId: 10,

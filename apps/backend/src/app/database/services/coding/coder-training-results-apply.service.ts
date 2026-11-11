@@ -1,6 +1,7 @@
 import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
+import { updateResponseCodingBatch } from './response-coding-batch.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   ApplyTrainingDiscussionResultsRequestDto,
@@ -217,18 +218,7 @@ export class CoderTrainingResultsApplyService {
         updates.filter(update => context.existingFinalResponseIds.has(update.responseId)).length :
         0;
 
-      for (const update of updates) {
-        await queryRunner.manager.update(
-          ResponseEntity,
-          update.responseId,
-          {
-            code_v2: update.code,
-            score_v2: update.score,
-            status_v2: this.getCompletedStatus(),
-            autocoder_invalidated_version: null
-          }
-        );
-      }
+      await updateResponseCodingBatch(queryRunner.manager, updates, this.getCompletedStatus());
 
       if (updates.length > 0) {
         await this.codingFreshnessService.markManualCodingCurrent(

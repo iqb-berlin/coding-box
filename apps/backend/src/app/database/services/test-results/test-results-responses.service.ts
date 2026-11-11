@@ -31,6 +31,10 @@ import { FlatResponseOptions, FlatResponseResult, LogAnomalySummary } from './wo
 import {
   applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
+import {
+  createFlatResponseUnitScope, findUnfilteredFlatResponseScope, findValueFilteredFlatResponsePage,
+  isUnfilteredFlatResponseQuery, withFlatResponsePageUnits
+} from './flat-response-query-scope';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
 
@@ -122,22 +126,25 @@ export class TestResultsResponsesService {
       repeatedStartThreshold: options.repeatedStartThreshold
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
-    const createQuery = (purpose: 'rows' | 'count') => {
-      const query = this.createFlatResponseQuery(workspaceId, filters, purpose, queryRunner);
+    const createQuery = () => {
+      const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
       applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
       this.anomalies.applyLogAnomalyFilters(query, logAnomalyCodes, logAnomalyThresholds, exclusions);
       return query;
     };
-    const qb = createQuery('rows');
-    const countQb = createQuery('count');
-    const total = await countQb
-      .select('COUNT(response.id)', 'cnt')
-      .getRawOne()
-      .then(r => Number(r?.cnt || 0));
-
+    const qb = createQuery();
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const raw = await this.selectFlatResponseRows(qb, validPage, validLimit);
+    const page = { number: validPage, size: validLimit };
+    const { total, raw } = filters.responseValue ?
+      await findValueFilteredFlatResponsePage(
+        this.connection,
+        qb,
+        this.projectFlatResponseRows(this.createFlatResponseJoins(queryRunner), filters.tags),
+        page,
+        queryRunner
+      ) :
+      await this.loadOtherFlatResponsePage(createQuery, qb, page, filters, exclusions, workspaceId, queryRunner);
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
@@ -185,26 +192,75 @@ export class TestResultsResponsesService {
     ];
   }
 
+  private async loadOtherFlatResponsePage(
+    createQuery: () => SelectQueryBuilder<ResponseEntity>,
+    qb: SelectQueryBuilder<ResponseEntity>,
+    page: { number: number; size: number },
+    filters: FlatResponseFilters,
+    exclusions: Parameters<typeof applyExclusionsToQuery>[1],
+    workspaceId: number,
+    queryRunner?: QueryRunner
+  ) {
+    const candidateUnits = page.number * page.size;
+    const units = isUnfilteredFlatResponseQuery(filters) ?
+      createFlatResponseUnitScope(this.connection, workspaceId, exclusions, queryRunner) : undefined;
+    const scope = units ? await findUnfilteredFlatResponseScope(
+      this.connection, units, Number.isSafeInteger(candidateUnits) ? candidateUnits : undefined, queryRunner
+    ) : undefined;
+    const total = scope ? scope.total : await createQuery()
+      .select('COUNT(response.id)', 'cnt')
+      .getRawOne()
+      .then(r => Number(r?.cnt || 0));
+
+    const pageQuery = scope?.pageUnitIds ? withFlatResponsePageUnits(qb, scope.pageUnitIds) : qb;
+    let raw = await this.selectFlatResponseRows(pageQuery, page.number, page.size, filters.tags);
+    // Empty/auto-generated-only units can exhaust the prefix before a whole page.
+    // In that case use the complete scope instead of silently dropping later rows.
+    if (scope?.pageUnitIds && raw.length < page.size) {
+      raw = await this.selectFlatResponseRows(qb, page.number, page.size, filters.tags);
+    }
+    return { total, raw };
+  }
+
   private createFlatResponseQuery(
     workspaceId: number,
     filters: FlatResponseFilters,
-    purpose: 'rows' | 'count',
     queryRunner?: QueryRunner
   ): SelectQueryBuilder<ResponseEntity> {
-    const query = this.responseRepository.createQueryBuilder('response', queryRunner)
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'bookletEntity')
-      .innerJoin('bookletEntity.person', 'person')
-      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+    const query = this.createFlatResponseJoins(queryRunner)
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
-    if (purpose === 'rows') query.leftJoin('unit.tags', 'unitTag');
     excludeAutocoderGeneratedResponses(query);
-    applyFlatResponseFilters(query, filters, purpose);
+    // EXISTS filters keep one row per response. Aggregate tags only for the page,
+    // rather than grouping and sorting every matching response before LIMIT.
+    applyFlatResponseFilters(query, filters, 'count');
     return query;
   }
 
-  private selectFlatResponseRows(qb: SelectQueryBuilder<ResponseEntity>, validPage: number, validLimit: number) {
+  private createFlatResponseJoins(queryRunner?: QueryRunner): SelectQueryBuilder<ResponseEntity> {
+    return this.responseRepository.createQueryBuilder('response', queryRunner)
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo');
+  }
+
+  private selectFlatResponseRows(
+    qb: SelectQueryBuilder<ResponseEntity>, validPage: number, validLimit: number, tags: string
+  ) {
+    return this.projectFlatResponseRows(qb, tags)
+      .orderBy('person.code', 'ASC')
+      .addOrderBy('bookletinfo.name', 'ASC')
+      .addOrderBy('unit.alias', 'ASC')
+      .addOrderBy('response.variableid', 'ASC')
+      .addOrderBy('response.id', 'ASC')
+      .offset((validPage - 1) * validLimit)
+      .limit(validLimit)
+      .getRawMany();
+  }
+
+  private projectFlatResponseRows(qb: SelectQueryBuilder<ResponseEntity>, tags: string) {
+    const tagFilter = tags ? 'AND page_tag.tag ILIKE :tags' : '';
     return qb
       .select([
         'bookletEntity.id AS "bookletId"',
@@ -219,30 +275,12 @@ export class TestResultsResponsesService {
         'response.variableid AS "response"',
         'response.status AS "responseStatus"',
         'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
-        "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
+        `COALESCE((SELECT string_agg(DISTINCT page_tag.tag, ',')
+          FROM unit_tag page_tag WHERE page_tag."unitId" = unit.id ${tagFilter}), '') AS "tags"`
       ])
       .setParameter(
         'maxResponseValueLen',
         RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
-      )
-      .groupBy('response.id')
-      .addGroupBy('unit.id')
-      .addGroupBy('bookletEntity.id')
-      .addGroupBy('person.id')
-      .addGroupBy('bookletinfo.name')
-      .addGroupBy('unit.alias')
-      .addGroupBy('unit.name')
-      .addGroupBy('person.code')
-      .addGroupBy('person.group')
-      .addGroupBy('person.login')
-      .addGroupBy('response.variableid')
-      .addGroupBy('response.status')
-      .orderBy('person.code', 'ASC')
-      .addOrderBy('bookletinfo.name', 'ASC')
-      .addOrderBy('unit.alias', 'ASC')
-      .addOrderBy('response.variableid', 'ASC')
-      .offset((validPage - 1) * validLimit)
-      .limit(validLimit)
-      .getRawMany();
+      );
   }
 }

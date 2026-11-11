@@ -760,14 +760,18 @@ test-group;test-user;code;booklet1;unit1;"[{""content"":""[{\\""id\\"":\\""var1\
       expect(result.issues?.some(i => i.category === 'invalid_status')).toBe(true);
     });
 
-    it('should mark the overview as pending when upload stats cannot be read', async () => {
+    it.each(['statistics', 'cache invalidation'] as const)('keeps the overview pending after a %s failure and still invalidates result caches', async failure => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
       const filePath = path.join(fixtureDirectory, 'test-stats-failure.csv');
       fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
-      jest.spyOn(personService, 'getWorkspaceUploadStats').mockRejectedValue(new Error('DB Error'));
+      if (failure === 'statistics') {
+        jest.spyOn(personService, 'getWorkspaceUploadStats').mockRejectedValue(new Error('DB Error'));
+      } else {
+        jest.spyOn(workspaceTestResultsService, 'invalidateWorkspaceStatsCache').mockResolvedValue(false);
+      }
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -791,6 +795,8 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(result.overviewPending).toBe(true);
       expect(result.overviewMessage).toContain('aggregierten Datenbankzahlen');
       expect(result.issues?.some(issue => issue.category === 'other')).toBe(true);
+      // A failed optional statistics read must not leave pre-import filter options cached.
+      expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
     });
 
     it('should merge a new person into an existing test group and report the follow-up state', async () => {

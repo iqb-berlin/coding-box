@@ -102,6 +102,43 @@ describe('CodingStatisticsService', () => {
     jest.clearAllMocks();
   });
 
+  describe('Unit scope for the statistics query', () => {
+    it.each(['v1', 'v2', 'v3'] as const)('restricts %s to exact metadata unit names while retaining the pair filter', async version => {
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([
+        ['Mixed.Case.xml', new Set(['one', 'two'])],
+        ['OTHER', new Set(['one'])]
+      ]));
+      mockWorkspaceExclusionService.resolveExclusionsForQueries.mockResolvedValue({
+        globalIgnoredUnits: ['IGNORED'],
+        ignoredBooklets: ['BOOKLET'],
+        testletIgnoredUnits: [{ bookletId: 'CONTEXT', unitId: 'HIDDEN' }]
+      });
+      mockResponseRepository.query.mockResolvedValue([]);
+
+      await service.getCodingStatistics(1, version, true);
+
+      const [sql, parameters] = mockResponseRepository.query.mock.calls[0];
+      expect(sql).toContain('unit.name = ANY($10::text[])');
+      expect(parameters?.[9]).toEqual(['Mixed.Case.xml', 'OTHER']);
+      expect(sql).toContain("(unit.name || E'\\u001F' || response.variableid) = ANY($4::text[])");
+      expect(parameters?.[3]).toEqual(['Mixed.Case.xml\u001Fone', 'Mixed.Case.xml\u001Ftwo', 'OTHER\u001Fone']);
+    });
+
+    it.each([
+      ['UNIT\u001FPART', 'variable'],
+      ['UNIT', 'part\u001Fvariable']
+    ])('preserves the legacy pair-key semantics for separator-bearing metadata', async (unitName, variableId) => {
+      mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(new Map([[unitName, new Set([variableId])]]));
+      mockResponseRepository.query.mockResolvedValue([]);
+
+      await service.getCodingStatistics(1, 'v1', true);
+
+      const [sql, parameters] = mockResponseRepository.query.mock.calls[0];
+      expect(sql).not.toContain('unit.name = ANY(');
+      expect(parameters?.[3]).toEqual([`${unitName}\u001F${variableId}`]);
+    });
+  });
+
   describe('Statistics calculation (v1, v2, v3)', () => {
     beforeEach(() => {
       jest
@@ -395,7 +432,7 @@ describe('CodingStatisticsService', () => {
         .mockResolvedValue({ Unit1: ['var1'] });
     });
 
-    it.skip('should use COALESCE for v2 version query', async () => {
+    it('should use COALESCE for v2 version query', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);
@@ -408,7 +445,7 @@ describe('CodingStatisticsService', () => {
       expect(queryCall[0]).toContain('code_v2');
     });
 
-    it.skip('should use v3 effective status expression', async () => {
+    it('should use v3 effective status expression', async () => {
       mockCacheService.get.mockResolvedValue(null);
       mockWorkspaceCoreService.getIgnoredUnits.mockResolvedValue([]);
       mockResponseRepository.query.mockResolvedValue([]);

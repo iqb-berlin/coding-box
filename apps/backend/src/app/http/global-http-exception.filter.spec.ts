@@ -70,6 +70,15 @@ describe('GlobalHttpExceptionFilter', () => {
     );
   });
 
+  it('reports an exhausted database pool as temporary unavailability without exposing driver details', () => {
+    const { host, response } = createHost({ requestId: 'pool-request' });
+    new GlobalHttpExceptionFilter().catch(new Error('timeout exceeded when trying to connect'), host);
+    expect(response.status).toHaveBeenCalledWith(503);
+    expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
+      statusCode: 503, message: 'Internal server error', requestId: 'pool-request'
+    }));
+  });
+
   it.each(['provider-unavailable', 'configuration-error'] as const)('preserves safe auth diagnostics for %s with a request id', code => {
     const { host, response } = createHost({ requestId: 'auth-request-123' });
     new GlobalHttpExceptionFilter().catch(new AuthFailureException(code), host);

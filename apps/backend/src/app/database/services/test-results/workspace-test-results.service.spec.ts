@@ -34,6 +34,7 @@ import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding
 import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 
 const mockQueryBuilder = () => ({
+  addCommonTableExpression: jest.fn().mockReturnThis(),
   select: jest.fn().mockReturnThis(),
   addSelect: jest.fn().mockReturnThis(),
   from: jest.fn().mockReturnThis(),
@@ -859,6 +860,9 @@ describe('WorkspaceTestResultsService', () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
       qb.getQueryAndParameters
+        .mockReturnValueOnce(['SELECT 1', [1]])
+        .mockReturnValueOnce(['SELECT 1', [1]])
+        .mockReturnValueOnce(['SELECT 1', [1]])
         .mockReturnValueOnce([
           'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
           [1]
@@ -868,6 +872,9 @@ describe('WorkspaceTestResultsService', () => {
           [1]
         ]);
       (dataSource.query as jest.Mock)
+        .mockResolvedValueOnce([{ facet: 'codeRows', values: ['C'] }])
+        .mockResolvedValueOnce([])
+        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
@@ -885,34 +892,31 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.where).not.toHaveBeenCalledWith('session.os IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
       );
 
-      expect(dataSource.query).toHaveBeenCalledTimes(2);
-      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+      expect(dataSource.query).toHaveBeenCalledTimes(5);
+      expect(result.codes).toEqual(['C']);
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain('filtered AS MATERIALIZED');
+      expect((dataSource.query as jest.Mock).mock.calls[3][0]).toContain(
         'LEFT JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[3][0]).toContain(
         'first_duration.duration_ms < $2'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
+      expect((dataSource.query as jest.Mock).mock.calls[3][1]).toEqual([
         1,
         60000
       ]);
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[4][0]).toContain(
         'CROSS JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[4][0]).toContain(
         'COUNT(DISTINCT progress_unit.id)'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect((dataSource.query as jest.Mock).mock.calls[4][1]).toEqual([1]);
       expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
       expect(result.unitProgresses).toEqual([
         'Vollständig',
@@ -1828,12 +1832,14 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
-    it('should apply a timeout and search the displayed response value prefix', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
+    it('should retain the response value prefix and timeout on the shared page query', async () => {
+      const matches = mockQueryBuilder();
+      const projection = mockQueryBuilder();
+      const page = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+        .mockReturnValueOnce(matches)
+        .mockReturnValueOnce(projection);
+      (dataSource.createQueryBuilder as jest.Mock).mockReturnValue(page);
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1846,25 +1852,13 @@ describe('WorkspaceTestResultsService', () => {
       expect(queryRunner.query).toHaveBeenCalledWith(
         "SET LOCAL statement_timeout = '15000ms'"
       );
-      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
-        1,
-        'response',
-        queryRunner
+      expect(dataSource.createQueryBuilder).toHaveBeenCalledWith(queryRunner);
+      expect(matches.andWhere).toHaveBeenCalledWith(
+        'LEFT(response.value, 2000) ILIKE :responseValue',
+        { responseValue: '%needle%' }
       );
-      [dataQb, countQb].forEach(qb => {
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'LEFT(response.value, 2000) ILIKE :responseValue',
-          { responseValue: '%needle%' }
-        );
-        expect(qb.andWhere).not.toHaveBeenCalledWith(
-          expect.stringContaining('LENGTH(response.value)'),
-          expect.anything()
-        );
-      });
-      expect(countQb.select).toHaveBeenCalledWith(
-        'COUNT(response.id)',
-        'cnt'
-      );
+      expect(projection.andWhere).not.toHaveBeenCalled();
+      expect(page.getRawMany).toHaveBeenCalledTimes(1);
     });
 
     it.each([
