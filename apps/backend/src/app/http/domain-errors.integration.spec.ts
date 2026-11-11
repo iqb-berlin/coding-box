@@ -4,6 +4,7 @@ import {
 import { Test } from '@nestjs/testing';
 import { CodingJobController } from '../admin/coding-job/coding-job.controller';
 import { VariableAnalysisController } from '../admin/variable-analysis/variable-analysis.controller';
+import { VARIABLE_ANALYSIS_RESULT_VERSION } from '../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { CodingJobService } from '../database/services/coding/coding-job.service';
 import { VariableAnalysisService } from '../database/services/test-results/variable-analysis.service';
 import { AuthService } from '../auth/service/auth.service';
@@ -62,7 +63,7 @@ describe('Domain errors at the HTTP boundary', () => {
   it.each(['results', 'results/page', 'results/export/csv', 'results/export/xlsx'])(
     'returns 400 for expired analysis results through %s', async endpoint => {
       jobQueueService.getVariableAnalysisJob.mockResolvedValueOnce({
-        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12', resultVersion: 3 },
+        data: { workspaceId: 47, cacheKey: 'variable-analysis:47:12', resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION },
         getState: async () => 'completed'
       } as never);
       const res = await fetch(`${url}/api/admin/workspace/47/variable-analysis/jobs/12/${endpoint}`);

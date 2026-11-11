@@ -22,19 +22,14 @@ import {
 } from '../../database/services/workspace/workspace-exclusion.service';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { VariableDetailDto } from '../../models/unit-variable-details.dto';
-import {
-  getExplicitSchemaValues, resolveSchemaValue, SchemaValueDefinition
-} from './variable-analysis-schema.util';
+import { VariableAnalysisOptions } from '../../../../../../api-dto/coding/variable-analysis-options';
+import { isEmptyVariableAnalysisValue, isValidVariableAnalysisRawValue } from '../../../../../../api-dto/coding/variable-analysis-rules';
+import { resolveSchemaValue, SchemaValueDefinition } from './variable-analysis-schema.util';
+import { enrichSchemaValueDefinition, getVariableAnalysisMetadata, VariableAnalysisMetadata } from './variable-analysis-metadata.util';
+import { formatAssignedCodeKey } from './variable-analysis-code.util';
+import { getEmptyVariableAnalysisValueSql, getVariableAnalysisColumns } from './variable-analysis-query.util';
 
 type SchemaCodeInfo = SchemaValueDefinition;
-
-interface VariableAnalysisMetadata {
-  coding?: VariableDetailDto['coding'];
-  type: VariableDetailDto['type'];
-  multiple: boolean;
-  categoryDefinitions: SchemaCodeInfo[];
-  valuesByPosition: SchemaCodeInfo[];
-}
 
 interface SchemaValueCountRow {
   unitName: string;
@@ -51,9 +46,6 @@ interface MultipleResponseRow {
   variableId: string;
   value: string | null;
   status: string | number | null;
-  statusV1: string | number | null;
-  codeV1: string | number | null;
-  scoreV1: string | number | null;
 }
 
 interface AnalyzedVariableScopeEntry extends VariableAnalysisMetadata {
@@ -71,6 +63,7 @@ interface AnalysisValueRow {
   unitName: string;
   variableId: string;
   value: string;
+  isEmptyValue?: boolean;
   valueLength: string | number;
   valueHash?: string;
   responseId: string | number;
@@ -79,7 +72,7 @@ interface AnalysisValueRow {
   nullCount: string | number;
 }
 
-interface VariableAnalysisScopeOptions {
+interface VariableAnalysisScopeOptions extends VariableAnalysisOptions {
   unitId?: number;
   variableId?: string;
 }
@@ -122,15 +115,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   private readonly RESULT_CACHE_CHUNK_SIZE = 100;
   private readonly MULTIPLE_RESPONSE_COMBO_CHUNK_SIZE = 100;
   private readonly MULTIPLE_RESPONSE_ROW_BATCH_SIZE = 5000;
-  private readonly INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES = [
-    0, // UNSET
-    1, // NOT_REACHED
-    2, // DISPLAYED
-    4, // DERIVE_ERROR
-    7, // INVALID
-    9, // CODING_ERROR
-    10 // PARTLY_DISPLAYED
-  ];
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -149,8 +133,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       await job.updateProgress(0);
 
       const workspaceId = job.data.workspaceId;
-      const unitId = job.data.unitId;
-      const variableId = job.data.variableId;
+      const { unitId, variableId } = job.data;
       const cacheKey = job.data.cacheKey || this.createResultCacheKey(workspaceId, job.id);
       const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
 
@@ -172,7 +155,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       const scopeEntries = await this.getAnalysisScope(
         workspaceId,
         query,
-        { unitId, variableId }
+        { ...job.data, unitId, variableId }
       );
       const variableCombos = scopeEntries.map(entry => entry.combo);
 
@@ -196,15 +179,14 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         scopeByLogicalKey.set(entry.logicalKey, entry);
         frequencies[comboKey] = [];
       });
-      const metadataByComboKey = this.getVariableMetadataByComboKey(
-        scopeEntries
-      );
+      const metadataByComboKey = new Map(scopeEntries.map(entry => [entry.comboKey, entry]));
       const categoryDefinitionsByComboKey = this.getCategoryDefinitionsByComboKey(
         metadataByComboKey
       );
       const analysisSql = this.getDedupedAnalysisSql(
         query,
-        scopeEntries.map(entry => entry.logicalKey)
+        scopeEntries.map(entry => entry.logicalKey),
+        job.data
       );
 
       await job.updateProgress(25);
@@ -216,7 +198,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             analysis_rows."variableId" AS "variableId",
             COUNT(*) AS "totalCount",
             SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount",
-            SUM(CASE WHEN analysis_rows."value" IS NULL OR analysis_rows."value" = '' THEN 1 ELSE 0 END) AS "emptyCount",
+            SUM(CASE WHEN ${getEmptyVariableAnalysisValueSql('analysis_rows."rawValue"')} THEN 1 ELSE 0 END) AS "emptyCount",
             COUNT(DISTINCT COALESCE(analysis_rows."value", '')) AS "distinctValueCount"
           FROM (${analysisSql.sql}) analysis_rows
           GROUP BY analysis_rows."unitName", analysis_rows."variableId"
@@ -251,13 +233,13 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             ranked_values."unitName",
             ranked_values."variableId",
             LEFT(ranked_values."value", ${maxValuePreviewLengthParameter}) AS "value",
+            ${getEmptyVariableAnalysisValueSql('ranked_values."value"')} AS "isEmptyValue",
             LENGTH(ranked_values."value") AS "valueLength",
             md5(ranked_values."value") AS "valueHash",
             ranked_values."responseId",
             ranked_values."nullCount",
             ranked_values."count",
-            ranked_values."validCount",
-            ranked_values."rank"
+            ranked_values."validCount"
           FROM (
             SELECT
               grouped_values.*,
@@ -289,13 +271,12 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
       await this.addObservedValueFrequencies(valueRows, scopeByLogicalKey, frequencies);
 
-      const multipleObservedCounts =
-        await this.recalculateMultipleVariableFrequencies(
-          query,
-          scopeEntries,
-          frequencies,
-          metadataByComboKey
-        );
+      const multipleObservedCounts = await this.recalculateMultipleVariableFrequencies(
+        query,
+        scopeEntries,
+        frequencies,
+        metadataByComboKey
+      );
 
       await this.addSchemaCodeFrequencies(
         query,
@@ -305,7 +286,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         multipleObservedCounts
       );
 
-      this.applyFrequencyPercentages(variableCombos, frequencies);
+      this.finalizeFrequencies(variableCombos, frequencies);
 
       await job.updateProgress(70);
 
@@ -378,12 +359,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
     return {
       cacheKey,
-      workspaceId: job.data.workspaceId,
-      total: result.total,
-      storage: manifest.storage,
-      variableComboChunks: manifest.variableComboChunks,
-      frequencyChunks: manifest.frequencyChunks,
-      storedAt: manifest.storedAt
+      ...manifest
     };
   }
 
@@ -519,6 +495,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           unitName: row.unitName,
           variableId: row.variableId,
           value: this.formatValuePreview(row.value || '', this.parseCount(row.valueLength), row.valueHash),
+          isEmptyValue: row.isEmptyValue ?? isEmptyVariableAnalysisValue(row.value),
           label: definition?.label,
           score: definition?.score,
           code: definition?.code,
@@ -564,61 +541,10 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   }
 
   private getValidResponseSql(alias = 'analysis_rows'): string {
-    const ignoredStatuses =
-      this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.join(', ');
-
-    return `(
-      (
-        (
-          ${alias}."statusV1" IS NOT NULL
-          OR ${alias}."codeV1" IS NOT NULL
-          OR ${alias}."scoreV1" IS NOT NULL
-        )
-        AND COALESCE(${alias}."statusV1", 0) NOT IN (${ignoredStatuses})
-      )
-      OR (
-        ${alias}."statusV1" IS NULL
-        AND ${alias}."codeV1" IS NULL
-        AND ${alias}."scoreV1" IS NULL
-        AND ${alias}."value" IS NOT NULL
-        AND ${alias}."value" <> ''
-        AND COALESCE(${alias}."status", 0) NOT IN (${ignoredStatuses})
-      )
-    )`;
+    return `${alias}."analysisValid"`;
   }
 
-  private isValidAnalysisRow(row: {
-    value: string | null;
-    status: string | number | null;
-    statusV1: string | number | null;
-    codeV1: string | number | null;
-    scoreV1: string | number | null;
-  }): boolean {
-    const hasCodingInfo =
-      (row.statusV1 !== null && row.statusV1 !== undefined) ||
-      (row.codeV1 !== null && row.codeV1 !== undefined) ||
-      (row.scoreV1 !== null && row.scoreV1 !== undefined);
-
-    if (hasCodingInfo) {
-      return this.isValidStatus(row.statusV1);
-    }
-
-    const value = String(row.value || '').trim();
-    if (this.isEmptyStoredValue(value)) {
-      return false;
-    }
-
-    return this.isValidStatus(row.status);
-  }
-
-  private isValidStatus(status: string | number | null): boolean {
-    const numericStatus = Number(status ?? 0);
-    return !this.INVALID_OR_MISSING_VALID_DENOMINATOR_STATUSES.includes(
-      numericStatus
-    );
-  }
-
-  private applyFrequencyPercentages(
+  private finalizeFrequencies(
     variableCombos: VariableCombo[],
     frequencies: Record<string, VariableFrequencyDto[]>
   ): void {
@@ -642,6 +568,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
         return {
           ...item,
+          value: combo.analysisMode === 'codes' ? formatAssignedCodeKey(item.value) : item.value,
           validOccurrenceCount,
           percentage: percentageTotal,
           percentageTotal,
@@ -733,35 +660,14 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         seenLogicalKeys.add(logicalKey);
 
         const unitId = getUnitId(normalizedUnitName);
-        const metadata = this.getVariableMetadata(variable);
-        const combo: VariableCombo = {
-          unitId,
-          unitName,
-          variableId: variableAlias,
-          sourceVariableId,
-          variableAlias: variableAlias !== sourceVariableId ?
-            variableAlias :
-            undefined,
-          selectionSource: this.getSelectionSource(variable),
-          sourceType: variable.sourceType,
-          isDerived: variable.isDerived,
-          hasCodingScheme: variable.hasCodingScheme,
-          totalCount: 0,
-          emptyCount: 0,
-          emptyPercentage: 0,
-          distinctValueCount: 0,
-          statusCounts: []
-        };
+        const metadata = getVariableAnalysisMetadata(variable, options);
+        const combo = this.createVariableCombo(unitId, unitName, variableAlias, sourceVariableId, variable, options);
 
         entries.push({
+          ...metadata,
           combo,
           comboKey: this.getComboKey(combo),
-          logicalKey,
-          coding: metadata.coding,
-          type: metadata.type,
-          multiple: metadata.multiple,
-          categoryDefinitions: metadata.categoryDefinitions,
-          valuesByPosition: metadata.valuesByPosition
+          logicalKey
         });
       });
     });
@@ -776,6 +682,36 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         sensitivity: 'base'
       })
     ));
+  }
+
+  private createVariableCombo(
+    unitId: number,
+    unitName: string,
+    variableAlias: string,
+    sourceVariableId: string,
+    variable: VariableDetailDto,
+    options: VariableAnalysisOptions
+  ): VariableCombo {
+    return {
+      unitId,
+      unitName,
+      variableId: variableAlias,
+      sourceVariableId,
+      variableAlias: variableAlias !== sourceVariableId ?
+        variableAlias :
+        undefined,
+      selectionSource: this.getSelectionSource(variable),
+      sourceType: variable.sourceType,
+      isDerived: variable.isDerived,
+      hasCodingScheme: variable.hasCodingScheme,
+      analysisMode: options.analysisMode ?? 'values',
+      codingVersion: options.analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined,
+      totalCount: 0,
+      emptyCount: 0,
+      emptyPercentage: 0,
+      distinctValueCount: 0,
+      statusCounts: []
+    };
   }
 
   private async getRepresentativeUnitIdsByUnitName(
@@ -795,84 +731,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           Number(row.unitId)
         ])
         .filter(([, unitId]) => Number.isFinite(unitId)) as [string, number][]
-    );
-  }
-
-  private getVariableMetadata(
-    variable: VariableDetailDto
-  ): VariableAnalysisMetadata {
-    const categoryDefinitions = getExplicitSchemaValues(variable);
-    const seenValues = new Set(categoryDefinitions.map(definition => definition.value));
-
-    (variable.values || []).forEach(valueInfo => {
-      const value = String(valueInfo.value);
-      if (seenValues.has(value)) {
-        return;
-      }
-      seenValues.add(value);
-      categoryDefinitions.push({
-        value,
-        label: valueInfo.label,
-        order: categoryDefinitions.length
-      });
-    });
-
-    const variableValues = variable.values || [];
-    const valuePositionLabels = variable.valuePositionLabels || [];
-    const positionCount = Math.max(
-      variableValues.length,
-      valuePositionLabels.length
-    );
-    const valuesByPosition: SchemaCodeInfo[] = [];
-    Array.from({ length: positionCount }).forEach((_, index) => {
-      const variableValue = variableValues[index]?.value;
-      const label =
-        valuePositionLabels[index] ||
-        variableValues[index]?.label ||
-        String(variableValue ?? index + 1);
-      valuesByPosition.push({
-        value: variableValue !== undefined ?
-          String(variableValue) :
-          String(index + 1),
-        label,
-        order: index
-      });
-    });
-
-    valuesByPosition.forEach(positionValue => {
-      if (seenValues.has(positionValue.value)) {
-        return;
-      }
-      seenValues.add(positionValue.value);
-      categoryDefinitions.push({
-        ...positionValue,
-        order: categoryDefinitions.length
-      });
-    });
-
-    return {
-      coding: variable.coding,
-      type: variable.type,
-      multiple: variable.multiple === true,
-      categoryDefinitions,
-      valuesByPosition
-    };
-  }
-
-  private getVariableMetadataByComboKey(
-    scopeEntries: AnalyzedVariableScopeEntry[]
-  ): Map<string, VariableAnalysisMetadata> {
-    return new Map(
-      scopeEntries.map(entry => [
-        entry.comboKey,
-        {
-          coding: entry.coding,
-          type: entry.type,
-          multiple: entry.multiple,
-          categoryDefinitions: entry.categoryDefinitions,
-          valuesByPosition: entry.valuesByPosition
-        }
-      ])
     );
   }
 
@@ -900,17 +758,18 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private getDedupedAnalysisSql(
     query: SelectQueryBuilder<ResponseEntity>,
-    logicalKeys: string[]
+    logicalKeys: string[],
+    options: VariableAnalysisOptions = {}
   ): AnalysisSql {
+    const columns = getVariableAnalysisColumns(options);
     const analysisRowsQuery = query.clone()
       .select('response.id', 'responseId')
       .addSelect('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status', 'status')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('response.code_v1', 'codeV1')
-      .addSelect('response.score_v1', 'scoreV1')
+      .addSelect(columns.value, 'value')
+      .addSelect('response.value', 'rawValue')
+      .addSelect(columns.status, 'status')
+      .addSelect(`(${columns.valid})`, 'analysisValid')
       .addSelect(
         `
           ROW_NUMBER() OVER (
@@ -1000,9 +859,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     frequencies: Record<string, VariableFrequencyDto[]>,
     metadataByComboKey: Map<string, VariableAnalysisMetadata>
   ): Promise<MultipleResponseObservedCounts> {
-    const multipleEntries = scopeEntries.filter(entry => (
-      Boolean(metadataByComboKey.get(entry.comboKey)?.multiple)
-    ));
+    const multipleEntries = scopeEntries.filter(entry => metadataByComboKey.get(entry.comboKey)?.multiple);
     const observedCounts: MultipleResponseObservedCounts = {
       countsByComboKey: new Map<string, Map<string, number>>(),
       validCountsByComboKey: new Map<string, Map<string, number>>()
@@ -1056,10 +913,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
                 analysis_rows."unitName" AS "unitName",
                 analysis_rows."variableId" AS "variableId",
                 analysis_rows."value" AS "value",
-                analysis_rows."status" AS "status",
-                analysis_rows."statusV1" AS "statusV1",
-                analysis_rows."codeV1" AS "codeV1",
-                analysis_rows."scoreV1" AS "scoreV1"
+                analysis_rows."status" AS "status"
               FROM (${analysisSql.sql}) analysis_rows
               WHERE analysis_rows."responseId" > ${lastResponseIdParameter}
               ORDER BY analysis_rows."responseId" ASC
@@ -1094,22 +948,24 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       }
     }
 
-    multipleEntries.forEach(entry => {
-      const combo = entry.combo;
-      const summary = summariesByComboKey.get(entry.comboKey);
+    multipleEntries.forEach(({ combo, comboKey }) => {
+      const summary = summariesByComboKey.get(comboKey);
 
       if (!summary) {
         return;
       }
 
+      // Raw emptiness is independent of the selected code/status tuple.
+      combo.emptyCount = summary.emptyCount;
+      if (combo.analysisMode === 'codes') return;
+
       combo.totalCount = summary.totalCount;
       combo.validCount = summary.validCount;
       combo.invalidCount = Math.max(0, summary.totalCount - summary.validCount);
-      combo.emptyCount = summary.emptyCount;
       combo.distinctValueCount = summary.counts.size;
-      observedCounts.countsByComboKey.set(entry.comboKey, summary.counts);
+      observedCounts.countsByComboKey.set(comboKey, summary.counts);
       observedCounts.validCountsByComboKey.set(
-        entry.comboKey,
+        comboKey,
         summary.validCounts
       );
 
@@ -1122,7 +978,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         })
         .slice(0, this.MAX_VALUES_PER_VARIABLE);
 
-      frequencies[entry.comboKey] = sortedValues.map(([value, count]) => {
+      frequencies[comboKey] = sortedValues.map(([value, count]) => {
         const category = summary.categories.get(value);
         return {
           unitId: combo.unitId,
@@ -1132,6 +988,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           label: category?.label,
           score: category?.score,
           schemaOrder: category?.schemaOrder,
+          isEmptyValue: false,
           count,
           validOccurrenceCount: summary.validCounts.get(value) || 0,
           percentage: 0
@@ -1163,10 +1020,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     }
 
     summary.totalCount += 1;
-    const isValidResponse = this.isValidAnalysisRow(row);
-    if (isValidResponse) {
-      summary.validCount += 1;
-    }
     const categories = this.parseMultipleResponseCategories(
       row.value,
       metadata
@@ -1175,6 +1028,13 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     if (categories.length === 0) {
       summary.emptyCount += 1;
       return;
+    }
+
+    if (scopeEntry.combo.analysisMode === 'codes') return;
+
+    const isValidResponse = isValidVariableAnalysisRawValue(row.value, Number(row.status ?? 0));
+    if (isValidResponse) {
+      summary.validCount += 1;
     }
 
     const uniqueCategories = new Map<string, ParsedMultipleCategory>();
@@ -1206,7 +1066,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     const value = rawValue || '';
     const trimmedValue = value.trim();
 
-    if (this.isEmptyStoredValue(trimmedValue)) {
+    if (isEmptyVariableAnalysisValue(trimmedValue)) {
       return [];
     }
 
@@ -1217,7 +1077,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         return this.parseMultipleArrayValue(parsedValue, metadata);
       }
 
-      return this.valueToCategory(parsedValue, metadata);
+      // A missing raw value was handled above; the text "null" is a response category.
+      return this.valueToCategory(parsedValue === null ? trimmedValue : parsedValue, metadata);
     } catch {
       return this.valueToCategory(trimmedValue, metadata);
     }
@@ -1272,7 +1133,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       JSON.stringify(value) :
       String(value);
 
-    if (this.isEmptyStoredValue(normalizedValue.trim())) {
+    // Parsed strings are literal categories, even when their text looks like an empty list.
+    if (typeof value === 'string' ? value.trim() === '' : isEmptyVariableAnalysisValue(normalizedValue)) {
       return [];
     }
 
@@ -1293,10 +1155,6 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     return metadata.categoryDefinitions.find(
       definition => definition.value === value
     );
-  }
-
-  private isEmptyStoredValue(value: string): boolean {
-    return value === '' || value.toLowerCase() === 'null';
   }
 
   private formatDirectValuePreview(value: string): string {
@@ -1346,19 +1204,13 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       schemaCodes.forEach(schemaValue => {
         const observedCounts = observedCountsForCombo.get(schemaValue.value);
         const count = typeof observedCounts === 'number' ?
-          observedCounts :
-          observedCounts?.count || 0;
+          observedCounts : observedCounts?.count || 0;
+        if (schemaValue.isObservedOnly && count === 0) return;
         const definition = this.resolveObservedSchemaValue(
           schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
         );
-        const schemaCode = entry.multiple ? schemaValue : {
-          ...schemaValue,
-          label: definition?.label ?? schemaValue.label,
-          score: definition?.score,
-          code: definition?.code,
-          order: definition?.order ?? schemaValue.order,
-          isFromSchema: definition?.isFromSchema
-        };
+        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ?
+          schemaValue : enrichSchemaValueDefinition(schemaValue, definition);
         const valuePreview = entry.multiple ?
           this.formatDirectValuePreview(schemaCode.value) :
           this.formatSchemaValuePreview(schemaCode.value);
@@ -1372,15 +1224,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         }
 
         if (existingRow) {
-          existingRow.label = existingRow.label ?? schemaCode.label;
-          if (valuePreview !== '') {
-            existingRow.score = existingRow.score ?? schemaCode.score;
-            existingRow.code = existingRow.code ?? schemaCode.code;
-            existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
-          }
-          existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
-          existingRow.validOccurrenceCount =
-            existingRow.validOccurrenceCount ?? validOccurrenceCount;
+          this.enrichSchemaFrequencyRow(existingRow, schemaCode, validOccurrenceCount);
           return;
         }
 
@@ -1389,6 +1233,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           unitName: combo.unitName,
           variableId: combo.variableId,
           value: valuePreview,
+          isEmptyValue: entry.multiple ? schemaCode.value.trim() === '' : isEmptyVariableAnalysisValue(schemaCode.value),
           label: schemaCode.label,
           score: schemaCode.score,
           code: schemaCode.code,
@@ -1404,6 +1249,22 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
       frequencies[entry.comboKey] = rows;
     });
+  }
+
+  private enrichSchemaFrequencyRow(
+    existingRow: VariableFrequencyDto,
+    schemaCode: SchemaCodeInfo,
+    validOccurrenceCount: number
+  ): void {
+    existingRow.label = existingRow.label ?? schemaCode.label;
+    if (existingRow.value !== '') {
+      existingRow.score = existingRow.score ?? schemaCode.score;
+      existingRow.code = existingRow.code ?? schemaCode.code;
+      existingRow.isFromSchema = existingRow.isFromSchema || schemaCode.isFromSchema;
+    }
+    existingRow.schemaOrder = existingRow.schemaOrder ?? schemaCode.order;
+    existingRow.validOccurrenceCount =
+      existingRow.validOccurrenceCount ?? validOccurrenceCount;
   }
 
   private async getObservedSchemaValueCounts(
@@ -1425,7 +1286,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       const entryChunk = entriesWithSchemaCodes.slice(index, index + chunkSize);
       const analysisSql = this.getDedupedAnalysisSql(
         query,
-        entryChunk.map(entry => entry.logicalKey)
+        entryChunk.map(entry => entry.logicalKey),
+        entryChunk[0]?.combo
       );
       const schemaValueFilters = entryChunk.flatMap(entry => (
         (schemaCodesByComboKey.get(entry.comboKey) || []).map(schemaCode => ({

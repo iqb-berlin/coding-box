@@ -1,6 +1,9 @@
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { VariableStatusCountDto } from './variable-analysis-result.dto';
 
-export class VariableAnalysisTableRowDto {
+export class VariableAnalysisTableRowDto implements VariableAnalysisOptions {
+  analysisMode?: VariableAnalysisOptions['analysisMode'];
+  codingVersion?: VariableAnalysisOptions['codingVersion'];
   unitId: number;
   unitName: string;
   variableId: string;
@@ -11,6 +14,7 @@ export class VariableAnalysisTableRowDto {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   value: string;
+  isEmptyValue?: boolean;
   label?: string;
   score?: number;
   code?: number | string;

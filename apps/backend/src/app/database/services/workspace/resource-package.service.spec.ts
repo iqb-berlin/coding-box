@@ -66,7 +66,8 @@ describe('ResourcePackageService', () => {
   it('rejects a corrupt later ZIP entry without an uncaught exception or partial package', () => {
     const result = spawnSync(process.execPath, [
       path.join(__dirname, 'resource-package-extraction.fixture.cjs'), process.cwd()
-    ], { encoding: 'utf8', timeout: 10000 });
+    // Cold TypeScript/Nest imports can exceed 10 seconds on a busy CI runner.
+    ], { encoding: 'utf8', timeout: 60000 });
 
     expect(result.error).toBeUndefined();
     expect(result.status).toBe(0);
