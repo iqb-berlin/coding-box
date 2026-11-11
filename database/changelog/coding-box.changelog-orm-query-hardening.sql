@@ -95,3 +95,10 @@ CREATE INDEX CONCURRENTLY idx_bookletlog_controller_covering
 -- comment: Retire the superseded lookup only after its covering replacement is recorded.
 DROP INDEX CONCURRENTLY public.idx_bookletlog_controller_booklet_parameter_id;
 -- rollback CREATE INDEX CONCURRENTLY idx_bookletlog_controller_booklet_parameter_id ON public.bookletlog(bookletid, parameter, id) WHERE key = 'CONTROLLER';
+
+-- changeset iqb:orm-manual-coding-job-candidate-index runInTransaction:false
+-- comment: Find job candidates by unit and variable among CODING_INCOMPLETE (8) and INTENDED_INCOMPLETE (12) responses.
+CREATE INDEX CONCURRENTLY idx_response_manual_job_candidates
+  ON public.response(unitid, variableid, id)
+  WHERE status_v1 IN (8, 12);
+-- rollback DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_manual_job_candidates;
