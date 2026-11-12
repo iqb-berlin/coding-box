@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { execFileSync, spawn } from 'node:child_process';
 import { randomBytes, randomUUID } from 'node:crypto';
-import { mkdir, mkdtemp, readFile, rm, writeFile, stat } from 'node:fs/promises';
+import { mkdir, mkdtemp, open, rm, writeFile } from 'node:fs/promises';
+import { constants } from 'node:fs';
 import { join } from 'node:path';
 import { parseEnv } from 'node:util';
 import { setTimeout as delay } from 'node:timers/promises';
@@ -20,6 +21,17 @@ const docker = (args, env = {}) => execFileSync('docker', args, {
   encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env, ...env }
 }).trim();
 const port = name => docker(['port', name, '8080/tcp']).split(':').at(-1);
+
+async function readPrivateConfig(path) {
+  const file = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
+  try {
+    // Check and read the same file, even if setup atomically replaces its path.
+    assert.equal((await file.stat()).mode & 0o777, 0o600);
+    return await file.readFile('utf8');
+  } finally {
+    await file.close();
+  }
+}
 
 async function json(url, options = {}) {
   const response = await fetch(url, { ...options, signal: AbortSignal.timeout(10_000) });
@@ -75,15 +87,14 @@ try {
   await writeFile(file, `# Isolated fixture only\nOIDC_ISSUER=${issuer}\nOIDC_TOKEN_ENDPOINT=${issuer}/protocol/openid-connect/token\nKEYCLOAK_USER_SYNC_AUTO_SETUP=true\nKEYCLOAK_USER_SYNC_ENABLED=false\n`);
   await writeFile(adminFile, `ADMIN_NAME=${adminName}\nADMIN_PASSWORD=${adminPassword}\n`, { mode: 0o600 });
   await setupFromEnvFile(file, adminFile);
-  const configured = parseEnv(await readFile(file, 'utf8'));
-  assert.equal((await stat(file)).mode & 0o777, 0o600);
+  const configured = parseEnv(await readPrivateConfig(file));
   await setupFromEnvFile(file, adminFile);
-  assert.equal(parseEnv(await readFile(file, 'utf8')).KEYCLOAK_USER_SYNC_CLIENT_SECRET, configured.KEYCLOAK_USER_SYNC_CLIENT_SECRET);
+  assert.equal(parseEnv(await readPrivateConfig(file)).KEYCLOAK_USER_SYNC_CLIENT_SECRET, configured.KEYCLOAK_USER_SYNC_CLIENT_SECRET);
   await setupFromEnvFile(file, undefined, true);
   console.log('PASS: provisioning is repeatable, secrets stay stable, subsequent starts need no admin credentials.');
   {
     const dockerFile = join(directory, '.env.docker');
-    await writeFile(dockerFile, updateSyncEnv(await readFile(file, 'utf8'), {
+    await writeFile(dockerFile, updateSyncEnv(await readPrivateConfig(file), {
       OIDC_TOKEN_ENDPOINT: `http://127.0.0.1:8080/realms/${realm}/protocol/openid-connect/token`
     }), { mode: 0o600 });
     try {
@@ -94,7 +105,7 @@ try {
       console.error(String(error.stderr || 'Docker setup helper failed.'));
       throw new Error('Docker setup helper failed.');
     }
-    assert.equal(parseEnv(await readFile(dockerFile, 'utf8')).KEYCLOAK_USER_SYNC_CLIENT_SECRET, configured.KEYCLOAK_USER_SYNC_CLIENT_SECRET);
+    assert.equal(parseEnv(await readPrivateConfig(dockerFile)).KEYCLOAK_USER_SYNC_CLIENT_SECRET, configured.KEYCLOAK_USER_SYNC_CLIENT_SECRET);
     console.log('PASS: the Docker-only installation helper configures the same client without a host Node dependency.');
   }
 
@@ -107,9 +118,9 @@ try {
   const writeRole = await adminApi(`/clients/${managementClient.id}/roles/manage-users`);
   const rolePath = `/users/${account.id}/role-mappings/clients/${managementClient.id}`;
   await adminApi(rolePath, { method: 'POST', body: JSON.stringify([writeRole]) });
-  const beforeRejectedSetup = await readFile(file, 'utf8');
+  const beforeRejectedSetup = await readPrivateConfig(file);
   await assert.rejects(setupFromEnvFile(file, adminFile), /unexpected administrative roles/);
-  assert.equal(await readFile(file, 'utf8'), beforeRejectedSetup);
+  assert.equal(await readPrivateConfig(file), beforeRejectedSetup);
   await adminApi(rolePath, { method: 'DELETE', body: JSON.stringify([writeRole]) });
   console.log('PASS: setup rejects an overprivileged service account without changing the app configuration.');
 
