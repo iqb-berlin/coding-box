@@ -35,6 +35,7 @@ export class WsAccessRightsComponent {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   readonly workspaceUsers = signal(new WorkspaceUserToCheckCollection([]));
+  protected readonly saving = signal(false);
   private refreshing = false;
   private rightsRevision = 0;
 
@@ -44,7 +45,7 @@ export class WsAccessRightsComponent {
   }
 
   private refreshUneditedUsers(): void {
-    if (this.refreshing || this.workspaceUsers().hasChanged) return;
+    if (this.refreshing || this.saving() || this.workspaceUsers().hasChanged) return;
     const workspaceId = this.appService.selectedWorkspaceId;
     const revision = this.rightsRevision;
     this.refreshing = true;
@@ -77,29 +78,37 @@ export class WsAccessRightsComponent {
   }
 
   save(): void {
+    if (this.saving()) return;
     this.rightsRevision += 1;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const collection = this.workspaceUsers();
+    const checks = collection.getChecks();
+    this.saving.set(true);
     runMutationAndRefreshAuthData(
       this.appService,
-      this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers().getChecks())
-    ).pipe(takeUntilDestroyed(this.destroyRef))
+      this.userBackendService.saveUsers(workspaceId, checks)
+    ).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.saving.set(false))
+    )
       .subscribe(result => {
+        if (result.mutationSucceeded && this.workspaceUsers() === collection &&
+          this.appService.selectedWorkspaceId === workspaceId) {
+          collection.acceptSavedChecks(checks);
+        }
         if (hasCurrentAuthDataAfterMutation(result)) {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-access-right-set'),
             '',
             { duration: 3000 }
           );
-          this.workspaceUsers().setHasChangedFalse();
         } else if (result.mutationSucceeded && result.authDataRefreshOutcome === 'failed') {
           this.snackBar.open(
             this.translateService.instant('admin.change-saved-auth-data-refresh-failed'),
             this.translateService.instant('error.error_title'),
             { duration: 5000 }
           );
-          this.workspaceUsers().setHasChangedFalse();
-        } else if (result.mutationSucceeded) {
-          this.workspaceUsers().setHasChangedFalse();
-        } else {
+        } else if (!result.mutationSucceeded) {
           this.snackBar.open(
             this.translateService.instant('admin.workspace-access-right-not-set'),
             this.translateService.instant('error.error_title'),
