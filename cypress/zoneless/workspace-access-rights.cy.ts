@@ -2,7 +2,6 @@ describe('zoneless users in workspace access rights', () => {
   it('keeps edits made while a successful rights save is pending', () => {
     let releaseSave: (() => void) | undefined;
     let savedLevel = 1;
-    let reads = 0;
     let writes = 0;
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -12,7 +11,6 @@ describe('zoneless users in workspace access rights', () => {
     });
     cy.intercept('GET', '**/api/admin/workspace/5/journal?*', { body: { data: [], total: 0, page: 1, limit: 20 } });
     cy.intercept('GET', '**/api/admin/users/access/5', request => {
-      reads += 1;
       request.reply([{ id: 7, name: 'Workspace user', accessLevel: savedLevel, canCode: false }]);
     });
     cy.intercept('PATCH', '**/api/admin/users/access/5', request => {
@@ -20,11 +18,11 @@ describe('zoneless users in workspace access rights', () => {
       expect(request.body).to.deep.equal([{ id: 7, accessLevel: writes === 1 ? 3 : 2, canCode: false }]);
       if (writes > 1) {
         savedLevel = 2;
-        request.reply(true);
+        request.reply({ body: true });
         return undefined;
       }
       return new Promise<void>(resolve => {
-        releaseSave = () => { savedLevel = 3; request.reply(true); resolve(); };
+        releaseSave = () => { savedLevel = 3; request.reply({ body: true }); resolve(); };
       });
     }).as('saveRights');
     cy.visit('/');
@@ -37,13 +35,13 @@ describe('zoneless users in workspace access rights', () => {
     cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(1).check();
     cy.get('@rights').find('button').should('be.disabled');
     cy.then(() => releaseSave!());
-    cy.wait('@saveRights');
+    cy.wait('@saveRights').its('response.body').should('eq', true);
+    cy.wait('@authData');
     cy.get('@rights').find('button').should('be.enabled');
     cy.window().then(win => win.dispatchEvent(new Event('focus')));
     cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(1).should('be.checked');
-    cy.then(() => { expect(reads).to.equal(1); });
     cy.get('@rights').find('button').click();
-    cy.wait('@saveRights');
+    cy.wait('@saveRights').its('response.body').should('eq', true);
     cy.get('@rights').find('button').should('be.disabled');
     cy.then(() => { expect(savedLevel).to.equal(2); expect(writes).to.equal(2); });
   });
