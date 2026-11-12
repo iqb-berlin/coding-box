@@ -2,13 +2,14 @@ import {
   ChangeDetectionStrategy, Component, input, output
 } from '@angular/core';
 import { MatButton } from '@angular/material/button';
+import { MatIcon } from '@angular/material/icon';
 import { TranslateModule } from '@ngx-translate/core';
 import type { UserDirectoryStatus } from '../../services/user/user-directory.facade';
 
 @Component({
   selector: 'coding-box-user-directory-status',
   changeDetection: ChangeDetectionStrategy.OnPush,
-  imports: [MatButton, TranslateModule],
+  imports: [MatButton, MatIcon, TranslateModule],
   template: `
     @if (status() === 'loading') {
       <p role="status">{{ 'admin.user-directory-loading' | translate }}</p>
@@ -16,7 +17,9 @@ import type { UserDirectoryStatus } from '../../services/user/user-directory.fac
     @if (status() === 'error') {
       <div role="alert">
         <p>{{ 'admin.user-directory-error' | translate }}</p>
-        <button mat-button type="button" (click)="retry.emit()">{{ 'admin.user-directory-retry' | translate }}</button>
+        <button mat-button type="button" (click)="retry.emit()">
+          <mat-icon>refresh</mat-icon>{{ 'admin.user-directory-retry' | translate }}
+        </button>
       </div>
     }
     @if (status() === 'loaded' && empty()) {

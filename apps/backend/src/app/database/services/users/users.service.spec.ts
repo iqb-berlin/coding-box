@@ -49,6 +49,8 @@ describe('UsersService', () => {
     usersRepository = createRepo();
     workspaceUserRepository = createRepo();
     const transactionManager = {
+      connection: { options: { type: 'postgres' } },
+      query: jest.fn(),
       getRepository: jest.fn(entity => (entity === WorkspaceUser ? workspaceUserRepository : usersRepository))
     };
     usersRepository.manager.transaction.mockImplementation(callback => callback(transactionManager));
@@ -674,6 +676,20 @@ describe('UsersService', () => {
     expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new' });
   });
 
+  it.each(['createOidcProviderUser', 'syncKeycloakUser'] as const)('rechecks a concurrent first login or import under the identity lock in %s', async method => {
+    const profile = {
+      username: 'coder', identity: 'subject', issuer: 'https://issuer.example', isAdmin: false
+    };
+    const query = jest.fn();
+    usersRepository.manager.transaction.mockImplementation(callback => callback({
+      connection: { options: { type: 'postgres' } }, query, getRepository: () => usersRepository
+    }));
+    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...profile, id: 25 });
+    await expect(service[method](profile)).resolves.toBe(25);
+    expect(query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [profile.issuer, profile.identity]);
+    expect(usersRepository.save).not.toHaveBeenCalled();
+  });
+
   describe.each(['createOidcProviderUser', 'syncKeycloakUser'] as const)('%s profile names', method => {
     const profile = {
       username: 'profile-user', identity: 'subject', issuer: 'https://issuer.example', isAdmin: false
@@ -725,7 +741,9 @@ describe('UsersService', () => {
       isAdmin: false
     };
     const logger = (service as unknown as { logger: { log: jest.Mock } }).logger;
-    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({
+    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
+    if (method === 'syncKeycloakUser') usersRepository.findOne.mockResolvedValueOnce(null);
+    usersRepository.findOne.mockResolvedValueOnce({
       ...profile, id: 77, firstName: 'Old'
     });
 

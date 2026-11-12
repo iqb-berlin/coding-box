@@ -1477,7 +1477,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
       "file": {
-        "max-lines": 1242
+        "max-lines": 1240
       },
       "functions": {
         "class CodingJobBackendService#1/method mapApiCodingJob#1": {

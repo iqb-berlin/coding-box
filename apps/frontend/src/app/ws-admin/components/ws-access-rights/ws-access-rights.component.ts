@@ -9,6 +9,8 @@ import { MatButton } from '@angular/material/button';
 import { MatCheckbox } from '@angular/material/checkbox';
 import { MatIcon } from '@angular/material/icon';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { finalize } from 'rxjs';
+import { viewRefreshEvents } from '../../../shared/utils/view-refresh';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceUserToCheckCollection } from '../../models/workspace-users-to-check-collection.class';
@@ -33,14 +35,40 @@ export class WsAccessRightsComponent {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
   readonly workspaceUsers = signal(new WorkspaceUserToCheckCollection([]));
+  private refreshing = false;
+  private rightsRevision = 0;
 
   constructor() {
     this.createUserList();
+    viewRefreshEvents().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => this.refreshUneditedUsers());
+  }
+
+  private refreshUneditedUsers(): void {
+    if (this.refreshing || this.workspaceUsers().hasChanged) return;
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const revision = this.rightsRevision;
+    this.refreshing = true;
+    this.userBackendService.getUsers(workspaceId, true).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { this.refreshing = false; })
+    ).subscribe({
+      next: users => {
+        if (workspaceId === this.appService.selectedWorkspaceId && revision === this.rightsRevision &&
+          !this.workspaceUsers().hasChanged) {
+          this.workspaceUsers.set(new WorkspaceUserToCheckCollection(users));
+        }
+      },
+      error: () => { /* Retain the last successful list and any unsaved rights. */ }
+    });
   }
 
   createUserList(): void {
     this.workspaceUsers.set(new WorkspaceUserToCheckCollection([]));
-    this.userBackendService.getUsers(this.appService.selectedWorkspaceId).pipe(takeUntilDestroyed(this.destroyRef))
+    this.refreshing = true;
+    this.userBackendService.getUsers(this.appService.selectedWorkspaceId).pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => { this.refreshing = false; })
+    )
       .subscribe(users => {
         if (users.length > 0) {
           this.workspaceUsers.set(new WorkspaceUserToCheckCollection(users));
@@ -49,6 +77,7 @@ export class WsAccessRightsComponent {
   }
 
   save(): void {
+    this.rightsRevision += 1;
     runMutationAndRefreshAuthData(
       this.appService,
       this.userBackendService.saveUsers(this.appService.selectedWorkspaceId, this.workspaceUsers().getChecks())
@@ -81,6 +110,7 @@ export class WsAccessRightsComponent {
   }
 
   changeAccessLevel(checked: boolean, user: Readonly<WorkspaceUserChecked>, level: number): void {
+    this.rightsRevision += 1;
     this.workspaceUsers().updateEntry(user.id, current => (checked ? {
       ...current, accessLevel: level, isChecked: true
     } : {
@@ -89,6 +119,7 @@ export class WsAccessRightsComponent {
   }
 
   changeCanCode(checked: boolean, user: Readonly<WorkspaceUserChecked>): void {
+    this.rightsRevision += 1;
     this.workspaceUsers().updateEntry(user.id, current => ({
       ...current,
       isChecked: checked || current.isChecked,

@@ -209,6 +209,16 @@
         }
       }
     },
+    "verify-keycloak-user-sync-live": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/qa/verify-keycloak-user-sync-live.mjs" }
+    },
+    "test-keycloak-user-sync-setup": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node --test scripts/keycloak/setup-user-sync.test.mjs" }
+    },
     "test-jest": {
       "executor": "@nx/jest:jest",
       "cache": false,

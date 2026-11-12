@@ -1,5 +1,5 @@
 import {
-  Injectable, Logger, BadRequestException, ForbiddenException, NotFoundException
+  Injectable, Logger, BadRequestException, ConflictException, ForbiddenException, NotFoundException
 } from '@nestjs/common';
 import {
   EntityManager, In, MoreThan, Repository
@@ -497,62 +497,28 @@ export class UsersService {
   }
 
   async createOidcProviderUser(oidcPdUser: CreateUserDto): Promise<number> {
-    const {
-      username, identity, issuer, isAdmin
-    } = oidcPdUser;
-    const existingUser = await this.usersRepository.findOne({
-      where: [
-        { identity, issuer },
-        { username }
-      ],
-      select: {
-        id: true, username: true, identity: true, issuer: true, isAdmin: true, firstName: true, lastName: true
-      }
-    });
-
-    if (existingUser) {
-      const updatedFields: Partial<User> = {};
-      const profileNames = this.getProfileNames(oidcPdUser);
-      if (profileNames.firstName !== undefined && existingUser.firstName !== profileNames.firstName) {
-        updatedFields.firstName = profileNames.firstName;
-      }
-      if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
-        updatedFields.lastName = profileNames.lastName;
-      }
-      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
-      if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
-      if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
-      if (username && existingUser.username !== username) updatedFields.username = username;
-      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
-
-      if (Object.keys(updatedFields).length > 0) {
-        await this.usersRepository.update({ id: existingUser.id }, updatedFields);
-        this.logger.log({ event: 'user.oidc.updated', userId: existingUser.id });
-      }
-
-      return existingUser.id;
-    }
-    const newUser = this.usersRepository.create({
-      username, identity, issuer, isAdmin, ...this.getProfileNames(oidcPdUser)
-    });
-    await this.usersRepository.save(newUser);
-
-    this.logger.log({ event: 'user.oidc.created', userId: newUser.id });
-
-    return newUser.id;
+    return this.provisionProviderUser(oidcPdUser, 'oidc');
   }
 
-  async syncKeycloakUser(keycloakUser: CreateUserDto): Promise<number> {
-    const {
-      username, identity, issuer, isAdmin = false
-    } = keycloakUser;
-
+  async syncKeycloakUser(keycloakUser: CreateUserDto, manager?: EntityManager): Promise<number> {
+    const { username, identity, issuer } = keycloakUser;
     if (!username || !identity || !issuer) {
       throw new BadRequestException('Keycloak user requires username, identity and issuer.');
     }
+    return this.provisionProviderUser(keycloakUser, 'keycloak', manager?.getRepository(User));
+  }
 
-    const existingUser = await this.usersRepository.findOne({
-      where: [
+  private async provisionProviderUser(
+    user: CreateUserDto,
+    source: 'oidc' | 'keycloak',
+    repository = this.usersRepository,
+    locked = false
+  ): Promise<number> {
+    const {
+      username, identity, issuer, isAdmin = false
+    } = user;
+    const existingUser = await repository.findOne({
+      where: source === 'keycloak' ? { identity, issuer } : [
         { identity, issuer },
         { username }
       ],
@@ -561,40 +527,61 @@ export class UsersService {
       }
     });
 
-    if (existingUser) {
-      const updatedFields: Partial<User> = {};
-      const profileNames = this.getProfileNames(keycloakUser);
-      if (profileNames.firstName !== undefined && existingUser.firstName !== profileNames.firstName) {
-        updatedFields.firstName = profileNames.firstName;
-      }
-      if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
-        updatedFields.lastName = profileNames.lastName;
-      }
-      const nextIsAdmin = existingUser.isAdmin || !!isAdmin;
-      if (identity && existingUser.identity !== identity) updatedFields.identity = identity;
-      if (issuer && existingUser.issuer !== issuer) updatedFields.issuer = issuer;
-      if (username && existingUser.username !== username) updatedFields.username = username;
-      if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
+    if (!existingUser && !locked) {
+      return repository.manager.transaction(async manager => {
+        // Import and first login must serialize creation of the same identity.
+        if (manager.connection.options.type === 'postgres') {
+          await manager.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [issuer, identity]);
+        }
+        return this.provisionProviderUser(user, source, manager.getRepository(User), true);
+      });
+    }
 
+    if (source === 'keycloak' && (!existingUser || existingUser.username !== username)) {
+      const sameName = await repository.findOne({ where: { username } });
+      if (sameName && sameName.id !== existingUser?.id) {
+        throw new ConflictException('Keycloak directory username is already bound to another identity');
+      }
+    }
+
+    if (existingUser) {
+      const updatedFields = this.getProviderUserUpdates(existingUser, user);
       if (Object.keys(updatedFields).length > 0) {
-        await this.usersRepository.update({ id: existingUser.id }, updatedFields);
-        this.logger.log({ event: 'user.keycloak.updated', userId: existingUser.id });
+        await repository.update({ id: existingUser.id }, updatedFields);
+        this.logger.log({ event: `user.${source}.updated`, userId: existingUser.id });
       }
 
       return existingUser.id;
     }
-    const newUser = this.usersRepository.create({
+    const newUser = repository.create({
       username,
       identity,
       issuer,
       isAdmin: !!isAdmin,
-      ...this.getProfileNames(keycloakUser)
+      ...this.getProfileNames(user)
     });
-    await this.usersRepository.save(newUser);
+    await repository.save(newUser);
 
-    this.logger.log({ event: 'user.keycloak.created', userId: newUser.id });
+    this.logger.log({ event: `user.${source}.created`, userId: newUser.id });
 
     return newUser.id;
+  }
+
+  private getProviderUserUpdates(existingUser: User, user: CreateUserDto): Partial<User> {
+    const updatedFields: Partial<User> = {};
+    const profileNames = this.getProfileNames(user);
+    if (profileNames.firstName !== undefined && existingUser.firstName !== profileNames.firstName) {
+      updatedFields.firstName = profileNames.firstName;
+    }
+    if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
+      updatedFields.lastName = profileNames.lastName;
+    }
+    if (user.identity && existingUser.identity !== user.identity) updatedFields.identity = user.identity;
+    if (user.issuer && existingUser.issuer !== user.issuer) updatedFields.issuer = user.issuer;
+    if (user.username && existingUser.username !== user.username) updatedFields.username = user.username;
+    const nextIsAdmin = existingUser.isAdmin || !!user.isAdmin;
+    if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;
+    return updatedFields;
   }
 
   private getProfileNames(user: CreateUserDto): Pick<User, 'firstName' | 'lastName'> {

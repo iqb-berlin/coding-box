@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -71,6 +71,29 @@ describe('WsAccessRightsComponent', () => {
     expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
     expect(component.workspaceUsers().entries.length).toBe(2);
     expect(component.workspaceUsers().entries[0].name).toBe('user1');
+  });
+
+  it('does not overwrite rights edited while a background refresh was pending', () => {
+    const response = new Subject<typeof mockUsers>();
+    (mockUserBackendService.getUsers as jest.Mock).mockReturnValue(response);
+    window.dispatchEvent(new Event('focus'));
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    response.next(mockUsers);
+    response.complete();
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
+  });
+
+  it('does not restore stale rights when an older refresh returns after saving', () => {
+    const response = new Subject<typeof mockUsers>();
+    (mockUserBackendService.getUsers as jest.Mock).mockReturnValue(response);
+    window.dispatchEvent(new Event('focus'));
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    component.save();
+    expect(component.workspaceUsers().hasChanged).toBe(false);
+    response.next(mockUsers);
+    response.complete();
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
   });
 
   it('should change access level correctly', () => {

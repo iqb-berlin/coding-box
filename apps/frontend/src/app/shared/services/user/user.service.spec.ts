@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { UserService } from './user.service';
 import { SERVER_URL } from '../../../injection-tokens';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../../core/interceptors/http-error-context';
 
 describe('UserService', () => {
   let service: UserService;
@@ -40,6 +41,13 @@ describe('UserService', () => {
   });
 
   describe('getUsers', () => {
+    it('keeps automatic routing checks silent', () => {
+      service.getUsers(1, true).subscribe();
+      const request = httpMock.expectOne(`${mockServerUrl}admin/users/access/1`);
+      expect(request.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      request.flush([]);
+    });
+
     it('should fetch users for workspace', () => {
       const mockUsers = [{ id: 1, name: 'User 1' }];
       service.getUsers(1).subscribe(res => {

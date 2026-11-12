@@ -69,6 +69,11 @@ describe('startup environment validation', () => {
     expect(() => validateEnvironment({ ...api, APP_ROLE: 'export-worker ' })).toThrow('APP_ROLE');
   });
 
+  it('validates the directory credentials before starting an enabled Keycloak sync', () => {
+    expect(() => validateEnvironment({ ...api, KEYCLOAK_USER_SYNC_ENABLED: 'true' }))
+      .toThrow('KEYCLOAK_USER_SYNC_USERS_URL');
+  });
+
   it('requires explicit OIDC endpoints even when legacy Keycloak settings are present', () => {
     const config = {
       ...api, KEYCLOAK_URL: 'https://login.example', KEYCLOAK_REALM: 'coding', KEYCLOAK_CLIENT_ID: 'coding'

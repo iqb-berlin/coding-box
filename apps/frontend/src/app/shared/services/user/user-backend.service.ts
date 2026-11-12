@@ -11,8 +11,10 @@ import type { TestcenterInstanceDto } from '../../../../../../../api-dto/testcen
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import { SERVER_URL } from '../../../injection-tokens';
+import {
+  suppressGlobalAndForbiddenHttpErrorContext, suppressGlobalHttpErrorContext
+} from '../../../core/interceptors/http-error-context';
 import { ServerResponse } from '../../../core/services/authentication.service';
-import { suppressGlobalAndForbiddenHttpErrorContext } from '../../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -25,9 +27,11 @@ export class UserBackendService {
     return this.http.get<TestcenterInstanceDto[]>(`${this.serverUrl}testcenter/instances`);
   }
 
-  getUsers(workspaceId: number): Observable<UserInListDto[]> {
+  getUsers(workspaceId: number, background = false): Observable<UserInListDto[]> {
     return this.http
-      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {});
+      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {
+        context: background ? suppressGlobalHttpErrorContext() : undefined
+      });
   }
 
   saveUsers(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Observable<boolean> {
@@ -38,16 +42,18 @@ export class UserBackendService {
       .pipe(catchError(() => of(false)));
   }
 
-  getUsersFull(): Observable<UserFullDto[]> {
+  getUsersFull(background = false): Observable<UserFullDto[]> {
     return this.http
       .get<UserFullDto[]>(
         `${this.serverUrl}admin/users/full`,
-        {});
+        { context: background ? suppressGlobalHttpErrorContext() : undefined });
   }
 
-  getUsersForWorkspaceSelection(workspaceId: number): Observable<UserFullDto[]> {
+  getUsersForWorkspaceSelection(workspaceId: number, background = false): Observable<UserFullDto[]> {
     return this.http
-      .get<UserFullDto[]>(`${this.serverUrl}admin/users/directory/${workspaceId}`);
+      .get<UserFullDto[]>(`${this.serverUrl}admin/users/directory/${workspaceId}`, {
+        context: background ? suppressGlobalHttpErrorContext() : undefined
+      });
   }
 
   addUser(newUser: RequestBody<'CreateUserDto'>): Observable<boolean> {

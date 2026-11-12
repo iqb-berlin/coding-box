@@ -31,6 +31,7 @@ import {
   getCurrentUserWorkspaceAccesses,
   hasOnlyPersonalCodingAccess
 } from '../../shared/utils/workspace-access';
+import { viewRefreshEvents } from '../../shared/utils/view-refresh';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -71,12 +72,16 @@ export class HomeComponent implements OnInit {
 
   ngOnInit(): void {
     this.router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(event => {
-      if (event instanceof NavigationStart) this.navigationStarted = true;
+      if (event instanceof NavigationStart && event.url.split('?')[0] !== '/home') this.navigationStarted = true;
     });
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((authData: AuthDataDto) => {
       if (authData) {
         this.authData.set(authData);
         this.workspaces.set(authData.workspaces);
+        if (this.authDataRefreshRequested && !this.navigationStarted &&
+          !this.isPersonalCodingJobsRedirectChecked && authData.userId > 0 && !authData.isAdmin) {
+          this.redirectPureCoderToPersonalCodingJobs(authData.userId);
+        }
         if (authData.userId > 0) {
           this.resolveAuthDataFailedQueryParam();
         }
@@ -106,6 +111,9 @@ export class HomeComponent implements OnInit {
         this.resetAuthDataFailedQueryParamState();
       }
     });
+    viewRefreshEvents().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      if (!this.navigationStarted) this.refreshHomeAuthData();
+    });
   }
 
   private refreshHomeAuthData(): void {
@@ -119,17 +127,20 @@ export class HomeComponent implements OnInit {
   }
 
   private redirectPureCoderToPersonalCodingJobs(userId: number): void {
-    this.isPersonalCodingJobsRedirectChecked = true;
-
     if (!this.workspaces() || this.workspaces().length === 0) {
       return;
     }
+    this.isPersonalCodingJobsRedirectChecked = true;
 
     const workspaceIds = this.workspaces().map(workspace => workspace.id);
-    const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId));
+    const observables = workspaceIds.map(workspaceId => this.userService.getUsers(workspaceId, true));
 
     forkJoin(observables).pipe(catchError(() => of(null)), takeUntilDestroyed(this.destroyRef)).subscribe(responses => {
-      if (this.navigationStarted || !responses) {
+      if (!responses || workspaceIds.join(',') !== this.workspaces().map(workspace => workspace.id).join(',')) {
+        this.isPersonalCodingJobsRedirectChecked = false;
+        return;
+      }
+      if (this.navigationStarted || this.authData().userId !== userId || this.authData().isAdmin) {
         return;
       }
 

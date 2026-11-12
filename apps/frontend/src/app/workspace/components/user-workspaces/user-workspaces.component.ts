@@ -7,6 +7,7 @@ import { RouterLink } from '@angular/router';
 import { MatAnchor, MatButton } from '@angular/material/button';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
+import { Observable } from 'rxjs';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppService, AuthBootstrapStatus } from '../../../core/services/app.service';
@@ -66,7 +67,9 @@ export class UserWorkspacesComponent {
     }
 
     this.authDataReloadRunning.set(true);
-    this.appService.retryAuthDataLoad()
+    const request: Observable<unknown> = this.authDataLoaded() ?
+      this.appService.refreshAuthData() : this.appService.retryAuthDataLoad();
+    request
       .pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
         error: () => {

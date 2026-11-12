@@ -317,6 +317,27 @@ describe('HomeComponent', () => {
     expect(component.workspaces()).toEqual([{ id: 12, name: 'Current' }]);
   });
 
+  it('routes a waiting coder when the newly assigned workspace arrives later', async () => {
+    authDataSubject.next({ ...defaultAuthData, userId: 7 });
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
+    createComponent();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+    authDataSubject.next({ ...defaultAuthData, userId: 7, workspaces: [{ id: 11 } as WorkspaceFullDto] });
+    await fixture.whenStable();
+    expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
+  });
+
+  it('retries routing automatically after a temporary workspace-access failure', async () => {
+    authDataSubject.next({ ...defaultAuthData, userId: 7, workspaces: [{ id: 11 } as WorkspaceFullDto] });
+    getUsers.mockReturnValue(throwError(() => new Error('offline')));
+    createComponent();
+    expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
+    getUsers.mockReturnValue(of([{ id: 7, accessLevel: 1, canCode: true }]));
+    window.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
+  });
+
   it('should retry a failed background refresh on the next home visit', () => {
     mockAppService.refreshAuthData.mockReturnValueOnce(of('failed'));
 
@@ -339,7 +360,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
     expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
   });
 
@@ -390,7 +411,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
@@ -436,7 +457,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
     if (shouldRouteToCoding) {
       expect(routerNavigate).toHaveBeenCalledWith(['/coding']);
     } else {
@@ -460,8 +481,8 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
-    expect(getUsers).toHaveBeenCalledWith(12);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
+    expect(getUsers).toHaveBeenCalledWith(12, true);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
@@ -481,8 +502,8 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
-    expect(getUsers).toHaveBeenCalledWith(12);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
+    expect(getUsers).toHaveBeenCalledWith(12, true);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 
@@ -497,7 +518,7 @@ describe('HomeComponent', () => {
     createComponent();
     await fixture.whenStable();
 
-    expect(getUsers).toHaveBeenCalledWith(11);
+    expect(getUsers).toHaveBeenCalledWith(11, true);
     expect(routerNavigate).not.toHaveBeenCalledWith(['/coding']);
   });
 

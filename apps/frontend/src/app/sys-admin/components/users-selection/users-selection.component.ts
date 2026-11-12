@@ -43,14 +43,22 @@ import { SearchFilterComponent } from '../../../shared/search-filter/search-filt
 export class UsersSelectionComponent implements OnInit, OnChanges {
   private readonly directory = inject(UserDirectoryFacade);
   protected readonly usersStatus = this.directory.status;
+  private directoryLoaded = false;
   private readonly synchronizeUsers = effect(() => {
     const users = this.directory.users();
     const loaded = this.directory.status() === 'loaded';
     untracked(() => {
+      let selectedIds = this.tableSelectionCheckboxes.selected.map(user => user.id);
+      if (!this.directoryLoaded) selectedIds = loaded ? this.selectedUserIds() : [];
+      const rowIds = this.tableSelectionRow.selected.map(user => user.id);
       this.setObjectsDatasource(users);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
-      if (loaded) this.setCheckboxes();
+      if (loaded) {
+        this.tableSelectionCheckboxes.select(...users.filter(user => selectedIds.includes(user.id)));
+        this.tableSelectionRow.select(...users.filter(user => rowIds.includes(user.id)));
+      }
+      this.directoryLoaded = loaded;
     });
   });
 
@@ -89,6 +97,7 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
   }
 
   private setObjectsDatasource(users: UserFullDto[]): void {
+    const previousFilter = this.userObjectsDatasource.filter;
     this.datasourceState.set(new MatTableDataSource(users));
     this.userObjectsDatasource
       .filterPredicate = (userList: UserFullDto, filter) => [
@@ -96,11 +105,12 @@ export class UsersSelectionComponent implements OnInit, OnChanges {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
+    this.userObjectsDatasource.filter = previousFilter;
     this.userObjectsDatasource.sort = this.sort() ?? null;
   }
 
   updateUserList(): void {
-    this.directory.load(() => this.userBackendService.getUsersFull());
+    this.directory.load(background => this.userBackendService.getUsersFull(background));
   }
 
   createWorkspaceList(): void {
