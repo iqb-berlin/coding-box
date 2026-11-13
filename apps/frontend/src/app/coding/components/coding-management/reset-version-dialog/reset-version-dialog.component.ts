@@ -1,9 +1,15 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import {
+  Component, ChangeDetectionStrategy, computed, inject, signal
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
 
 import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatRadioModule } from '@angular/material/radio';
 import { TranslateModule } from '@ngx-translate/core';
 
 export interface ResetVersionDialogData {
@@ -11,6 +17,11 @@ export interface ResetVersionDialogData {
   versionLabel: string;
   affectedCount?: number;
   cascadeVersions?: string[];
+}
+
+export interface ResetVersionDialogResult {
+  unitFilters: string[];
+  variableFilters: string[];
 }
 
 @Component({
@@ -22,6 +33,10 @@ export interface ResetVersionDialogData {
     MatButtonModule,
     MatIconModule,
     MatDividerModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatRadioModule,
     TranslateModule
   ],
   template: `
@@ -42,6 +57,38 @@ export interface ResetVersionDialogData {
           <p class="version-label">{{ 'coding-management.reset-dialog.version-to-reset' | translate }}</p>
           <p class="version-value">{{ versionLabel | translate }}</p>
         </div>
+
+        <mat-radio-group
+          [ngModel]="scope()"
+          (ngModelChange)="scope.set($event)"
+          [attr.aria-label]="'coding-management.reset-dialog.scope-label' | translate"
+          class="scope-selection"
+        >
+          <mat-radio-button value="global">
+            {{ 'coding-management.reset-dialog.scope-global' | translate }}
+          </mat-radio-button>
+          <mat-radio-button value="filtered">
+            {{ 'coding-management.reset-dialog.scope-filtered' | translate }}
+          </mat-radio-button>
+        </mat-radio-group>
+
+        @if (scope() === 'filtered') {
+          <div class="filter-fields">
+            <p>{{ 'coding-management.reset-dialog.filter-help' | translate }}</p>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'coding-management.reset-dialog.units-label' | translate }}</mat-label>
+              <textarea matInput rows="2" data-cy="reset-unit-filters"
+                [ngModel]="unitInput()" (ngModelChange)="unitInput.set($event)"
+                [placeholder]="'coding-management.reset-dialog.units-placeholder' | translate"></textarea>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'coding-management.reset-dialog.variables-label' | translate }}</mat-label>
+              <textarea matInput rows="2" data-cy="reset-variable-filters"
+                [ngModel]="variableInput()" (ngModelChange)="variableInput.set($event)"></textarea>
+            </mat-form-field>
+            <p>{{ 'coding-management.reset-dialog.filter-combination' | translate }}</p>
+          </div>
+        }
 
         <div class="result-impact-info">
           <p class="info-heading">
@@ -96,24 +143,58 @@ export interface ResetVersionDialogData {
 
       <mat-divider></mat-divider>
 
-      <div class="dialog-actions">
-        <button
-          mat-raised-button
-          (click)="onCancel()"
-          class="cancel-button"
-        >
-          <mat-icon>cancel</mat-icon>
-          {{ 'coding-management.reset-dialog.cancel-button' | translate }}
-        </button>
-        <button
-          mat-raised-button
-          color="warn"
-          (click)="onConfirm()"
-          class="confirm-button"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ 'coding-management.reset-dialog.confirm-button' | translate }}
-        </button>
+      <div class="confirmation-footer">
+        <div class="scope-summary" aria-live="polite">
+          @if (scope() === 'global') {
+            <strong>{{ 'coding-management.reset-dialog.confirmation-global' | translate }}</strong>
+          } @else if (canConfirm()) {
+            <strong>{{ 'coding-management.reset-dialog.confirmation-filtered' | translate }}</strong>
+            @let unitsText = 'coding-management.reset-dialog.summary-units' | translate: {
+              units: unitFilters().length ? unitFilters().join(', ') : ('coding-management.reset-dialog.all-units' | translate)
+            };
+            @let variablesText = 'coding-management.reset-dialog.summary-variables' | translate: {
+              variables: variableFilters().length ? variableFilters().join(', ') : ('coding-management.reset-dialog.all-variables' | translate)
+            };
+            <p class="scope-filter-line" [attr.title]="unitsText">{{ unitsText }}</p>
+            <p class="scope-filter-line" [attr.title]="variablesText">{{ variablesText }}</p>
+          } @else {
+            <strong>{{ 'coding-management.reset-dialog.filter-required' | translate }}</strong>
+          }
+          <p class="confirmation-cascade">
+            @if (cascadeVersions.length) {
+              {{ 'coding-management.reset-dialog.confirmation-cascade' | translate: {
+                version: data.version, versions: cascadeVersions.join(', ')
+              } }}
+            } @else {
+              {{ 'coding-management.reset-dialog.confirmation-no-cascade' | translate: { version: data.version } }}
+            }
+          </p>
+        </div>
+
+        <div class="dialog-actions">
+          <button
+            mat-raised-button
+            (click)="onCancel()"
+            class="cancel-button"
+          >
+            <mat-icon>cancel</mat-icon>
+            {{ 'coding-management.reset-dialog.cancel-button' | translate }}
+          </button>
+          <button
+            mat-raised-button
+            color="warn"
+            (click)="onConfirm()"
+            [disabled]="!canConfirm()"
+            class="confirm-button"
+          >
+            <mat-icon>restart_alt</mat-icon>
+            @if (scope() === 'global') {
+              {{ 'coding-management.reset-dialog.confirm-global' | translate }}
+            } @else {
+              {{ 'coding-management.reset-dialog.confirm-filtered' | translate }}
+            }
+          </button>
+        </div>
       </div>
     </div>
   `,
@@ -122,11 +203,14 @@ export interface ResetVersionDialogData {
       display: flex;
       flex-direction: column;
       gap: 0;
-      min-width: 450px;
+      min-width: 0;
+      max-height: 90vh;
+      overflow: hidden;
     }
 
     .dialog-header {
       display: flex;
+      flex-shrink: 0;
       align-items: center;
       gap: 12px;
       padding: 24px 24px 16px 24px;
@@ -148,10 +232,19 @@ export interface ResetVersionDialogData {
     }
 
     .dialog-content {
+      overflow-y: auto;
+      min-height: 0;
       padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 16px;
+
+      .scope-selection,
+      .filter-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
 
       .warning-text {
         margin: 0;
@@ -302,10 +395,43 @@ export interface ResetVersionDialogData {
       }
     }
 
+    .confirmation-footer {
+      flex-shrink: 0;
+      padding: 12px 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .scope-summary {
+      padding: 8px 12px;
+      border: 2px solid #ff9800;
+      border-radius: 4px;
+      background-color: #fff8e1;
+      color: #5d4037;
+      font-size: 13px;
+      line-height: 1.4;
+
+      p {
+        margin: 4px 0 0;
+      }
+
+      .scope-filter-line {
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+
+      .confirmation-cascade {
+        font-weight: 600;
+      }
+    }
+
     .dialog-actions {
       display: flex;
+      flex-wrap: wrap;
+      flex-shrink: 0;
       gap: 12px;
-      padding: 16px 24px;
       justify-content: flex-end;
 
       button {
@@ -331,9 +457,11 @@ export interface ResetVersionDialogData {
       }
 
       .confirm-button {
-        background-color: #d32f2f;
+        &:not(:disabled) {
+          background-color: #d32f2f;
+        }
 
-        &:hover {
+        &:hover:not(:disabled) {
           background-color: #b71c1c;
         }
       }
@@ -341,13 +469,20 @@ export interface ResetVersionDialogData {
   `]
 })
 export class ResetVersionDialogComponent {
-  dialogRef = inject<MatDialogRef<ResetVersionDialogComponent>>(MatDialogRef);
+  dialogRef = inject<MatDialogRef<ResetVersionDialogComponent, ResetVersionDialogResult>>(MatDialogRef);
   data = inject<ResetVersionDialogData>(MAT_DIALOG_DATA);
 
   protected versionLabel: string;
   protected cascadeVersions: string[] = [];
   protected resetVersions: string[] = [];
   resultImpactKey: string;
+  protected readonly scope = signal<'global' | 'filtered'>('global');
+  protected readonly unitInput = signal('');
+  protected readonly variableInput = signal('');
+  protected readonly unitFilters = computed(() => this.parseFilters(this.unitInput()));
+  protected readonly variableFilters = computed(() => this.parseFilters(this.variableInput()));
+  protected readonly canConfirm = computed(() => this.scope() === 'global' ||
+    this.unitFilters().length > 0 || this.variableFilters().length > 0);
 
   constructor() {
     const data = this.data;
@@ -359,10 +494,18 @@ export class ResetVersionDialogComponent {
   }
 
   protected onCancel(): void {
-    this.dialogRef.close(false);
+    this.dialogRef.close();
   }
 
   onConfirm(): void {
-    this.dialogRef.close(true);
+    if (!this.canConfirm()) return;
+    this.dialogRef.close({
+      unitFilters: this.scope() === 'filtered' ? this.unitFilters() : [],
+      variableFilters: this.scope() === 'filtered' ? this.variableFilters() : []
+    });
+  }
+
+  private parseFilters(value: string): string[] {
+    return [...new Set(value.split(/[,;\r\n]+/).map(filter => filter.trim()).filter(Boolean))];
   }
 }

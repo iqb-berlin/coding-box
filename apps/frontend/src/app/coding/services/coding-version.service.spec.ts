@@ -51,4 +51,17 @@ describe('CodingVersionService', () => {
     });
     req.flush(mockRes);
   });
+
+  it.each([
+    { unitFilters: undefined, variableFilters: undefined },
+    { unitFilters: ['DHB003'], variableFilters: undefined },
+    { unitFilters: undefined, variableFilters: ['V1'] }
+  ])('sends the selected reset filters %j', ({ unitFilters, variableFilters }) => {
+    service.resetCodingVersion(1, 'v1', unitFilters, variableFilters).subscribe();
+
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/reset-version`);
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ version: 'v1', unitFilters: unitFilters ?? [], variableFilters: variableFilters ?? [] });
+    req.flush({ jobId: 'reset-1', message: 'Started' });
+  });
 });

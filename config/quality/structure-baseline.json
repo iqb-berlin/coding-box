@@ -1452,7 +1452,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-management/coding-management.component.ts": {
       "file": {
-        "max-lines": 1416
+        "max-lines": 1414
       },
       "functions": {
         "class CodingManagementComponent#1/method fetchResponsesByStatus#1/function next#1/anonymous:9e93dd2ca83edb03#1": {

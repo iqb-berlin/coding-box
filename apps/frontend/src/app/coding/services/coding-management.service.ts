@@ -449,11 +449,11 @@ export class CodingManagementService {
     });
   }
 
-  resetCodingVersion(version: StatisticsVersion): void {
+  resetCodingVersion(version: StatisticsVersion, unitFilters?: string[], variableFilters?: string[]): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
 
-    this.versionService.resetCodingVersion(workspaceId, version).subscribe({
+    this.versionService.resetCodingVersion(workspaceId, version, unitFilters, variableFilters).subscribe({
       next: ({ jobId }) => {
         this.codingBackgroundJobsService.setJobRunning(
           workspaceId,
