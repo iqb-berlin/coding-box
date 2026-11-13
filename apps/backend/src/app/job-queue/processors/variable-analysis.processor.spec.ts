@@ -1602,12 +1602,90 @@ describe('VariableAnalysisProcessor', () => {
     ]);
   });
 
-  it('keeps a rare selected Boolean position separate from the empty row when its metadata value is blank', async () => {
-    const blankMetadataValue = '   ';
+  it.each(['', '   '])('keeps an unselected Boolean option with metadata value %j alongside the empty row', async value => {
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI',
+          type: 'boolean',
+          multiple: true,
+          hasCodingScheme: false,
+          values: [{ value, label: 'Option A' }, { value: '1', label: 'Option B' }]
+        }]
+      }],
+      queryResults: [[], [], ['[false,false]', '[false,true]'].map((response, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value: response, status: 3
+      }))]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    const [[, rows]] = findCacheSetPayload<Array<[string, VariableFrequencyDto[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows.filter(row => row.isEmptyValue)).toEqual([
+      expect.objectContaining({ value: '', count: 1, validOccurrenceCount: 0 })
+    ]);
+    expect(rows).toContainEqual(expect.objectContaining({
+      value: '1', position: 1, label: 'Option A', count: 0, isEmptyValue: false, isSchemaOnly: true, isSchemaSupplemental: true
+    }));
+    expect(rows).toContainEqual(expect.objectContaining({ value: '1', label: 'Option B', count: 1 }));
+    expect(new Set(rows.map(row => row.position ?? row.value)).size).toBe(3);
+  });
+
+  it.each(['', '   ', undefined])('counts a Boolean position with metadata value %j separately from literal "1" and empty answers', async value => {
+    const values = value === undefined ? undefined : [{ value, label: 'Option A' }];
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI',
+          type: 'boolean',
+          multiple: true,
+          hasCodingScheme: false,
+          values,
+          valuePositionLabels: ['Option A']
+        }]
+      }],
+      queryResults: [[], [], ['[true]', '["1"]', '[]'].map((response, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value: response, status: 3
+      }))]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 3, validCount: 2, emptyCount: 1, distinctValueCount: 3
+      })
+    ]);
+    const [[, rows]] = findCacheSetPayload<Array<[string, VariableFrequencyDto[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(rows).toHaveLength(3);
+    expect(rows).toEqual(expect.arrayContaining([
+      expect.objectContaining({
+        value: '1', position: 1, label: 'Option A', count: 1, validOccurrenceCount: 1, percentageValid: 50, isEmptyValue: false
+      }),
+      expect.objectContaining({
+        value: '1', position: undefined, label: undefined, count: 1, validOccurrenceCount: 1, percentageValid: 50, isEmptyValue: false
+      }),
+      expect.objectContaining({
+        value: '', label: undefined, count: 1, validOccurrenceCount: 0, percentageValid: 0, isEmptyValue: true
+      })
+    ]));
+  });
+
+  it('keeps a rare selected Boolean position separate from literal "1" and the empty row', async () => {
     const otherPositionsSelected = [false, ...Array<boolean>(20).fill(true)];
     const responses = [
       [true, ...Array<boolean>(20).fill(false)],
       Array<boolean>(21).fill(false),
+      ['1'],
       otherPositionsSelected,
       otherPositionsSelected
     ];
@@ -1620,7 +1698,7 @@ describe('VariableAnalysisProcessor', () => {
           type: 'boolean',
           multiple: true,
           hasCodingScheme: false,
-          values: [{ value: blankMetadataValue, label: 'Option A' }]
+          values: [{ value: '   ', label: 'Option A' }]
         }]
       }],
       queryResults: [[], [], responses.map((response, index) => ({
@@ -1641,13 +1719,45 @@ describe('VariableAnalysisProcessor', () => {
       expect.objectContaining({ value: '', count: 1, validOccurrenceCount: 0 })
     ]);
     expect(rows).toContainEqual(expect.objectContaining({
-      value: blankMetadataValue,
+      value: '1',
+      position: 1,
       label: 'Option A',
       isEmptyValue: false,
       isSchemaSupplemental: true,
       count: 1,
       validOccurrenceCount: 1
     }));
+  });
+
+  it.each([
+    { first: '[true]', second: '["1"]' },
+    { first: '["1"]', second: '[true]' }
+  ])('keeps the same twentieth category when $first precedes $second', async ({ first, second }) => {
+    const frequentPositions = JSON.stringify([false, ...Array<boolean>(19).fill(true)]);
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', type: 'boolean', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [[], [], [frequentPositions, frequentPositions, first, second, '[]'].map((value, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+      }))]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    const [[, rows]] = findCacheSetPayload<Array<[string, VariableFrequencyDto[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(rows).toHaveLength(21);
+    expect(rows.filter(row => row.count === 2)).toHaveLength(19);
+    expect(rows.filter(row => row.value === '1')).toEqual([
+      expect.objectContaining({ position: 1, count: 1 })
+    ]);
+    expect(rows).toContainEqual(expect.objectContaining({ value: '', count: 1, isEmptyValue: true }));
   });
 
   it('paginates multiple response rows across batches', async () => {

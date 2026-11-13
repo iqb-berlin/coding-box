@@ -4,7 +4,14 @@ import { createHash } from 'crypto';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
-import { getTopMultipleResponseCounts, shouldSkipSchemaFrequency } from './variable-analysis-frequency.util';
+import {
+  FrequencyCounts,
+  getSchemaFrequencyCounts,
+  getTopMultipleResponseCounts,
+  MultipleResponseCategoryKey,
+  MultipleResponseObservedCounts,
+  shouldSkipSchemaFrequency
+} from './variable-analysis-frequency.util';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -26,11 +33,11 @@ import { VariableDetailDto } from '../../models/unit-variable-details.dto';
 import { VariableAnalysisOptions } from '../../../../../../api-dto/coding/variable-analysis-options';
 import { isEmptyVariableAnalysisValue, isValidVariableAnalysisRawValue } from '../../../../../../api-dto/coding/variable-analysis-rules';
 import { resolveSchemaValue, SchemaValueDefinition } from './variable-analysis-schema.util';
-import { enrichSchemaValueDefinition, getVariableAnalysisMetadata, VariableAnalysisMetadata } from './variable-analysis-metadata.util';
+import {
+  enrichSchemaValueDefinition, getVariableAnalysisMetadata, VariableAnalysisCategoryDefinition, VariableAnalysisMetadata
+} from './variable-analysis-metadata.util';
 import { formatAssignedCodeKey } from './variable-analysis-code.util';
 import { getEmptyVariableAnalysisValueSql, getVariableAnalysisColumns } from './variable-analysis-query.util';
-
-type SchemaCodeInfo = SchemaValueDefinition;
 
 interface SchemaValueCountRow {
   unitName: string;
@@ -80,6 +87,7 @@ interface VariableAnalysisScopeOptions extends VariableAnalysisOptions {
 
 interface ParsedMultipleCategory {
   value: string;
+  position?: number;
   label?: string;
   score?: number;
   schemaOrder?: number;
@@ -89,20 +97,9 @@ interface MultipleResponseSummary {
   totalCount: number;
   validCount: number;
   emptyCount: number;
-  counts: Map<string, number>;
-  validCounts: Map<string, number>;
-  categories: Map<string, ParsedMultipleCategory>;
-}
-
-interface FrequencyCounts {
-  count: number;
-  validCount: number;
-  nullCount: number;
-}
-
-interface MultipleResponseObservedCounts {
-  countsByComboKey: Map<string, Map<string, number>>;
-  validCountsByComboKey: Map<string, Map<string, number>>;
+  counts: Map<MultipleResponseCategoryKey, number>;
+  validCounts: Map<MultipleResponseCategoryKey, number>;
+  categories: Map<MultipleResponseCategoryKey, ParsedMultipleCategory>;
 }
 
 @Processor('variable-analysis', { concurrency: 1 })
@@ -840,8 +837,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private getCategoryDefinitionsByComboKey(
     metadataByComboKey: Map<string, VariableAnalysisMetadata>
-  ): Map<string, SchemaCodeInfo[]> {
-    const categoryDefinitionsByComboKey = new Map<string, SchemaCodeInfo[]>();
+  ): Map<string, VariableAnalysisCategoryDefinition[]> {
+    const categoryDefinitionsByComboKey = new Map<string, VariableAnalysisCategoryDefinition[]>();
 
     metadataByComboKey.forEach((metadata, comboKey) => {
       if (metadata.categoryDefinitions.length > 0) {
@@ -860,12 +857,9 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     scopeEntries: AnalyzedVariableScopeEntry[],
     frequencies: Record<string, VariableFrequencyDto[]>,
     metadataByComboKey: Map<string, VariableAnalysisMetadata>
-  ): Promise<MultipleResponseObservedCounts> {
+  ): Promise<Map<string, MultipleResponseObservedCounts>> {
     const multipleEntries = scopeEntries.filter(entry => metadataByComboKey.get(entry.comboKey)?.multiple);
-    const observedCounts: MultipleResponseObservedCounts = {
-      countsByComboKey: new Map<string, Map<string, number>>(),
-      validCountsByComboKey: new Map<string, Map<string, number>>()
-    };
+    const observedCounts = new Map<string, MultipleResponseObservedCounts>();
 
     if (multipleEntries.length === 0) {
       return observedCounts;
@@ -881,9 +875,9 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         totalCount: 0,
         validCount: 0,
         emptyCount: 0,
-        counts: new Map<string, number>(),
-        validCounts: new Map<string, number>(),
-        categories: new Map<string, ParsedMultipleCategory>()
+        counts: new Map(),
+        validCounts: new Map(),
+        categories: new Map()
       });
     });
 
@@ -965,27 +959,24 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       combo.validCount = summary.validCount;
       combo.invalidCount = Math.max(0, summary.totalCount - summary.validCount);
       combo.distinctValueCount = summary.counts.size + Number(summary.emptyCount > 0);
-      observedCounts.countsByComboKey.set(comboKey, summary.counts);
-      observedCounts.validCountsByComboKey.set(
-        comboKey,
-        summary.validCounts
-      );
+      observedCounts.set(comboKey, { counts: summary.counts, validCounts: summary.validCounts });
 
       const sortedValues = getTopMultipleResponseCounts(summary.counts, summary.emptyCount, this.MAX_VALUES_PER_VARIABLE);
 
-      frequencies[comboKey] = sortedValues.map(([value, count]) => {
-        const category = summary.categories.get(value);
+      frequencies[comboKey] = sortedValues.map(([key, count]) => {
+        const category = summary.categories.get(key);
         return {
           unitId: combo.unitId,
           unitName: combo.unitName,
           variableId: combo.variableId,
-          value,
+          value: String(key),
+          position: category?.position,
           label: category?.label,
           score: category?.score,
           schemaOrder: category?.schemaOrder,
-          isEmptyValue: value === '',
+          isEmptyValue: key === '',
           count,
-          validOccurrenceCount: summary.validCounts.get(value) || 0,
+          validOccurrenceCount: summary.validCounts.get(key) || 0,
           percentage: 0
         };
       });
@@ -1032,25 +1023,26 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       summary.validCount += 1;
     }
 
-    const uniqueCategories = new Map<string, ParsedMultipleCategory>();
+    const uniqueCategories = new Map<MultipleResponseCategoryKey, ParsedMultipleCategory>();
     categories.forEach(category => {
-      if (!uniqueCategories.has(category.value)) {
-        uniqueCategories.set(category.value, category);
+      const key = category.position ?? category.value;
+      if (!uniqueCategories.has(key)) {
+        uniqueCategories.set(key, category);
       }
     });
 
-    uniqueCategories.forEach(category => {
+    uniqueCategories.forEach((category, key) => {
       summary.counts.set(
-        category.value,
-        (summary.counts.get(category.value) || 0) + 1
+        key,
+        (summary.counts.get(key) || 0) + 1
       );
       if (isValidResponse) {
         summary.validCounts.set(
-          category.value,
-          (summary.validCounts.get(category.value) || 0) + 1
+          key,
+          (summary.validCounts.get(key) || 0) + 1
         );
       }
-      summary.categories.set(category.value, category);
+      summary.categories.set(key, category);
     });
   }
 
@@ -1105,14 +1097,17 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     metadata: VariableAnalysisMetadata
   ): ParsedMultipleCategory {
     const positionValue = metadata.valuesByPosition[index];
-    const fallbackValue = String(index + 1);
-    const value = positionValue?.value || fallbackValue;
+    const value = positionValue?.value || String(index + 1);
+    const implicitPosition = !positionValue && metadata.type === 'boolean';
+    const position = implicitPosition ? index + 1 : positionValue?.position;
+    const definition = position === undefined ? this.getCategoryDefinition(value, metadata) : undefined;
 
     return {
       value,
-      label: positionValue?.label || this.getCategoryDefinition(value, metadata)?.label,
-      score: positionValue?.score ?? this.getCategoryDefinition(value, metadata)?.score,
-      schemaOrder: positionValue?.order ?? this.getCategoryDefinition(value, metadata)?.order
+      position,
+      label: positionValue?.label || definition?.label,
+      score: positionValue?.score ?? definition?.score,
+      schemaOrder: positionValue?.order ?? definition?.order
     };
   }
 
@@ -1146,9 +1141,9 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   private getCategoryDefinition(
     value: string,
     metadata: VariableAnalysisMetadata
-  ): SchemaCodeInfo | undefined {
+  ): SchemaValueDefinition | undefined {
     return metadata.categoryDefinitions.find(
-      definition => definition.value === value
+      definition => definition.position === undefined && definition.value === value
     );
   }
 
@@ -1164,11 +1159,8 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
     query: SelectQueryBuilder<ResponseEntity>,
     scopeEntries: AnalyzedVariableScopeEntry[],
     frequencies: Record<string, VariableFrequencyDto[]>,
-    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>,
-    observedCountsOverride: MultipleResponseObservedCounts = {
-      countsByComboKey: new Map<string, Map<string, number>>(),
-      validCountsByComboKey: new Map<string, Map<string, number>>()
-    }
+    schemaCodesByComboKey: Map<string, VariableAnalysisCategoryDefinition[]>,
+    multipleCountsByComboKey = new Map<string, MultipleResponseObservedCounts>()
   ): Promise<void> {
     if (schemaCodesByComboKey.size === 0) {
       return;
@@ -1188,38 +1180,24 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       }
 
       const rows = frequencies[entry.comboKey] || [];
-      const rowsByValue = new Map(rows.map(row => [row.value, row]));
-      const observedCountsForCombo = observedCountsOverride.countsByComboKey
-        .get(entry.comboKey) ||
-        observedSchemaCounts.get(entry.comboKey) ||
-        new Map<string, FrequencyCounts>();
-      const observedValidCountsForCombo =
-        observedCountsOverride.validCountsByComboKey.get(entry.comboKey);
+      const rowsByKey = new Map(rows.map(row => [row.position ?? row.value, row]));
+      const multipleCounts = multipleCountsByComboKey.get(entry.comboKey);
+      const observedCountsForCombo = observedSchemaCounts.get(entry.comboKey);
 
       schemaCodes.forEach(schemaValue => {
-        const observedCounts = observedCountsForCombo.get(schemaValue.value);
-        const count = typeof observedCounts === 'number' ?
-          observedCounts : observedCounts?.count || 0;
-        if (shouldSkipSchemaFrequency(schemaValue, count, entry.multiple, rowsByValue)) return;
-        const definition = this.resolveObservedSchemaValue(
-          schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
+        const key = schemaValue.position ?? schemaValue.value;
+        const { count, validCount, nullCount } = getSchemaFrequencyCounts(
+          key, multipleCounts, observedCountsForCombo?.get(schemaValue.value)
         );
-        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ?
-          schemaValue : enrichSchemaValueDefinition(schemaValue, definition);
+        if (shouldSkipSchemaFrequency(schemaValue, count, entry.multiple, rowsByKey)) return;
+        const schemaCode = entry.multiple || combo.analysisMode === 'codes' ? schemaValue :
+          enrichSchemaValueDefinition(schemaValue, this.resolveObservedSchemaValue(schemaValue.value, count, nullCount, entry));
         const valuePreview = entry.multiple ?
-          this.formatDirectValuePreview(schemaCode.value) :
-          this.formatSchemaValuePreview(schemaCode.value);
-        const existingRow = rowsByValue.get(valuePreview);
-        let validOccurrenceCount = 0;
-        if (observedValidCountsForCombo) {
-          validOccurrenceCount =
-            observedValidCountsForCombo.get(schemaCode.value) || 0;
-        } else if (typeof observedCounts !== 'number') {
-          validOccurrenceCount = observedCounts?.validCount || 0;
-        }
+          this.formatDirectValuePreview(schemaCode.value) : this.formatSchemaValuePreview(schemaCode.value);
+        const existingRow = rowsByKey.get(schemaValue.position ?? valuePreview);
 
         if (existingRow) {
-          this.enrichSchemaFrequencyRow(existingRow, schemaCode, validOccurrenceCount);
+          this.enrichSchemaFrequencyRow(existingRow, schemaCode, validCount);
           return;
         }
 
@@ -1228,6 +1206,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           unitName: combo.unitName,
           variableId: combo.variableId,
           value: valuePreview,
+          position: schemaValue.position,
           isEmptyValue: entry.multiple ? count === 0 && schemaCode.value.trim() === '' : isEmptyVariableAnalysisValue(schemaCode.value),
           label: schemaCode.label,
           score: schemaCode.score,
@@ -1237,7 +1216,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           isSchemaOnly: count === 0,
           isSchemaSupplemental: true,
           count,
-          validOccurrenceCount,
+          validOccurrenceCount: validCount,
           percentage: 0
         });
       });
@@ -1248,7 +1227,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
   private enrichSchemaFrequencyRow(
     existingRow: VariableFrequencyDto,
-    schemaCode: SchemaCodeInfo,
+    schemaCode: SchemaValueDefinition,
     validOccurrenceCount: number
   ): void {
     existingRow.label = existingRow.label ?? schemaCode.label;
@@ -1265,7 +1244,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
   private async getObservedSchemaValueCounts(
     query: SelectQueryBuilder<ResponseEntity>,
     scopeEntries: AnalyzedVariableScopeEntry[],
-    schemaCodesByComboKey: Map<string, SchemaCodeInfo[]>
+    schemaCodesByComboKey: Map<string, VariableAnalysisCategoryDefinition[]>
   ): Promise<Map<string, Map<string, FrequencyCounts>>> {
     const countsByComboKey =
       new Map<string, Map<string, FrequencyCounts>>();

@@ -202,10 +202,7 @@ export class VariableAnalysisService {
     if (cacheKey) {
       const cachedResult = await this.getCachedResult(cacheKey);
       if (cachedResult) {
-        return this.withSchemaCodeVisibility(
-          cachedResult,
-          includeSchemaCodes
-        );
+        return this.withSchemaCodeVisibility(cachedResult, includeSchemaCodes);
       }
 
       throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
@@ -215,10 +212,7 @@ export class VariableAnalysisService {
       throw new BadRequestException(`Job with ID ${jobId} has no results`);
     }
 
-    return this.withSchemaCodeVisibility(
-      job.returnvalue as VariableAnalysisResultDto,
-      includeSchemaCodes
-    );
+    return this.withSchemaCodeVisibility(job.returnvalue, includeSchemaCodes);
   }
 
   async getAnalysisResultsPage(
@@ -1021,6 +1015,7 @@ export class VariableAnalysisService {
         analysisMode: combo.analysisMode,
         codingVersion: combo.codingVersion,
         value: row.value,
+        position: row.position,
         isEmptyValue: row.isEmptyValue ?? isEmptyVariableAnalysisValue(row.value),
         label: row.label,
         score: row.score,
@@ -1151,6 +1146,7 @@ export class VariableAnalysisService {
       this.compareRowValues(a.variableId, b.variableId) ||
       this.compareRowValues(a.schemaOrder, b.schemaOrder) ||
       this.compareRowValues(a.value, b.value) ||
+      this.compareRowValues(a.position, b.position) ||
       this.compareRowValues(a.label, b.label)
     );
   }
@@ -1193,6 +1189,7 @@ export class VariableAnalysisService {
         unitName: row.unitName,
         variableId: row.variableId,
         value: row.value,
+        position: row.position,
         isEmptyValue: row.isEmptyValue,
         label: row.label,
         score: row.score,
@@ -1250,6 +1247,7 @@ export class VariableAnalysisService {
         unitName: row.unitName,
         variableId: row.variableId,
         value: row.value,
+        position: row.position ?? '',
         label: row.label || '',
         analysisMode: row.analysisMode === 'codes' ? 'Codes' : 'Antwortwerte',
         codingVersion: row.analysisMode === 'codes' ? row.codingVersion ?? 'v1' : '',

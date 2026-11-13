@@ -24,7 +24,8 @@ export const VARIABLE_ANALYSIS_EXPORT_COLUMNS = [
   { header: 'Anteil gültig (%)', key: 'percentageValid', width: 18 },
   { header: 'Punktbiseriale Korrelation', key: 'pointBiserial', width: 26 },
   { header: 'Code-PBC', key: 'codePbc', width: 14 },
-  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 }
+  { header: 'Kategorie-PBC', key: 'categoryPbc', width: 16 },
+  { header: 'Antwortposition', key: 'position', width: 16 }
 ] as const;
 
 type VariableAnalysisExportColumnKey =

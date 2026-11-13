@@ -3,6 +3,8 @@ export class VariableFrequencyDto {
   unitName?: string;
   variableId: string;
   value: string;
+  /** One-based Boolean position when the option has no declared value. */
+  position?: number;
   /** Emptiness of the complete analysis value, before preview truncation. */
   isEmptyValue?: boolean;
   label?: string;

@@ -9,6 +9,7 @@ export interface VariableFrequency {
   unitName?: string;
   variableid: string;
   value: string;
+  position?: number;
   isEmptyValue?: boolean;
   label?: string;
   score?: number;
@@ -176,6 +177,7 @@ export function createVariableAnalysisRows(
         analysisMode: combo.analysisMode,
         codingVersion: combo.codingVersion,
         value: frequency.value,
+        position: frequency.position,
         isEmptyValue: frequency.isEmptyValue ?? isEmptyVariableAnalysisValue(frequency.value),
         label: frequency.label,
         score: frequency.score,

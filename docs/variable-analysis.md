@@ -51,8 +51,12 @@ als leer, einschließlich `[null]` und `["", null]`. Diese Rohwertzählung gilt
 unabhängig von der Auswertungsgrundlage und dem gewählten Kodierlauf.
 Textkategorien wie `"[]"` oder `"[false]"` bleiben nach dem Auflösen einer
 Mehrfachantwort erhalten. Beispielsweise enthält `["[]"]` eine ausgewählte
-Textkategorie; `[]` enthält dagegen keine Kategorie. Nicht leere
-Antworten sind gültig, wenn ihr ursprünglicher Status nicht
+Textkategorie; `[]` enthält dagegen keine Kategorie. Boolesche Optionen ohne
+hinterlegten Antwortwert erscheinen als „Position 1“, „Position 2“ usw.
+Die Position ergibt sich aus der Stelle im Antwortarray und bleibt über
+verschiedene Analysen gleich. In CSV und XLSX steht ihre Nummer in der Spalte
+„Antwortposition“. Bei Textkategorien wie `"1"` bleibt diese Spalte leer.
+Nicht leere Antworten sind gültig, wenn ihr ursprünglicher Status nicht
 `UNSET`, `NOT_REACHED`, `DISPLAYED`, `DERIVE_ERROR`, `INVALID`, `CODING_ERROR` oder
 `PARTLY_DISPLAYED` ist. Kodierergebnisse verändern diese Rohwertgültigkeit nicht.
 
@@ -148,6 +152,8 @@ eine ansonsten gefüllte Antwort nicht leer.
 Die zusätzliche Leerzeile erfordert Berechnungsversion 11. Ergebnisse bis einschließlich
 Version 10 müssen nach der Bereitstellung neu berechnet werden. Für wartende Jobs
 zählt die Version, mit der der Worker das Ergebnis tatsächlich berechnet.
+Berechnungsversion 12 trennt boolesche Positionen von gleichlautenden Textwerten.
+Ergebnisse bis einschließlich Version 11 müssen dafür neu berechnet werden.
 
 Codeanalysen gruppieren intern nach einem Schlüssel aus Kodierstatus und Code.
 Erst nach Schema-Ergänzung und Prozentberechnung entsteht daraus der sichtbare

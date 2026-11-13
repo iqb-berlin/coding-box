@@ -18,6 +18,7 @@ export interface VariableFrequencyDto {
   unitName?: string;
   variableId: string;
   value: string;
+  position?: number;
   isEmptyValue?: boolean;
   label?: string;
   score?: number;
