@@ -4108,6 +4108,10 @@
       "start-freshness-job-failed": "Failed to start coding freshness job",
       "restart-job-failed": "Failed to restart job {{jobId}}"
     },
+    "response-variable-analysis": {
+      "position-value": "Position {{position}}",
+      "boolean-option": "Boolesche Option"
+    },
     "variable-analysis-dialog": {
       "results-tab": "Analyseergebnisse",
       "total-responses-column": "Antworten gesamt",

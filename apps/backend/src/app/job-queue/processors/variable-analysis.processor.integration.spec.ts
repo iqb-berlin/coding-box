@@ -375,6 +375,80 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     });
   });
 
+  it('keeps the same Boolean position in cached pages, CSV and XLSX with and without literal "1"', async () => {
+    const variableId = 'BOOLEAN_POSITION';
+    await client.query(`INSERT INTO analysis_response (id, unitid, variableid, subform, value, status)
+      VALUES (600, 1, $1, '', '[true]', 3), (601, 2, $1, '', '["1"]', 3)`, [variableId]);
+    const variable: VariableDetailDto = {
+      id: variableId, alias: variableId, type: 'boolean', multiple: true, hasCodingScheme: false
+    };
+    const queryDatabase = async (sql: string, parameters: unknown[]) => (await client.query(sql, parameters)).rows;
+
+    for (const unitId of [1, undefined]) {
+      const combo: VariableCombo = {
+        analysisMode: 'values', unitId: 1, unitName: 'UNIT', variableId
+      };
+      const entry = {
+        ...getVariableAnalysisMetadata(variable),
+        combo,
+        comboKey: `1:${variableId}`,
+        logicalKey: `UNIT\u001F${variableId}`
+      };
+      const query = {
+        innerJoin: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        clone: () => (unitId === undefined ? createQuery() : createQuery().andWhere('unit.id = :unitId', { unitId }))
+      };
+      const cached = new Map<string, unknown>();
+      const cache = {
+        set: async (key: string, value: unknown) => { cached.set(key, value); return true; },
+        get: async (key: string) => cached.get(key)
+      };
+      const worker = new VariableAnalysisProcessor({
+        createQueryBuilder: () => query,
+        query: queryDatabase
+      } as unknown as Repository<ResponseEntity>, cache as never, {
+        resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+      } as never, {} as never);
+      jest.spyOn(worker as unknown as { getAnalysisScope(): Promise<typeof entry[]> }, 'getAnalysisScope').mockResolvedValue([entry]);
+      const jobId = `boolean-position-${unitId ?? 'all'}`;
+      const job = {
+        id: jobId, data: { workspaceId: 1, analysisMode: 'values', unitId }, updateProgress: jest.fn()
+      } as unknown as Job<VariableAnalysisJobData>;
+      const result = await worker.processWorkspaceJob(job);
+      const service = new VariableAnalysisService({
+        getVariableAnalysisJob: async () => ({ data: job.data, getState: async () => 'completed', returnvalue: result })
+      } as never, cache as never);
+      const expectedCount = unitId === undefined ? 2 : 1;
+      const page = await service.getAnalysisResultsPage(jobId, 1);
+      expect(page.rows).toHaveLength(expectedCount);
+      expect(page.rows).toContainEqual(expect.objectContaining({ value: '1', position: 1, count: 1 }));
+      expect(page.frequencies[entry.comboKey]).toContainEqual(expect.objectContaining({ value: '1', position: 1, count: 1 }));
+      if (unitId === undefined) {
+        expect(page.rows).toContainEqual(expect.objectContaining({ value: '1', position: undefined, count: 1 }));
+        const first = await service.getAnalysisResultsPage(jobId, 1, { page: 1, pageSize: 1, sortBy: 'value' });
+        const second = await service.getAnalysisResultsPage(jobId, 1, { page: 2, pageSize: 1, sortBy: 'value' });
+        expect(first.rows).toEqual([expect.objectContaining({ value: '1', position: 1 })]);
+        expect(second.rows).toEqual([expect.objectContaining({ value: '1', position: undefined })]);
+      }
+
+      const columns = ['Antwortwert/Kategorie oder Code', 'Antwortposition', 'Anzahl Antworten'];
+      const csv = await service.exportAnalysisResultsAsCsv(jobId, 1);
+      const [headers, ...csvRows] = csv.trim().split(/\r?\n/).map(row => row.split(';'));
+      const expectedCsv = [['1', '1', '1'], ...(unitId === undefined ? [['1', '', '1']] : [])];
+      expect(csvRows.map(row => columns.map(header => row[headers.indexOf(header)])).sort()).toEqual(expectedCsv.sort());
+
+      const workbook = new ExcelJS.Workbook();
+      await workbook.xlsx.load(await service.exportAnalysisResultsAsXlsx(jobId, 1) as unknown as ExcelJS.Buffer);
+      const sheet = workbook.getWorksheet('Antwortwerte')!;
+      const xlsxHeaders = sheet.getRow(1).values as string[];
+      const xlsxRows = sheet.getRows(2, expectedCount)!.map(row => columns.map(header => row.getCell(xlsxHeaders.indexOf(header)).value));
+      const expectedXlsx = [['1', 1, 1], ...(unitId === undefined ? [['1', '', 1]] : [])];
+      expect(xlsxRows.sort()).toEqual(expectedXlsx.sort());
+    }
+  });
+
   it.each([0, 4])('enriches manually assigned intended-incomplete code %i in v2 without an unobserved status duplicate', async code => {
     const variableId = `MANUAL_FALLBACK_${code}`;
     await client.query(`INSERT INTO analysis_response

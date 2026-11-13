@@ -32,13 +32,14 @@ import { MatTabsModule } from '@angular/material/tabs';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
-import { VariableAnalysisMode, VariableAnalysisCodingVersion, VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
+import { VariableAnalysisMode, VariableAnalysisCodingVersion } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import {
   VariableFrequency, VariableStatusCount, VariableCombo, VariableComboSummary, variableComboKey, variableStatusSummary, variableComboSummary, withVariableComboSummary, createVariableAnalysisRows, summarizeVariableAnalysisResponses
 } from './variable-analysis-projection';
 import {
   VariableAnalysisService,
   JobCancelResult,
+  VariableAnalysisResultDto,
   VariableAnalysisResultPageDto,
   VariableAnalysisSortBy,
   VariableAnalysisSortDirection,
@@ -70,60 +71,7 @@ export interface VariableAnalysisData {
     codedstatus?: string;
     expanded?: boolean;
   }[];
-  analysisResults?: {
-    variableCombos: (VariableAnalysisOptions & {
-      unitId: number;
-      unitName: string;
-      variableId: string;
-      sourceVariableId?: string;
-      variableAlias?: string;
-      selectionSource?: string;
-      sourceType?: string;
-      isDerived?: boolean;
-      hasCodingScheme?: boolean;
-      totalCount?: number;
-      validCount?: number;
-      invalidCount?: number;
-      emptyCount?: number;
-      emptyPercentage?: number;
-      distinctValueCount?: number;
-      statusCounts?: VariableStatusCount[];
-    })[];
-    frequencies: {
-      [key: string]: {
-        unitId?: number;
-        unitName?: string;
-        variableId: string;
-        value: string;
-        isEmptyValue?: boolean;
-        label?: string;
-        score?: number;
-        code?: number | string;
-        schemaOrder?: number;
-        isFromSchema?: boolean;
-        isSchemaOnly?: boolean;
-        isSchemaSupplemental?: boolean;
-        count: number;
-        validOccurrenceCount?: number;
-        percentage: number;
-        percentageTotal?: number;
-        percentageValid?: number | null;
-        pointBiserial?: number | null;
-        codePbc?: number | null;
-        categoryPbc?: number | null;
-      }[];
-    };
-    total: number;
-    unfilteredTotal?: number;
-    rows?: VariableAnalysisTableRowDto[];
-    rowTotal?: number;
-    pageableRowTotal?: number;
-    unfilteredRowTotal?: number;
-    maxPage?: number;
-    page?: number;
-    pageSize?: number;
-    totalPages?: number;
-  };
+  analysisResults?: VariableAnalysisResultDto & Partial<VariableAnalysisResultPageDto>;
   jobs?: VariableAnalysisJobDto[];
 }
 
@@ -1154,6 +1102,7 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
       this.compareValues(a.variableId, b.variableId) ||
       this.compareValues(a.schemaOrder, b.schemaOrder) ||
       this.compareValues(a.value, b.value) ||
+      this.compareValues(a.position, b.position) ||
       this.compareValues(a.label, b.label);
   }
 

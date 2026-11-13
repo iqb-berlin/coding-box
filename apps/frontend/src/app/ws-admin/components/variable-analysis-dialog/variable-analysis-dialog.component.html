@@ -200,7 +200,10 @@
                 </th>
                 <td mat-cell *matCellDef="let row">
                   <div class="value-cell">
-                    @if (row.isEmptyValue ?? row.value.trim() === '') {
+                    @if (row.position !== undefined) {
+                    <span>{{ 'ui-text.response-variable-analysis.position-value' | translate:{ position: row.position } }}</span>
+                    <span class="position-chip">{{ 'ui-text.response-variable-analysis.boolean-option' | translate }}</span>
+                    } @else if (row.isEmptyValue ?? row.value.trim() === '') {
                     <span class="empty-value">{{ (resultAnalysisMode() === 'codes' ? 'variable-analysis.missing-code' : 'variable-analysis.empty-value') | translate }}</span>
                     } @else {
                     <span>{{ row.value | slice:0:100 }}{{ row.value.length > 100 ? '...' : '' }}</span>

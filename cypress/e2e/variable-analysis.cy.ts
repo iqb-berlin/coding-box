@@ -144,7 +144,7 @@ describe('Answer-value and assigned-code analysis', () => {
     cy.readFile(`cypress/downloads/variable-analysis-5-codes-v2-${new Date().toISOString().slice(0, 10)}.csv`).should('contain', 'Codes;v2;0');
   });
   [
-    { name: 'mixed', totalCount: 3, validCount: 2, emptyCount: 1 },
+    { name: 'mixed', totalCount: 4, validCount: 3, emptyCount: 1 },
     { name: 'entirely empty', totalCount: 2, validCount: 0, emptyCount: 2 }
   ].forEach(({ name, totalCount, validCount, emptyCount }) => {
     it(`shows the observed empty row for ${name} multiple responses`, () => {
@@ -164,13 +164,14 @@ describe('Answer-value and assigned-code analysis', () => {
       const combo = {
         unitId: 1, unitName: 'MULTI_UNIT', variableId: 'MULTI', analysisMode: 'values',
         totalCount, validCount, invalidCount: emptyCount, emptyCount,
-        emptyPercentage: (emptyCount / totalCount) * 100, distinctValueCount: validCount > 0 ? 3 : 1
+        emptyPercentage: (emptyCount / totalCount) * 100, distinctValueCount: validCount > 0 ? 4 : 1
       };
       const frequencies = [
         { value: '', isEmptyValue: true, count: emptyCount, validOccurrenceCount: 0, percentageTotal: (emptyCount / totalCount) * 100, percentageValid: validCount > 0 ? 0 : null },
         ...(validCount > 0 ? [
-          { value: 'A', count: 1, validOccurrenceCount: 1, percentageTotal: 100 / 3, percentageValid: 50 },
-          { value: 'B', count: 2, validOccurrenceCount: 2, percentageTotal: 200 / 3, percentageValid: 100 }
+          { value: '1', position: 1, count: 1, validOccurrenceCount: 1, percentageTotal: 25, percentageValid: 100 / 3 },
+          { value: '1', count: 1, validOccurrenceCount: 1, percentageTotal: 25, percentageValid: 100 / 3 },
+          { value: 'Position 1', count: 2, validOccurrenceCount: 2, percentageTotal: 50, percentageValid: 200 / 3 }
         ] : [])
       ];
       cy.intercept('GET', '**/variable-analysis/jobs/empty-job/results/page?*', { body: {
@@ -192,6 +193,22 @@ describe('Answer-value and assigned-code analysis', () => {
         cy.get('.mat-column-totalCount').should('have.text', String(totalCount));
         cy.get('.schema-chip').should('not.exist');
       });
+      if (validCount > 0) {
+        // Material focuses the dialog after opening, which can scroll back to its controls.
+        cy.focused().closest('mat-dialog-container').find('coding-box-variable-analysis-dialog').should('exist');
+        const valueCells = 'coding-box-variable-analysis-dialog .analysis-table tbody .value-cell';
+        cy.contains(`${valueCells} span`, /^Boolesche Option$/).as('booleanOption');
+        cy.get('@booleanOption').then($badge => {
+          // Scroll the enclosing dialog as well as the table.
+          $badge[0].scrollIntoView({ block: 'center', inline: 'nearest' });
+        });
+        cy.get('@booleanOption').should('be.visible')
+          .closest('.value-cell').should('contain.text', 'Position 1')
+          .closest('tr').find('.mat-column-count').should('have.text', '1');
+        cy.get(valueCells).filter((_, cell) => cell.textContent?.trim() === 'Position 1')
+          .should('have.length', 1).closest('tr').find('.mat-column-count').should('have.text', '2');
+        cy.contains(`${valueCells} span`, /^1$/).closest('tr').find('.mat-column-count').should('have.text', '1');
+      }
     });
   });
 });

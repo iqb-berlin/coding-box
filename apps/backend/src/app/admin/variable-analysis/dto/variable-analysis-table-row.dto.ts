@@ -14,6 +14,7 @@ export class VariableAnalysisTableRowDto implements VariableAnalysisOptions {
   isDerived?: boolean;
   hasCodingScheme?: boolean;
   value: string;
+  position?: number;
   isEmptyValue?: boolean;
   label?: string;
   score?: number;
