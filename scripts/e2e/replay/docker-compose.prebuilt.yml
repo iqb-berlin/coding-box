@@ -1,0 +1,19 @@
+services:
+  backend:
+    build: !reset null
+    image: ${REPLAY_E2E_IMAGE_PREFIX:-}node:24.22.1-bookworm
+    working_dir: /usr/src/coding-box
+    command: ['node', 'dist/apps/backend/main.mjs']
+    volumes:
+      - ${REPLAY_E2E_REPO_DIR}/dist/apps/backend:/usr/src/coding-box/dist/apps/backend:ro
+      - ${REPLAY_E2E_LINUX_DEPS_DIR}/node_modules:/usr/src/coding-box/node_modules:ro
+      - ${REPLAY_E2E_LINUX_DEPS_DIR}/vendor:/usr/src/coding-box/vendor:ro
+  frontend:
+    build: !reset null
+    image: ${REPLAY_E2E_IMAGE_PREFIX:-}nginx:stable-alpine@sha256:583b7f2fce1cdb8da5ad5c39ebd3c33b98b87d493190e548bdee1fa8c619c311
+    command: ['nginx', '-g', 'daemon off;']
+    volumes:
+      - ${REPLAY_E2E_REPO_DIR}/dist/apps/frontend:/usr/share/nginx/html:ro
+      - ${REPLAY_E2E_REPO_DIR}/scripts/e2e/replay/nginx.prebuilt.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://127.0.0.1:4200/']
