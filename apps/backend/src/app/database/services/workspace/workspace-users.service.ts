@@ -28,21 +28,12 @@ export class WorkspaceUsersService {
     private workspacesRepository: Repository<Workspace>
   ) {}
 
-  async findAllUserWorkspaces(identity: string): Promise<WorkspaceFullDto[]> {
-    this.logger.log('Returning all workspaces for user', identity);
-    const user = await this.usersRepository.findOne({ where: { identity: identity } });
-
-    if (!user) {
-      this.logger.warn(`User with identity ${identity} not found.`);
-      return [];
-    }
-
+  async findAllUserWorkspaces(userId: number): Promise<WorkspaceFullDto[]> {
     const userWorkspaces = await this.workspaceUsersRepository.find({
-      where: { userId: user.id, accessLevel: MoreThan(0) }
+      where: { userId, accessLevel: MoreThan(0) }
     });
 
     if (userWorkspaces.length === 0) {
-      this.logger.log(`No workspaces found for user ${identity} (ID: ${user.id}).`);
       return [];
     }
 

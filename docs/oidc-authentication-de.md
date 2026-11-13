@@ -506,10 +506,10 @@ Es gibt keinen allgemeinen konfigurierbaren Claim-Mapper; Claims wie
 Identität und die erwarteten Rollen über alle drei Pfade konsistent halten.
 
 Die [lokale Benutzerzuordnung](../apps/backend/src/app/database/services/users/users.service.ts)
-sucht sowohl nach Issuer/Subject als auch nach dem Benutzernamen. Ein Treffer
-über denselben Benutzernamen kann die gespeicherte Issuer-/Subject-Zuordnung
-aktualisieren. Ein Providerwechsel schafft daher keine getrennten Benutzer allein
-durch eine andere Issuer-URL. Bestehendes lokales `isAdmin` bleibt bei der
+ordnet Konten über Issuer und Subject zu. Ist der Benutzername an eine andere
+Identität gebunden, wird die Übernahme abgelehnt. Ändert sich bei einem
+Providerwechsel der Issuer oder Subject, muss die Identitätsbindung vor der
+Anmeldung geprüft und gezielt migriert werden. Bestehendes lokales `isAdmin` bleibt bei der
 Benutzersynchronisierung erhalten (`bisheriges isAdmin` oder neuer Admin-Claim);
 ein fehlender Admin-Claim entzieht dieses lokale Recht nicht automatisch.
 Benutzerzuordnung, lokale Adminrechte, Workspace-Mitgliedschaft und Jobzuweisungen

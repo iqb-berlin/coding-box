@@ -348,9 +348,8 @@ describe('UsersService', () => {
   it('returns access levels, workspace ids and users by identity or id', async () => {
     workspaceUserRepository.findOne.mockResolvedValueOnce({ accessLevel: 2 });
     workspaceUserRepository.find.mockResolvedValueOnce([{ workspaceId: 3 }, { workspaceId: 4 }]);
+    usersRepository.find.mockResolvedValueOnce([{ id: 5, username: 'user', isAdmin: false }]);
     usersRepository.findOne
-      .mockResolvedValueOnce({ id: 5, username: 'user', isAdmin: false })
-      .mockResolvedValueOnce(null)
       .mockResolvedValueOnce({ id: 6, username: 'by-id', isAdmin: true })
       .mockResolvedValueOnce(null);
 
@@ -648,32 +647,32 @@ describe('UsersService', () => {
     usersRepository.findOne
       .mockResolvedValueOnce({ isAdmin: true })
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({
-        id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: false
-      })
       .mockResolvedValueOnce(null);
+    usersRepository.find.mockResolvedValueOnce([{
+      id: 10, username: 'u', identity: 'subject', issuer: 'iss', isAdmin: false
+    }]);
 
     await expect(service.getUserIsAdmin(1)).resolves.toBe(true);
     await expect(service.getUserIsAdmin(2)).resolves.toBe(false);
     await expect(service.createOidcProviderUser({
-      username: 'u', identity: 'new', issuer: 'iss', isAdmin: true
+      username: 'u', identity: 'subject', issuer: 'iss', isAdmin: true
     } as never)).resolves.toBe(10);
-    expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new', isAdmin: true });
+    expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { isAdmin: true });
     await expect(service.createOidcProviderUser({
       username: 'fresh', identity: 'id', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(77);
   });
 
   it('does not demote existing database admins during OIDC login', async () => {
-    usersRepository.findOne.mockResolvedValueOnce({
-      id: 10, username: 'u', identity: 'old', issuer: 'iss', isAdmin: true
-    });
+    usersRepository.find.mockResolvedValueOnce([{
+      id: 10, username: 'u', identity: 'subject', issuer: 'iss', isAdmin: true
+    }]);
 
     await expect(service.createOidcProviderUser({
-      username: 'u', identity: 'new', issuer: 'iss', isAdmin: false
+      username: 'u', identity: 'subject', issuer: 'iss', isAdmin: false
     } as never)).resolves.toBe(10);
 
-    expect(usersRepository.update).toHaveBeenCalledWith({ id: 10 }, { identity: 'new' });
+    expect(usersRepository.update).not.toHaveBeenCalled();
   });
 
   it.each(['createOidcProviderUser', 'syncKeycloakUser'] as const)('rechecks a concurrent first login or import under the identity lock in %s', async method => {
@@ -684,7 +683,7 @@ describe('UsersService', () => {
     usersRepository.manager.transaction.mockImplementation(callback => callback({
       connection: { options: { type: 'postgres' } }, query, getRepository: () => usersRepository
     }));
-    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce({ ...profile, id: 25 });
+    usersRepository.find.mockResolvedValueOnce([]).mockResolvedValueOnce([{ ...profile, id: 25 }]);
     await expect(service[method](profile)).resolves.toBe(25);
     expect(query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [profile.issuer, profile.identity]);
     expect(usersRepository.save).not.toHaveBeenCalled();
@@ -704,17 +703,17 @@ describe('UsersService', () => {
     });
 
     it('fills and refreshes names of existing users without changing their ID or admin rights', async () => {
-      usersRepository.findOne.mockResolvedValue({
+      usersRepository.find.mockResolvedValue([{
         ...profile, id: 7, isAdmin: true, firstName: null, lastName: 'Old name'
-      });
+      }]);
       await expect(service[method]({ ...profile, firstName: 'Ada', lastName: 'Lovelace' })).resolves.toBe(7);
       expect(usersRepository.update).toHaveBeenCalledWith({ id: 7 }, { firstName: 'Ada', lastName: 'Lovelace' });
     });
 
     it('retains names when claims are omitted and skips unchanged profiles', async () => {
-      usersRepository.findOne.mockResolvedValue({
+      usersRepository.find.mockResolvedValue([{
         ...profile, id: 7, firstName: 'Ada', lastName: 'Lovelace'
-      });
+      }]);
       await service[method](profile);
       await service[method]({ ...profile, firstName: null, lastName: null } as never);
       await service[method]({ ...profile, firstName: 'Ada', lastName: 'Lovelace' });
@@ -722,9 +721,9 @@ describe('UsersService', () => {
     });
 
     it('clears an explicitly empty name without clearing an omitted name', async () => {
-      usersRepository.findOne.mockResolvedValue({
+      usersRepository.find.mockResolvedValue([{
         ...profile, id: 7, firstName: 'Ada', lastName: 'Lovelace'
-      });
+      }]);
       await service[method]({ ...profile, firstName: '  ' });
       expect(usersRepository.update).toHaveBeenCalledWith({ id: 7 }, { firstName: '' });
     });
@@ -741,11 +740,10 @@ describe('UsersService', () => {
       isAdmin: false
     };
     const logger = (service as unknown as { logger: { log: jest.Mock } }).logger;
-    usersRepository.findOne.mockResolvedValueOnce(null).mockResolvedValueOnce(null);
-    if (method === 'syncKeycloakUser') usersRepository.findOne.mockResolvedValueOnce(null);
-    usersRepository.findOne.mockResolvedValueOnce({
+    usersRepository.findOne.mockResolvedValueOnce(null);
+    usersRepository.find.mockResolvedValueOnce([]).mockResolvedValueOnce([]).mockResolvedValueOnce([{
       ...profile, id: 77, firstName: 'Old'
-    });
+    }]);
 
     await service[method](profile);
     await service[method](profile);

@@ -30,16 +30,33 @@ describe('OIDC profile name persistence', () => {
     expect(await database.getRepository(User).count()).toBe(1);
   });
 
-  it('does not rebind an existing account with the same username during import', async () => {
-    const existing = await database.getRepository(User).save({
-      username: 'same-name', identity: 'existing-subject', issuer: 'https://issuer.example', isAdmin: true
+  it.each([
+    { identity: 'replacement-subject', issuer: 'https://issuer.example' },
+    { identity: 'existing-subject', issuer: 'https://other-issuer.example' }
+  ])('keeps the original account when a different identity uses its username', async replacement => {
+    const original = {
+      username: 'same-name', identity: 'existing-subject', issuer: 'https://issuer.example'
+    };
+    const id = await service.syncKeycloakUser(original);
+    await service.createOidcProviderUser({ ...original, isAdmin: true });
+    const collision = { ...original, ...replacement };
+    await expect(service.syncKeycloakUser(collision)).rejects.toThrow('already bound');
+    await expect(service.createOidcProviderUser(collision)).rejects.toThrow('already bound');
+    await expect(database.getRepository(User).findOneByOrFail({ id })).resolves.toMatchObject({
+      ...original, isAdmin: true
     });
-    await expect(service.syncKeycloakUser({
-      username: 'same-name', identity: 'foreign-subject', issuer: 'https://issuer.example'
-    })).rejects.toThrow('already bound');
-    expect(await database.getRepository(User).findOneByOrFail({ id: existing.id })).toMatchObject({
-      identity: 'existing-subject', isAdmin: true
-    });
+    await expect(service.createOidcProviderUser(original)).resolves.toBe(id);
+    expect(await database.getRepository(User).count()).toBe(1);
+  });
+
+  it('rejects an identity already associated with multiple local accounts', async () => {
+    const identity = { identity: 'subject', issuer: 'https://issuer.example' };
+    const repository = database.getRepository(User);
+    await repository.save([
+      { ...identity, username: 'one', isAdmin: false },
+      { ...identity, username: 'two', isAdmin: true }
+    ]);
+    await expect(service.createOidcProviderUser({ ...identity, username: 'one' })).rejects.toThrow('multiple accounts');
   });
 
   it('fills a legacy account on authentication and exposes refreshed names after reloading from storage', async () => {
@@ -55,6 +72,7 @@ describe('OIDC profile name persistence', () => {
 
     await expect(service.createOidcProviderUser({ ...profile, firstName: 'Ada', lastName: 'Lovelace' }))
       .resolves.toBe(user.id);
+    await expect(service.createOidcProviderUser({ ...profile, username: undefined } as never)).resolves.toBe(user.id);
     await expect(database.getRepository(User).findOneByOrFail({ id: user.id })).resolves.toMatchObject({
       firstName: 'Ada', lastName: 'Lovelace'
     });

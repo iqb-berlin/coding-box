@@ -141,11 +141,13 @@ implements OnInit, OnDestroy, OnChanges {
   private jobNameFilterSubscription?: Subscription;
   private workspaceToggleInProgress = false;
   private workspaceSelectionInitialized = false;
+  private allWorkspacesSelected = false;
   private initialWorkspaceFilterId: number | null = null;
   private readonly jobNameFilterChanges = new Subject<string>();
   private readonly windowFocusReloadThrottleMs = 10000;
   private lastWindowFocusReloadAt = 0;
   readonly jobsLoadFailed = signal(false);
+  readonly assignmentsLoadFailed = signal(false);
   readonly assignmentsRefreshing = signal(false);
   private loadingJobs = false;
 
@@ -175,6 +177,8 @@ implements OnInit, OnDestroy, OnChanges {
 
     this.appService.authData$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(authData => {
       const background = this.isAuthorized() && this.currentUserId() === authData.userId;
+      if (!background) this.workspaceSelectionInitialized = false;
+      this.assignmentsLoadFailed.set(false);
       this.currentUserId.set(authData.userId);
       this.isAuthorized.set(true);
       const workspaces = authData.workspaces || [];
@@ -186,6 +190,7 @@ implements OnInit, OnDestroy, OnChanges {
 
   ngOnChanges(): void {
     if (this.authWorkspaces.length > 0) {
+      this.workspaceSelectionInitialized = false;
       this.reloadFirstPage();
     }
   }
@@ -205,13 +210,11 @@ implements OnInit, OnDestroy, OnChanges {
     this.loadJobsSubscription?.unsubscribe();
 
     if (targetWorkspaces.length > 0) {
-      if (this.shouldResetWorkspaceFilter()) {
-        this.selectedWorkspaceIds.set(this.getDefaultSelectedWorkspaceIds());
-        this.workspaceSelectionInitialized = true;
-      }
+      this.updateWorkspaceSelection(targetWorkspaces);
       const selectedWorkspaces = this.getSelectedWorkspaces();
       if (selectedWorkspaces.length === 0) {
         this.clearLoadedJobData();
+        this.jobsLoadFailed.set(false);
         this.loadingJobs = false;
         this.isLoading.set(false);
         return;
@@ -273,7 +276,9 @@ implements OnInit, OnDestroy, OnChanges {
         }
       });
     } else {
-      this.clearLoadedJobs();
+      this.clearLoadedJobData();
+      this.selectedWorkspaceIds.set([]);
+      this.jobsLoadFailed.set(false);
       this.loadingJobs = false;
       this.isLoading.set(false);
     }
@@ -284,14 +289,15 @@ implements OnInit, OnDestroy, OnChanges {
     this.assignmentsRefreshing.set(true);
     this.appService.refreshAuthData().pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: outcome => {
-        if (outcome !== 'updated' && outcome !== 'superseded') this.loadMyCodingJobs(this.authWorkspaces, true);
+        if (outcome === 'failed') this.assignmentsLoadFailed.set(true);
       },
-      error: () => { this.assignmentsRefreshing.set(false); this.jobsLoadFailed.set(true); },
+      error: () => { this.assignmentsRefreshing.set(false); this.assignmentsLoadFailed.set(true); },
       complete: () => { this.assignmentsRefreshing.set(false); }
     });
   }
 
   protected get emptyMessageKey(): string {
+    if (this.assignmentsLoadFailed()) return 'home.auth-data-load-error';
     if (this.jobsLoadFailed()) return 'coding.my-coding-jobs.error-loading-jobs';
     if (this.authWorkspaces.length === 0) return 'home.no-user-workspaces';
     if (this.selectedStatus() || this.selectedJobName()?.trim() || this.selectedWorkspaceIds().length === 0) {
@@ -344,21 +350,24 @@ implements OnInit, OnDestroy, OnChanges {
     );
   }
 
+  private updateWorkspaceSelection(workspaces: WorkspaceFullDto[]): void {
+    const availableIds = workspaces.map(workspace => workspace.id);
+    if (!this.workspaceSelectionInitialized) {
+      const requestedId = this.workspaceId() || this.initialWorkspaceFilterId;
+      const requestedWorkspace = workspaces.find(workspace => workspace.id === requestedId);
+      this.allWorkspacesSelected = !requestedWorkspace;
+      this.selectedWorkspaceIds.set(requestedWorkspace ? [requestedWorkspace.id] : availableIds);
+      this.workspaceSelectionInitialized = true;
+    } else if (this.allWorkspacesSelected) {
+      this.selectedWorkspaceIds.set(availableIds);
+    } else {
+      this.selectedWorkspaceIds.update(ids => ids.filter(id => availableIds.includes(id)));
+    }
+  }
+
   private normalizeJobNameFilter(): string | undefined {
     const normalized = this.selectedJobName()?.trim();
     return normalized || undefined;
-  }
-
-  private getDefaultSelectedWorkspaceIds(): number[] {
-    const requestedWorkspaceId = this.workspaceId() || this.initialWorkspaceFilterId;
-    if (
-      requestedWorkspaceId &&
-      this.currentWorkspaces().some(workspace => workspace.id === requestedWorkspaceId)
-    ) {
-      return [requestedWorkspaceId];
-    }
-
-    return this.currentWorkspaces().map(workspace => workspace.id);
   }
 
   private getInitialWorkspaceFilterIdFromRoute(): number | null {
@@ -388,21 +397,6 @@ implements OnInit, OnDestroy, OnChanges {
     return Number.isInteger(workspaceId) && workspaceId > 0 ? workspaceId : null;
   }
 
-  private shouldResetWorkspaceFilter(): boolean {
-    const currentWorkspaceIds = this.currentWorkspaces().map(
-      workspace => workspace.id
-    );
-    const selectedWorkspaceIds = this.selectedWorkspaceIds().filter(
-      workspaceId => workspaceId !== -1
-    );
-    return (
-      !this.workspaceSelectionInitialized ||
-      selectedWorkspaceIds.some(
-        workspaceId => !currentWorkspaceIds.includes(workspaceId)
-      )
-    );
-  }
-
   protected onStatusFilterChange(): void {
     this.reloadFirstPage();
   }
@@ -416,6 +410,7 @@ implements OnInit, OnDestroy, OnChanges {
       return;
     }
     this.selectedWorkspaceIds.set(this.selectedWorkspaceIds().filter(id => id !== -1));
+    this.allWorkspacesSelected = this.isAllWorkspacesSelected();
     this.reloadFirstPage();
   }
 
@@ -427,7 +422,8 @@ implements OnInit, OnDestroy, OnChanges {
 
   toggleAllWorkspaces(): void {
     this.workspaceToggleInProgress = true;
-    if (this.isAllWorkspacesSelected()) {
+    this.allWorkspacesSelected = !this.isAllWorkspacesSelected();
+    if (!this.allWorkspacesSelected) {
       this.selectedWorkspaceIds.set([]);
     } else {
       this.selectedWorkspaceIds.set(this.currentWorkspaces().map(ws => ws.id));

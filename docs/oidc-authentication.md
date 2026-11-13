@@ -496,9 +496,10 @@ A new provider integration must keep local identity and expected roles consisten
 across all three paths.
 
 [Local user mapping](../apps/backend/src/app/database/services/users/users.service.ts)
-looks up both issuer/subject and username. A matching username can update the
-stored issuer/subject mapping. Changing the issuer URL therefore does not create
-separate users by itself. User synchronization retains existing local `isAdmin`
+matches accounts by issuer and subject. A username already bound to another
+identity blocks provisioning. If the issuer or subject changes during a provider
+migration, verify and migrate the identity binding before the user signs in.
+User synchronization retains existing local `isAdmin`
 (`previous isAdmin` or new admin claim); an absent admin claim does not
 automatically revoke that local permission. Separately check user mapping, local
 admin rights, workspace membership and job assignments before a planned switch;

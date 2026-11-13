@@ -40,7 +40,9 @@ coding-box-up:
 		pull
 	@if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
 	@if [ "$(KEYCLOAK_USER_SYNC_AUTO_SETUP)" = "true" ]; then\
-		bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.coding-box" "$(TRAEFIK_DIR)/.env.traefik" --auto;\
+		set -- --auto;\
+		if [ -n "$(TRAEFIK_DIR)" ] && [ "$(KEYCLOAK_USER_SYNC_ENABLED)" != "true" ]; then set -- "$$@" --start-managed; fi;\
+		bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.coding-box" "$(TRAEFIK_DIR)/.env.traefik" "$$@";\
 	fi
 	$(MAKE) -f "$(CODING_BOX_PROD_MAKE_FILE)" coding-box-up-configured
 

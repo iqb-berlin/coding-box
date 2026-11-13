@@ -719,4 +719,59 @@ describe('MyCodingJobsComponent', () => {
     expect(selection.selected).toEqual([updated]);
     expect(selection.selected[0]).toBe(updated);
   });
+
+  it('adds newly assigned workspaces to the default all-workspaces selection', () => {
+    const auth = new BehaviorSubject({ userId: 7, workspaces: [{ id: 1, name: 'First workspace' }] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    const getJobs = jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs');
+    fixture.detectChanges();
+
+    getJobs.mockClear();
+    auth.next({ userId: 7, workspaces: [...auth.value.workspaces, { id: 2, name: 'New workspace' }] });
+    expect(component.selectedWorkspaceIds()).toEqual([1, 2]);
+    expect(getJobs.mock.calls.map(([workspaceId]) => workspaceId)).toEqual([1, 2]);
+  });
+
+  it('preserves a manually selected workspace when more assignments arrive', () => {
+    const auth = new BehaviorSubject({
+      userId: 7,
+      workspaces: [{ id: 1, name: 'First workspace' }, { id: 2, name: 'Second workspace' }]
+    });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    const getJobs = jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs');
+    fixture.detectChanges();
+
+    component.selectedWorkspaceIds.set([2]);
+    component.onWorkspaceFilterChange();
+    getJobs.mockClear();
+    auth.next({ userId: 7, workspaces: [...auth.value.workspaces, { id: 3, name: 'New workspace' }] });
+    expect(component.selectedWorkspaceIds()).toEqual([2]);
+    expect(getJobs.mock.calls.map(([workspaceId]) => workspaceId)).toEqual([2]);
+  });
+
+  it('shows a retry after failed assignment refresh and returns to the empty state after success', async () => {
+    const auth = new BehaviorSubject({ userId: 7, workspaces: [] });
+    const appService = TestBed.inject(AppService);
+    (appService as unknown as { authData$: Observable<unknown> }).authData$ = auth;
+    const refresh = jest.spyOn(appService, 'refreshAuthData').mockReturnValueOnce(of('failed'));
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    component.refreshAssignments();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('home.auth-data-load-error');
+    const retryButton = fixture.nativeElement.querySelector('.no-data-message button');
+    expect(retryButton).not.toBeNull();
+
+    refresh.mockImplementationOnce(() => {
+      auth.next(auth.value);
+      return of('updated');
+    });
+    retryButton.click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
+  });
 });

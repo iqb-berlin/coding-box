@@ -20,6 +20,13 @@ describe('JwtStrategy', () => {
     } as unknown as ConfigService, usersService as unknown as UsersService);
   };
 
+  it('rejects a padded subject instead of resolving it as another identity', async () => {
+    const strategy = createStrategy();
+    await expect(strategy.validate({ sub: ' existing-subject ', azp: 'coding-box' }))
+      .rejects.toThrow('subject is invalid');
+    expect(usersService.createOidcProviderUser).not.toHaveBeenCalled();
+  });
+
   it('accepts tokens issued for the configured client through azp', async () => {
     const strategy = createStrategy();
 

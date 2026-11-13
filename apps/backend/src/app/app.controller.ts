@@ -16,6 +16,7 @@ import { WorkspaceUsersService } from './database/services/workspace';
 
 type AuthenticatedRequest = Request & {
   user?: {
+    id: number;
     identity?: string;
   };
 };
@@ -35,7 +36,8 @@ export class AppController {
     @Req() req: AuthenticatedRequest
   ): Promise<AuthDataDto> {
     const tokenIdentity = req.user?.identity;
-    if (!tokenIdentity) {
+    const userId = req.user?.id;
+    if (!tokenIdentity || !userId) {
       throw new BadRequestException('authenticated identity is required');
     }
 
@@ -49,12 +51,12 @@ export class AppController {
 
     this.assertTokenMatchesRequestedIdentity(requestedIdentity, tokenIdentity);
 
-    const user = await this.usersService.findUserByIdentity(requestedIdentity);
+    const user = await this.usersService.findUserById(userId);
     if (!user) {
       throw new NotFoundException(`User with identity ${requestedIdentity} not found`);
     }
 
-    const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(requestedIdentity);
+    const workspaces = await this.workspaceUsersService.findAllUserWorkspaces(user.id);
     return <AuthDataDto><unknown>{
       userId: user.id,
       userName: user.username,

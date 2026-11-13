@@ -247,7 +247,8 @@ export class UsersService {
 
   async findUserByIdentity(id: string): Promise<UserFullDto | null> {
     this.logger.log('Searching for user by identity');
-    const user = await this.usersRepository.findOne({ where: { identity: id } });
+    const [user, duplicate] = await this.usersRepository.find({ where: { identity: id }, take: 2 });
+    if (duplicate) throw new ConflictException('Subject is bound to multiple accounts');
 
     if (!user) {
       this.logger.warn('User not found by identity');
@@ -501,11 +502,14 @@ export class UsersService {
   }
 
   async syncKeycloakUser(keycloakUser: CreateUserDto, manager?: EntityManager): Promise<number> {
-    const { username, identity, issuer } = keycloakUser;
-    if (!username || !identity || !issuer) {
-      throw new BadRequestException('Keycloak user requires username, identity and issuer.');
-    }
     return this.provisionProviderUser(keycloakUser, 'keycloak', manager?.getRepository(User));
+  }
+
+  private validateProviderIdentity({ identity, issuer }: CreateUserDto): void {
+    if (typeof identity !== 'string' || !identity || identity !== identity.trim() ||
+        typeof issuer !== 'string' || !issuer || issuer !== issuer.trim()) {
+      throw new BadRequestException('Provider user requires a subject and issuer.');
+    }
   }
 
   private async provisionProviderUser(
@@ -514,38 +518,42 @@ export class UsersService {
     repository = this.usersRepository,
     locked = false
   ): Promise<number> {
-    const {
-      username, identity, issuer, isAdmin = false
-    } = user;
-    const existingUser = await repository.findOne({
-      where: source === 'keycloak' ? { identity, issuer } : [
-        { identity, issuer },
-        { username }
-      ],
+    const { identity, issuer, isAdmin = false } = user;
+    this.validateProviderIdentity(user);
+    const [existingUser, duplicate] = await repository.find({
+      where: { identity, issuer },
       select: {
         id: true, username: true, identity: true, issuer: true, isAdmin: true, firstName: true, lastName: true
-      }
+      },
+      take: 2
     });
+    if (duplicate) throw new ConflictException('Provider identity is bound to multiple accounts');
 
-    if (!existingUser && !locked) {
+    const suppliedUsername = typeof user.username === 'string' ? user.username.trim() : '';
+    const username = suppliedUsername || (source === 'oidc' ? existingUser?.username : undefined);
+    if (!username) throw new BadRequestException('New provider user requires a username.');
+    const usernameChanged = existingUser?.username !== username;
+    if (usernameChanged && !locked) {
       return repository.manager.transaction(async manager => {
         // Import and first login must serialize creation of the same identity.
         if (manager.connection.options.type === 'postgres') {
           await manager.query('SELECT pg_advisory_xact_lock(hashtext($1), hashtext($2))', [issuer, identity]);
+          // Serialize provider claims of a username even when their identities differ.
+          await manager.query('SELECT pg_advisory_xact_lock(774020254, hashtext($1))', [username]);
         }
         return this.provisionProviderUser(user, source, manager.getRepository(User), true);
       });
     }
 
-    if (source === 'keycloak' && (!existingUser || existingUser.username !== username)) {
+    if (usernameChanged) {
       const sameName = await repository.findOne({ where: { username } });
       if (sameName && sameName.id !== existingUser?.id) {
-        throw new ConflictException('Keycloak directory username is already bound to another identity');
+        throw new ConflictException('Provider username is already bound to another identity');
       }
     }
 
     if (existingUser) {
-      const updatedFields = this.getProviderUserUpdates(existingUser, user);
+      const updatedFields = this.getProviderUserUpdates(existingUser, { ...user, username });
       if (Object.keys(updatedFields).length > 0) {
         await repository.update({ id: existingUser.id }, updatedFields);
         this.logger.log({ event: `user.${source}.updated`, userId: existingUser.id });
@@ -576,8 +584,6 @@ export class UsersService {
     if (profileNames.lastName !== undefined && existingUser.lastName !== profileNames.lastName) {
       updatedFields.lastName = profileNames.lastName;
     }
-    if (user.identity && existingUser.identity !== user.identity) updatedFields.identity = user.identity;
-    if (user.issuer && existingUser.issuer !== user.issuer) updatedFields.issuer = user.issuer;
     if (user.username && existingUser.username !== user.username) updatedFields.username = user.username;
     const nextIsAdmin = existingUser.isAdmin || !!user.isAdmin;
     if (existingUser.isAdmin !== nextIsAdmin) updatedFields.isAdmin = nextIsAdmin;

@@ -194,10 +194,16 @@ describe('AuthController', () => {
       id: 7, identity: 'subject', issuer, username: 'old-name', isAdmin: false, firstName: 'Ada', lastName: 'Lovelace'
     };
     const usersRepository = {
-      findOne: jest.fn().mockImplementation(async ({ where }) => (
-        where.some((condition: Record<string, unknown>) => Object.entries(condition)
-          .every(([key, value]) => existingUser[key] === value)) ? existingUser : null
+      find: jest.fn().mockImplementation(async ({ where }) => (
+        where.identity === existingUser.identity && where.issuer === existingUser.issuer ? [existingUser] : []
       )),
+      findOne: jest.fn().mockResolvedValue(null),
+      manager: {
+        transaction: async callback => callback({
+          connection: { options: { type: 'sqlite' } },
+          getRepository: () => usersRepository
+        })
+      },
       update: jest.fn().mockImplementation(async (_criteria, fields) => Object.assign(existingUser, fields)),
       create: jest.fn().mockImplementation(data => ({ ...data, id: 8 })),
       save: jest.fn().mockImplementation(async data => data)

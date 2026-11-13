@@ -178,7 +178,11 @@ export class WorkspaceController {
     @ValidatedBody('CreateWorkspaceDto') createWorkspaceDto: RequestBody<'CreateWorkspaceDto'>,
     @Req() req: RequestWithUser
   ): Promise<number> {
-    const userIdentity = req.user?.identity ?? req.user?.id;
+    const id = req.user?.id;
+    if (typeof id === 'number' && Number.isSafeInteger(id) && id > 0) {
+      return this.workspaceCoreService.create(createWorkspaceDto, id);
+    }
+    const userIdentity = req.user?.identity ?? id;
 
     if (!userIdentity) {
       throw new BadRequestException('Missing user identity');

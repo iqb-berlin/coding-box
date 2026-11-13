@@ -2,8 +2,8 @@
   <div class="admin-background">
     <h1 class="page-title">{{ 'coding.my-coding-jobs.title' | translate }}</h1>
     <p class="subtitle">{{ 'coding.my-coding-jobs.subtitle' | translate }}</p>
-    @if (jobsLoadFailed() && jobsTotal() > 0) {
-      <p role="alert">{{ 'coding.my-coding-jobs.error-loading-jobs' | translate }}</p>
+    @if ((assignmentsLoadFailed() || jobsLoadFailed()) && jobsTotal() > 0) {
+      <p role="alert">{{ (assignmentsLoadFailed() ? 'home.auth-data-load-error' : 'coding.my-coding-jobs.error-loading-jobs') | translate }}</p>
       <button mat-button type="button" [disabled]="assignmentsRefreshing()" (click)="refreshAssignments()">
         <mat-icon>refresh</mat-icon>{{ 'admin.user-directory-retry' | translate }}
       </button>
@@ -199,8 +199,8 @@
       @if (jobsTotal() === 0) {
         <div class="no-data-message">
           <mat-icon>assignment</mat-icon>
-          <p [attr.role]="jobsLoadFailed() ? 'alert' : 'status'">{{ emptyMessageKey | translate }}</p>
-          @if (jobsLoadFailed()) {
+          <p [attr.role]="(assignmentsLoadFailed() || jobsLoadFailed()) ? 'alert' : 'status'">{{ emptyMessageKey | translate }}</p>
+          @if (assignmentsLoadFailed() || jobsLoadFailed()) {
             <button mat-stroked-button type="button" [disabled]="assignmentsRefreshing()" (click)="refreshAssignments()">
               <mat-icon>refresh</mat-icon>{{ 'admin.user-directory-retry' | translate }}
             </button>

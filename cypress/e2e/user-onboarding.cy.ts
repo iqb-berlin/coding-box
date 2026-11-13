@@ -60,5 +60,18 @@ describe('User onboarding and live assignment lists', () => {
     cy.tick(30_000);
     cy.wait('@newJobs');
     cy.contains('coding-box-my-coding-jobs mat-row', 'Newly assigned job').should('be.visible');
+
+    cy.intercept('GET', '**/api/auth-data?identity=e2e-user', request => {
+      request.reply({ userId: 2, userName: 'e2e-user', isAdmin: false,
+        workspaces: [{ id: 5, name: 'Workspace' }, { id: 6, name: 'Second workspace' }] });
+    }).as('secondAssignment');
+    cy.intercept('GET', '**/api/wsg-admin/workspace/6/coding-job*', {
+      body: { data: [{ id: 43, workspace_id: 6, name: 'Job in second workspace', status: 'pending',
+        assignedCoders: [2], totalUnits: 1, codedUnits: 0, progress: 0 }], total: 1, page: 1, limit: 20 }
+    }).as('secondWorkspaceJobs');
+    cy.tick(30_000);
+    cy.wait('@secondAssignment');
+    cy.wait('@secondWorkspaceJobs');
+    cy.contains('coding-box-my-coding-jobs mat-row', 'Job in second workspace').should('be.visible');
   });
 });

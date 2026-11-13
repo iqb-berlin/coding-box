@@ -16,6 +16,7 @@ declare TRAEFIK_DIR
 declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
 declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
 declare ARE_KEYCLOAK_SERVICES_UP=false
+declare USE_MANAGED_KEYCLOAK=false
 
 set_env_value() {
   local env_file="$1"
@@ -560,7 +561,7 @@ customize_settings() {
     printf "\nKeycloak Realm Import\n"
     import_keycloak_realm
     set_env_value ".env.${APP_NAME}" KEYCLOAK_USER_SYNC_AUTO_SETUP true
-    bash scripts/keycloak/setup-user-sync.sh ".env.${APP_NAME}" "${TRAEFIK_DIR}/.env.traefik"
+    USE_MANAGED_KEYCLOAK=true
 
   else
     env_vars_oidc[oidc_provider_url]=https://oidc_provider_url
@@ -614,6 +615,9 @@ application_start() {
   if [[ ! ${is_start_now} =~ [nN] ]]; then
     if ! test "$(docker network ls -q --filter name=app-net)"; then
       docker network create app-net
+    fi
+    if ${USE_MANAGED_KEYCLOAK}; then
+      bash scripts/keycloak/setup-user-sync.sh ".env.${APP_NAME}" "${TRAEFIK_DIR}/.env.traefik" --auto --start-managed
     fi
     docker compose \
         --env-file ".env.${APP_NAME}" \

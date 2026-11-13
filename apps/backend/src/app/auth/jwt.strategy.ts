@@ -121,11 +121,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   private getIdentity(payload: OidcJwtPayload): string {
-    if (!payload.sub || !payload.sub.trim()) {
-      throw new UnauthorizedException('JWT subject is missing');
+    if (typeof payload.sub !== 'string' || !payload.sub || payload.sub !== payload.sub.trim()) {
+      throw new UnauthorizedException('JWT subject is invalid');
     }
 
-    return payload.sub.trim();
+    return payload.sub;
   }
 
   private getUsername(payload: OidcJwtPayload, identity: string): string {

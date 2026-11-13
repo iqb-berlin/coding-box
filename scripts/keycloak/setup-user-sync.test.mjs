@@ -96,3 +96,54 @@ if (process.argv[2] === 'run') {
     }
   });
 }
+
+test('first managed Make start brings up Keycloak with its infrastructure settings before provisioning', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'coding-box-managed-sync-'));
+  try {
+    const scripts = join(directory, 'scripts');
+    const infra = join(directory, 'infra');
+    const bin = join(directory, 'bin');
+    await mkdir(join(scripts, 'keycloak'), { recursive: true });
+    await mkdir(join(directory, 'config', 'frontend'), { recursive: true });
+    await writeFile(join(directory, 'config', 'frontend', 'default.conf.template'), '');
+    await mkdir(infra);
+    await mkdir(bin);
+    const makefile = join(scripts, 'prod.mk');
+    await copyFile(fileURLToPath(new URL('../make/prod.mk', import.meta.url)), makefile);
+    await copyFile(fileURLToPath(new URL('./setup-user-sync.sh', import.meta.url)),
+      join(scripts, 'keycloak', 'setup-user-sync.sh'));
+    const envFile = join(directory, '.env.coding-box');
+    const log = join(directory, 'start.log');
+    await writeFile(join(infra, '.env.traefik'), 'POSTGRES_DB=keycloak\nHTTP_PORT=80\n');
+    await writeFile(envFile, `TRAEFIK_DIR=${infra}\nPOSTGRES_DB=coding-box\nHTTP_PORT=4200\nKEYCLOAK_USER_SYNC_AUTO_SETUP=true\nKEYCLOAK_USER_SYNC_ENABLED=false\nKEYCLOAK_USER_SYNC_CLIENT_SECRET=\n`);
+    await writeFile(join(bin, 'docker'), `#!${process.execPath}
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const args = process.argv.slice(2);
+const env = process.env;
+if (args[0] === 'network') {
+  console.log('app-net');
+} else if (args[0] === 'compose' && args.includes('traefik') && args.includes('keycloak')) {
+  assert.equal(env.POSTGRES_DB, undefined);
+  assert.equal(env.HTTP_PORT, undefined);
+  assert.ok(args.includes(fs.realpathSync(env.FIXTURE_INFRA_ENV)));
+  fs.appendFileSync(env.FIXTURE_LOG, 'keycloak\\n');
+} else if (args[0] === 'run') {
+  assert.ok(args.includes('--auto'));
+  fs.appendFileSync(env.FIXTURE_LOG, 'setup\\n');
+  fs.appendFileSync(env.FIXTURE_ENV_FILE, 'KEYCLOAK_USER_SYNC_ENABLED=true\\nKEYCLOAK_USER_SYNC_CLIENT_SECRET=new-synthetic-secret\\n');
+} else if (args[0] === 'compose' && args.includes('up')) {
+  assert.equal(env.KEYCLOAK_USER_SYNC_CLIENT_SECRET, 'new-synthetic-secret');
+  fs.appendFileSync(env.FIXTURE_LOG, 'application\\n');
+}
+`, { mode: 0o700 });
+    execFileSync('make', ['--no-print-directory', '-f', makefile, `CODING_BOX_BASE_DIR=${directory}`, 'REGISTRY_PATH=', 'coding-box-up'], {
+      cwd: directory, stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, PATH: `${bin}:${process.env.PATH}`, FIXTURE_ENV_FILE: envFile,
+        FIXTURE_INFRA_ENV: join(infra, '.env.traefik'), FIXTURE_LOG: log }
+    });
+    assert.equal(await readFile(log, 'utf8'), 'keycloak\nsetup\napplication\n');
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});

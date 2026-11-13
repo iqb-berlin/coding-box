@@ -113,6 +113,18 @@ live('enabled Keycloak accounts before first login (real Keycloak and PostgreSQL
       expect(await database.getRepository(User).countBy({ identity, issuer })).toBe(1);
       expect(await database.getRepository(WorkspaceUser).findOneBy({ userId, workspaceId: workspace.id }))
         .toMatchObject({ accessLevel: 1, canCode: true });
+
+      // Simulate the original local binding after Keycloak reuses a username.
+      const originalSubject = 'previous-keycloak-subject';
+      await database.getRepository(User).update(userId, { identity: originalSubject });
+      const collision = await fetch(`${await app.getUrl()}/me`, {
+        headers: { Authorization: `Bearer ${token.access_token}` }
+      });
+      expect(collision.status).toBe(409);
+      expect(await database.getRepository(User).findOneByOrFail({ id: userId }))
+        .toMatchObject({ identity: originalSubject, issuer, username: 'waiting-coder' });
+      expect(await database.getRepository(WorkspaceUser).findOneBy({ userId, workspaceId: workspace.id }))
+        .toMatchObject({ accessLevel: 1, canCode: true });
     } finally {
       await app.close();
       await database.destroy();

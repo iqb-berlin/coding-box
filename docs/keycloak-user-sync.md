@@ -11,7 +11,9 @@ nach der Freischaltung brauchen. Laufzeiten der Abfragen kommen hinzu.
 ## Automatische Einrichtung
 
 Bei einer Neuinstallation mit der mitgelieferten Keycloak-Infrastruktur richtet
-der Installer den Lesezugang automatisch ein. Auch `make dev-up` erledigt dies
+der Installer den Lesezugang beim Start der Anwendung automatisch ein. Wird
+der Start aufgeschoben, uebernimmt `make coding-box-up` die Einrichtung.
+Auch `make dev-up` erledigt dies
 mit einer neuen `.env.dev` aus der Vorlage. Es sind keine manuellen Client-,
 Rollen- oder Secret-Eingaben fuer den Benutzerimport noetig.
 
@@ -99,8 +101,9 @@ verwendet.
 - Arbeitsbereichsrechte und Jobs werden weiterhin durch die Verwaltung zugewiesen.
   Eine arbeitsbereichsspezifische Kodierendenliste enthaelt weiterhin nur die dort
   zum Kodieren berechtigten Personen.
-- Die Zuordnung erfolgt ueber Issuer und Keycloak-ID. Ein gleichnamiges Konto mit
-  anderer Identitaet wird beim Import uebersprungen und als Ereignis protokolliert.
+- Import und Anmeldung ordnen Konten ueber Issuer und Keycloak-ID zu.
+  Ein gleichnamiges Konto mit anderer Identitaet wird beim Import uebersprungen
+  und bei der Anmeldung abgewiesen.
   Import und erster Login sperren die Neuanlage derselben Identitaet gegenseitig.
 - Bestehende interne IDs, Adminrechte, Mitgliedschaften und Jobs bleiben erhalten.
   Der Import legt keine neuen Adminrechte an und aendert nur Benutzernamen und
