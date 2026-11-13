@@ -133,7 +133,6 @@ export interface CodingAnalysisJobData {
 }
 
 export interface VariableAnalysisJobData extends VariableAnalysisOptions {
-  resultVersion?: number;
   skipRetries?: boolean;
   workspaceId: number;
   unitId?: number;
@@ -141,7 +140,8 @@ export interface VariableAnalysisJobData extends VariableAnalysisOptions {
   cacheKey?: string;
 }
 
-export type VariableAnalysisJobResult = VariableAnalysisResultCacheManifest & { cacheKey: string };
+export type VariableAnalysisJobResult = VariableAnalysisResultCacheManifest &
+  { cacheKey: string; resultVersion: number };
 
 export interface VariableAnalysisResultCacheManifest {
   storage: 'chunked';

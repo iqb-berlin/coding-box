@@ -183,10 +183,11 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     jest.spyOn(worker as unknown as { getAnalysisScope(): Promise<typeof entry[]> }, 'getAnalysisScope').mockResolvedValue([entry]);
     const job = {
       id: 'long-empty',
-      data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION, ...options },
+      data: { workspaceId: 1, resultVersion: 10, ...options },
       updateProgress: jest.fn()
     } as unknown as Job<VariableAnalysisJobData>;
     const result = await worker.processWorkspaceJob(job);
+    expect(result.resultVersion).toBe(VARIABLE_ANALYSIS_RESULT_VERSION);
     const service = new VariableAnalysisService({
       getVariableAnalysisJob: async () => ({ data: job.data, getState: async () => 'completed', returnvalue: result })
     } as never, cache as never);
@@ -313,9 +314,11 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     expect(combo.emptyPercentage).toBe(50);
     const service = new VariableAnalysisService({
       getVariableAnalysisJob: async () => ({
-        data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION },
+        data: { workspaceId: 1 },
         getState: async () => 'completed',
-        returnvalue: { variableCombos: [combo], frequencies, total: 1 }
+        returnvalue: {
+          resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION, variableCombos: [combo], frequencies, total: 1
+        }
       })
     } as never, {} as never);
     const resultOptions = { includeSchemaCodes: options.analysisMode === 'values' };
@@ -422,7 +425,7 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     Object.defineProperty(worker, 'MAX_VALUES_PER_VARIABLE', { value: 1 });
     const job = {
       id: `manual-fallback-${code}`,
-      data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION, ...options },
+      data: { workspaceId: 1, ...options },
       updateProgress: jest.fn()
     } as unknown as Job<VariableAnalysisJobData>;
     const result = await worker.processWorkspaceJob(job);
@@ -543,9 +546,9 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     const result = { variableCombos: [combo], frequencies, total: 1 };
     const service = new VariableAnalysisService({
       getVariableAnalysisJob: async () => ({
-        data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION },
+        data: { workspaceId: 1 },
         getState: async () => 'completed',
-        returnvalue: result
+        returnvalue: { ...result, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION }
       })
     } as never, {} as never);
     const page = await service.getAnalysisResultsPage('job-1', 1);

@@ -130,7 +130,6 @@ export class VariableAnalysisService {
     }
 
     const jobData: VariableAnalysisJobData = {
-      resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
       workspaceId,
       unitId,
       variableId,
@@ -417,24 +416,8 @@ export class VariableAnalysisService {
     return `${this.RESULT_CACHE_KEY_PREFIX}:${workspaceId}:${randomUUID()}`;
   }
 
-  private async getCompletedAnalysisJob(
-    jobId: number | string,
-    workspaceId: number
-  ) {
-    const job = await this.jobQueueService.getVariableAnalysisJob(
-      jobId.toString()
-    );
-
-    if (!job) {
-      throw new NotFoundException(`Job with ID ${jobId} not found`);
-    }
-
-    if (!Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
-      throw new NotFoundException(
-        `Job with ID ${jobId} not found in workspace ${workspaceId}`
-      );
-    }
-
+  private async getCompletedAnalysisJob(jobId: number | string, workspaceId: number) {
+    const job = await this.loadAnalysisJobForWorkspace(jobId, workspaceId);
     const state = await job.getState();
     if (state !== 'completed') {
       throw new BadRequestException(
@@ -442,13 +425,32 @@ export class VariableAnalysisService {
       );
     }
 
-    if (job.data.resultVersion !== VARIABLE_ANALYSIS_RESULT_VERSION) {
+    // BullMQ reads the state separately from the job snapshot.
+    const completedJob = job.returnvalue === null || job.returnvalue === undefined ?
+      await this.loadAnalysisJobForWorkspace(jobId, workspaceId) :
+      job;
+    const result: Partial<VariableAnalysisJobResult> | null | undefined =
+      completedJob.returnvalue;
+    if (result?.resultVersion !== VARIABLE_ANALYSIS_RESULT_VERSION) {
       throw new BadRequestException({
         code: 'VARIABLE_ANALYSIS_OUTDATED',
         message: 'Bitte starten Sie eine neue Antwortwertanalyse. Dieses Ergebnis wurde mit einer älteren Auswertung berechnet.'
       });
     }
 
+    return completedJob;
+  }
+
+  private async loadAnalysisJobForWorkspace(jobId: number | string, workspaceId: number) {
+    const job = await this.jobQueueService.getVariableAnalysisJob(jobId.toString());
+    if (!job) {
+      throw new NotFoundException(`Job with ID ${jobId} not found`);
+    }
+    if (!Number.isSafeInteger(workspaceId) || workspaceId < 1 || job.data.workspaceId !== workspaceId) {
+      throw new NotFoundException(
+        `Job with ID ${jobId} not found in workspace ${workspaceId}`
+      );
+    }
     return job;
   }
 
@@ -460,21 +462,16 @@ export class VariableAnalysisService {
       return dataCacheKey;
     }
 
-    if (this.isVariableAnalysisJobResult(returnvalue)) {
+    if (
+      typeof returnvalue === 'object' &&
+      returnvalue !== null &&
+      'cacheKey' in returnvalue &&
+      typeof returnvalue.cacheKey === 'string'
+    ) {
       return returnvalue.cacheKey;
     }
 
     return undefined;
-  }
-
-  private isVariableAnalysisJobResult(
-    value: unknown
-  ): value is VariableAnalysisJobResult {
-    return (
-      typeof value === 'object' &&
-      value !== null &&
-      typeof (value as VariableAnalysisJobResult).cacheKey === 'string'
-    );
   }
 
   private isVariableAnalysisResult(

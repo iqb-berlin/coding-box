@@ -15,18 +15,15 @@ const createJob = (
     };
     state: string;
     progress: number;
-    returnvalue: unknown;
+    returnvalue: Record<string, unknown>;
   }> = {}
 ) => ({
   id: overrides.id || 'job-1',
-  data: {
-    resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
-    ...(overrides.data || {
-      workspaceId: 1,
-      unitId: 2,
-      variableId: 'VAR',
-      cacheKey: 'variable-analysis:1:job-1'
-    })
+  data: overrides.data ?? {
+    workspaceId: 1,
+    unitId: 2,
+    variableId: 'VAR',
+    cacheKey: 'variable-analysis:1:job-1'
   },
   getState: jest.fn().mockResolvedValue(overrides.state || 'completed'),
   progress: overrides.progress ?? 100,
@@ -34,14 +31,15 @@ const createJob = (
   failedReason: undefined,
   timestamp: 1000,
   finishedOn: 2000,
-  returnvalue: Object.prototype.hasOwnProperty.call(overrides, 'returnvalue') ?
-    overrides.returnvalue :
-    {
+  returnvalue: 'returnvalue' in overrides && !overrides.returnvalue ? undefined : {
+    resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
+    ...(overrides.returnvalue ?? {
       cacheKey: 'variable-analysis:1:job-1',
       workspaceId: 1,
       total: 1,
       storedAt: '2026-05-26T00:00:00.000Z'
-    }
+    })
+  }
 });
 
 describe('VariableAnalysisService', () => {
@@ -81,10 +79,42 @@ describe('VariableAnalysisService', () => {
     expect(cacheService.get).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, 4, 5, 6, 7, 8, 9].flatMap(resultVersion => ([
+  it('serves the result when the job completes between loading the job and checking its state', async () => {
+    const data = { workspaceId: 1 };
+    const activeJob = { ...createJob({ data, state: 'active' }), returnvalue: null };
+    const completedJob = createJob({ data });
+    let completed = false;
+    activeJob.getState.mockImplementationOnce(async () => {
+      completed = true;
+      return 'completed';
+    });
+    jobQueueService.getVariableAnalysisJob.mockImplementation(async () => (
+      completed ? completedJob : activeJob
+    ));
+    cacheService.get.mockResolvedValue({
+      variableCombos: [{ unitId: 2, unitName: 'UNIT', variableId: 'VAR' }],
+      frequencies: {
+        '2:VAR': [{
+          value: '', count: 2, isEmptyValue: true, percentage: 100
+        }]
+      },
+      total: 1
+    });
+
+    await expect(service.getAnalysisResultsPage('job-1', 1)).resolves.toMatchObject({
+      rows: [expect.objectContaining({
+        variableId: 'VAR', value: '', count: 2, isEmptyValue: true
+      })]
+    });
+  });
+
+  it.each([undefined, 4, 5, 6, 7, 8, 9, 10].flatMap(resultVersion => ([
     'getAnalysisResults', 'getAnalysisResultsPage', 'exportAnalysisResultsAsCsv', 'exportAnalysisResultsAsXlsx'
   ] as const).map(method => ({ method, resultVersion }))))('$method requires recalculation of results from version $resultVersion', async ({ method, resultVersion }) => {
-    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ data: { workspaceId: 1, resultVersion } }));
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
+      data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION },
+      returnvalue: { resultVersion }
+    }));
     await expect(service[method]('job-1', 1)).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'VARIABLE_ANALYSIS_OUTDATED' })
     });
@@ -292,6 +322,7 @@ describe('VariableAnalysisService', () => {
         )
       })
     );
+    expect(jobQueueService.addVariableAnalysisJob.mock.calls[0][0]).not.toHaveProperty('resultVersion');
     await expect(service.createAnalysisJob(1)).rejects.toBeInstanceOf(
       ConflictException
     );

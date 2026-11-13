@@ -145,7 +145,9 @@ Die Leerwertkennzeichnung jeder Zeile wird vor dem Kürzen langer Antwortwerte
 gespeichert und für Oberfläche sowie CSV/XLSX übernommen. Auch mehr als 500
 Leerzeichen bleiben damit als leer erkennbar; führende Leerzeichen allein machen
 eine ansonsten gefüllte Antwort nicht leer.
-Berechnungsversion 10 erfordert eine neue Analyse auch für Ergebnisse der Version 9.
+Die zusätzliche Leerzeile erfordert Berechnungsversion 11. Ergebnisse bis einschließlich
+Version 10 müssen nach der Bereitstellung neu berechnet werden. Für wartende Jobs
+zählt die Version, mit der der Worker das Ergebnis tatsächlich berechnet.
 
 Codeanalysen gruppieren intern nach einem Schlüssel aus Kodierstatus und Code.
 Erst nach Schema-Ergänzung und Prozentberechnung entsteht daraus der sichtbare

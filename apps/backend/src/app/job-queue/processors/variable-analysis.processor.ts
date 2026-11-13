@@ -15,7 +15,7 @@ import {
   VariableAnalysisJobResult,
   VariableAnalysisResultCacheManifest
 } from '../job-queue.service';
-import { VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
+import { VARIABLE_ANALYSIS_RESULT_VERSION, VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import {
   applyResolvedExclusionsToQuery,
@@ -360,6 +360,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
     return {
       cacheKey,
+      resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
       ...manifest
     };
   }

@@ -1133,7 +1133,7 @@
     },
     "apps/backend/src/app/database/services/test-results/variable-analysis.service.ts": {
       "file": {
-        "max-lines": 1334
+        "max-lines": 1333
       },
       "functions": {}
     },
