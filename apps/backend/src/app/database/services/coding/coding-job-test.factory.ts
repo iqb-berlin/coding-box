@@ -63,7 +63,7 @@ export function createCodingJobService(codingJobRepository: Repository<CodingJob
   const scheme = new CodingJobSchemeService(fileUploadRepository, codingFileCacheService, replayAnchorService, runtimeConfig);
   const progress = new CodingJobProgressService(codingJobRepository, codingJobUnitRepository, connection, workspaceExclusionService, access, mutation, query, scheme);
   const replay = new CodingJobReplayService(codingJobRepository, codingJobVariableBundleRepository, codingJobUnitRepository, variableBundleRepository, responseRepository, workspaceExclusionService, query, scheme);
-  const status = new CodingJobStatusService(access, mutation, query);
+  const status = new CodingJobStatusService(access, mutation, query, connection);
   const facade = new CodingJobService(access, aggregation, distribution, mutation, progress, query, replay, responses, scheme, status);
   const providers = {
     mutation, responses, access, query, distribution, status, progress, scheme, replay, aggregation

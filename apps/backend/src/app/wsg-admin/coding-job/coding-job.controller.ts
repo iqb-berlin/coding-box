@@ -714,9 +714,7 @@ export class WsgCodingJobController {
     );
 
     if (!isFinalizedJob) {
-      await this.codingJobService.updateCodingJob(id, workspaceId, {
-        status: 'active'
-      }, this.getRequestUserId(req), true);
+      await this.codingJobService.startCodingJob(id, workspaceId, this.getRequestUserId(req));
     }
 
     return this.prepareCodingJobReplay(workspaceId, id, req, onlyOpen);

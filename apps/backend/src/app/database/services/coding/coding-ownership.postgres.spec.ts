@@ -90,7 +90,7 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       },
       responses: { getSlimResponsesForCodingJob: async () => [] }
     }) as CodingJobMutationService;
-    const status = new CodingJobStatusService(access, mutation, {} as never);
+    const status = new CodingJobStatusService(access, mutation, {} as never, db);
     const progress = Object.assign(Object.create(CodingJobProgressService.prototype), dependencies, { access, mutation }) as CodingJobProgressService;
     jobs = new CodingJobService(
       access, {} as never, {} as never, mutation, progress, {} as never, {} as never, {} as never, {} as never, status
@@ -199,6 +199,32 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 2 });
     }
   }, 15000);
+
+  it('starts a pending job while an import holds the workspace lock', async () => {
+    const id = resources.get('job')![0];
+    await db.manager.update(CodingJob, id, { status: 'pending' });
+    await db.query(
+      'DELETE FROM journal_entries WHERE workspace_id=$1 AND event_type=$2 AND entity_id=$3',
+      [workspaceId, 'CODING_JOB_UPDATED', String(id)]
+    );
+    const importer = db.createQueryRunner();
+    await importer.connect();
+    try {
+      await importer.startTransaction();
+      await lockWorkspaceTestResultsMutationInTransaction(importer.manager, workspaceId);
+      await expect(jobs.startCodingJob(id, workspaceId, owner.id))
+        .resolves.toMatchObject({ status: 'active' });
+      expect(importer.isTransactionActive).toBe(true);
+      expect(await db.manager.findOneByOrFail(CodingJob, { id })).toMatchObject({ status: 'active' });
+      expect(await db.query(
+        'SELECT actor_user_id FROM journal_entries WHERE workspace_id=$1 AND event_type=$2 AND entity_id=$3',
+        [workspaceId, 'CODING_JOB_UPDATED', String(id)]
+      )).toEqual([{ actor_user_id: owner.id }]);
+    } finally {
+      if (importer.isTransactionActive) await importer.rollbackTransaction();
+      await importer.release();
+    }
+  }, 20000);
 
   it('rechecks a revoked role after waiting for a locked foreign bundle', async () => {
     const id = resources.get('bundle')![1];

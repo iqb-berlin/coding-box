@@ -2038,6 +2038,50 @@ describe('CodingJobService', () => {
     }
   );
 
+  it('starts an assigned pending job under its row lock while the workspace can be importing', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1, workspace_id: 3, status: 'pending', freshness_status: 'stale_source'
+    });
+
+    await expect(service.startCodingJob(1, 3, 7))
+      .resolves.toMatchObject({ status: 'active', freshness_status: 'stale_source' });
+
+    const manager = jest.mocked(JournalService.recordEventInTransaction).mock.lastCall?.[0];
+    expect(manager?.query).toHaveBeenCalledTimes(1);
+    expect(manager?.query).toHaveBeenCalledWith('SELECT id FROM public.workspace WHERE id = $1 FOR KEY SHARE', [3]);
+    expect(connection.transaction).toHaveBeenCalledTimes(1);
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
+    expect(codingJobCoderRepository.count).toHaveBeenCalledWith({ where: { coding_job_id: 1, user_id: 7 } });
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(manager, expect.objectContaining({
+      workspaceId: 3,
+      actorUserId: 7,
+      eventType: 'CODING_JOB_UPDATED',
+      details: { changedFields: ['status'], status: 'active' }
+    }));
+  });
+
+  it('rejects starting a pending job by an unassigned coder', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'pending' });
+    codingJobCoderRepository.count.mockResolvedValueOnce(0);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.startCodingJob(1, 3, 7)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(JournalService.recordEventInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('takes the workspace mutation lock before reopening a completed job', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'completed' });
+
+    await expect(service.startCodingJob(1, 3, 7)).resolves.toMatchObject({ status: 'active' });
+
+    const manager = jest.mocked(JournalService.recordEventInTransaction).mock.lastCall?.[0];
+    expect(manager?.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock($1::int, $2::int)', [expect.any(Number), 3]);
+  });
+
   it('pauses active coding jobs through the coder action', async () => {
     const codingJob = {
       id: 1,

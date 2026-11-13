@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
-import { EntityManager } from 'typeorm';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { DataSource, EntityManager } from 'typeorm';
 import { assertCodingResourceMutation } from '../shared/coding-ownership.policy';
+import { withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import { canTransitionCodingJobStatus, isProtectedCodingJobStatus } from './coding-job-status-policy';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobAccessService } from './coding-job-access.service';
@@ -12,8 +13,33 @@ export class CodingJobStatusService {
   constructor(
     private readonly access: CodingJobAccessService,
     private readonly mutation: CodingJobMutationService,
-    private readonly query: CodingJobQueryService
+    private readonly query: CodingJobQueryService,
+    private readonly connection: DataSource
   ) {}
+
+  async startCodingJob(id: number, workspaceId: number, actorUserId: number): Promise<CodingJob> {
+    const started = await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
+      // Match the workspace-first lock order used by cascading workspace deletion.
+      await manager.query('SELECT id FROM public.workspace WHERE id = $1 FOR KEY SHARE', [workspaceId]);
+      const repository = manager.getRepository(CodingJob);
+      const job = await repository.findOne({
+        where: { id, workspace_id: workspaceId },
+        lock: { mode: 'pessimistic_write' }
+      });
+      if (!job) throw new NotFoundException(`Coding job with ID ${id} not found in workspace ${workspaceId}`);
+      if (job.status !== 'pending') return null;
+
+      // A pending start changes only this job. Its row lock also protects freshness updates.
+      await this.access.assertAssignedCoderAccess(id, workspaceId, actorUserId, manager);
+      job.status = 'active';
+      const saved = await repository.save(job);
+      await this.mutation.recordJobEvent(manager, workspaceId, id, 'CODING_JOB_UPDATED', actorUserId, {
+        changedFields: ['status'], status: saved.status
+      });
+      return saved;
+    });
+    return started ?? this.mutation.updateCodingJob(id, workspaceId, { status: 'active' }, actorUserId, true);
+  }
 
   async pauseCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
     return this.setOwnCodingJobStatus(id, workspaceId, 'paused', actorUserId);
