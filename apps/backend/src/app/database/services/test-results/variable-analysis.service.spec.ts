@@ -15,18 +15,15 @@ const createJob = (
     };
     state: string;
     progress: number;
-    returnvalue: unknown;
+    returnvalue: Record<string, unknown>;
   }> = {}
 ) => ({
   id: overrides.id || 'job-1',
-  data: {
-    resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
-    ...(overrides.data || {
-      workspaceId: 1,
-      unitId: 2,
-      variableId: 'VAR',
-      cacheKey: 'variable-analysis:1:job-1'
-    })
+  data: overrides.data ?? {
+    workspaceId: 1,
+    unitId: 2,
+    variableId: 'VAR',
+    cacheKey: 'variable-analysis:1:job-1'
   },
   getState: jest.fn().mockResolvedValue(overrides.state || 'completed'),
   progress: overrides.progress ?? 100,
@@ -34,14 +31,15 @@ const createJob = (
   failedReason: undefined,
   timestamp: 1000,
   finishedOn: 2000,
-  returnvalue: Object.prototype.hasOwnProperty.call(overrides, 'returnvalue') ?
-    overrides.returnvalue :
-    {
+  returnvalue: 'returnvalue' in overrides && !overrides.returnvalue ? undefined : {
+    resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
+    ...(overrides.returnvalue ?? {
       cacheKey: 'variable-analysis:1:job-1',
       workspaceId: 1,
       total: 1,
       storedAt: '2026-05-26T00:00:00.000Z'
-    }
+    })
+  }
 });
 
 describe('VariableAnalysisService', () => {
@@ -81,14 +79,136 @@ describe('VariableAnalysisService', () => {
     expect(cacheService.get).not.toHaveBeenCalled();
   });
 
-  it.each([undefined, 4, 5, 6, 7, 8, 9].flatMap(resultVersion => ([
+  it('serves the result when the job completes between loading the job and checking its state', async () => {
+    const data = { workspaceId: 1 };
+    const activeJob = { ...createJob({ data, state: 'active' }), returnvalue: null };
+    const completedJob = createJob({ data });
+    let completed = false;
+    activeJob.getState.mockImplementationOnce(async () => {
+      completed = true;
+      return 'completed';
+    });
+    jobQueueService.getVariableAnalysisJob.mockImplementation(async () => (
+      completed ? completedJob : activeJob
+    ));
+    cacheService.get.mockResolvedValue({
+      variableCombos: [{ unitId: 2, unitName: 'UNIT', variableId: 'VAR' }],
+      frequencies: {
+        '2:VAR': [{
+          value: '', count: 2, isEmptyValue: true, percentage: 100
+        }]
+      },
+      total: 1
+    });
+
+    await expect(service.getAnalysisResultsPage('job-1', 1)).resolves.toMatchObject({
+      rows: [expect.objectContaining({
+        variableId: 'VAR', value: '', count: 2, isEmptyValue: true
+      })]
+    });
+  });
+
+  it.each([undefined, 4, 5, 6, 7, 8, 9, 10].flatMap(resultVersion => ([
     'getAnalysisResults', 'getAnalysisResultsPage', 'exportAnalysisResultsAsCsv', 'exportAnalysisResultsAsXlsx'
   ] as const).map(method => ({ method, resultVersion }))))('$method requires recalculation of results from version $resultVersion', async ({ method, resultVersion }) => {
-    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({ data: { workspaceId: 1, resultVersion } }));
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob({
+      data: { workspaceId: 1, resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION },
+      returnvalue: { resultVersion }
+    }));
     await expect(service[method]('job-1', 1)).rejects.toMatchObject({
       response: expect.objectContaining({ code: 'VARIABLE_ANALYSIS_OUTDATED' })
     });
     expect(cacheService.get).not.toHaveBeenCalled();
+  });
+
+  it.each(['direct', 'chunked'])('keeps multiple-response empty rows in %s pages and both exports', async storage => {
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        totalCount: 3,
+        validCount: 2,
+        invalidCount: 1,
+        emptyCount: 1,
+        distinctValueCount: 3
+      },
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'ONLY_EMPTY',
+        totalCount: 2,
+        validCount: 0,
+        invalidCount: 2,
+        emptyCount: 2,
+        distinctValueCount: 1
+      }
+    ];
+    const frequencies = {
+      '1:MULTI': [
+        {
+          value: 'B', count: 2, validOccurrenceCount: 2, percentage: 200 / 3
+        },
+        {
+          value: 'A', count: 1, validOccurrenceCount: 1, percentage: 100 / 3
+        },
+        {
+          value: '', count: 1, validOccurrenceCount: 0, percentage: 100 / 3
+        }
+      ],
+      '1:ONLY_EMPTY': [{
+        value: '', count: 2, validOccurrenceCount: 0, percentage: 100
+      }]
+    };
+    const result = { variableCombos, frequencies, total: 2 };
+    const manifest = {
+      storage: 'chunked', workspaceId: 1, total: 2, variableComboChunks: 1, frequencyChunks: 1
+    };
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockImplementation((key: string) => {
+      if (key.endsWith(':variable-combos:0')) return Promise.resolve(variableCombos);
+      if (key.endsWith(':frequencies:0')) return Promise.resolve(Object.entries(frequencies));
+      return Promise.resolve(storage === 'chunked' ? manifest : result);
+    });
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      search: 'MULTI', pageSize: 1, sortBy: 'value', sortDirection: 'asc'
+    });
+    expect(page.rows).toEqual([expect.objectContaining({
+      value: '',
+      count: 1,
+      validOccurrenceCount: 0,
+      totalCount: 3,
+      validCount: 2,
+      emptyCount: 1,
+      percentageValid: 0,
+      hiddenValueCount: 0
+    })]);
+    expect(page.rows![0].isSchemaOnly).not.toBe(true);
+    const filtered = await service.getAnalysisResultsPage('job-1', 1, { onlyEmpty: true });
+    expect(filtered.rows?.filter(row => row.value === '')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ variableId: 'MULTI', count: 1 }),
+      expect.objectContaining({
+        variableId: 'ONLY_EMPTY', count: 2, percentageTotal: 100, percentageValid: null
+      })
+    ]));
+
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    const [headers, ...rows] = csv.split(/\r?\n/).map(line => line.split(';'));
+    const emptyRows = rows.filter(row => row[headers.indexOf('Wert ist leer')] === 'ja');
+    expect(emptyRows.map(row => [
+      row[headers.indexOf('Variablen-ID')], row[headers.indexOf('Anzahl Antworten')],
+      row[headers.indexOf('Anzahl gültiger Antworten')], row[headers.indexOf('Anteil gültig (%)')]
+    ])).toEqual([['MULTI', '1', '0', '0'], ['ONLY_EMPTY', '2', '0', '']]);
+
+    const bytes = await service.exportAnalysisResultsAsXlsx('job-1', 1);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Antwortwerte')!;
+    const xlsxHeaders = sheet.getRow(1).values as string[];
+    const xlsxEmptyRows = sheet.getRows(2, 4)!.filter(row => row.getCell(xlsxHeaders.indexOf('Wert ist leer')).value === 'ja');
+    expect(xlsxEmptyRows.map(row => row.getCell(xlsxHeaders.indexOf('Anzahl Antworten')).value)).toEqual([1, 2]);
+    expect(xlsxEmptyRows.map(row => row.getCell(xlsxHeaders.indexOf('Anzahl gültiger Antworten')).value)).toEqual([0, 0]);
   });
 
   it.each(['direct', 'chunked'])('preserves animal answer counts, scores and schema origin in %s results and exports', async storage => {
@@ -202,6 +322,7 @@ describe('VariableAnalysisService', () => {
         )
       })
     );
+    expect(jobQueueService.addVariableAnalysisJob.mock.calls[0][0]).not.toHaveProperty('resultVersion');
     await expect(service.createAnalysisJob(1)).rejects.toBeInstanceOf(
       ConflictException
     );

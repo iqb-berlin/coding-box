@@ -30,3 +30,5 @@ The normalizer keeps Kodierbox percentages as percent values. eatPrepTBA proport
 It also checks that counts, denominators, proportions, duplicate keys, and expected schema/response rows are internally consistent.
 
 The golden fixture covers raw answer categories. This fixture uses unit value metadata without coding rules. Rule-based code/score enrichment of raw values is tested separately; matching a raw value to a code ID alone never establishes a schema assignment. Assigned-code frequencies and coding-run selection are covered separately by the processor regression tests.
+
+The manually normalized table includes the empty multiple-response category for #559. Both `[]` and `[null]` count as empty responses and contribute no valid occurrences. A mixed response such as `["B",null,"  "]` contributes only to category B. These rows extend the manual MVP reference for the Kodierbox display contract.

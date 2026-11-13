@@ -2,6 +2,7 @@ import * as childProcess from 'child_process';
 import * as path from 'path';
 import { createHash } from 'crypto';
 import { Job } from 'bullmq';
+import type { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import { CacheService } from '../../cache/cache.service';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
@@ -89,7 +90,7 @@ interface ReferenceFrequency {
   count: number;
   validOccurrenceCount: number;
   percentageTotal: number;
-  percentageValid: number;
+  percentageValid: number | null;
   isSchemaOnly: boolean;
 }
 
@@ -518,7 +519,7 @@ describe('VariableAnalysisProcessor', () => {
     ].map(value => ({ logicalKey: 'UNIT\u001FVAR', value })));
   });
 
-  it('keeps the documented eatPrepTBA reference golden in sync with the normalized reference table', () => {
+  it('normalizes the eatPrepTBA reference with [null] as an empty response and ignores empty list elements', () => {
     try {
       childProcess.execFileSync(
         process.execPath,
@@ -570,6 +571,13 @@ describe('VariableAnalysisProcessor', () => {
                 { value: 'B', label: 'Beta' },
                 { value: 'C', label: 'Gamma' }
               ]
+            },
+            {
+              id: 'VAR_MULTI_ONLY_EMPTY',
+              type: 'string',
+              sourceType: 'BASE',
+              multiple: true,
+              hasCodingScheme: false
             }
           ]
         }
@@ -646,7 +654,7 @@ describe('VariableAnalysisProcessor', () => {
             responseId: '2',
             unitName: 'UNIT_REF',
             variableId: 'VAR_MULTI',
-            value: '["B"]',
+            value: '["B",null,"  "]',
             status: '3',
             statusV1: null,
             codeV1: null,
@@ -656,8 +664,8 @@ describe('VariableAnalysisProcessor', () => {
             responseId: '3',
             unitName: 'UNIT_REF',
             variableId: 'VAR_MULTI',
-            value: '[]',
-            status: '7',
+            value: '[null]',
+            status: '3',
             statusV1: null,
             codeV1: null,
             scoreV1: null
@@ -671,7 +679,14 @@ describe('VariableAnalysisProcessor', () => {
             statusV1: null,
             codeV1: null,
             scoreV1: null
-          }
+          },
+          ...['5', '6'].map(responseId => ({
+            responseId,
+            unitName: 'UNIT_REF',
+            variableId: 'VAR_MULTI_ONLY_EMPTY',
+            value: '[]',
+            status: '3'
+          }))
         ],
         [
           {
@@ -706,13 +721,13 @@ describe('VariableAnalysisProcessor', () => {
             unitName: 'UNIT_REF',
             variableId: 'VAR_MULTI',
             status: '3',
-            count: '3'
+            count: '4'
           },
           {
             unitName: 'UNIT_REF',
-            variableId: 'VAR_MULTI',
-            status: '7',
-            count: '1'
+            variableId: 'VAR_MULTI_ONLY_EMPTY',
+            status: '3',
+            count: '2'
           }
         ]
       ]
@@ -812,8 +827,7 @@ describe('VariableAnalysisProcessor', () => {
       [
         'count',
         'validOccurrenceCount',
-        'percentageTotal',
-        'percentageValid'
+        'percentageTotal'
       ].forEach(field => {
         expectCloseToReference(
           actual?.[field],
@@ -821,6 +835,11 @@ describe('VariableAnalysisProcessor', () => {
           eatPrepReference.tolerance
         );
       });
+      if (expected.percentageValid === null) {
+        expect(actual?.percentageValid).toBeNull();
+      } else {
+        expectCloseToReference(actual?.percentageValid, expected.percentageValid, eatPrepReference.tolerance);
+      }
     });
   });
 
@@ -1380,7 +1399,7 @@ describe('VariableAnalysisProcessor', () => {
         validCount: 2,
         invalidCount: 1,
         emptyCount: 1,
-        distinctValueCount: 2
+        distinctValueCount: 3
       })
     ]);
 
@@ -1403,12 +1422,22 @@ describe('VariableAnalysisProcessor', () => {
           count: 1,
           validOccurrenceCount: 1,
           percentage: 33.33333333333333
+        }),
+        expect.objectContaining({
+          value: '',
+          count: 1,
+          validOccurrenceCount: 0,
+          percentageTotal: 33.33333333333333,
+          percentageValid: 0
         })
       ]]
     ]);
   });
 
-  it('splits boolean multiple response arrays using position labels', async () => {
+  it.each([
+    { name: 'position labels only', values: undefined },
+    { name: 'an empty value for a labeled option', values: [{ value: '', label: 'Red' }] }
+  ])('keeps option labels off the empty row with $name', async ({ values }) => {
     const { processor, cacheService } = createProcessor({
       unitVariableDetails: [
         {
@@ -1421,6 +1450,7 @@ describe('VariableAnalysisProcessor', () => {
               type: 'boolean',
               multiple: true,
               hasCodingScheme: false,
+              values,
               valuePositionLabels: ['Red', 'Blue']
             }
           ]
@@ -1473,7 +1503,7 @@ describe('VariableAnalysisProcessor', () => {
         variableId: 'BOOL_MULTI',
         totalCount: 3,
         emptyCount: 1,
-        distinctValueCount: 2
+        distinctValueCount: 3
       })
     ]);
 
@@ -1496,9 +1526,128 @@ describe('VariableAnalysisProcessor', () => {
           count: 1,
           percentage: 33.33333333333333,
           schemaOrder: 1
+        }),
+        expect.objectContaining({
+          value: '',
+          count: 1,
+          label: undefined,
+          schemaOrder: undefined,
+          validOccurrenceCount: 0,
+          percentageTotal: 33.33333333333333,
+          percentageValid: null
         })
       ]]
     ]);
+  });
+
+  it('keeps actual empty multiple responses as an observed row when every answer is empty', async () => {
+    const values = [null, '', '   ', '[]', '[false,false]', '[null,""]'];
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [[], [], values.map((value, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+      }))]
+    });
+    await processor.processWorkspaceJob(createJob());
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 6,
+        validCount: 0,
+        invalidCount: 6,
+        emptyCount: 6,
+        emptyPercentage: 100,
+        distinctValueCount: 1
+      })
+    ]);
+    const frequencies = findCacheSetPayload<Array<[string, { isSchemaOnly?: boolean }[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(frequencies).toEqual([['1:MULTI', [expect.objectContaining({
+      value: '', count: 6, validOccurrenceCount: 0, percentageTotal: 100, percentageValid: null
+    })]]]);
+    expect(frequencies[0][1][0].isSchemaOnly).not.toBe(true);
+  });
+
+  it('keeps a rare empty multiple response in addition to the twenty most frequent categories', async () => {
+    const responseValues = Array.from({ length: 21 }, (_, index) => [String(index), String(index)]).flat();
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI', type: 'string', multiple: true, hasCodingScheme: false
+        }]
+      }],
+      queryResults: [[], [], [...responseValues.map(value => JSON.stringify([value])), '[]'].map((value, index) => ({
+        responseId: index + 1, unitName: 'UNIT', variableId: 'MULTI', value, status: 3
+      }))]
+    });
+    await processor.processWorkspaceJob(createJob());
+    const frequencies = findCacheSetPayload<Array<[string, { value: string; count: number }[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    )[0][1];
+    expect(frequencies).toHaveLength(21);
+    expect(frequencies.filter(row => row.value !== '')).toHaveLength(20);
+    expect(frequencies).toContainEqual(expect.objectContaining({ value: '', count: 1, validOccurrenceCount: 0 }));
+    expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
+      expect.objectContaining({
+        totalCount: 43, validCount: 42, emptyCount: 1, distinctValueCount: 22
+      })
+    ]);
+  });
+
+  it('keeps a rare selected Boolean position separate from the empty row when its metadata value is blank', async () => {
+    const blankMetadataValue = '   ';
+    const otherPositionsSelected = [false, ...Array<boolean>(20).fill(true)];
+    const responses = [
+      [true, ...Array<boolean>(20).fill(false)],
+      Array<boolean>(21).fill(false),
+      otherPositionsSelected,
+      otherPositionsSelected
+    ];
+    const { processor, cacheService } = createProcessor({
+      unitVariableDetails: [{
+        unitName: 'UNIT',
+        unitId: 'UNIT',
+        variables: [{
+          id: 'MULTI',
+          type: 'boolean',
+          multiple: true,
+          hasCodingScheme: false,
+          values: [{ value: blankMetadataValue, label: 'Option A' }]
+        }]
+      }],
+      queryResults: [[], [], responses.map((response, index) => ({
+        responseId: index + 1,
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        value: JSON.stringify(response),
+        status: 3
+      }))]
+    });
+
+    await processor.processWorkspaceJob(createJob());
+
+    const [[, rows]] = findCacheSetPayload<Array<[string, VariableFrequencyDto[]]>>(
+      cacheService, 'variable-analysis:1:job-1:frequencies:0'
+    );
+    expect(rows.filter(row => row.isEmptyValue)).toEqual([
+      expect.objectContaining({ value: '', count: 1, validOccurrenceCount: 0 })
+    ]);
+    expect(rows).toContainEqual(expect.objectContaining({
+      value: blankMetadataValue,
+      label: 'Option A',
+      isEmptyValue: false,
+      isSchemaSupplemental: true,
+      count: 1,
+      validOccurrenceCount: 1
+    }));
   });
 
   it('paginates multiple response rows across batches', async () => {
@@ -1604,7 +1753,7 @@ describe('VariableAnalysisProcessor', () => {
 
     expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:variable-combos:0')).toEqual([
       expect.objectContaining({
-        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 2
+        totalCount: 5, validCount: 2, invalidCount: 3, emptyCount: 3, distinctValueCount: 3
       })
     ]);
     expect(findCacheSetPayload(cacheService, 'variable-analysis:1:job-1:frequencies:0')).toEqual([
@@ -1657,7 +1806,7 @@ describe('VariableAnalysisProcessor', () => {
         invalidCount: analysisMode === 'values' ? 4 : 0,
         emptyCount: 4,
         emptyPercentage: 50,
-        distinctValueCount: analysisMode === 'values' ? 3 : 1
+        distinctValueCount: analysisMode === 'values' ? 4 : 1
       })
     ]);
     const rows = analysisMode === 'values' ? [
@@ -1669,6 +1818,9 @@ describe('VariableAnalysisProcessor', () => {
       }),
       expect.objectContaining({
         value: 'A', count: 1, validOccurrenceCount: 1, percentageValid: 25, isEmptyValue: false
+      }),
+      expect.objectContaining({
+        value: '', count: 4, validOccurrenceCount: 0, percentageValid: 0, isEmptyValue: true
       }),
       expect.objectContaining({
         value: '[false,false]', count: 0, isSchemaOnly: true, isEmptyValue: false

@@ -5,6 +5,8 @@ UNIT_REF,VAR_BASE,3,B,3,false
 UNIT_REF,VAR_BASE,4,D,3,false
 UNIT_REF,VAR_BASE,5,,7,false
 UNIT_REF,VAR_MULTI,1,"[""A"",""B""]",3,true
-UNIT_REF,VAR_MULTI,2,"[""B""]",3,true
-UNIT_REF,VAR_MULTI,3,[],7,true
+UNIT_REF,VAR_MULTI,2,"[""B"",null,""  ""]",3,true
+UNIT_REF,VAR_MULTI,3,[null],3,true
 UNIT_REF,VAR_MULTI,4,"[""A"",""C"",""C""]",3,true
+UNIT_REF,VAR_MULTI_ONLY_EMPTY,5,[],3,true
+UNIT_REF,VAR_MULTI_ONLY_EMPTY,6,[],3,true

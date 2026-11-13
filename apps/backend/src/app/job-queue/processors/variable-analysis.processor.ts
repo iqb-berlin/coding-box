@@ -4,6 +4,7 @@ import { createHash } from 'crypto';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, SelectQueryBuilder } from 'typeorm';
+import { getTopMultipleResponseCounts, shouldSkipSchemaFrequency } from './variable-analysis-frequency.util';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -14,7 +15,7 @@ import {
   VariableAnalysisJobResult,
   VariableAnalysisResultCacheManifest
 } from '../job-queue.service';
-import { VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
+import { VARIABLE_ANALYSIS_RESULT_VERSION, VariableAnalysisResultDto, VariableCombo } from '../../admin/variable-analysis/dto/variable-analysis-result.dto';
 import { VariableFrequencyDto } from '../../admin/variable-analysis/dto/variable-frequency.dto';
 import {
   applyResolvedExclusionsToQuery,
@@ -359,6 +360,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
 
     return {
       cacheKey,
+      resultVersion: VARIABLE_ANALYSIS_RESULT_VERSION,
       ...manifest
     };
   }
@@ -962,21 +964,14 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       combo.totalCount = summary.totalCount;
       combo.validCount = summary.validCount;
       combo.invalidCount = Math.max(0, summary.totalCount - summary.validCount);
-      combo.distinctValueCount = summary.counts.size;
+      combo.distinctValueCount = summary.counts.size + Number(summary.emptyCount > 0);
       observedCounts.countsByComboKey.set(comboKey, summary.counts);
       observedCounts.validCountsByComboKey.set(
         comboKey,
         summary.validCounts
       );
 
-      const sortedValues = Array.from(summary.counts.entries())
-        .sort(([valueA, countA], [valueB, countB]) => {
-          if (countA !== countB) {
-            return countB - countA;
-          }
-          return valueA.localeCompare(valueB);
-        })
-        .slice(0, this.MAX_VALUES_PER_VARIABLE);
+      const sortedValues = getTopMultipleResponseCounts(summary.counts, summary.emptyCount, this.MAX_VALUES_PER_VARIABLE);
 
       frequencies[comboKey] = sortedValues.map(([value, count]) => {
         const category = summary.categories.get(value);
@@ -988,7 +983,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           label: category?.label,
           score: category?.score,
           schemaOrder: category?.schemaOrder,
-          isEmptyValue: false,
+          isEmptyValue: value === '',
           count,
           validOccurrenceCount: summary.validCounts.get(value) || 0,
           percentage: 0
@@ -1205,7 +1200,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
         const observedCounts = observedCountsForCombo.get(schemaValue.value);
         const count = typeof observedCounts === 'number' ?
           observedCounts : observedCounts?.count || 0;
-        if (schemaValue.isObservedOnly && count === 0) return;
+        if (shouldSkipSchemaFrequency(schemaValue, count, entry.multiple, rowsByValue)) return;
         const definition = this.resolveObservedSchemaValue(
           schemaValue.value, count, typeof observedCounts === 'number' ? 0 : observedCounts?.nullCount || 0, entry
         );
@@ -1233,7 +1228,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
           unitName: combo.unitName,
           variableId: combo.variableId,
           value: valuePreview,
-          isEmptyValue: entry.multiple ? schemaCode.value.trim() === '' : isEmptyVariableAnalysisValue(schemaCode.value),
+          isEmptyValue: entry.multiple ? count === 0 && schemaCode.value.trim() === '' : isEmptyVariableAnalysisValue(schemaCode.value),
           label: schemaCode.label,
           score: schemaCode.score,
           code: schemaCode.code,
