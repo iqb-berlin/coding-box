@@ -69,6 +69,29 @@ const githubDevelopPr = {
   CI_EXTERNAL_PULL_REQUEST_TARGET_REPOSITORY: 'iqb-berlin/coding-box'
 };
 
+test('only the opt-in web experiment releases the frontend before backend tests complete', () => {
+  const branch = 'compare-ci-unit-test-parallelism';
+  const frontend = resolve('test-frontend');
+  for (const [env, parallel] of [
+    [{ CI_COMMIT_BRANCH: branch, CI_PIPELINE_SOURCE: 'push', CI_UNIT_TEST_SCHEDULING: 'parallel' }, false],
+    [{ CI_COMMIT_BRANCH: branch, CI_PIPELINE_SOURCE: 'web' }, false],
+    [{ CI_COMMIT_BRANCH: branch, CI_PIPELINE_SOURCE: 'web', CI_UNIT_TEST_SCHEDULING: 'parallel' }, true],
+    [{ CI_COMMIT_BRANCH: 'develop', CI_PIPELINE_SOURCE: 'web', CI_UNIT_TEST_SCHEDULING: 'parallel' }, false],
+    [{ CI_COMMIT_TAG: '2.0.0', CI_PIPELINE_SOURCE: 'web', CI_UNIT_TEST_SCHEDULING: 'parallel' }, false]
+  ]) {
+    const variables = { ...config.variables, ...env };
+    const rule = selectedRule(frontend.rules, variables);
+    const needs = (rule.needs ?? frontend.needs).map(need => need.job ?? need);
+    assert.ok(needs.includes('install-dependencies'));
+    assert.ok(needs.includes('build-cicd-base-image'));
+    for (const backend of ['test-backend', 'test-backend-integration']) {
+      assert.equal(needs.includes(backend), !parallel);
+      assert.ok(selected(backend, variables));
+      assert.equal(resolve(backend).allow_failure, false);
+    }
+  }
+});
+
 test('Cypress jobs publish JUnit on failure and join live evidence before publication', () => {
   for (const [name, suites] of [
     ['test-browser', 'component,browser'], ['test-replay-live', 'replay-live'],
