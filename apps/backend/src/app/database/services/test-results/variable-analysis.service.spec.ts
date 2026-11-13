@@ -91,6 +91,96 @@ describe('VariableAnalysisService', () => {
     expect(cacheService.get).not.toHaveBeenCalled();
   });
 
+  it.each(['direct', 'chunked'])('keeps multiple-response empty rows in %s pages and both exports', async storage => {
+    const variableCombos = [
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'MULTI',
+        totalCount: 3,
+        validCount: 2,
+        invalidCount: 1,
+        emptyCount: 1,
+        distinctValueCount: 3
+      },
+      {
+        unitId: 1,
+        unitName: 'UNIT',
+        variableId: 'ONLY_EMPTY',
+        totalCount: 2,
+        validCount: 0,
+        invalidCount: 2,
+        emptyCount: 2,
+        distinctValueCount: 1
+      }
+    ];
+    const frequencies = {
+      '1:MULTI': [
+        {
+          value: 'B', count: 2, validOccurrenceCount: 2, percentage: 200 / 3
+        },
+        {
+          value: 'A', count: 1, validOccurrenceCount: 1, percentage: 100 / 3
+        },
+        {
+          value: '', count: 1, validOccurrenceCount: 0, percentage: 100 / 3
+        }
+      ],
+      '1:ONLY_EMPTY': [{
+        value: '', count: 2, validOccurrenceCount: 0, percentage: 100
+      }]
+    };
+    const result = { variableCombos, frequencies, total: 2 };
+    const manifest = {
+      storage: 'chunked', workspaceId: 1, total: 2, variableComboChunks: 1, frequencyChunks: 1
+    };
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(createJob());
+    cacheService.get.mockImplementation((key: string) => {
+      if (key.endsWith(':variable-combos:0')) return Promise.resolve(variableCombos);
+      if (key.endsWith(':frequencies:0')) return Promise.resolve(Object.entries(frequencies));
+      return Promise.resolve(storage === 'chunked' ? manifest : result);
+    });
+
+    const page = await service.getAnalysisResultsPage('job-1', 1, {
+      search: 'MULTI', pageSize: 1, sortBy: 'value', sortDirection: 'asc'
+    });
+    expect(page.rows).toEqual([expect.objectContaining({
+      value: '',
+      count: 1,
+      validOccurrenceCount: 0,
+      totalCount: 3,
+      validCount: 2,
+      emptyCount: 1,
+      percentageValid: 0,
+      hiddenValueCount: 0
+    })]);
+    expect(page.rows![0].isSchemaOnly).not.toBe(true);
+    const filtered = await service.getAnalysisResultsPage('job-1', 1, { onlyEmpty: true });
+    expect(filtered.rows?.filter(row => row.value === '')).toEqual(expect.arrayContaining([
+      expect.objectContaining({ variableId: 'MULTI', count: 1 }),
+      expect.objectContaining({
+        variableId: 'ONLY_EMPTY', count: 2, percentageTotal: 100, percentageValid: null
+      })
+    ]));
+
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    const [headers, ...rows] = csv.split(/\r?\n/).map(line => line.split(';'));
+    const emptyRows = rows.filter(row => row[headers.indexOf('Wert ist leer')] === 'ja');
+    expect(emptyRows.map(row => [
+      row[headers.indexOf('Variablen-ID')], row[headers.indexOf('Anzahl Antworten')],
+      row[headers.indexOf('Anzahl gültiger Antworten')], row[headers.indexOf('Anteil gültig (%)')]
+    ])).toEqual([['MULTI', '1', '0', '0'], ['ONLY_EMPTY', '2', '0', '']]);
+
+    const bytes = await service.exportAnalysisResultsAsXlsx('job-1', 1);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(bytes as unknown as Parameters<typeof workbook.xlsx.load>[0]);
+    const sheet = workbook.getWorksheet('Antwortwerte')!;
+    const xlsxHeaders = sheet.getRow(1).values as string[];
+    const xlsxEmptyRows = sheet.getRows(2, 4)!.filter(row => row.getCell(xlsxHeaders.indexOf('Wert ist leer')).value === 'ja');
+    expect(xlsxEmptyRows.map(row => row.getCell(xlsxHeaders.indexOf('Anzahl Antworten')).value)).toEqual([1, 2]);
+    expect(xlsxEmptyRows.map(row => row.getCell(xlsxHeaders.indexOf('Anzahl gültiger Antworten')).value)).toEqual([0, 0]);
+  });
+
   it.each(['direct', 'chunked'])('preserves animal answer counts, scores and schema origin in %s results and exports', async storage => {
     const result = {
       variableCombos: [{

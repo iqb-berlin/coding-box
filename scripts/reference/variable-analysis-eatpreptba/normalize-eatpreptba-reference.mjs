@@ -164,7 +164,11 @@ function comboKey(unitName, variableId) {
 function parseResponseValues(response) {
   if (response.isMultiple === 'true') {
     const values = JSON.parse(response.value || '[]');
-    return [...new Set(values)];
+    if (!Array.isArray(values)) {
+      throw new Error(`Expected a JSON array for ${response.unitName}/${response.variableId}, response ${response.responseId}.`);
+    }
+    const categories = values.filter(value => value !== null && (typeof value !== 'string' || value.trim() !== ''));
+    return categories.length > 0 ? [...new Set(categories)] : [''];
   }
 
   return [response.value];
@@ -180,7 +184,7 @@ function getSchemaByKey(schemaRows) {
 function getObservedValues(responses) {
   const observedValues = new Set();
   responses.forEach(response => {
-    parseResponseValues(response).forEach(value => {
+    response.values.forEach(value => {
       observedValues.add(key(response.unitName, response.variableId, value));
     });
   });
@@ -208,11 +212,10 @@ function getExpectedFrequencyStats(responses, schemaRows) {
   });
 
   responses.forEach(response => {
-    const isValid = !invalidOrMissingStatuses.has(Number(response.status));
-    parseResponseValues(response).forEach(value => {
+    response.values.forEach(value => {
       const stat = ensureStat(response.unitName, response.variableId, value);
       stat.count += 1;
-      if (isValid) {
+      if (response.isValid) {
         stat.validOccurrenceCount += 1;
       }
     });
@@ -235,20 +238,12 @@ function getVariableCombos(responses) {
   return [...grouped.values()].map(groupRows => {
     const [{ unitName, variableId }] = groupRows;
     const totalCount = groupRows.length;
-    const validCount = groupRows.filter(
-      row => !invalidOrMissingStatuses.has(Number(row.status))
-    ).length;
-    const emptyCount = groupRows.filter(row => (
-      parseResponseValues(row).length === 0 ||
-      parseResponseValues(row).every(value => value === '')
-    )).length;
+    const validCount = groupRows.filter(row => row.isValid).length;
+    const emptyCount = groupRows.filter(row => row.isEmpty).length;
     const distinctValues = new Set();
 
     groupRows.forEach(row => {
-      parseResponseValues(row).forEach(value => {
-        if (row.isMultiple === 'true' && value === '') {
-          return;
-        }
+      row.values.forEach(value => {
         distinctValues.add(value);
       });
     });
@@ -282,7 +277,7 @@ function validateReferenceRow({
     row.category_p_total,
     `${rowLabel} category_p_total`
   );
-  const categoryPValid = toRequiredNumber(
+  const categoryPValid = toNumber(
     row.category_p_valid,
     `${rowLabel} category_p_valid`
   );
@@ -321,13 +316,15 @@ function validateReferenceRow({
     combo.totalCount > 0 ? expectedFrequency.count / combo.totalCount : 0,
     `${rowLabel} category_p_total`
   );
-  assertClose(
-    categoryPValid,
-    combo.validCount > 0 ?
-      expectedFrequency.validOccurrenceCount / combo.validCount :
-      0,
-    `${rowLabel} category_p_valid`
-  );
+  const validShareContext = `${rowLabel} category_p_valid`;
+  if (combo.validCount === 0) {
+    assertEqual(categoryPValid, null, validShareContext);
+  } else {
+    if (categoryPValid === null) {
+      throw new Error(`${validShareContext} must be present when there are valid answers.`);
+    }
+    assertClose(categoryPValid, expectedFrequency.validOccurrenceCount / combo.validCount, validShareContext);
+  }
 
   return { categoryCount, categoryPTotal, categoryPValid };
 }
@@ -393,7 +390,7 @@ function getFrequencies(referenceRows, schemaRows, responses) {
         count: categoryCount,
         validOccurrenceCount: expectedFrequency.validOccurrenceCount,
         percentageTotal: categoryPTotal * 100,
-        percentageValid: categoryPValid * 100,
+        percentageValid: categoryPValid === null ? null : categoryPValid * 100,
         isSchemaOnly: Boolean(schema) &&
           categoryCount === 0 &&
           !observedValues.has(key(unitName, variableId, value))
@@ -422,7 +419,12 @@ function getFrequencies(referenceRows, schemaRows, responses) {
   return frequencies;
 }
 
-const responses = readCsv(responsesPath, responseColumns);
+const responses = readCsv(responsesPath, responseColumns).map(response => {
+  const values = parseResponseValues(response);
+  const isEmpty = values.every(value => value === '');
+  const isValid = !isEmpty && !invalidOrMissingStatuses.has(Number(response.status));
+  return { ...response, values, isEmpty, isValid };
+});
 const schema = readCsv(schemaPath, schemaColumns);
 const referenceRows = readCsv(referenceTablePath, referenceTableColumns);
 

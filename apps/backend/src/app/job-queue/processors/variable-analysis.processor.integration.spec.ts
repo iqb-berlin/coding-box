@@ -142,7 +142,7 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     expect(values.map(isEmptyVariableAnalysisValue)).toEqual([true, false, false, true, true]);
   });
 
-  it('preserves empty-value flags through truncation, cached pages and CSV/XLSX exports', async () => {
+  it('serves newly computed results from a legacy queued job and preserves long empty values', async () => {
     const variableId = 'LONG_EMPTY';
     const values = [' '.repeat(500), ' '.repeat(501), ' '.repeat(1000), `${' '.repeat(1000)}x`];
     for (const [index, value] of values.entries()) {
@@ -269,7 +269,11 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
       multiple: true,
       hasCodingScheme: true,
       codes: [{ id: 0, label: 'Nullcode', score: 0 }, { id: 1, label: 'Eins', score: 1 }, { id: 2, label: 'Unbeobachtet' }],
-      values: [{ value: 'A', label: 'Alpha' }, { value: 'B', label: 'Beta' }]
+      values: [
+        { value: 'A', label: 'Alpha' },
+        { value: 'B', label: 'Beta' },
+        { value: '   ', label: 'Leeres Feld' }
+      ]
     }, options);
     const combo: VariableCombo = {
       ...options,
@@ -314,7 +318,8 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
         returnvalue: { variableCombos: [combo], frequencies, total: 1 }
       })
     } as never, {} as never);
-    const page = await service.getAnalysisResultsPage('job-1', 1);
+    const resultOptions = { includeSchemaCodes: options.analysisMode === 'values' };
+    const page = await service.getAnalysisResultsPage('job-1', 1, resultOptions);
     expect(page.rows?.length).toBeGreaterThan(0);
     page.rows?.forEach(row => expect(row).toMatchObject({ totalCount: 8, validCount, emptyCount: 4 }));
     if (options.analysisMode === 'codes') {
@@ -331,18 +336,27 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
       expect(page.rows).toContainEqual(expect.objectContaining({
         value: 'A', count: 2, validOccurrenceCount: 2, percentageValid: 50
       }));
+      expect(page.rows!.filter(row => row.isEmptyValue)).toEqual([expect.objectContaining({
+        value: '', count: 4, validOccurrenceCount: 0, percentageValid: 0
+      })]);
+      expect(page.rows!.find(row => row.isEmptyValue)?.isSchemaOnly).not.toBe(true);
     }
 
-    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1);
+    const csv = await service.exportAnalysisResultsAsCsv('job-1', 1, resultOptions);
     const [headers, ...csvRows] = csv.trim().split(/\r?\n/).map(row => row.split(';'));
+    expect(csvRows).toHaveLength(page.rows!.length);
     csvRows.forEach(row => {
       expect(row[headers.indexOf('Leere Rohwerte')]).toBe('4');
       expect(row[headers.indexOf('Leere Rohwerte (%)')]).toBe('50');
       expect(row[headers.indexOf('Antworten gültig')]).toBe(String(validCount));
-      if (options.analysisMode === 'values') expect(row[headers.indexOf('Wert ist leer')]).toBe('nein');
+      if (options.analysisMode === 'values') {
+        const isEmpty = row[headers.indexOf('Antwortwert/Kategorie oder Code')] === '';
+        expect(row[headers.indexOf('Wert ist leer')]).toBe(isEmpty ? 'ja' : 'nein');
+        if (isEmpty) expect(row[headers.indexOf('Anzahl Antworten')]).toBe('4');
+      }
     });
     const workbook = new ExcelJS.Workbook();
-    await workbook.xlsx.load(await service.exportAnalysisResultsAsXlsx('job-1', 1) as unknown as ExcelJS.Buffer);
+    await workbook.xlsx.load(await service.exportAnalysisResultsAsXlsx('job-1', 1, resultOptions) as unknown as ExcelJS.Buffer);
     const sheet = workbook.getWorksheet('Antwortwerte')!;
     const xlsxHeaders = sheet.getRow(1).values as string[];
     expect(sheet.rowCount).toBe(page.rows!.length + 1);
@@ -350,7 +364,11 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
       expect(row.getCell(xlsxHeaders.indexOf('Leere Rohwerte')).value).toBe(4);
       expect(row.getCell(xlsxHeaders.indexOf('Leere Rohwerte (%)')).value).toBe(50);
       expect(row.getCell(xlsxHeaders.indexOf('Antworten gültig')).value).toBe(validCount);
-      if (options.analysisMode === 'values') expect(row.getCell(xlsxHeaders.indexOf('Wert ist leer')).value).toBe('nein');
+      if (options.analysisMode === 'values') {
+        const isEmpty = row.getCell(xlsxHeaders.indexOf('Antwortwert/Kategorie oder Code')).text === '';
+        expect(row.getCell(xlsxHeaders.indexOf('Wert ist leer')).value).toBe(isEmpty ? 'ja' : 'nein');
+        if (isEmpty) expect(row.getCell(xlsxHeaders.indexOf('Anzahl Antworten')).value).toBe(4);
+      }
     });
   });
 

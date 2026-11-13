@@ -81,7 +81,22 @@ auch für CSV und XLSX. Ergebnisse älterer Berechnungsversionen müssen neu ber
 `Prozent gültig = Anzahl gültiger Antworten / Gültige Antworten × 100`.
 Bei null gültigen Antworten wird kein gültiger Prozentwert ausgegeben.
 Bei Mehrfachantworten wird jede Kategorie höchstens einmal pro Antwort gezählt;
-die Kategorieprozente können sich deshalb zu mehr als 100 % summieren.
+die Kategorieprozente können sich deshalb zu mehr als 100 % summieren. Eine Antwort
+mit `["A","B"]` zählt sowohl bei A als auch bei B. Deshalb muss auch die Summe aus
+Kategoriehäufigkeiten und leeren Antworten nicht der Zahl der Antwortdatensätze entsprechen.
+
+Mehrfachantworten ohne ausgewählte Kategorie erhalten eine eigene Zeile `[Leer]`
+mit ihrer tatsächlichen Häufigkeit. Sie zählt einmal je leerer Antwort und bleibt
+auch zusätzlich zu den 20 häufigsten Kategorien enthalten. Das gilt ebenso, wenn
+alle Antworten leer sind. Leere Antworten zählen in der Antwortwertanalyse nicht
+als gültig; ihr Anteil an gültigen Antworten ist 0 %, bei fehlendem gültigem Nenner
+bleibt er ohne Wert. Die Spalte „Leere Rohwerte“ bleibt als Angabe zur gesamten
+Variable erhalten. CSV und XLSX enthalten dieselbe Leerzeile als leeren Wert mit
+„Wert ist leer = ja“.
+
+Beispiel: `["A","B"]`, `["B"]`, `[]` ergeben drei Antworten, davon zwei gültige
+(bei gültigem ursprünglichem Antwortstatus). Die Wertzeilen zeigen A einmal,
+B zweimal und `[Leer]` einmal. Die Summe der Wertzeilen ist vier.
 
 Die Statusübersicht zeigt pro Variable einmal die vollständige Verteilung auf
 der aktuellen Ergebnisseite. Bei Antwortwerten verwendet sie den ursprünglichen
@@ -142,8 +157,9 @@ dieselbe Projektion der Ergebniszeilen und Bezugsgrößen.
 Die Prozessor- und Servicetests prüfen Kategorien, Code-Metadaten, die drei
 Kodierläufe, fehlende Werte, den Antworttext `null`, Null-Nenner sowie CSV/XLSX.
 Die zusätzliche `variable-analysis.processor.integration.spec.ts` führt die erzeugten SQL-Abfragen
-gegen PostgreSQL aus. Sie benötigt `VARIABLE_ANALYSIS_TEST_DB_URL` mit einer
-Verbindung zu einer Wegwerfdatenbank und arbeitet ausschließlich mit temporären
-Tabellen. Ohne diese Variable wird sie übersprungen.
+gegen PostgreSQL aus. `backend:test-integration` führt sie in der CI mit
+`VARIABLE_ANALYSIS_TEST_DB_URL` gegen die temporäre Testdatenbank aus. Für einen
+gezielten lokalen Lauf lässt sich die Variable auf eine Wegwerfdatenbank setzen.
+Die Suite arbeitet ausschließlich mit temporären Tabellen.
 
 Die fachliche Abnahme mit MGV090_01 und MDV007 im Testarbeitsbereich steht noch aus.

@@ -143,4 +143,55 @@ describe('Answer-value and assigned-code analysis', () => {
     cy.wait('@exportCsv');
     cy.readFile(`cypress/downloads/variable-analysis-5-codes-v2-${new Date().toISOString().slice(0, 10)}.csv`).should('contain', 'Codes;v2;0');
   });
+  [
+    { name: 'mixed', totalCount: 3, validCount: 2, emptyCount: 1 },
+    { name: 'entirely empty', totalCount: 2, validCount: 0, emptyCount: 2 }
+  ].forEach(({ name, totalCount, validCount, emptyCount }) => {
+    it(`shows the observed empty row for ${name} multiple responses`, () => {
+      cy.viewport(1800, 1000);
+      cy.mockKeycloakAuthentication();
+      cy.stubWorkspace({ workspaceId: 5 });
+      cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
+      cy.intercept('GET', '**/api/admin/workspace/5/test-results/?*', { body: { data: [], total: 0 } });
+      cy.intercept('GET', '**/api/admin/workspace/5/test-results/overview', {
+        body: { testPersons: totalCount, testGroups: 1, uniqueBooklets: 1, uniqueUnits: 1, uniqueResponses: totalCount }
+      }).as('overview');
+      cy.intercept('GET', '**/api/admin/workspace/5/results/export/jobs', { body: [] });
+      cy.intercept('GET', '**/api/admin/workspace/5/files/unit-variables', { body: [] });
+      cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/variable-analysis/jobs' }, {
+        body: [{ id: 'empty-job', type: 'variable-analysis', status: 'completed', created_at: new Date().toISOString(), analysisMode: 'values' }]
+      });
+      const combo = {
+        unitId: 1, unitName: 'MULTI_UNIT', variableId: 'MULTI', analysisMode: 'values',
+        totalCount, validCount, invalidCount: emptyCount, emptyCount,
+        emptyPercentage: (emptyCount / totalCount) * 100, distinctValueCount: validCount > 0 ? 3 : 1
+      };
+      const frequencies = [
+        { value: '', isEmptyValue: true, count: emptyCount, validOccurrenceCount: 0, percentageTotal: (emptyCount / totalCount) * 100, percentageValid: validCount > 0 ? 0 : null },
+        ...(validCount > 0 ? [
+          { value: 'A', count: 1, validOccurrenceCount: 1, percentageTotal: 100 / 3, percentageValid: 50 },
+          { value: 'B', count: 2, validOccurrenceCount: 2, percentageTotal: 200 / 3, percentageValid: 100 }
+        ] : [])
+      ];
+      cy.intercept('GET', '**/variable-analysis/jobs/empty-job/results/page?*', { body: {
+        total: 1, unfilteredTotal: 1, page: 1, pageSize: 50, totalPages: 1,
+        variableCombos: [combo], frequencies: { '1:MULTI': frequencies },
+        rows: frequencies.map(frequency => ({ ...combo, ...frequency, hiddenValueCount: 0, statusSummary: '' }))
+      } }).as('emptyResults');
+
+      cy.visit('/');
+      cy.wait('@authData');
+      cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-results'; });
+      cy.wait('@overview');
+      cy.contains('button', 'Antwortwertanalyse').click();
+      cy.wait('@emptyResults');
+      cy.get('coding-box-variable-analysis-dialog .analysis-table tbody tr').should('have.length', frequencies.length);
+      cy.contains('coding-box-variable-analysis-dialog .analysis-table tbody tr', '[Leer]').within(() => {
+        cy.get('.mat-column-count').should('have.text', String(emptyCount));
+        cy.get('.mat-column-validOccurrenceCount').should('have.text', '0');
+        cy.get('.mat-column-totalCount').should('have.text', String(totalCount));
+        cy.get('.schema-chip').should('not.exist');
+      });
+    });
+  });
 });

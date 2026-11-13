@@ -51,6 +51,8 @@ export function assertIntegrationResults(results, benchmarkEnabled = false) {
 export async function runIntegration(environment = process.env) {
   const config = integrationConfiguration(environment);
   const databaseName = `backend_integration_${randomUUID().replaceAll('-', '')}`;
+  const integrationDatabase = new URL(config.server);
+  integrationDatabase.pathname = `/${databaseName}`;
   const admin = new pg.Client({ connectionString: config.server.toString(), connectionTimeoutMillis: 5000 });
   const redis = new Redis({
     host: config.redisHost, port: config.redisPort, lazyConnect: true,
@@ -91,6 +93,7 @@ export async function runIntegration(environment = process.env) {
         POSTGRES_USER: decodeURIComponent(config.server.username), POSTGRES_PASSWORD: decodeURIComponent(config.server.password),
         POSTGRES_DB: databaseName, WORKSPACE_DELETION_TEST_DATABASE_URL: config.server.toString(),
         KAPPA_QUERY_TEST_DATABASE_URL: config.server.toString(),
+        VARIABLE_ANALYSIS_TEST_DB_URL: integrationDatabase.toString(),
         REDIS_HOST: config.redisHost, REDIS_PORT: String(config.redisPort), REDIS_PREFIX: databaseName
       }
     });

@@ -16,7 +16,7 @@ Kodierbox speichert relative Haeufigkeiten als Prozentwerte, waehrend eatPrepTBA
 
 ## Referenzdatensatz
 
-Der Regressionstest nutzt eine kleine synthetische Datenbasis mit einer Einheit `UNIT_REF` und zwei Variablen. Das erwartete Golden-Ergebnis wird aus einer eingecheckten, manuell normalisierten Referenztabelle im Spaltenformat von `eatPrepTBA::evaluate_psychometrics()` erzeugt. Die Spalten und Bedeutungen orientieren sich am dokumentierten Referenzstand `16e3567adefb7341a3e93fd3d97aa25a207d0c99`.
+Der Regressionstest nutzt eine kleine synthetische Datenbasis mit einer Einheit `UNIT_REF` und drei Variablen. Das erwartete Golden-Ergebnis wird aus einer eingecheckten, manuell normalisierten Referenztabelle im Spaltenformat von `eatPrepTBA::evaluate_psychometrics()` erzeugt. Die Spalten und Bedeutungen orientieren sich am dokumentierten Referenzstand `16e3567adefb7341a3e93fd3d97aa25a207d0c99`.
 
 Die Referenztabelle ist kein unveraenderter Raw-Export aus einer externen R-Session. Sie ist das MVP-Artefakt fuer #563, bis ein echter `eatPrepTBA::evaluate_psychometrics()`-Export inklusive Provenance vorliegt. Die Tabelle wird nicht in CI erzeugt. Dadurch bleibt der Regressionstest stabil und unabhaengig von R-Paketinstallationen, GitHub-Remotes und transitiven CRAN-Abhaengigkeiten.
 
@@ -67,8 +67,8 @@ Antworten:
 | Wert | Status | Gueltig |
 | --- | --- | --- |
 | ["A","B"] | 3 | ja |
-| ["B"] | 3 | ja |
-| [] | 7 | nein |
+| ["B",null,"  "] | 3 | ja |
+| [null] | 3 | nein |
 | ["A","C","C"] | 3 | ja |
 
 Erwartungen:
@@ -78,13 +78,29 @@ Erwartungen:
 | A | 2 | 2 | 50.0 | 66.6666666667 |
 | B | 2 | 2 | 50.0 | 66.6666666667 |
 | C | 1 | 1 | 25.0 | 33.3333333333 |
+| [Leer] | 1 | 0 | 25.0 | 0.0 |
 
-Mehrfachnennungen desselben Werts innerhalb einer Antwort werden fuer diese Antwort nur einmal gezaehlt.
+Mehrfachnennungen desselben Werts innerhalb einer Antwort werden fuer diese Antwort nur einmal gezaehlt. `null` sowie leere oder nur aus Leerzeichen bestehende Zeichenketten werden bei der Kategorienzaehlung ignoriert. `[null]` zaehlt trotz Status 3 als leer und traegt nichts zu den drei gueltigen Antworten bei.
+
+### VAR_MULTI_ONLY_EMPTY
+
+Fuer diese Variable sind keine Kategorien im Schema definiert.
+
+| Antwort-ID | Wert | Status | Gueltig |
+| --- | --- | --- | --- |
+| 5 | [] | 3 | nein |
+| 6 | [] | 3 | nein |
+
+| Wert | Anzahl | Gueltige Anzahl | Anteil gesamt | Anteil gueltig |
+| --- | --- | --- | --- | --- |
+| [Leer] | 2 | 0 | 100.0 | |
+
+Die zwei leeren Antworten ergeben eine beobachtete Zeile. Da es keine gueltigen Antworten gibt, bleibt der Anteil gueltig leer.
 
 ## Abweichungen zur R-Referenz
 
 * Kodierbox gibt Prozentwerte aus, eatPrepTBA gibt Anteile aus. Beispiel: `40.0` in Kodierbox entspricht `0.4` in eatPrepTBA.
-* Kodierbox nutzt das lokale Response-Statusmodell. Fuer den Gueltig-Nenner werden die Status `0, 1, 2, 4, 7, 9, 10` ausgeschlossen.
+* Kodierbox nutzt das lokale Response-Statusmodell. Fuer den Gueltig-Nenner werden leere Antworten und die Status `0, 1, 2, 4, 7, 9, 10` ausgeschlossen.
 * Point-Biserial-Korrelationen (`code_pbc`, `category_pbc`) werden in diesem Regressionstest nicht verglichen, weil die aktuelle Kodierbox-Variablenanalyse keine Domaenen- bzw. Gesamtscore-Berechnung fuer diese Kennwerte erzeugt. Die DTOs und die Anzeige koennen vorhandene Werte durchreichen; die Berechnung selbst bleibt ein separater Methoden-/Implementierungsschritt.
 
 ## Technische Verankerung
