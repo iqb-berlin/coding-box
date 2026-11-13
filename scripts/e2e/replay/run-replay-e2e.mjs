@@ -7,6 +7,7 @@ import { spawn } from 'node:child_process';
 import { prepareAuthEnvironment } from './auth-environment.mjs';
 import { startLoopbackForwarders } from './loopback-forwarders.mjs';
 import { waitForHttp } from './http-readiness.mjs';
+import { prebuiltStack } from './prebuilt-stack.mjs';
 import { clearCypressReports } from '../../qa/cypress-reporting.cjs';
 import {
   cleanupReplayWorkspaceFromState,
@@ -28,6 +29,7 @@ const authMode = process.argv.includes('--auth') || workflowMode;
 // A failed stack startup must not leave a previous successful run as evidence.
 clearCypressReports(repoDir, workflowMode ? 'workflows-live' : authMode ? 'auth-live' : 'replay-live');
 const production = process.argv.includes('--production');
+const prebuilt = await prebuiltStack(repoDir, process.env.REPLAY_E2E_PREBUILT, production);
 const dockerConnectHost = process.env.REPLAY_E2E_CONNECT_HOST || '127.0.0.1';
 const connectHost = '127.0.0.1';
 const publishHost = process.env.REPLAY_E2E_PUBLISH_HOST || '127.0.0.1';
@@ -42,10 +44,12 @@ await mkdir(runDir, { recursive: true });
 await mkdir(artifactDir, { recursive: true });
 
 const composeFiles = ['--file', composeFile, '--file', path.join(scriptDir, 'docker-compose.auth.yml')];
+if (prebuilt) composeFiles.push('--file', prebuilt.overrideFile);
 const authEnvironment = await prepareAuthEnvironment(runDir, keycloakPort, frontendPort, connectHost);
 const replayEnvironment = {
   ...process.env,
   ...authEnvironment,
+  ...prebuilt?.environment,
   REPLAY_E2E_AUTH: String(authMode),
   REPLAY_E2E_CONNECT_HOST: connectHost,
   REPLAY_E2E_FRONTEND_CONFIGURATION: production ? 'production' : 'development',
@@ -80,7 +84,9 @@ try {
       { localPort: frontendPort, remotePort: dockerFrontendPort },
       { localPort: keycloakPort, remotePort: dockerKeycloakPort }
     ]);
-  process.stdout.write('[replay-e2e] Building and starting the disposable stack.\n');
+  process.stdout.write(prebuilt ?
+    '[replay-e2e] Starting the disposable stack with this pipeline’s build artifacts.\n' :
+    '[replay-e2e] Building and starting the disposable stack.\n');
   await run(
     compose.command,
     [
@@ -90,7 +96,7 @@ try {
       ...composeFiles,
       'up',
       '--detach',
-      '--build',
+      prebuilt ? '--no-build' : '--build',
       ...compose.waitArguments
     ],
     replayEnvironment
@@ -155,8 +161,7 @@ try {
       ...composeFiles,
       'down',
       '--volumes',
-      '--rmi',
-      'local',
+      ...(prebuilt ? [] : ['--rmi', 'local']),
       '--remove-orphans',
       '--timeout',
       '10'

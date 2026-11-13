@@ -184,6 +184,24 @@ test('all live browser jobs install a Docker client and bound daemon readiness',
   }
 });
 
+test('all live browser jobs use the same pipeline builds and retain independent test gates', () => {
+  const producer = resolve('build-app');
+  for (const project of ['frontend', 'backend']) {
+    assert.ok(producer.script.some(command => command.startsWith(`npx nx build ${project}`)));
+    assert.ok(producer.artifacts.paths.includes(`dist/apps/${project}/`));
+  }
+  for (const [label, env] of scenarios) {
+    for (const name of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+      assert.ok(selected('build-app', { ...config.variables, ...env }), label);
+      const job = resolve(name);
+      assert.equal(job.allow_failure, false);
+      assert.equal(job.variables.REPLAY_E2E_PREBUILT, 'true');
+      assert.ok(job.needs.includes('build-app'));
+      assert.ok(job.needs.includes('install-dependencies'));
+    }
+  }
+});
+
 test('the feature pipeline builds and probes the Linux production image without publishing it', () => {
   const job = resolve('test-backend-container');
   assert.equal(job.allow_failure, false);

@@ -105,6 +105,15 @@ own Compose project, database, Redis prefix, random credentials, workspace and
 ports. Cleanup removes only that project's resources. Never point the acceptance
 fixtures at an existing production or development database.
 
+GitLab builds the production frontend and the backend bundle once in
+`build-app`. Replay, authentication and workflow jobs use that pipeline's
+build outputs and installed dependencies as read-only mounts. Their Compose
+stacks start with `--no-build`; each keeps its own PostgreSQL, Redis, Keycloak,
+ports and generated runtime configuration. The lightweight frontend container
+serves the production bundle and forwards `/api/` to that job's backend.
+The mocked browser job continues to use the same frontend artifact.
+Local runs still build the disposable development stack by default.
+
 The workflow's audit rollback case temporarily rejects one synthetic person's
 deletion event with a PostgreSQL constraint in that disposable database. It removes
 the constraint in `finally`, verifies the failed deletion preserved all dependent

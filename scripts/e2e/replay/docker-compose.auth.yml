@@ -25,4 +25,4 @@ services:
       OIDC_JWKS_URI: http://keycloak:8080/realms/coding-e2e/protocol/openid-connect/certs
   frontend:
     volumes:
-      - ${REPLAY_E2E_AUTH_DIR}/runtime-config.js:/usr/src/coding-box/apps/frontend/src/assets/config/runtime-config.js:ro
+      - ${REPLAY_E2E_AUTH_DIR}/runtime-config.js:${REPLAY_E2E_RUNTIME_CONFIG_TARGET:-/usr/src/coding-box/apps/frontend/src/assets/config/runtime-config.js}:ro
