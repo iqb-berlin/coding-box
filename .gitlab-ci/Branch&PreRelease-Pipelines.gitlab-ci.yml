@@ -533,10 +533,12 @@ test-backend:
   allow_failure: false
   extends: .distributed
   rules:
-    - if: $CI_COMMIT_BRANCH == "compare-ci-unit-test-parallelism"
-      variables:
-        NX_SKIP_NX_CACHE: "true"
     - !reference [ .quality_gate_rules, rules ]
+  before_script: &skip_unit_cache_for_comparison
+    - |
+      if [ "$CI_COMMIT_BRANCH" = "compare-ci-unit-test-parallelism" ]; then
+        export NX_SKIP_NX_CACHE=true
+      fi
   script:
     - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
     - node --test scripts/qa/junit-reporter.test.cjs
@@ -616,12 +618,8 @@ test-frontend:
         - job: build-cicd-base-image
           optional: true
           artifacts: false
-      variables:
-        NX_SKIP_NX_CACHE: "true"
-    - if: $CI_COMMIT_BRANCH == "compare-ci-unit-test-parallelism"
-      variables:
-        NX_SKIP_NX_CACHE: "true"
     - !reference [ .quality_gate_rules, rules ]
+  before_script: *skip_unit_cache_for_comparison
   script:
     - npx nx run frontend:test-quality-gates
     - npx nx run frontend:test --configuration=ci --maxWorkers=2
