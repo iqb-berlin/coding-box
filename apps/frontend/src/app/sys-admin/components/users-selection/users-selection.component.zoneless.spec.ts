@@ -127,6 +127,38 @@ describe('UsersSelectionComponent delayed lists', () => {
     expect(fixture.nativeElement.textContent).not.toContain('before-refresh');
   });
 
+  it('keeps the name-only search predicate when refreshing a filtered list', async () => {
+    response.next([{ id: 7, username: 'other-user' }, { id: 8, username: 'coder-7' }]);
+    response.complete();
+    await fixture.whenStable();
+    fixture.componentInstance.userObjectsDatasource.filter = '7';
+    const refreshed = new Subject<UserFullDto[]>();
+    getUsersFull.mockReturnValue(refreshed);
+    window.dispatchEvent(new Event('focus'));
+    refreshed.next([{ id: 7, username: 'other-user' }, { id: 8, username: 'coder-7' }]);
+    refreshed.complete();
+    await fixture.whenStable();
+    expect(fixture.componentInstance.userObjectsDatasource.filteredData.map(user => user.id)).toEqual([8]);
+  });
+
+  it('keeps an edited selection while an automatic refresh adds another person', async () => {
+    response.next([{ id: 7, username: 'existing-user' }]);
+    response.complete();
+    await fixture.whenStable();
+    const checkbox: HTMLInputElement = fixture.nativeElement.querySelector('mat-row input[type="checkbox"]');
+    checkbox.click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('mat-row input').checked).toBe(false);
+    const refreshed = new Subject<UserFullDto[]>();
+    getUsersFull.mockReturnValue(refreshed);
+    window.dispatchEvent(new Event('focus'));
+    refreshed.next([{ id: 7, username: 'existing-user' }, { id: 8, username: 'new-user' }]);
+    refreshed.complete();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelectorAll('mat-row')).toHaveLength(2);
+    expect(fixture.nativeElement.querySelector('mat-row input').checked).toBe(false);
+  });
+
   it('renders, filters and sorts by the full name returned by the user directory', async () => {
     response.next([
       { id: 7, username: 'z-login', displayName: 'Ada Lovelace' },

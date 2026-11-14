@@ -91,4 +91,11 @@ export class WorkspaceUserToCheckCollection {
     })));
     this.hasChangedState.set(false);
   }
+
+  acceptSavedChecks(checks: readonly UserWorkspaceAccessDto[]): void {
+    this.workspacesUsersIds.set(checks.filter(user => user.accessLevel > 0).map(user => ({
+      ...user, canCode: getEffectiveCanCode(user)
+    })));
+    this.updateHasChanged();
+  }
 }

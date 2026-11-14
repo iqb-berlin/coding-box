@@ -10,6 +10,7 @@ import type { RequestBody } from '../../../../../../../api-dto/request-contracts
 import { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
 import { UserInListDto } from '../../../../../../../api-dto/user/user-in-list-dto';
 import { SERVER_URL } from '../../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 
 @Injectable({
   providedIn: 'root'
@@ -18,9 +19,11 @@ export class UserService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
 
-  getUsers(workspaceId: number): Observable<UserInListDto[]> {
+  getUsers(workspaceId: number, background = false): Observable<UserInListDto[]> {
     return this.http
-      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {});
+      .get<UserInListDto[]>(`${this.serverUrl}admin/users/access/${workspaceId}`, {
+        context: background ? suppressGlobalHttpErrorContext() : undefined
+      });
   }
 
   saveUsers(workspaceId: number, users: RequestBody<'UsersController_updateUsersAccess'>): Observable<boolean> {

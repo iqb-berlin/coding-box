@@ -441,6 +441,7 @@ prepare_installation_dir() {
   mkdir -p "${APP_DIR}/config/keycloak"
   mkdir -p "${APP_DIR}/scripts/make"
   mkdir -p "${APP_DIR}/scripts/migration"
+  mkdir -p "${APP_DIR}/scripts/keycloak"
 }
 
 download_file() {
@@ -462,6 +463,8 @@ update_files() {
   download_file "docker-compose.${APP_NAME}.yaml" docker-compose.yaml
   download_file "docker-compose.${APP_NAME}.prod.yaml" "docker-compose.${APP_NAME}.prod.yaml"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
+  download_file "scripts/keycloak/setup-user-sync.mjs" scripts/keycloak/setup-user-sync.mjs
+  download_file "scripts/keycloak/setup-user-sync.sh" scripts/keycloak/setup-user-sync.sh
 
   printf "File download done.\n\n"
 }

@@ -100,6 +100,22 @@ describe('WsUsersComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('keeps the name-only search predicate when the directory updates automatically', async () => {
+    let requestStarted!: () => void;
+    const started = new Promise<void>(resolve => { requestStarted = resolve; });
+    jest.mocked(mockUserBackendService.getUsersFull!).mockImplementationOnce(() => { requestStarted(); return of(mockUsers); });
+    fixture.detectChanges();
+    await started;
+    await fixture.whenStable();
+    component.userObjectsDatasource().filter = '7';
+    (mockUserBackendService.getUsersFull as jest.Mock).mockReturnValue(of([
+      { id: 7, username: 'other-user' }, { id: 8, username: 'coder-7' }
+    ]));
+    window.dispatchEvent(new Event('focus'));
+    await fixture.whenStable();
+    expect(component.userObjectsDatasource().filteredData.map(user => user.id)).toEqual([8]);
+  });
+
   it('should load users on init', async () => {
     let requestStarted!: () => void;
     const started = new Promise<void>(resolve => { requestStarted = resolve; });
@@ -147,7 +163,7 @@ describe('WsUsersComponent', () => {
 
     expect(component.userObjectsDatasource().data).toEqual(mockUsers);
     expect(component.tableSelectionCheckboxes.isSelected(mockUsers[0])).toBe(true);
-    expect(mockUserBackendService.getUsersForWorkspaceSelection).toHaveBeenCalledWith(3);
+    expect(mockUserBackendService.getUsersForWorkspaceSelection).toHaveBeenCalledWith(3, false);
     expect(mockUserBackendService.getUsersFull).not.toHaveBeenCalled();
     expect(mockUserBackendService.getWorkspacesByUserList).not.toHaveBeenCalled();
     expect(fixture.nativeElement.querySelector('.container coding-box-wrapped-icon')).toBeNull();

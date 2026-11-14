@@ -2,6 +2,7 @@ import { EXPORT_WORKER_ROLE } from '../export-worker/export-worker-role';
 import { parseAuthRateLimitConfig } from '../auth/auth-rate-limit.config';
 import { parseTrustedProxies } from '../http/trusted-proxies';
 import { parseAllowedTestcenterUrls } from '../database/services/test-results/testcenter-target';
+import { parseKeycloakUserSyncConfig } from '../user/keycloak-user-sync.config';
 
 /** Validate effective configuration before infrastructure providers are created. */
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
@@ -65,6 +66,7 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
       }
       parseAuthRateLimitConfig(config);
       parseTrustedProxies(config.HTTP_TRUSTED_PROXIES);
+      parseKeycloakUserSyncConfig(config);
     } catch (error) {
       errors.push(error instanceof Error ? error.message : 'Invalid HTTP authentication configuration');
     }

@@ -3,7 +3,7 @@
     <button mat-raised-button
             [matTooltip]="'save' | translate"
             matTooltipPosition="above"
-            [disabled]="!workspaceUsers().hasChanged"
+            [disabled]="!workspaceUsers().hasChanged || saving()"
             (click)="save()">
       <mat-icon>save</mat-icon>
       {{'save' | translate}}

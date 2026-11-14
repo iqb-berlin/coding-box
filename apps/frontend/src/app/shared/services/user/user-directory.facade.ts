@@ -6,6 +6,7 @@ import {
   catchError, defer, finalize, Observable, of, Subject, switchMap, tap
 } from 'rxjs';
 import type { UserFullDto } from '../../../../../../../api-dto/user/user-full-dto';
+import { viewRefreshEvents } from '../../utils/view-refresh';
 
 export type UserDirectoryStatus = 'idle' | 'loading' | 'loaded' | 'error';
 type DirectoryState = { status: 'loaded'; users: UserFullDto[] } |
@@ -15,7 +16,9 @@ type DirectoryState = { status: 'loaded'; users: UserFullDto[] } |
 @Injectable()
 export class UserDirectoryFacade {
   private readonly state = signal<DirectoryState>({ status: 'idle' });
-  private readonly requests = new Subject<() => Observable<UserFullDto[]>>();
+  private readonly requests = new Subject<{ request: (background: boolean) => Observable<UserFullDto[]>; background: boolean }>();
+  private currentRequest?: (background: boolean) => Observable<UserFullDto[]>;
+  private loading = false;
   readonly status = computed(() => this.state().status);
   readonly users = computed(() => {
     const state = this.state();
@@ -24,23 +27,35 @@ export class UserDirectoryFacade {
 
   constructor() {
     this.requests.pipe(
-      switchMap(request => defer(() => {
+      switchMap(({ request, background }) => defer(() => {
         let settled = false;
-        this.state.set({ status: 'loading' });
-        return defer(request).pipe(
+        this.loading = true;
+        if (!background) this.state.set({ status: 'loading' });
+        return defer(() => request(background)).pipe(
           tap(users => { settled = true; this.state.set({ status: 'loaded', users }); }),
           catchError(() => {
             settled = true;
-            this.state.set({ status: 'error' });
+            if (!background) this.state.set({ status: 'error' });
             return of(null);
           }),
-          finalize(() => { if (!settled) this.state.set({ status: 'idle' }); })
+          finalize(() => {
+            this.loading = false;
+            if (!settled && !background) this.state.set({ status: 'idle' });
+          })
         );
       })),
       takeUntilDestroyed()
     ).subscribe();
+    viewRefreshEvents().pipe(takeUntilDestroyed()).subscribe(() => {
+      if (this.currentRequest && !this.loading && this.status() !== 'idle') {
+        this.requests.next({ request: this.currentRequest, background: true });
+      }
+    });
     inject(DestroyRef).onDestroy(() => this.requests.complete());
   }
 
-  load(request: () => Observable<UserFullDto[]>): void { this.requests.next(request); }
+  load(request: (background: boolean) => Observable<UserFullDto[]>): void {
+    this.currentRequest = request;
+    this.requests.next({ request, background: false });
+  }
 }

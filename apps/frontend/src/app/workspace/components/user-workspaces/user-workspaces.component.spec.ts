@@ -15,7 +15,8 @@ const mockAppService = {
   authDataFailureCode: null as string | null,
   reAuthenticationReturnUrl: '/coding',
   needsReAuthentication: false,
-  retryAuthDataLoad: jest.fn().mockReturnValue(of(false))
+  retryAuthDataLoad: jest.fn().mockReturnValue(of(false)),
+  refreshAuthData: jest.fn().mockReturnValue(of('updated'))
 };
 
 describe('UserWorkspacesComponent', () => {
@@ -53,6 +54,17 @@ describe('UserWorkspacesComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('keeps empty assignments free of redundant refresh controls', () => {
+    fixture.componentRef.setInput('authDataLoaded', true);
+    fixture.componentRef.setInput('authBootstrapStatus', 'ready');
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('button')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
+    expect(mockAppService.refreshAuthData).not.toHaveBeenCalled();
+    expect(mockAuthService.login).not.toHaveBeenCalled();
+    expect(mockAppService.retryAuthDataLoad).not.toHaveBeenCalled();
   });
 
   it('shows a backend rejection separately from a session expiry', () => {

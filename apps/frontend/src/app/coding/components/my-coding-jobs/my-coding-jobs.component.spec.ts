@@ -40,7 +40,8 @@ describe('MyCodingJobsComponent', () => {
               workspaces: []
             }),
             loggedUser: { sub: 'user-7' },
-            createOwnToken: jest.fn().mockReturnValue(of('token'))
+            createOwnToken: jest.fn().mockReturnValue(of('token')),
+            refreshAuthData: jest.fn().mockReturnValue(of('invalidated'))
           }
         },
         {
@@ -663,7 +664,7 @@ describe('MyCodingJobsComponent', () => {
     await fixture.whenStable();
     auth.next({ userId: 7, workspaces: [] });
     await fixture.whenStable();
-    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
     expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
   });
 
@@ -679,6 +680,98 @@ describe('MyCodingJobsComponent', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector('.loading-container')).toBeNull();
     expect(fixture.nativeElement.querySelector('.filter-row')).not.toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.no-jobs-assigned');
+    expect(fixture.nativeElement.textContent).toContain('coding.my-coding-jobs.error-loading-jobs');
+    expect(fixture.nativeElement.textContent).not.toContain('coding.my-coding-jobs.no-jobs-assigned');
+  });
+
+  it('keeps the filter controls and last loaded jobs during a failed background refresh', async () => {
+    const auth = new BehaviorSubject({ userId: 7, workspaces: [{ id: 1, name: 'Workspace' }] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    const backend = TestBed.inject(CodingJobBackendService);
+    jest.spyOn(backend, 'getCodingJobs').mockReturnValue(of({
+      data: [completedJob], total: 1, page: 1, limit: 100
+    }));
+    fixture.detectChanges();
+    const filters = fixture.nativeElement.querySelector('.filter-row');
+    const pending = new Subject<{ data: CodingJob[]; total: number; page: number; limit: number }>();
+    (backend.getCodingJobs as jest.Mock).mockReturnValue(pending);
+    auth.next({ userId: 7, workspaces: [{ id: 1, name: 'Workspace' }] });
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.filter-row')).toBe(filters);
+    expect(component.isLoading()).toBe(false);
+    pending.error(new Error('offline'));
+    await fixture.whenStable();
+    expect(component.dataSource.data).toEqual([completedJob]);
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).not.toBeNull();
+  });
+
+  it('retains the selected job across automatic updates with new row objects', () => {
+    const backend = TestBed.inject(CodingJobBackendService);
+    jest.spyOn(backend, 'getCodingJobs').mockReturnValue(of({ data: [completedJob], total: 1 }));
+    fixture.detectChanges();
+    component.loadMyCodingJobs([{ id: 1, name: 'Workspace' }]);
+    component.selectRow(component.dataSource.data[0]);
+    const updated = { ...completedJob, name: 'Updated job' };
+    (backend.getCodingJobs as jest.Mock).mockReturnValue(of({ data: [updated], total: 1 }));
+    component.loadMyCodingJobs([{ id: 1, name: 'Workspace' }], true);
+    const selection = (component as unknown as { selection: { selected: CodingJob[] } }).selection;
+    expect(selection.selected).toEqual([updated]);
+    expect(selection.selected[0]).toBe(updated);
+  });
+
+  it('adds newly assigned workspaces to the default all-workspaces selection', () => {
+    const auth = new BehaviorSubject({ userId: 7, workspaces: [{ id: 1, name: 'First workspace' }] });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    const getJobs = jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs');
+    fixture.detectChanges();
+
+    getJobs.mockClear();
+    auth.next({ userId: 7, workspaces: [...auth.value.workspaces, { id: 2, name: 'New workspace' }] });
+    expect(component.selectedWorkspaceIds()).toEqual([1, 2]);
+    expect(getJobs.mock.calls.map(([workspaceId]) => workspaceId)).toEqual([1, 2]);
+  });
+
+  it('preserves a manually selected workspace when more assignments arrive', () => {
+    const auth = new BehaviorSubject({
+      userId: 7,
+      workspaces: [{ id: 1, name: 'First workspace' }, { id: 2, name: 'Second workspace' }]
+    });
+    const appService = TestBed.inject(AppService) as unknown as { authData$: Observable<unknown> };
+    appService.authData$ = auth;
+    const getJobs = jest.spyOn(TestBed.inject(CodingJobBackendService), 'getCodingJobs');
+    fixture.detectChanges();
+
+    component.selectedWorkspaceIds.set([2]);
+    component.onWorkspaceFilterChange();
+    getJobs.mockClear();
+    auth.next({ userId: 7, workspaces: [...auth.value.workspaces, { id: 3, name: 'New workspace' }] });
+    expect(component.selectedWorkspaceIds()).toEqual([2]);
+    expect(getJobs.mock.calls.map(([workspaceId]) => workspaceId)).toEqual([2]);
+  });
+
+  it('shows a retry after failed assignment refresh and returns to the empty state after success', async () => {
+    const auth = new BehaviorSubject({ userId: 7, workspaces: [] });
+    const appService = TestBed.inject(AppService);
+    (appService as unknown as { authData$: Observable<unknown> }).authData$ = auth;
+    const refresh = jest.spyOn(appService, 'refreshAuthData').mockReturnValueOnce(of('failed'));
+    fixture.autoDetectChanges();
+    await fixture.whenStable();
+
+    component.refreshAssignments();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]').textContent).toContain('home.auth-data-load-error');
+    const retryButton = fixture.nativeElement.querySelector('.no-data-message button');
+    expect(retryButton).not.toBeNull();
+
+    refresh.mockImplementationOnce(() => {
+      auth.next(auth.value);
+      return of('updated');
+    });
+    retryButton.click();
+    await fixture.whenStable();
+    expect(fixture.nativeElement.querySelector('[role="alert"]')).toBeNull();
+    expect(fixture.nativeElement.textContent).toContain('home.no-user-workspaces');
   });
 });

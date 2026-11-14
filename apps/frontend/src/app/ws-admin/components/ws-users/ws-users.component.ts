@@ -60,9 +60,13 @@ export class WsUsersComponent implements OnInit {
   private readonly synchronizeUsers = effect(() => {
     const users = this.directory.users();
     untracked(() => {
+      const selectedIds = this.tableSelectionCheckboxes.selected.map(user => user.id);
+      const rowIds = this.tableSelectionRow.selected.map(user => user.id);
       this.setObjectsDatasource(users);
       this.tableSelectionCheckboxes.clear();
       this.tableSelectionRow.clear();
+      this.tableSelectionCheckboxes.select(...users.filter(user => selectedIds.includes(user.id)));
+      this.tableSelectionRow.select(...users.filter(user => rowIds.includes(user.id)));
     });
   });
 
@@ -107,6 +111,7 @@ export class WsUsersComponent implements OnInit {
       ].some(column => (userList[column as keyof UserFullDto] as string || '')
         .toLowerCase()
         .includes(filter));
+    datasource.filter = this.userObjectsDatasource().filter;
     datasource.sort = this.sort() ?? null;
     this.userObjectsDatasource.set(datasource);
   }
@@ -118,13 +123,13 @@ export class WsUsersComponent implements OnInit {
   updateUserList(): void {
     const workspaceId = this.appService.selectedWorkspaceId;
     const global = this.canManageGlobalUsers;
-    this.directory.load(() => {
-      this.appService.dataLoading = true;
+    this.directory.load(background => {
+      if (!background) this.appService.dataLoading = true;
       return (global ?
-        this.userBackendService.getUsersFull() :
-        this.userBackendService.getUsersForWorkspaceSelection(workspaceId)).pipe(
+        this.userBackendService.getUsersFull(background) :
+        this.userBackendService.getUsersForWorkspaceSelection(workspaceId, background)).pipe(
         takeUntilWorkspaceChanged(this.appService, workspaceId),
-        finalize(() => { this.appService.dataLoading = false; })
+        finalize(() => { if (!background) this.appService.dataLoading = false; })
       );
     });
   }

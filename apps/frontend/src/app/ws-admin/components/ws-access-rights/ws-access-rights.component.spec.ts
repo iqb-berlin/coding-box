@@ -6,7 +6,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatCheckboxModule } from '@angular/material/checkbox';
-import { of } from 'rxjs';
+import { of, Subject } from 'rxjs';
 import { WsAccessRightsComponent } from './ws-access-rights.component';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { AppService } from '../../../core/services/app.service';
@@ -71,6 +71,63 @@ describe('WsAccessRightsComponent', () => {
     expect(mockUserBackendService.getUsers).toHaveBeenCalledWith(1);
     expect(component.workspaceUsers().entries.length).toBe(2);
     expect(component.workspaceUsers().entries[0].name).toBe('user1');
+  });
+
+  it('does not overwrite rights edited while a background refresh was pending', () => {
+    const response = new Subject<typeof mockUsers>();
+    (mockUserBackendService.getUsers as jest.Mock).mockReturnValue(response);
+    window.dispatchEvent(new Event('focus'));
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    response.next(mockUsers);
+    response.complete();
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
+  });
+
+  it('does not restore stale rights when an older refresh returns after saving', () => {
+    const response = new Subject<typeof mockUsers>();
+    (mockUserBackendService.getUsers as jest.Mock).mockReturnValue(response);
+    window.dispatchEvent(new Event('focus'));
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    component.save();
+    expect(component.workspaceUsers().hasChanged).toBe(false);
+    response.next(mockUsers);
+    response.complete();
+    expect(component.workspaceUsers().entries[0].canCode).toBe(false);
+  });
+
+  it.each(['updated', 'failed', 'invalidated'] as const)('retains edits made during a pending save when auth refresh is %s', outcome => {
+    const saved = new Subject<boolean>();
+    (mockUserBackendService.saveUsers as jest.Mock).mockReturnValue(saved);
+    (mockAppService.refreshAuthData as jest.Mock).mockReturnValue(of(outcome));
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    component.save();
+    component.changeAccessLevel(true, component.workspaceUsers().entries[0], 2);
+    saved.next(true);
+    saved.complete();
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0]).toMatchObject({ accessLevel: 2, canCode: false });
+    (mockUserBackendService.getUsers as jest.Mock).mockClear();
+    window.dispatchEvent(new Event('focus'));
+    expect(mockUserBackendService.getUsers).not.toHaveBeenCalled();
+  });
+
+  it('keeps a return to the previous values pending relative to the newly saved baseline', () => {
+    const saved = new Subject<boolean>();
+    (mockUserBackendService.saveUsers as jest.Mock).mockReturnValue(saved);
+    component.changeCanCode(false, component.workspaceUsers().entries[0]);
+    component.save();
+    component.changeCanCode(true, component.workspaceUsers().entries[0]);
+    expect(component.workspaceUsers().hasChanged).toBe(false);
+    (mockUserBackendService.getUsers as jest.Mock).mockClear();
+    window.dispatchEvent(new Event('focus'));
+    expect(mockUserBackendService.getUsers).not.toHaveBeenCalled();
+    component.save();
+    expect(mockUserBackendService.saveUsers).toHaveBeenCalledTimes(1);
+    saved.next(true);
+    saved.complete();
+    expect(component.workspaceUsers().hasChanged).toBe(true);
+    expect(component.workspaceUsers().entries[0].canCode).toBe(true);
   });
 
   it('should change access level correctly', () => {

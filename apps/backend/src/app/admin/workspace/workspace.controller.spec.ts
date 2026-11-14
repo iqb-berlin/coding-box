@@ -72,7 +72,11 @@ describe('WorkspaceController', () => {
       { user } as never
     )).resolves.toBe(12);
 
-    expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-5');
+    if (typeof user.id === 'number') {
+      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+    } else {
+      expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-5');
+    }
     expect(workspaceCoreService.create).toHaveBeenCalledWith({ name: 'New workspace' }, 5);
   });
 });

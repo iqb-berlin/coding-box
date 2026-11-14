@@ -1,4 +1,5 @@
 CODING_BOX_BASE_DIR := $(shell git rev-parse --show-toplevel)
+CODING_BOX_PROD_MAKE_FILE := $(abspath $(lastword $(MAKEFILE_LIST)))
 CMD ?= status
 
 include $(CODING_BOX_BASE_DIR)/.env.coding-box
@@ -11,7 +12,7 @@ EXPORT_WORKER_PGOPTIONS := $(subst ",,$(EXPORT_WORKER_PGOPTIONS))
 .EXPORT_ALL_VARIABLES:
 
 # prevents collisions of make target names with possible file names
-.PHONY: coding-box-up coding-box-down coding-box-start coding-box-stop coding-box-status coding-box-logs\
+.PHONY: coding-box-up coding-box-up-configured coding-box-keycloak-user-sync-setup coding-box-down coding-box-start coding-box-stop coding-box-status coding-box-logs\
 	coding-box-config coding-box-system-prune coding-box-volumes-prune coding-box-images-clean\
 	coding-box-liquibase-status coding-box-connect-db coding-box-dump-all coding-box-restore-all coding-box-dump-db\
 	coding-box-restore-db coding-box-dump-db-data-only coding-box-restore-db-data-only coding-box-export-backend-vol\
@@ -38,6 +39,18 @@ coding-box-up:
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
 		pull
 	@if test $(REGISTRY_PATH); then docker logout $(REGISTRY_PATH); fi
+	@if [ "$(KEYCLOAK_USER_SYNC_AUTO_SETUP)" = "true" ]; then\
+		set -- --auto;\
+		if [ -n "$(TRAEFIK_DIR)" ] && [ "$(KEYCLOAK_USER_SYNC_ENABLED)" != "true" ]; then set -- "$$@" --start-managed; fi;\
+		bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.coding-box" "$(TRAEFIK_DIR)/.env.traefik" "$$@";\
+	fi
+	$(MAKE) -f "$(CODING_BOX_PROD_MAKE_FILE)" coding-box-up-configured
+
+coding-box-keycloak-user-sync-setup:
+	bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.coding-box" "$(TRAEFIK_DIR)/.env.traefik"
+	$(MAKE) -f "$(CODING_BOX_PROD_MAKE_FILE)" coding-box-up-configured
+
+coding-box-up-configured:
 	docker compose\
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\

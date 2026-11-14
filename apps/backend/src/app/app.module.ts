@@ -15,6 +15,7 @@ import { HealthModule } from './health/health.module';
 import { CacheModule } from './cache/cache.module';
 import { WsgAdminModule } from './wsg-admin/wsg-admin.module';
 import { RuntimeConfigModule } from './config/runtime-config.module';
+import { KeycloakUserSyncModule } from './user/keycloak-user-sync.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { RuntimeConfigModule } from './config/runtime-config.module';
     JobQueueModule,
     HealthModule,
     CacheModule,
+    KeycloakUserSyncModule,
     WsgAdminModule
   ],
   controllers: [AppController]

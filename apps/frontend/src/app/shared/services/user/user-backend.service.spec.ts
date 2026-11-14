@@ -79,6 +79,20 @@ describe('UserBackendService', () => {
     expect(received).not.toHaveBeenCalled();
   });
 
+  it('marks automatic directory and access-list requests as silent', () => {
+    service.getUsersFull(true).subscribe();
+    service.getUsersForWorkspaceSelection(3, true).subscribe();
+    service.getUsers(3, true).subscribe();
+    const requests = httpMock.match(() => true);
+    expect(requests).toHaveLength(3);
+    requests.forEach(request => {
+      expect(request.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      expect(request.request.context.get(SUPPRESS_AUTH_ERROR_REDIRECT)).toBe(false);
+      expect(request.request.context.get(SUPPRESS_FORBIDDEN_HTTP_ERROR)).toBe(false);
+      request.flush([]);
+    });
+  });
+
   describe('getUsersForWorkspaceSelection', () => {
     it('uses the study-manager directory for the selected workspace', () => {
       const users = [{ id: 7, username: 'coder' }];

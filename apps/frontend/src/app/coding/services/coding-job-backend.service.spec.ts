@@ -11,6 +11,7 @@ import { CodingJobBackendService } from './coding-job-backend.service';
 import { SERVER_URL } from '../../injection-tokens';
 import { CodingJob } from '../models/coding-job.model';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../core/interceptors/http-error-context';
 
 describe('CodingJobBackendService', () => {
   let service: CodingJobBackendService;
@@ -205,6 +206,13 @@ describe('CodingJobBackendService', () => {
       );
       expect(req.request.method).toBe('GET');
       req.flush({ data: [], total: 0, page: 1 });
+    });
+
+    it('silences background refresh errors without adding a query option', () => {
+      service.getCodingJobs(1, undefined, undefined, { assignedTo: 'me', background: true }).subscribe();
+      const request = httpMock.expectOne(`${mockServerUrl}wsg-admin/workspace/1/coding-job?assignedTo=me`);
+      expect(request.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
+      request.flush({ data: [], total: 0, page: 1 });
     });
 
     it('should pass pagination and list filter options when requesting coding jobs', () => {

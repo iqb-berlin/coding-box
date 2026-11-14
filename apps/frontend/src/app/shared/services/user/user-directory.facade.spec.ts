@@ -30,6 +30,30 @@ describe('UserDirectoryFacade', () => {
     expect(directory.users()).toEqual([user]);
   });
 
+  it('refreshes the open directory on focus while retaining data during failures', () => {
+    const pending = new Subject<UserFullDto[]>();
+    const request = jest.fn().mockReturnValueOnce(of([user])).mockReturnValueOnce(pending);
+    directory.load(request);
+    window.dispatchEvent(new Event('focus'));
+    expect(request).toHaveBeenCalledTimes(2);
+    expect(request).toHaveBeenNthCalledWith(1, false);
+    expect(request).toHaveBeenNthCalledWith(2, true);
+    expect(directory.status()).toBe('loaded');
+    expect(directory.users()).toEqual([user]);
+    pending.error(new Error('offline'));
+    expect(directory.users()).toEqual([user]);
+    expect(directory.status()).toBe('loaded');
+  });
+
+  it('retries an initial failure silently on return to the view', () => {
+    const request = jest.fn().mockReturnValueOnce(throwError(() => new Error('offline'))).mockReturnValueOnce(of([user]));
+    directory.load(request);
+    expect(directory.status()).toBe('error');
+    window.dispatchEvent(new Event('focus'));
+    expect(request).toHaveBeenLastCalledWith(true);
+    expect(directory.status()).toBe('loaded');
+  });
+
   it('replaces pending requests and ignores their late results and errors', () => {
     const stale = new Subject<UserFullDto[]>();
     const current = new Subject<UserFullDto[]>();

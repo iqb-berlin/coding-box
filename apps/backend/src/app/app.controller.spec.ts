@@ -39,7 +39,7 @@ describe('AppController', () => {
 
   describe('getUserAuthData', () => {
     it('returns auth data for the authenticated identity', async () => {
-      usersService.findUserByIdentity.mockResolvedValue({
+      usersService.findUserById.mockResolvedValue({
         id: 5,
         username: 'new-user',
         isAdmin: false
@@ -48,7 +48,7 @@ describe('AppController', () => {
 
       await expect(controller.getUserAuthData(
         'identity-1',
-        { user: { identity: 'identity-1' } } as never
+        { user: { id: 5, identity: 'identity-1' } } as never
       )).resolves.toEqual({
         userId: 5,
         userName: 'new-user',
@@ -56,12 +56,12 @@ describe('AppController', () => {
         workspaces: []
       });
 
-      expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-1');
-      expect(workspaceUsersService.findAllUserWorkspaces).toHaveBeenCalledWith('identity-1');
+      expect(usersService.findUserById).toHaveBeenCalledWith(5);
+      expect(workspaceUsersService.findAllUserWorkspaces).toHaveBeenCalledWith(5);
     });
 
     it('falls back to the authenticated identity when the query is blank', async () => {
-      usersService.findUserByIdentity.mockResolvedValue({
+      usersService.findUserById.mockResolvedValue({
         id: 5,
         username: 'new-user',
         isAdmin: false
@@ -70,7 +70,7 @@ describe('AppController', () => {
 
       await expect(controller.getUserAuthData(
         ' ',
-        { user: { identity: 'identity-1' } } as never
+        { user: { id: 5, identity: 'identity-1' } } as never
       )).resolves.toEqual({
         userId: 5,
         userName: 'new-user',
@@ -78,25 +78,25 @@ describe('AppController', () => {
         workspaces: []
       });
 
-      expect(usersService.findUserByIdentity).toHaveBeenCalledWith('identity-1');
+      expect(usersService.findUserById).toHaveBeenCalledWith(5);
     });
 
     it('rejects repeated identity parameters', async () => {
       await expect(controller.getUserAuthData(
         ['identity-1', 'identity-2'] as unknown as string,
-        { user: { identity: 'identity-1' } } as never
+        { user: { id: 5, identity: 'identity-1' } } as never
       )).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(usersService.findUserById).not.toHaveBeenCalled();
     });
 
     it('rejects identity parameters that do not match the token identity', async () => {
       await expect(controller.getUserAuthData(
         'requested-identity',
-        { user: { identity: 'token-identity' } } as never
+        { user: { id: 5, identity: 'token-identity' } } as never
       )).rejects.toBeInstanceOf(ForbiddenException);
 
-      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(usersService.findUserById).not.toHaveBeenCalled();
     });
 
     it('rejects identity parameters when the token has no identity claim', async () => {
@@ -105,15 +105,15 @@ describe('AppController', () => {
         { user: {} } as never
       )).rejects.toBeInstanceOf(BadRequestException);
 
-      expect(usersService.findUserByIdentity).not.toHaveBeenCalled();
+      expect(usersService.findUserById).not.toHaveBeenCalled();
     });
 
     it('returns not found when the authenticated identity is not in the coding-box database yet', async () => {
-      usersService.findUserByIdentity.mockResolvedValue(null);
+      usersService.findUserById.mockResolvedValue(null);
 
       await expect(controller.getUserAuthData(
         'identity-1',
-        { user: { identity: 'identity-1' } } as never
+        { user: { id: 5, identity: 'identity-1' } } as never
       )).rejects.toBeInstanceOf(NotFoundException);
 
       expect(workspaceUsersService.findAllUserWorkspaces).not.toHaveBeenCalled();

@@ -1,4 +1,51 @@
 describe('zoneless users in workspace access rights', () => {
+  it('keeps edits made while a successful rights save is pending', () => {
+    let releaseSave: (() => void) | undefined;
+    let savedLevel = 1;
+    let writes = 0;
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
+    cy.intercept('GET', '**/api/admin/workspace/token-policy', {
+      body: { scopes: { 'replay:read': { maxDurationDays: 365 } } }
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/journal?*', { body: { data: [], total: 0, page: 1, limit: 20 } });
+    cy.intercept('GET', '**/api/admin/users/access/5', request => {
+      request.reply([{ id: 7, name: 'Workspace user', accessLevel: savedLevel, canCode: false }]);
+    });
+    cy.intercept('PATCH', '**/api/admin/users/access/5', request => {
+      writes += 1;
+      expect(request.body).to.deep.equal([{ id: 7, accessLevel: writes === 1 ? 3 : 2, canCode: false }]);
+      if (writes > 1) {
+        savedLevel = 2;
+        request.reply({ body: true });
+        return undefined;
+      }
+      return new Promise<void>(resolve => {
+        releaseSave = () => { savedLevel = 3; request.reply({ body: true }); resolve(); };
+      });
+    }).as('saveRights');
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/5/settings'; });
+    cy.get('coding-box-ws-access-rights').as('rights');
+    cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(2).check();
+    cy.get('@rights').find('button').click().should('be.disabled');
+    cy.wrap(null).should(() => { expect(releaseSave).to.be.a('function'); });
+    cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(1).check();
+    cy.get('@rights').find('button').should('be.disabled');
+    cy.then(() => releaseSave!());
+    cy.wait('@saveRights').its('response.body').should('eq', true);
+    cy.wait('@authData');
+    cy.get('@rights').find('button').should('be.enabled');
+    cy.window().then(win => win.dispatchEvent(new Event('focus')));
+    cy.get('@rights').contains('tr', 'Workspace user').find('input[type="checkbox"]').eq(1).should('be.checked');
+    cy.get('@rights').find('button').click();
+    cy.wait('@saveRights').its('response.body').should('eq', true);
+    cy.get('@rights').find('button').should('be.disabled');
+    cy.then(() => { expect(savedLevel).to.equal(2); expect(writes).to.equal(2); });
+  });
+
   for (const role of [{ name: 'administrator', isAdmin: true }, { name: 'study manager', isAdmin: false }]) {
     it(`retains edited rights after a delayed save failure and retries as ${role.name}`, () => {
       const unexpectedRequests: string[] = [];

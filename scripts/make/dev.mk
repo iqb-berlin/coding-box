@@ -10,7 +10,7 @@ EXPORT_WORKER_PGOPTIONS := $(subst ",,$(EXPORT_WORKER_PGOPTIONS))
 .EXPORT_ALL_VARIABLES:
 
 ## prevents collisions of make target names with possible file names
-.PHONY: dev-registry-login dev-registry-logout dev-build dev-up dev-down dev-start dev-stop dev-status dev-logs\
+.PHONY: dev-registry-login dev-registry-logout dev-build dev-up dev-up-configured dev-keycloak-user-sync-setup dev-down dev-start dev-stop dev-status dev-logs\
 	dev-config dev-system-prune dev-volumes-prune dev-volumes-clean dev-images-clean dev-clean-all
 
 ## disables printing the recipe of a make target before executing it
@@ -38,7 +38,19 @@ dev-up:
 	fi
 	docker pull quay.io/keycloak/keycloak:22.0
 	docker pull postgres:14
+	docker compose --env-file $(CODING_BOX_BASE_DIR)/.env.dev up --no-build --pull never -d keycloak
+	@if [ "$(KEYCLOAK_USER_SYNC_AUTO_SETUP)" = "true" ]; then\
+		bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.dev" "$(CODING_BOX_BASE_DIR)/.env.dev" --auto;\
+	fi
+	$(MAKE) -f "$(CODING_BOX_BASE_DIR)/scripts/make/dev.mk" dev-up-configured
+
+# Re-read the env file written by setup instead of exporting a stale, empty secret.
+dev-up-configured:
 	docker compose --env-file $(CODING_BOX_BASE_DIR)/.env.dev up --no-build --pull never -d
+
+dev-keycloak-user-sync-setup:
+	bash "$(CODING_BOX_BASE_DIR)/scripts/keycloak/setup-user-sync.sh" "$(CODING_BOX_BASE_DIR)/.env.dev" "$(CODING_BOX_BASE_DIR)/.env.dev"
+	$(MAKE) -f "$(CODING_BOX_BASE_DIR)/scripts/make/dev.mk" dev-up-configured
 
 ## Stop and remove all docker containers, preserve data volumes
 dev-down:

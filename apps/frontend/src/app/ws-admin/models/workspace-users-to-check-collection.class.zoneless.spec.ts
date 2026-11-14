@@ -2,6 +2,34 @@ import { computed } from '@angular/core';
 import { WorkspaceUserToCheckCollection } from './workspace-users-to-check-collection.class';
 
 describe('Workspace users reactive entries and baselines', () => {
+  it('accepts a saved removal without retaining it as a pending change', () => {
+    const collection = new WorkspaceUserToCheckCollection([{
+      id: 1, name: 'User', accessLevel: 1, canCode: true
+    }]);
+    collection.updateEntry(1, user => ({
+      ...user, isChecked: false, accessLevel: 0, canCode: false
+    }));
+    collection.acceptSavedChecks(collection.getChecks());
+    expect(collection.hasChanged).toBe(false);
+    expect(collection.getChecks()).toEqual([]);
+  });
+
+  it('acknowledges only the submitted baseline without replacing later entry snapshots', () => {
+    const collection = new WorkspaceUserToCheckCollection([{
+      id: 1, name: 'User', accessLevel: 1, canCode: true
+    }]);
+    collection.updateEntry(1, user => ({ ...user, canCode: false }));
+    const submitted = collection.getChecks();
+    collection.updateEntry(1, user => ({ ...user, accessLevel: 2 }));
+    const edited = collection.entries;
+    collection.acceptSavedChecks(submitted);
+    submitted[0].accessLevel = 2;
+    collection.updateHasChanged();
+    expect(collection.entries).toBe(edited);
+    expect(collection.hasChanged).toBe(true);
+    expect(collection.getChecks()).toEqual([{ id: 1, accessLevel: 2, canCode: false }]);
+  });
+
   it('updates derived checks when persisted removal changes the baseline', () => {
     const collection = new WorkspaceUserToCheckCollection([
       {

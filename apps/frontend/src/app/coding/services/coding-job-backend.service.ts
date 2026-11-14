@@ -239,6 +239,7 @@ interface PaginatedResponse<T> {
 }
 
 export interface CodingJobListOptions {
+  background?: boolean;
   assignedTo?: 'me';
   scope?: 'all' | 'training' | 'productive';
   status?: string;
@@ -498,22 +499,19 @@ export class CodingJobBackendService {
       params = params.set('trainingId', options.trainingId.toString());
     }
     if (options.includeIssueSummary !== undefined) {
-      params = params.set(
-        'includeIssueSummary',
-        options.includeIssueSummary.toString()
-      );
+      params = params.set('includeIssueSummary', options.includeIssueSummary.toString());
     }
 
     return this.http
       .get<PaginatedResponse<unknown>>(url, {
         params,
+        context: options.background ? suppressGlobalHttpErrorContext() : undefined,
         headers: this.authHeader
       })
       .pipe(
         map(response => ({
           ...response,
-          data: (response.data || []).map((j: unknown) => this.mapApiCodingJob(j)
-          )
+          data: (response.data || []).map((j: unknown) => this.mapApiCodingJob(j))
         }))
       );
   }

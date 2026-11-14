@@ -462,7 +462,7 @@
     "auth-data-load-error": "Die Sitzungsdaten konnten noch nicht geladen werden. Bitte versuchen Sie es erneut oder melden Sie sich neu an.",
     "retry-auth-data": "Erneut laden",
     "relogin": "Neu anmelden",
-    "no-user-workspaces": "Für diese Anmeldung wurden keine Arbeitsbereiche gefunden.",
+    "no-user-workspaces": "Ihre Anmeldung war erfolgreich. Ihnen wurde noch kein Arbeitsbereich zugewiesen. Bitte warten Sie auf die Zuweisung durch die Studienleitung.",
     "user-menu": "Profil verwalten",
     "appName": "{{name}}",
     "appVersion": " {{version}}",
@@ -1095,7 +1095,7 @@
       "no-variables": "Keine Variablen",
       "no-variable-bundles": "Keine Variablen-Bündel",
       "no-tasks": "Keine Aufgaben",
-      "no-jobs-assigned": "Keine Kodierjobs zugewiesen. Ihnen sind derzeit keine Kodierjobs zugewiesen."
+      "no-jobs-assigned": "Ihnen wurden noch keine Kodierjobs zugewiesen. Bitte warten Sie auf die Zuweisung durch die Studienleitung."
     },
     "trainings": {
       "title": "Kodierer-Schulungen",
@@ -4212,6 +4212,9 @@
     },
     "workspace-access-rights-dialog": {
       "title": "Nutzer Zugriffs Rechte für Arbeitsbereich(e)"
+    },
+    "assignment-status": {
+      "no-matching-jobs": "Für die gewählten Filter wurden keine Kodierjobs gefunden."
     },
     "user-workspaces": {
       "login-required": "Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen."
