@@ -1122,7 +1122,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
   });
 
   describe('Mode: Job (Create/Edit)', () => {
-    it('should submit create calling createCodingJob and assignCoder when 1 variable selected', async () => {
+    it('should create the coding job with its coder and retry key', async () => {
       jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
       try {
         createComponent({ mode: 'job', isEdit: false });
@@ -1142,8 +1142,8 @@ describe('CodingJobDefinitionDialogComponent', () => {
           status: 'pending',
           assignedCoders: [1],
           variables: [mockVariables[0]]
-        }));
-        expect(mockCodingJobService.assignCoder).toHaveBeenCalledWith(101, 1);
+        }), expect.any(String));
+        expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
         expect(mockDialogRef.close).toHaveBeenCalledWith(expect.objectContaining({ id: 101 }));
       } finally {
         jest.useRealTimers();
@@ -1284,13 +1284,17 @@ describe('CodingJobDefinitionDialogComponent', () => {
       }));
       if (isEdit) expect(payload.created_at).toBe(existingJob.created_at);
 
-      saved.next(existingJob);
-      saved.complete();
-      expect(component.isSaving()).toBe(true);
-      expect(mockDialogRef.close).not.toHaveBeenCalled();
       const result = { ...existingJob, assignedCoders: [1] };
-      assigned.next(result);
-      assigned.complete();
+      saved.next(isEdit ? existingJob : result);
+      saved.complete();
+      if (isEdit) {
+        expect(component.isSaving()).toBe(true);
+        expect(mockDialogRef.close).not.toHaveBeenCalled();
+        assigned.next(result);
+        assigned.complete();
+      } else {
+        expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
+      }
       expect(component.isSaving()).toBe(false);
       expect(mockDialogRef.close).toHaveBeenCalledTimes(1);
       expect(mockDialogRef.close).toHaveBeenCalledWith(result);
@@ -1321,23 +1325,30 @@ describe('CodingJobDefinitionDialogComponent', () => {
       write.mockReturnValue(of(existingJob));
       await component.onSubmit();
       expect(write).toHaveBeenCalledTimes(2);
+      if (!isEdit) {
+        expect(write.mock.calls[0][2]).toMatch(/^[a-f0-9-]{36}$/);
+        expect(write.mock.calls[1][2]).toBe(write.mock.calls[0][2]);
+      }
       expect(mockDialogRef.close).toHaveBeenCalledTimes(1);
     });
 
-    it('retains the saved job and partial-failure feedback if coder assignment fails', async () => {
-      prepareSave().mockReturnValue(of(existingJob));
-      (mockCodingJobService.assignCoder as jest.Mock).mockReturnValue(throwError(() => new Error('Assignment failed')));
-      await component.onSubmit();
-      expect(component.isSaving()).toBe(false);
-      expect(mockDialogRef.close).toHaveBeenCalledWith({ ...existingJob, assignedCoders: [1] });
-      expect(mockSnackBar.open).toHaveBeenCalledWith(
-        `coding-job-definition-dialog.snackbars.job-${isEdit ? 'updated' : 'created'}-coder-failed`,
-        'common.close',
-        { duration: 5000 }
-      );
-    });
+    if (isEdit) {
+      it('retains the saved job and partial-failure feedback if coder assignment fails', async () => {
+        prepareSave().mockReturnValue(of(existingJob));
+        (mockCodingJobService.assignCoder as jest.Mock).mockReturnValue(throwError(() => new Error('Assignment failed')));
+        await component.onSubmit();
+        expect(component.isSaving()).toBe(false);
+        expect(mockDialogRef.close).toHaveBeenCalledWith({ ...existingJob, assignedCoders: [1] });
+        expect(mockSnackBar.open).toHaveBeenCalledWith(
+          `coding-job-definition-dialog.snackbars.job-${isEdit ? 'updated' : 'created'}-coder-failed`,
+          'common.close',
+          { duration: 5000 }
+        );
+      });
 
-    it.each(['write', 'assignment'])('cancels a pending %s when the dialog is destroyed', async phase => {
+    }
+
+    it.each(isEdit ? ['write', 'assignment'] : ['write'])('cancels a pending %s when the dialog is destroyed', async phase => {
       const write = prepareSave();
       const pending = new Subject<CodingJob>();
       write.mockReturnValue(phase === 'write' ? pending : of(existingJob));

@@ -489,7 +489,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-distribution.service.ts": {
       "file": {
-        "max-lines": 2194
+        "max-lines": 2193
       },
       "functions": {
         "class CodingJobDistributionService#1/method buildDistributionPlan#1": {
@@ -506,9 +506,6 @@
         "max-lines": 1112
       },
       "functions": {
-        "class CodingJobMutationService#1/method createCodingJob#1": {
-          "max-lines-per-function": 108
-        },
         "class CodingJobMutationService#1/method createCodingJobWithUnitSubsetInManager#1": {
           "max-lines-per-function": 104
         },

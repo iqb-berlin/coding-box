@@ -210,7 +210,7 @@ describe('CodingJobService', () => {
     connection = {
       transaction: jest.fn(callback => callback({
         find: jest.fn().mockResolvedValue([]),
-        query: jest.fn().mockResolvedValue([]),
+        query: jest.fn().mockResolvedValue([{ locked: true }]),
         transaction: jest.fn(async nestedCallback => nestedCallback({ getRepository: entity => (entity === CodingJob ? codingJobRepository : codingJobCoderRepository) })),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
@@ -1804,7 +1804,7 @@ describe('CodingJobService', () => {
   it('locks workspace test-result mutations before selecting direct coding-job units', async () => {
     const transactionManager = {
       find: jest.fn().mockResolvedValue([]),
-      query: jest.fn().mockResolvedValue([]),
+      query: jest.fn().mockResolvedValue([{ locked: true }]),
       getRepository: (entity: unknown) => {
         if (entity === CodingJob) return codingJobRepository;
         if (entity === CodingJobCoder) return codingJobCoderRepository;
@@ -1835,7 +1835,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expect(transactionManager.query).toHaveBeenCalledWith(
-      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
       [expect.any(Number), 3]
     );
     expect(

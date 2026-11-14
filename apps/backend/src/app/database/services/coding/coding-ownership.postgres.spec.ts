@@ -1,4 +1,5 @@
-import { ForbiddenException, BadRequestException } from '@nestjs/common';
+import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import User from '../../entities/user.entity';
 import Workspace from '../../entities/workspace.entity';
@@ -80,7 +81,15 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       logger: { log: () => undefined, error: () => undefined }
     };
     const access = Object.assign(Object.create(CodingJobAccessService.prototype), dependencies) as CodingJobAccessService;
-    const mutation = Object.assign(Object.create(CodingJobMutationService.prototype), dependencies, { access }) as CodingJobMutationService;
+    const mutation = Object.assign(Object.create(CodingJobMutationService.prototype), dependencies, {
+      access,
+      aggregation: {
+        getCurrentAggregationSettingsSnapshot: async () => ({
+          aggregationEnabled: false, aggregationThreshold: null
+        })
+      },
+      responses: { getSlimResponsesForCodingJob: async () => [] }
+    }) as CodingJobMutationService;
     const status = new CodingJobStatusService(access, mutation, {} as never);
     const progress = Object.assign(Object.create(CodingJobProgressService.prototype), dependencies, { access, mutation }) as CodingJobProgressService;
     jobs = new CodingJobService(
@@ -144,33 +153,52 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     expect(await db.getRepository(CodingJob).countBy({ workspace_id: workspaceId, creatorUserId: owner.id })).toBe(1);
   });
 
-  it('rechecks creation rights after waiting for the workspace mutation lock', async () => {
+  it('rejects a busy create without writing, then recovers a committed retry under the same lock', async () => {
+    const request = { name: 'Retry-safe creation', creationRequestId: randomUUID() };
     const holder = db.createQueryRunner();
     await holder.connect();
-    await holder.startTransaction();
-    await lockWorkspaceTestResultsMutationInTransaction(holder.manager, workspaceId);
-    const attempt = jobs.createCodingJob(workspaceId, { name: 'Must not be created' }, owner.id);
-    const observed = attempt.then(() => undefined, () => undefined);
     try {
-      const deadline = Date.now() + 5000;
-      let blocked = false;
-      while (!blocked && Date.now() < deadline) {
-        const [row] = await db.query("SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE datname=current_database() AND wait_event_type='Lock' AND pid<>pg_backend_pid()) AS blocked");
-        blocked = row.blocked;
-        if (!blocked) await new Promise(resolve => { setTimeout(resolve, 20); });
-      }
-      expect(blocked).toBe(true);
-      await holder.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 1 });
+      await holder.startTransaction();
+      await lockWorkspaceTestResultsMutationInTransaction(holder.manager, workspaceId);
+      const attempt = jobs.createCodingJob(workspaceId, request, owner.id);
+      await expect(attempt).rejects.toBeInstanceOf(ConflictException);
+      const repository = db.getRepository(CodingJob);
+      const key = { workspace_id: workspaceId, creationRequestId: request.creationRequestId };
+      expect(await repository.countBy(key)).toBe(0);
       await holder.commitTransaction();
-      await expect(attempt).rejects.toBeInstanceOf(ForbiddenException);
-      expect(await db.getRepository(CodingJob).countBy({ workspace_id: workspaceId, name: 'Must not be created' })).toBe(0);
+
+      const attempts = await Promise.allSettled([jobs.createCodingJob(workspaceId, request, owner.id),
+        jobs.createCodingJob(workspaceId, request, owner.id)]);
+      const saved = await repository.findOneByOrFail(key);
+      expect(attempts.filter(result => result.status === 'fulfilled').length).toBeGreaterThan(0);
+      for (const result of attempts) {
+        if (result.status === 'fulfilled') expect(result.value.id).toBe(saved.id);
+        else expect(result.reason).toBeInstanceOf(ConflictException);
+      }
+
+      await holder.startTransaction();
+      await lockWorkspaceTestResultsMutationInTransaction(holder.manager, workspaceId);
+      await expect(jobs.createCodingJob(workspaceId, request, owner.id)).resolves.toMatchObject({ id: saved.id });
+      expect(await repository.countBy(key)).toBe(1);
+      expect(await db.query(
+        'SELECT entity_id FROM journal_entries WHERE workspace_id=$1 AND event_type=$2 AND entity_id=$3',
+        [workspaceId, 'CODING_JOB_CREATED', String(saved.id)]
+      )).toEqual([{ entity_id: String(saved.id) }]);
+      await holder.commitTransaction();
+
+      await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 1 });
+      await expect(jobs.createCodingJob(workspaceId, request, owner.id)).rejects.toBeInstanceOf(ForbiddenException);
+      await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 2 });
+
+      await expect(jobs.createCodingJob(workspaceId, request, foreign.id)).resolves.not.toMatchObject({ id: saved.id });
+      await expect(jobs.createCodingJob(workspaceId, { ...request, creationRequestId: randomUUID() }, owner.id))
+        .resolves.not.toMatchObject({ id: saved.id });
     } finally {
       if (holder.isTransactionActive) await holder.rollbackTransaction();
       await holder.release();
-      await observed;
       await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 2 });
     }
-  });
+  }, 15000);
 
   it('rechecks a revoked role after waiting for a locked foreign bundle', async () => {
     const id = resources.get('bundle')![1];

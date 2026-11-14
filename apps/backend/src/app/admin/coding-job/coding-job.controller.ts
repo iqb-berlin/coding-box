@@ -12,6 +12,7 @@ import {
 } from '@nestjs/common';
 import {
   ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiNotFoundResponse,
@@ -132,6 +133,7 @@ export class CodingJobController {
   @ApiBadRequestResponse({
     description: 'Invalid input data.'
   })
+  @ApiConflictResponse({ description: 'Test results are being updated. Retry with the same creation request ID.' })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
     @Body() createCodingJobDto: CreateCodingJobDto,

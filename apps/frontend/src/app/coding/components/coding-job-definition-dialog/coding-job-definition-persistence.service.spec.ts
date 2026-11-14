@@ -32,32 +32,20 @@ describe('CodingJobDefinitionPersistence', () => {
     persistence = TestBed.inject(CodingJobDefinitionPersistence);
   });
 
-  it('waits for the saved job and all assignments, preserving selection order in the result', () => {
-    const saved = new Subject<CodingJob>();
-    const first = new Subject<CodingJob>();
-    const second = new Subject<CodingJob>();
-    backend.createCodingJob.mockReturnValue(saved);
-    assignments.assignCoder.mockReturnValueOnce(first).mockReturnValueOnce(second);
+  it('sends the chosen coders and a retry key with the creation request', () => {
     const result = jest.fn();
-    persistence.createJob(5, job, [1, 2]).subscribe(result);
+    backend.createCodingJob.mockReturnValue(of(job));
+    persistence.createJob(5, job, [1, 2], 'creation-id').subscribe(result);
+    expect(backend.createCodingJob).toHaveBeenCalledWith(5, { ...job, assignedCoders: [1, 2] }, 'creation-id');
     expect(assignments.assignCoder).not.toHaveBeenCalled();
-    saved.next(job);
-    saved.complete();
-    expect(assignments.assignCoder.mock.calls).toEqual([[8, 1], [8, 2]]);
-    const secondReply = { ...job, assignedCoders: [1, 2] };
-    second.next(secondReply);
-    second.complete();
-    expect(result).not.toHaveBeenCalled();
-    first.next({ ...job, assignedCoders: [1] });
-    first.complete();
-    expect(result).toHaveBeenCalledWith({ job: secondReply, assignmentFailed: false });
+    expect(result).toHaveBeenCalledWith({ job, assignmentFailed: false });
   });
 
   it('preserves the undefined-assignment fallback and does not turn it into a new failure', () => {
-    backend.createCodingJob.mockReturnValue(of(job));
+    backend.updateCodingJob.mockReturnValue(of(job));
     assignments.assignCoder.mockReturnValue(of(undefined));
     const result = jest.fn();
-    persistence.createJob(5, job, [1]).subscribe(result);
+    persistence.updateJob(5, 8, job, [1]).subscribe(result);
     expect(result).toHaveBeenCalledWith({ job: { ...job, assignedCoders: [1] }, assignmentFailed: false });
   });
 
@@ -73,7 +61,7 @@ describe('CodingJobDefinitionPersistence', () => {
     backend.createCodingJob.mockReturnValue(throwError(() => error));
     const failed = jest.fn();
     assignments.assignCoder.mockClear();
-    persistence.createJob(5, job, [1]).subscribe({ error: failed });
+    persistence.createJob(5, job, [1], 'creation-id').subscribe({ error: failed });
     expect(failed).toHaveBeenCalledWith(error);
     expect(assignments.assignCoder).not.toHaveBeenCalled();
   });
@@ -81,18 +69,18 @@ describe('CodingJobDefinitionPersistence', () => {
   it('returns the saved job directly when no coders are selected', () => {
     backend.createCodingJob.mockReturnValue(of(job));
     const result = jest.fn();
-    persistence.createJob(5, job, []).subscribe(result);
+    persistence.createJob(5, job, [], 'creation-id').subscribe(result);
     expect(result).toHaveBeenCalledWith({ job, assignmentFailed: false });
     expect(assignments.assignCoder).not.toHaveBeenCalled();
   });
 
   it('cancels pending assignments with the owning subscription', () => {
-    backend.createCodingJob.mockReturnValue(of(job));
+    backend.updateCodingJob.mockReturnValue(of(job));
     const first = new Subject<CodingJob>();
     const second = new Subject<CodingJob>();
     assignments.assignCoder.mockReturnValueOnce(first).mockReturnValueOnce(second);
     const result = jest.fn();
-    const subscription = persistence.createJob(5, job, [1, 2]).subscribe(result);
+    const subscription = persistence.updateJob(5, 8, job, [1, 2]).subscribe(result);
     subscription.unsubscribe();
     expect(first.observed).toBe(false);
     expect(second.observed).toBe(false);

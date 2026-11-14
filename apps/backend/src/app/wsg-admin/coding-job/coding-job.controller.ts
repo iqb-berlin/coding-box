@@ -21,6 +21,7 @@ import { Request } from 'express';
 
 import {
   ApiBadRequestResponse,
+  ApiConflictResponse,
   ApiBearerAuth,
   ApiCreatedResponse,
   ApiNotFoundResponse,
@@ -532,9 +533,8 @@ export class WsgCodingJobController {
     description: 'The coding job has been successfully created.',
     type: CodingJobDto
   })
-  @ApiBadRequestResponse({
-    description: 'Invalid input data.'
-  })
+  @ApiBadRequestResponse({ description: 'Invalid input data.' })
+  @ApiConflictResponse({ description: 'Test results are being updated. Retry with the same creation request ID.' })
   async createCodingJob(
     @WorkspaceId() workspaceId: number,
     @Body() createCodingJobDto: CreateCodingJobDto,

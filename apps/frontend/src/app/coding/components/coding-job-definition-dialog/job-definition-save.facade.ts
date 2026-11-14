@@ -5,6 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
+import { v4 as uuid } from 'uuid';
 import {
   EmptyError, Observable, finalize, firstValueFrom
 } from 'rxjs';
@@ -43,6 +44,7 @@ export class JobDefinitionSaveFacade {
   private readonly destroyRef = inject(DestroyRef);
   private readonly rules = new CodingJobDefinitionRules();
   private workspaceGeneration = 0;
+  private creationRequestId?: string;
 
   constructor() {
     let workspaceId = this.app.selectedWorkspaceId;
@@ -50,6 +52,7 @@ export class JobDefinitionSaveFacade {
       if (id !== workspaceId) {
         workspaceId = id;
         this.workspaceGeneration += 1;
+        this.creationRequestId = undefined;
       }
     });
   }
@@ -58,7 +61,7 @@ export class JobDefinitionSaveFacade {
     const workspaceId = this.beginSave();
     if (!workspaceId) return;
     const request = isEdit ? this.persistence.updateJob(workspaceId, job.id!, job, coderIds) :
-      this.persistence.createJob(workspaceId, job, coderIds);
+      this.persistence.createJob(workspaceId, job, coderIds, this.creationRequestId ??= uuid());
     this.watch(request, workspaceId).subscribe({
       next: ({ job: savedJob, assignmentFailed }) => {
         this.saving.set(false);
@@ -67,7 +70,13 @@ export class JobDefinitionSaveFacade {
           assignmentFailed ? 5000 : 3000);
         this.dialogRef.close(savedJob);
       },
-      error: error => this.notify(isEdit ? 'error-updating-job' : 'error-creating-job', { error: error.message }, 5000)
+      error: error => {
+        if (!isEdit && error?.error?.code === 'CODING_JOB_WORKSPACE_BUSY') {
+          this.notify('job-creation-workspace-busy', undefined, 7000);
+          return;
+        }
+        this.notify(isEdit ? 'error-updating-job' : 'error-creating-job', { error: this.errorMessage(error) }, 5000);
+      }
     });
   }
 

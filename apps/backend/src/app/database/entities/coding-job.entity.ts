@@ -52,6 +52,9 @@ export class CodingJob {
   @Column({ name: 'creator_user_id', type: 'integer', nullable: true })
   creatorUserId: number | null;
 
+  @Column({ name: 'creation_request_id', type: 'uuid', nullable: true })
+  creationRequestId?: string | null;
+
   @Column()
   name: string;
 

@@ -15,6 +15,7 @@ import {
   ParseBoolPipe
 } from '@nestjs/common';
 import {
+  ApiConflictResponse,
   ApiCreatedResponse,
   ApiOkResponse,
   ApiParam,
@@ -429,9 +430,8 @@ export class WorkspaceCodingJobDefinitionController {
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiParam({ name: 'id', type: Number, description: 'Job definition ID' })
-  @ApiCreatedResponse({
-    description: 'Distributed coding jobs created successfully from job definition.'
-  })
+  @ApiCreatedResponse({ description: 'Distributed coding jobs created successfully from job definition.' })
+  @ApiConflictResponse({ description: 'Test results are being updated. Retry once the update completes.' })
   async createCodingJobFromDefinition(
     @WorkspaceId() workspace_id: number,
     @Param('id') id: number,

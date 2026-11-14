@@ -922,7 +922,7 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
   async createCodingJobFromDefinition(
     definition: JobDefinition
   ): Promise<void> {
-    if (!this.permissions.canEdit(definition)) return;
+    if (this.isBulkCreating() || !this.permissions.canEdit(definition)) return;
     if (!definition.id || !definition.assignedCoders) {
       return;
     }
@@ -1084,6 +1084,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
       }
     } catch (error) {
       if (!isCurrentContext()) return;
+      const busy = (error as { error?: { code?: string } })?.error?.code === 'CODING_JOB_WORKSPACE_BUSY';
+      if (busy) {
+        this.showError(this.translateService.instant('coding-job-definition-dialog.snackbars.job-creation-workspace-busy'));
+        return;
+      }
       this.snackBar.open(
         this.translateService.instant(
           'coding-job-definition-dialog.snackbars.bulk-creation-failed',
