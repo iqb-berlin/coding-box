@@ -844,10 +844,10 @@ export class CodingJobMutationService {
     const repo = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
-    const BATCH_SIZE = 500;
-    for (let i = 0; i < responses.length; i += BATCH_SIZE) {
-      const chunk = responses.slice(i, i + BATCH_SIZE);
-      const units = chunk.map(r => repo.create({
+    // Twelve bound values per case keep a batch well within PostgreSQL's parameter limit.
+    const batchSize = 2000;
+    for (let i = 0; i < responses.length; i += batchSize) {
+      const units = responses.slice(i, i + batchSize).map(r => ({
         coding_job_id: codingJobId,
         workspace_id: workspaceId,
         response_id: r.id,
@@ -860,9 +860,8 @@ export class CodingJobMutationService {
         person_code: r.personCode,
         person_group: r.personGroup,
         variable_bundle_id: r.variableBundleId || null
-      })
-      );
-      await repo.save(units);
+      }));
+      await repo.insert(units);
     }
   }
 

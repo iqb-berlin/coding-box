@@ -46,6 +46,7 @@ const createRepo = () => ({
   find: jest.fn(),
   findOne: jest.fn(),
   create: jest.fn(value => value),
+  insert: jest.fn().mockResolvedValue({}),
   save: jest.fn(value => Promise.resolve(value)),
   delete: jest.fn(),
   update: jest.fn(),
@@ -2714,6 +2715,33 @@ describe('CodingJobService', () => {
 
     expectManualCodingCandidateStatusFilter(qb);
     expectCompletedV2Filter(qb);
+  });
+
+  it('inserts a large direct job in bounded batches within the job transaction', async () => {
+    const responses = Array.from({ length: 5000 }, (_, index) => ({
+      id: index + 1,
+      unitName: 'UNIT',
+      variableid: 'VAR',
+      value: String(index + 1)
+    }));
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(responses));
+    codingJobRepository.save.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobVariableRepository.find.mockResolvedValue([{ unit_name: 'UNIT', variable_id: 'VAR' }]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+
+    await service.createCodingJob(3, {
+      name: 'Large direct job',
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      maxCodingCases: 5000
+    });
+
+    const batches = codingJobUnitRepository.insert.mock.calls.map(([batch]) => batch);
+    expect(batches.map(batch => batch.length)).toEqual([2000, 2000, 1000]);
+    expect(batches.flatMap(batch => batch.map(row => row.response_id))).toEqual(responses.map(row => row.id));
+    expect(batches[0][0]).toMatchObject({
+      coding_job_id: 1, workspace_id: 3, variable_id: 'VAR', variable_anchor: 'VAR'
+    });
   });
 
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {
