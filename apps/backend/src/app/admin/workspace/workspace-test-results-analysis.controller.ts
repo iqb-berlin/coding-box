@@ -295,69 +295,39 @@ export class WorkspaceTestResultsAnalysisController {
       isEmpty(sessionScreens) &&
       isEmpty(sessionIds);
 
-    if (isNoFilterRequest) {
-      const versionKey =
-        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-          workspace_id
-        );
-      const version = await this.cacheService.getNumber(versionKey, 1);
-      const cacheKey =
-        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
-          workspace_id,
-          version,
-          threshold
-        );
-      const cached = await this.cacheService.get<FlatResponseFilterOptions>(cacheKey);
-      if (cached) {
-        return cached;
+    const compute = () => this.workspaceTestResultsService.findFlatResponseFilterOptions(
+      workspace_id,
+      {
+        code,
+        group,
+        login,
+        booklet,
+        unit,
+        response,
+        responseStatus,
+        responseValue,
+        tags,
+        geogebra,
+        audioLow,
+        audioLowThreshold,
+        shortProcessing,
+        shortProcessingThresholdMs,
+        longLoading,
+        longLoadingThresholdMs,
+        processingDurations,
+        processingDurationThresholdMs,
+        unitProgress,
+        sessionBrowsers,
+        sessionOs,
+        sessionScreens,
+        sessionIds
       }
-    }
-
-    const result =
-      await this.workspaceTestResultsService.findFlatResponseFilterOptions(
-        workspace_id,
-        {
-          code,
-          group,
-          login,
-          booklet,
-          unit,
-          response,
-          responseStatus,
-          responseValue,
-          tags,
-          geogebra,
-          audioLow,
-          audioLowThreshold,
-          shortProcessing,
-          shortProcessingThresholdMs,
-          longLoading,
-          longLoadingThresholdMs,
-          processingDurations,
-          processingDurationThresholdMs,
-          unitProgress,
-          sessionBrowsers,
-          sessionOs,
-          sessionScreens,
-          sessionIds
-        }
-      );
+    );
 
     if (isNoFilterRequest) {
-      const versionKey =
-        this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-          workspace_id
-        );
-      const version = await this.cacheService.getNumber(versionKey, 1);
-      const cacheKey =
-        this.cacheService.generateFlatResponseFilterOptionsCacheKey(
-          workspace_id,
-          version,
-          threshold
-        );
-      await this.cacheService.set(cacheKey, result, 0);
+      return this.cacheService.getOrComputeFlatResponseFilterOptions(workspace_id, threshold, compute);
     }
 
-    return result;
+    return compute();
   }
 }

@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
 } from 'typeorm';
+import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../workspace/workspace-constants';
 import { CacheService } from '../../../cache/cache.service';
 import { Booklet } from '../../entities/booklet.entity';
 import { BookletInfo } from '../../entities/bookletInfo.entity';
@@ -57,7 +58,7 @@ export class TestResultsReplayService {
       workspaceId,
       connector,
       unitId
-    )}:v6`;
+    )}${REPLAY_RESPONSE_CACHE_SUFFIX}`;
     const cachedResponse = await this.cacheService.get<{
       responses: {
         id: string;

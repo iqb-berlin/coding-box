@@ -9,8 +9,8 @@ export default {
   displayName: 'backend-integration',
   testMatch: [
     '<rootDir>/src/**/*.postgres.spec.ts',
-    '<rootDir>/src/**/bullmq.integration.spec.ts',
-    '<rootDir>/src/**/auth-rate-limit.redis.integration.spec.ts',
+    '<rootDir>/src/**/*bullmq.integration.spec.ts',
+    '<rootDir>/src/**/*.redis.integration.spec.ts',
     '<rootDir>/src/**/variable-analysis.processor.integration.spec.ts'
   ],
   collectCoverage: false,
