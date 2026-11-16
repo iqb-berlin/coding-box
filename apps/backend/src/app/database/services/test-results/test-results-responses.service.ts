@@ -10,11 +10,11 @@ import {
   SelectQueryBuilder
 } from 'typeorm';
 import {
+  RESPONSE_VALUE_SEARCH_STATEMENT_TIMEOUT_MS,
   toRegexSearchException,
   toResponseValueSearchException,
   validatePostgresRegexSearchPatterns,
-  withRegexSearchStatementTimeout,
-  withResponseValueSearchStatementTimeout
+  withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
@@ -28,18 +28,31 @@ import {
   applyExclusionsToQuery, excludeAutocoderGeneratedResponses
 } from './test-results.util';
 import { FlatResponseOptions, FlatResponseResult, LogAnomalySummary } from './workspace-test-results.types';
+import { LRUCache } from '../shared/lru-cache';
 import {
   applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 import {
-  createFlatResponseUnitScope, findUnfilteredFlatResponseScope, findValueFilteredFlatResponsePage,
-  isUnfilteredFlatResponseQuery, withFlatResponsePageUnits
+  countUnfilteredFlatResponses, createFlatResponseUnitScope, createIndexedFlatResponseMatches,
+  findUnfilteredFlatResponsePageRows, findUnfilteredFlatResponsePageUnits, findValueFilteredFlatResponsePage,
+  FlatResponsePageUnit, isUnfilteredFlatResponseQuery
 } from './flat-response-query-scope';
+import { findProjectedFlatResponsePage, ResponsePageProjection } from './flat-response-first-page';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
+const MAX_CACHED_PAGE_BYTES = 512 * 1024;
+const MAX_CACHED_PAGE_UNITS = 4_000;
+
+type FlatResponsePage = Awaited<ReturnType<typeof findValueFilteredFlatResponsePage>>;
 
 @Injectable()
 export class TestResultsResponsesService {
+  private readonly pendingUnfilteredCounts = new Map<string, Promise<number>>();
+  private readonly completedUnfilteredCounts = new LRUCache<number>(128);
+  private readonly unfilteredPageUnits = new LRUCache<FlatResponsePageUnit[]>(128);
+  private readonly pendingPages = new Map<string, Promise<FlatResponsePage>>();
+  private readonly completedPages = new LRUCache<FlatResponsePage>(32);
+
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
@@ -96,10 +109,7 @@ export class TestResultsResponsesService {
 
     if (hasResponseValueFilter && !queryRunner) {
       try {
-        return await withResponseValueSearchStatementTimeout(
-          this.connection,
-          runner => this.findFlatResponses(workspaceId, options, runner)
-        );
+        return await this.queryFlatResponses(workspaceId, options);
       } catch (error) {
         const searchError = toResponseValueSearchException(error);
         if (searchError) {
@@ -126,25 +136,40 @@ export class TestResultsResponsesService {
       repeatedStartThreshold: options.repeatedStartThreshold
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
-    const createQuery = () => {
-      const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
-      applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
-      this.anomalies.applyLogAnomalyFilters(query, logAnomalyCodes, logAnomalyThresholds, exclusions);
-      return query;
-    };
-    const qb = createQuery();
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
     const page = { number: validPage, size: validLimit };
-    const { total, raw } = filters.responseValue ?
-      await findValueFilteredFlatResponsePage(
-        this.connection,
-        qb,
-        this.projectFlatResponseRows(this.createFlatResponseJoins(queryRunner), filters.tags),
-        page,
-        queryRunner
-      ) :
-      await this.loadOtherFlatResponsePage(createQuery, qb, page, filters, exclusions, workspaceId, queryRunner);
+    const unfiltered = isUnfilteredFlatResponseQuery(filters);
+    const valueSearch = Boolean(filters.responseValue);
+    const projectedValueSearch = valueSearch && Number.isSafeInteger(page.number) &&
+      isUnfilteredFlatResponseQuery({ ...filters, responseValue: '' });
+    const canProject = Number.isSafeInteger(page.size) && ((unfiltered && page.number === 1) || projectedValueSearch);
+    const loadPage = async (
+      runner?: QueryRunner, scopeKey?: string, projection?: ResponsePageProjection | null
+    ): Promise<FlatResponsePage> => {
+      if (projection) {
+        const firstPage = await findProjectedFlatResponsePage(
+          this.connection, workspaceId, exclusions, page, projection, filters.responseValue, runner
+        );
+        if (firstPage) return firstPage;
+      }
+      const qb = await this.createFlatResponseQuery(workspaceId, filters, runner, scopeKey !== undefined);
+      applyExclusionsToQuery(qb, exclusions, { bookletInfoAlias: 'bookletinfo' });
+      this.anomalies.applyLogAnomalyFilters(qb, logAnomalyCodes, logAnomalyThresholds, exclusions);
+      return filters.responseValue ?
+        findValueFilteredFlatResponsePage(
+          this.connection,
+          qb,
+          this.projectFlatResponseRows(this.createFlatResponseJoins(runner), filters.tags),
+          page,
+          runner
+        ) :
+        this.loadOtherFlatResponsePage(qb, page, filters, exclusions, workspaceId, runner, scopeKey);
+    };
+    const pageKey = valueSearch ? JSON.stringify([page, filters, logAnomalyThresholds]) : JSON.stringify(page);
+    const { total, raw } = !queryRunner && (unfiltered || valueSearch) ?
+      await this.loadSnapshotPage(workspaceId, exclusions, pageKey, valueSearch, canProject, loadPage) :
+      await loadPage(queryRunner);
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
@@ -192,48 +217,154 @@ export class TestResultsResponsesService {
     ];
   }
 
+  private async loadSnapshotPage(
+    workspaceId: number,
+    exclusions: Parameters<typeof applyExclusionsToQuery>[1],
+    pageKey: string,
+    valueSearch: boolean,
+    canProject: boolean,
+    loadPage: (runner?: QueryRunner, scopeKey?: string, projection?: ResponsePageProjection | null) => Promise<FlatResponsePage>
+  ): Promise<FlatResponsePage> {
+    const pageRead = await this.connection.transaction('REPEATABLE READ', async manager => {
+      await manager.query('SET TRANSACTION READ ONLY');
+      if (valueSearch) {
+        await manager.query(`SET LOCAL statement_timeout = '${RESPONSE_VALUE_SEARCH_STATEMENT_TIMEOUT_MS}ms'`);
+      }
+      const projectionColumn = canProject ?
+        `, CASE
+              WHEN to_regclass('flat_response_first_page_workspace') IS NULL THEN NULL
+              ${valueSearch ?
+                "WHEN to_regclass('flat_response_value_search_workspace') IS NOT NULL THEN 'value' ELSE NULL" :
+                "WHEN to_regclass('flat_response_first_page_total') IS NOT NULL THEN 'totals' ELSE 'units'"}
+            END AS "projection"` : '';
+      const [{ snapshot, postmasterStartedAt, projection }] = await manager.query(
+        `SELECT pg_current_snapshot()::text AS snapshot,
+          pg_postmaster_start_time()::text AS "postmasterStartedAt"${projectionColumn}`
+      ) as { snapshot: string; postmasterStartedAt: string; projection?: ResponsePageProjection | null }[];
+      // Reuse requires the same server, row visibility and workspace scope.
+      const scopeKey = JSON.stringify([workspaceId, exclusions, postmasterStartedAt, snapshot]);
+      const snapshotPageKey = JSON.stringify([scopeKey, pageKey]);
+      const cached = this.completedPages.get(snapshotPageKey);
+      if (cached) return { result: cached };
+      const pending = this.pendingPages.get(snapshotPageKey);
+      // End the follower's transaction before waiting for the shared page.
+      if (pending) return { pending };
+
+      const read = loadPage(manager.queryRunner, scopeKey, projection);
+      this.pendingPages.set(snapshotPageKey, read);
+      try {
+        const result = await read;
+        if (Buffer.byteLength(JSON.stringify(result.raw)) <= MAX_CACHED_PAGE_BYTES) {
+          this.completedPages.set(snapshotPageKey, result);
+        }
+        return { result };
+      } finally {
+        this.pendingPages.delete(snapshotPageKey);
+      }
+    });
+    return pageRead.pending ?? pageRead.result;
+  }
+
   private async loadOtherFlatResponsePage(
-    createQuery: () => SelectQueryBuilder<ResponseEntity>,
     qb: SelectQueryBuilder<ResponseEntity>,
     page: { number: number; size: number },
     filters: FlatResponseFilters,
     exclusions: Parameters<typeof applyExclusionsToQuery>[1],
     workspaceId: number,
-    queryRunner?: QueryRunner
+    queryRunner?: QueryRunner,
+    scopeKey?: string
   ) {
-    const candidateUnits = page.number * page.size;
     const units = isUnfilteredFlatResponseQuery(filters) ?
       createFlatResponseUnitScope(this.connection, workspaceId, exclusions, queryRunner) : undefined;
-    const scope = units ? await findUnfilteredFlatResponseScope(
-      this.connection, units, Number.isSafeInteger(candidateUnits) ? candidateUnits : undefined, queryRunner
-    ) : undefined;
-    const total = scope ? scope.total : await createQuery()
+    const total = units ? await this.getUnfilteredCount(
+      scopeKey, () => countUnfilteredFlatResponses(this.connection, units, queryRunner)
+    ) : await qb.clone()
       .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
 
-    const pageQuery = scope?.pageUnitIds ? withFlatResponsePageUnits(qb, scope.pageUnitIds) : qb;
-    let raw = await this.selectFlatResponseRows(pageQuery, page.number, page.size, filters.tags);
-    // Empty/auto-generated-only units can exhaust the prefix before a whole page.
-    // In that case use the complete scope instead of silently dropping later rows.
-    if (scope?.pageUnitIds && raw.length < page.size) {
-      raw = await this.selectFlatResponseRows(qb, page.number, page.size, filters.tags);
+    const range = this.getFlatResponsePageRange(page, scopeKey === undefined ? undefined : total);
+    if (!range) return { total, raw: [] };
+    const {
+      pageOffset, size, direction, candidateUnits
+    } = range;
+    let pageUnits: FlatResponsePageUnit[] | undefined;
+    if (scopeKey !== undefined && units && Number.isSafeInteger(candidateUnits) && candidateUnits <= MAX_CACHED_PAGE_UNITS) {
+      const unitsKey = JSON.stringify([scopeKey, direction, candidateUnits]);
+      pageUnits = this.unfilteredPageUnits.get(unitsKey);
+      if (!pageUnits) {
+        pageUnits = await findUnfilteredFlatResponsePageUnits(this.connection, units, candidateUnits, direction, queryRunner);
+        if (pageUnits.length <= MAX_CACHED_PAGE_UNITS) {
+          this.unfilteredPageUnits.set(unitsKey, pageUnits);
+        }
+      }
     }
-    return { total, raw };
+    let raw = pageUnits && await findUnfilteredFlatResponsePageRows(
+      this.connection,
+      this.projectFlatResponseRows(this.createFlatResponseJoins(queryRunner), ''),
+      pageUnits,
+      { offset: pageOffset, limit: size, direction },
+      queryRunner
+    );
+    // Empty or generated-only units can exhaust the candidate range.
+    // In that case use the complete scope instead of silently dropping later rows.
+    if (!raw || raw.length < size) {
+      raw = await this.selectFlatResponseRows(qb, pageOffset, size, filters.tags, direction);
+    }
+    return { total, raw: direction === 'DESC' ? raw.reverse() : raw };
   }
 
-  private createFlatResponseQuery(
+  private getFlatResponsePageRange(page: { number: number; size: number }, snapshotTotal?: number) {
+    const offset = (page.number - 1) * page.size;
+    // Count and reverse pagination must see the same rows.
+    if (snapshotTotal === undefined) {
+      return {
+        pageOffset: offset, size: page.size, direction: 'ASC', candidateUnits: offset + page.size
+      } as const;
+    }
+    if (offset >= snapshotTotal) return undefined;
+    const reverseEnd = snapshotTotal - offset;
+    const size = Math.min(page.size, reverseEnd);
+    const forwardEnd = offset + size;
+    return reverseEnd < forwardEnd ?
+      {
+        pageOffset: reverseEnd - size, size, direction: 'DESC', candidateUnits: reverseEnd
+      } as const :
+      {
+        pageOffset: offset, size, direction: 'ASC', candidateUnits: forwardEnd
+      } as const;
+  }
+
+  private getUnfilteredCount(key: string | undefined, count: () => Promise<number>): Promise<number> {
+    if (key === undefined) return count();
+    const cached = this.completedUnfilteredCounts.get(key);
+    if (cached !== undefined) return Promise.resolve(cached);
+    const pending = this.pendingUnfilteredCounts.get(key);
+    if (pending) return pending;
+    const result = count().then(total => {
+      this.completedUnfilteredCounts.set(key, total);
+      return total;
+    }).finally(() => this.pendingUnfilteredCounts.delete(key));
+    this.pendingUnfilteredCounts.set(key, result);
+    return result;
+  }
+
+  private async createFlatResponseQuery(
     workspaceId: number,
     filters: FlatResponseFilters,
-    queryRunner?: QueryRunner
-  ): SelectQueryBuilder<ResponseEntity> {
-    const query = this.createFlatResponseJoins(queryRunner)
-      .where('person.workspace_id = :workspaceId', { workspaceId })
+    queryRunner?: QueryRunner,
+    useIndex = false
+  ): Promise<SelectQueryBuilder<ResponseEntity>> {
+    // Only select the index when readiness and links are read in our single repeatable-read snapshot.
+    const indexedMatches = useIndex ?
+      await createIndexedFlatResponseMatches(this.connection, workspaceId, filters, queryRunner) : undefined;
+    const query = (indexedMatches || this.createFlatResponseJoins(queryRunner))
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
-    excludeAutocoderGeneratedResponses(query);
+    if (!indexedMatches) excludeAutocoderGeneratedResponses(query);
     // EXISTS filters keep one row per response. Aggregate tags only for the page,
     // rather than grouping and sorting every matching response before LIMIT.
-    applyFlatResponseFilters(query, filters, 'count');
+    applyFlatResponseFilters(query, indexedMatches ? { ...filters, responseValue: '' } : filters, 'count');
     return query;
   }
 
@@ -246,17 +377,21 @@ export class TestResultsResponsesService {
   }
 
   private selectFlatResponseRows(
-    qb: SelectQueryBuilder<ResponseEntity>, validPage: number, validLimit: number, tags: string
+    qb: SelectQueryBuilder<ResponseEntity>, offset: number, limit: number, tags: string, direction: 'ASC' | 'DESC'
   ) {
-    return this.projectFlatResponseRows(qb, tags)
-      .orderBy('person.code', 'ASC')
-      .addOrderBy('bookletinfo.name', 'ASC')
-      .addOrderBy('unit.alias', 'ASC')
-      .addOrderBy('response.variableid', 'ASC')
-      .addOrderBy('response.id', 'ASC')
-      .offset((validPage - 1) * validLimit)
-      .limit(validLimit)
+    return this.orderFlatResponseRows(this.projectFlatResponseRows(qb, tags), direction)
+      .offset(offset)
+      .limit(limit)
       .getRawMany();
+  }
+
+  private orderFlatResponseRows(qb: SelectQueryBuilder<ResponseEntity>, direction: 'ASC' | 'DESC') {
+    return qb
+      .orderBy('person.code', direction)
+      .addOrderBy('bookletinfo.name', direction)
+      .addOrderBy('unit.alias', direction)
+      .addOrderBy('response.variableid', direction)
+      .addOrderBy('response.id', direction);
   }
 
   private projectFlatResponseRows(qb: SelectQueryBuilder<ResponseEntity>, tags: string) {

@@ -139,14 +139,6 @@ export async function validatePostgresRegexSearchPatterns(
   }
 }
 
-export function withResponseValueSearchStatementTimeout<T>(
-  dataSource: Pick<DataSource, 'createQueryRunner'>,
-  work: (queryRunner: QueryRunner) => Promise<T>,
-  timeoutMs = RESPONSE_VALUE_SEARCH_STATEMENT_TIMEOUT_MS
-): Promise<T> {
-  return withRegexSearchStatementTimeout(dataSource, work, timeoutMs);
-}
-
 export function toRegexSearchException(
   error: unknown,
   fieldName?: string

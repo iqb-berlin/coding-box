@@ -1,5 +1,8 @@
 import { createMock } from '@golevelup/ts-jest';
+import { readFileSync } from 'fs';
+import { resolve } from 'path';
 import { DataSource } from 'typeorm';
+import { PersonQueryService } from './person-query.service';
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
@@ -26,6 +29,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   let db: DataSource;
   let service: TestResultsResponsesService;
   let filterOptionsService: TestResultsFilterOptionsService;
+  let exclusionService: WorkspaceExclusionService;
 
   beforeAll(async () => {
     db = new DataSource({
@@ -76,6 +80,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (5, 2, 'E', 3, 'answer B'), (6, 3, 'F', 3, 'answer C'), (7, 4, 'G', 3, '0'), (8, 5, 'H', 3, '[1]'),
         (10, 6, 'J', 3, 'foreign'), (11, 7, 'K', 3, 'not considered'), (12, 8, 'L', 3, 'ignored unit');
       INSERT INTO "${schema}".response VALUES (9, 1, 'I', 3, 'generated', true);
+      UPDATE "${schema}".response SET is_autocoder_generated = NULL WHERE id = 4;
       INSERT INTO "${schema}".unit_tag VALUES
         (1, 1, 'review-alpha'), (2, 1, 'review-beta'), (3, 2, 'review-alpha'), (4, 3, 'other');
       INSERT INTO "${schema}".bookletlog VALUES
@@ -88,12 +93,15 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (201, 2, 'Firefox', 'Mac', '1920x1080', 100), (301, 3, 'Chrome', 'Linux', '1920x1080', 100),
         (401, 4, 'Firefox', 'Windows', '1920x1080', 100), (501, 5, 'Safari', 'Linux', '1920x1080', 100);
     `);
-    const exclusions = createMock<WorkspaceExclusionService>({
+    exclusionService = createMock<WorkspaceExclusionService>({
       resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: ['IGNORED'], ignoredBooklets: [], testletIgnoredUnits: [] })
     });
-    const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusions);
-    service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusions, anomalies);
-    filterOptionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusions);
+    filterOptionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusionService);
+  });
+
+  beforeEach(() => {
+    const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusionService);
+    service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusionService, anomalies);
   });
 
   afterAll(async () => {
@@ -113,6 +121,381 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const [{ current_schema: currentSchema }] = await db.query('SELECT current_schema()');
     expect(currentSchema).toBe(schema);
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('backfills the migrated projections and reads through a workspace move and rebuild', async () => {
+    const migration = readFileSync(resolve(
+      'database/changelog/coding-box.changelog-response-list-search.sql'
+    ), 'utf8').replace(/\bpublic\./g, `"${schema}".`);
+    const changes = migration.split(/^--changeset .*$/m).slice(1);
+    const original = await service.findFlatResponses(42, { page: 1, limit: 50 });
+    await db.transaction(async manager => {
+      await manager.query('CREATE TABLE workspace (id int PRIMARY KEY)');
+      await manager.query('INSERT INTO workspace VALUES (42), (43)');
+      for (const sql of changes) await manager.query(sql);
+    });
+    try {
+      await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+      await expectResponses({ responseValue: 'answer' }, [4, 5, 6]);
+      await db.query(`
+        INSERT INTO response VALUES (999, 2, 'NEW', 3, 'new answer', false);
+        UPDATE response SET value = 'edited answer' WHERE id = 999;
+      `);
+      await expectResponses({ responseValue: 'edited answer' }, [999]);
+      const cachedCounts = 'SELECT COALESCE(sum(total), 0)::int AS n FROM flat_response_first_page_total WHERE workspace_id = $1';
+      await expect(db.query(cachedCounts, [42])).resolves.toEqual([{ n: 10 }]);
+
+      await db.query('UPDATE persons SET workspace_id = 43 WHERE id = 1');
+      await expectResponses({ responseValue: 'answer' }, []);
+      await db.query('SELECT rebuild_flat_response_workspace(43)');
+      const [movedRows] = await service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'edited answer' });
+      expect(movedRows.map(row => row.responseId)).toEqual([999]);
+      await db.query('DELETE FROM response WHERE id = 999');
+      const [deletedRows] = await service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'edited answer' });
+      expect(deletedRows).toEqual([]);
+    } finally {
+      await db.transaction(async manager => {
+        for (const changeset of [...changes].reverse()) {
+          const rollback = [...changeset.matchAll(/^--rollback (.*)$/gm)].map(match => match[1]).join('\n');
+          await manager.query(rollback);
+        }
+        await manager.query('DELETE FROM response WHERE id = 999');
+        await manager.query('UPDATE persons SET workspace_id = 42 WHERE id = 1');
+        await manager.query('DROP TABLE workspace');
+      });
+    }
+    await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+  });
+
+  it('counts only in-scope answers in upload statistics, including legacy null autocoder flags', async () => {
+    const importExclusions = createMock<WorkspaceExclusionService>({
+      resolveExclusionsForQueries: async () => ({
+        globalIgnoredUnits: ['ignored.xml'],
+        ignoredBooklets: ['booklet_b'],
+        testletIgnoredUnits: [{ bookletId: 'booklet_c', unitId: 'unit_c.xml' }]
+      })
+    });
+    const personQuery = new PersonQueryService(
+      db.getRepository(Persons),
+      db.getRepository(Booklet),
+      db.getRepository(Unit),
+      db.getRepository(ResponseEntity),
+      db.getRepository(BookletLog),
+      importExclusions
+    );
+    await expect(personQuery.getWorkspaceUploadStats(42)).resolves.toEqual({
+      testPersons: 1,
+      testGroups: 1,
+      uniqueBooklets: 4,
+      uniqueUnits: 3,
+      uniqueResponses: 6
+    });
+  });
+
+  it('shares an overlapping unfiltered count for different page sizes in the same snapshot', async () => {
+    let countQueries = 0;
+    let snapshots = 0;
+    let releaseCount!: () => void;
+    const countReleased = new Promise<void>(resolve => { releaseCount = resolve; });
+    const createRunner = db.createQueryRunner.bind(db);
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+        if (typeof sql === 'string' && sql.includes('pg_current_snapshot()')) {
+          const snapshot = await query(sql, parameters, structured);
+          snapshots += 1;
+          if (snapshots === 2) setImmediate(releaseCount);
+          return snapshot;
+        }
+        if (typeof sql === 'string' && sql.includes('"counted_response"')) {
+          countQueries += 1;
+          await countReleased;
+        }
+        return query(sql, parameters, structured);
+      });
+      return runner;
+    });
+    try {
+      const [[first, firstTotal], [second, secondTotal]] = await Promise.all([
+        service.findFlatResponses(42, { page: 1, limit: 2 }),
+        service.findFlatResponses(42, { page: 2, limit: 3 })
+      ]);
+      expect(first.map(row => row.responseId)).toEqual([1, 2]);
+      expect(second.map(row => row.responseId)).toEqual([4, 5, 6]);
+      expect([firstTotal, secondTotal]).toEqual([8, 8]);
+      expect(countQueries).toBe(1);
+    } finally {
+      releaseCount();
+      runners.mockRestore();
+    }
+  });
+
+  it('keeps exact page totals and ordering with provisioned per-unit counts', async () => {
+    await db.query(`CREATE TABLE "${schema}".flat_response_unit_count AS
+      SELECT unitid, COUNT(*) AS total FROM "${schema}".response
+      WHERE is_autocoder_generated IS NOT TRUE GROUP BY unitid`);
+    try {
+      await expectResponses({ page: 1, limit: 3 }, [1, 2, 3], 8);
+      await expectResponses({ page: 3, limit: 3 }, [7, 8], 8);
+      await expectResponses({ page: 4, limit: 3 }, [], 8);
+      jest.mocked(exclusionService.resolveExclusionsForQueries).mockResolvedValueOnce({
+        globalIgnoredUnits: ['IGNORED', 'UNIT_E'], ignoredBooklets: [], testletIgnoredUnits: []
+      });
+      await expectResponses({ page: 3, limit: 3 }, [7], 7);
+    } finally {
+      await db.query(`DROP TABLE "${schema}".flat_response_unit_count`);
+    }
+  });
+
+  async function installFirstPageProjection() {
+    await db.query(`
+      CREATE TABLE flat_response_first_page_workspace (workspace_id int, ready boolean);
+      INSERT INTO flat_response_first_page_workspace VALUES (42, true);
+      CREATE TABLE flat_response_first_page_unit AS
+        SELECT u.id AS unit_id, p.workspace_id, p.consider, p.id AS person_id,
+          p.code AS person_code, p.login AS person_login, p."group" AS person_group,
+          b.id AS booklet_id, bi.name AS booklet_name, u.name AS unit_name, u.alias AS unit_alias
+        FROM unit u JOIN booklet b ON b.id=u.bookletid JOIN bookletinfo bi ON bi.id=b.infoid
+        JOIN persons p ON p.id=b.personid WHERE p.workspace_id=42;
+      CREATE TABLE flat_response_first_page_response AS
+        SELECT id, unitid, variableid, status, SUBSTRING(value, 1, 2000) AS value_prefix
+        FROM response WHERE is_autocoder_generated IS NOT TRUE;
+      CREATE TABLE flat_response_unit_count AS
+        SELECT unitid, COUNT(*) AS total FROM response
+        WHERE is_autocoder_generated IS NOT TRUE GROUP BY unitid;
+    `);
+  }
+
+  it.each(['units', 'totals'])('uses the projected first page with %s only while the workspace projection is ready', async countSource => {
+    const options = { page: 1, limit: 3 };
+    const reference = await service.findFlatResponses(42, options);
+    await installFirstPageProjection();
+    if (countSource === 'totals') {
+      await db.query(`CREATE TABLE flat_response_first_page_total AS
+        SELECT u.workspace_id, u.booklet_name, u.unit_name, SUM(n.total) AS total
+        FROM flat_response_first_page_unit u JOIN flat_response_unit_count n ON n.unitid=u.unit_id
+        WHERE u.consider IS TRUE GROUP BY 1, 2, 3`);
+    }
+    const createRunner = db.createQueryRunner.bind(db);
+    const projectionRowCounts: number[] = [];
+    const projectedTotalReads: boolean[] = [];
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+        const result = await query(sql, parameters, structured);
+        if (typeof sql === 'string' && sql.includes('first_page_rows AS MATERIALIZED')) {
+          projectionRowCounts.push(result.length);
+          projectedTotalReads.push(sql.includes('flat_response_first_page_total'));
+        }
+        return result;
+      });
+      return runner;
+    });
+    try {
+      await expect(service.findFlatResponses(42, options)).resolves.toEqual(reference);
+      jest.mocked(exclusionService.resolveExclusionsForQueries).mockResolvedValueOnce({
+        globalIgnoredUnits: ['IGNORED', 'UNIT_A'], ignoredBooklets: [], testletIgnoredUnits: []
+      });
+      await expectResponses(options, [5, 6, 7], 4);
+      expect(projectionRowCounts).toEqual([3, 3]);
+
+      await db.query('UPDATE flat_response_first_page_workspace SET ready = false');
+      await expect(service.findFlatResponses(42, options)).resolves.toEqual(reference);
+      expect(projectionRowCounts).toEqual([3, 3, 0]);
+      expect(projectedTotalReads).toEqual(Array(3).fill(countSource === 'totals'));
+    } finally {
+      runners.mockRestore();
+      await db.query('DROP TABLE IF EXISTS flat_response_first_page_total');
+      await db.query(`DROP TABLE flat_response_first_page_workspace, flat_response_first_page_unit,
+        flat_response_first_page_response, flat_response_unit_count`);
+    }
+  });
+
+  it('reuses completed unfiltered results only while the workspace snapshot and exclusions match', async () => {
+    let countQueries = 0;
+    let unitQueries = 0;
+    let pageQueries = 0;
+    const createRunner = db.createQueryRunner.bind(db);
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation((sql, parameters, structured) => {
+        if (typeof sql === 'string' && sql.includes('"counted_response"')) countQueries += 1;
+        if (typeof sql === 'string' && sql.includes('ROWS WITH TIES')) unitQueries += 1;
+        if (typeof sql === 'string' && sql.includes('AS "responseId"')) pageQueries += 1;
+        return query(sql, parameters, structured);
+      });
+      return runner;
+    });
+
+    try {
+      await expectResponses({ page: 1, limit: 2 }, [1, 2], 8);
+      await expectResponses({ page: 2, limit: 3 }, [4, 5, 6], 8);
+      await expectResponses({ page: 1, limit: 2 }, [1, 2], 8);
+      expect(countQueries).toBe(1);
+      expect(unitQueries).toBe(2);
+      expect(pageQueries).toBe(2);
+
+      jest.mocked(exclusionService.resolveExclusionsForQueries).mockResolvedValueOnce({
+        globalIgnoredUnits: ['IGNORED', 'UNIT_E'], ignoredBooklets: [], testletIgnoredUnits: []
+      });
+      await expectResponses({ page: 1, limit: 2 }, [1, 2], 7);
+      expect(countQueries).toBe(2);
+      expect(unitQueries).toBe(3);
+      expect(pageQueries).toBe(3);
+
+      await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value)
+        VALUES (99, 1, 'NEW', 3, 'committed after the cached count')`);
+      await expectResponses({ page: 1, limit: 2 }, [1, 2], 9);
+      expect(countQueries).toBe(3);
+      expect(unitQueries).toBe(4);
+      expect(pageQueries).toBe(4);
+    } finally {
+      runners.mockRestore();
+      await db.query(`DELETE FROM "${schema}".response WHERE id = 99`);
+    }
+  });
+
+  it.each(['unfiltered', 'value search'] as const)('releases the pool connection while an identical %s page is loading', async kind => {
+    const valueSearch = kind === 'value search';
+    const pageStatement = valueSearch ? '"flat_response_value_matches"' : 'AS "responseId"';
+    let pageQueries = 0;
+    let startRead!: () => void;
+    let finishRead!: () => void;
+    const readStarted = new Promise<void>(resolve => { startRead = resolve; });
+    const readCanFinish = new Promise<void>(resolve => { finishRead = resolve; });
+    const createRunner = db.createQueryRunner.bind(db);
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+        if (typeof sql === 'string' && sql.includes(pageStatement)) {
+          pageQueries += 1;
+          if (pageQueries === 1) {
+            startRead();
+            await readCanFinish;
+          }
+        }
+        const result = await query(sql, parameters, structured);
+        if (sql === 'COMMIT') finishRead();
+        return result;
+      });
+      return runner;
+    });
+    const options = { ...(valueSearch ? { responseValue: 'answer' } : {}), page: 1, limit: 1 };
+    const ids = valueSearch ? [4] : [1];
+    const total = valueSearch ? 3 : 8;
+    const changedId = valueSearch ? 4 : 1;
+    const first = expectResponses(options, ids, total);
+    try {
+      await readStarted;
+      await Promise.all([first, expectResponses(options, ids, total)]);
+      await expectResponses(options, ids, total);
+      expect(pageQueries).toBe(1);
+
+      await expectResponses({ ...options, page: 2 }, valueSearch ? [5] : [2], total);
+      await expectResponses({ ...options, responseValue: 'answer B' }, [5]);
+      expect(pageQueries).toBe(3);
+
+      await db.query('UPDATE response SET value = $1 WHERE id = $2', ['changed', changedId]);
+      if (valueSearch) {
+        await expectResponses(options, [5], 2);
+      } else {
+        const rows = await expectResponses(options, [1], 8);
+        expect(rows[0].responseValue).toBe('changed');
+      }
+      expect(pageQueries).toBe(4);
+    } finally {
+      finishRead();
+      runners.mockRestore();
+      await first;
+      await db.query('UPDATE response SET value = $1 WHERE id = $2', [valueSearch ? 'answer A' : null, changedId]);
+    }
+  });
+
+  it('maps a value search timeout and retries the same page on the same snapshot', async () => {
+    let firstRead = true;
+    const createRunner = db.createQueryRunner.bind(db);
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+        if (firstRead && typeof sql === 'string' && sql.includes('"flat_response_value_matches"')) {
+          firstRead = false;
+          await query("SET LOCAL statement_timeout = '5ms'");
+          await query('SELECT pg_sleep(0.05)');
+        }
+        return query(sql, parameters, structured);
+      });
+      return runner;
+    });
+    try {
+      const options = { responseValue: 'answer', page: 1, limit: 1 };
+      await expect(service.findFlatResponses(42, options)).rejects.toMatchObject({
+        response: { code: 'SEARCH_TIMEOUT', field: 'responseValue' }
+      });
+      await expectResponses(options, [4], 3);
+    } finally {
+      runners.mockRestore();
+    }
+  });
+
+  it.each(['insertion', 'deletion', 'exclusion'] as const)('counts the new scope after %s while an older read is still counting', async change => {
+    let releaseCount!: () => void;
+    let startedCount!: () => void;
+    const countReleased = new Promise<void>(resolve => { releaseCount = resolve; });
+    const countStarted = new Promise<void>(resolve => { startedCount = resolve; });
+    const createRunner = db.createQueryRunner.bind(db);
+    let snapshots = 0;
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+        if (typeof sql === 'string' && sql.includes('pg_current_snapshot()')) {
+          const snapshot = await query(sql, parameters, structured);
+          snapshots += 1;
+          if (snapshots === 2) setImmediate(releaseCount);
+          return snapshot;
+        }
+        if (typeof sql === 'string' && sql.includes('"counted_response"') && snapshots === 1) {
+          startedCount();
+          await countReleased;
+        }
+        return query(sql, parameters, structured);
+      });
+      return runner;
+    });
+    const oldPage = service.findFlatResponses(42, { page: 1, limit: 50 });
+    try {
+      await Promise.race([countStarted, oldPage.then(() => { throw new Error('Old snapshot did not start counting'); })]);
+      if (change === 'insertion') {
+        await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value)
+          VALUES (99, 1, 'NEW', 3, 'committed after the old snapshot')`);
+        await expectResponses({}, [1, 2, 3, 4, 99, 5, 6, 7, 8]);
+      } else if (change === 'deletion') {
+        await db.query(`DELETE FROM "${schema}".response WHERE id = 8`);
+        await expectResponses({}, [1, 2, 3, 4, 5, 6, 7]);
+      } else {
+        jest.mocked(exclusionService.resolveExclusionsForQueries).mockResolvedValueOnce({
+          globalIgnoredUnits: ['IGNORED', 'UNIT_E'], ignoredBooklets: [], testletIgnoredUnits: []
+        });
+        await expectResponses({}, [1, 2, 3, 4, 5, 6, 7]);
+      }
+    } finally {
+      releaseCount();
+      runners.mockRestore();
+      await oldPage;
+      if (change === 'insertion') await db.query(`DELETE FROM "${schema}".response WHERE id = 99`);
+      if (change === 'deletion') {
+        await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value)
+          VALUES (8, 5, 'H', 3, '[1]') ON CONFLICT DO NOTHING`);
+      }
+    }
+    const [oldRows, oldTotal] = await oldPage;
+    expect(oldRows.map(row => row.responseId)).toEqual([1, 2, 3, 4, 5, 6, 7, 8]);
+    expect(oldTotal).toBe(8);
   });
 
   it('counts meaningful values while excluding NULL, whitespace and empty arrays', async () => {
@@ -177,6 +560,87 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ responseValue: 'answer', page: 3, limit: 2 }, [], 3);
     await expectResponses({ responseValue: 'no-such-value' }, []);
     await expectResponses({ responseValue: '%' }, [2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it('uses the value index only for ready workspaces and preserves the complete source results', async () => {
+    const queries = [
+      { responseValue: 'answer', page: 2, limit: 2 },
+      {
+        responseValue: '%', tags: 'review', page: 2, limit: 1
+      },
+      { responseValue: 'answer', regexSearch: true, unit: '^UNIT_[AB]$' },
+      { responseValue: 'no-such-value' },
+      { responseValue: 'answer', hasValue: 'yes' }
+    ];
+    const options = queries.map(query => ({ page: 1, limit: 50, ...query }));
+    const reference: Awaited<ReturnType<typeof service.findFlatResponses>>[] = [];
+    for (const query of options) {
+      reference.push(await service.findFlatResponses(42, query));
+    }
+    const foreign = await service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'foreign' });
+    const searchStatements: string[] = [];
+    const projectedStatements: string[] = [];
+    const createRunner = db.createQueryRunner.bind(db);
+    const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = createRunner(...args);
+      const query = runner.query.bind(runner);
+      jest.spyOn(runner, 'query').mockImplementation((sql, parameters, structured) => {
+        if (typeof sql === 'string' && sql.includes('"flat_response_value_matches"')) searchStatements.push(sql);
+        if (typeof sql === 'string' && sql.includes('projected_value_matches AS MATERIALIZED')) projectedStatements.push(sql);
+        return query(sql, parameters, structured);
+      });
+      return runner;
+    });
+
+    try {
+      await db.query(`
+        CREATE TABLE flat_response_value_search_workspace (workspace_id int PRIMARY KEY);
+        CREATE TABLE flat_response_value_search_value (
+          id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY, workspace_id int, value_prefix text);
+        CREATE TABLE flat_response_value_search_link (
+          id int PRIMARY KEY, workspace_id int, unitid int, variableid text, value_id bigint);
+        CREATE TEMP TABLE indexed_responses ON COMMIT DROP AS
+          SELECT r.id, r.unitid, r.variableid, p.workspace_id, LEFT(r.value, 2000) AS value_prefix
+          FROM response r JOIN unit u ON u.id = r.unitid
+          JOIN booklet b ON b.id = u.bookletid JOIN persons p ON p.id = b.personid
+          WHERE p.workspace_id = 42 AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE;
+        INSERT INTO flat_response_value_search_value (workspace_id, value_prefix)
+          SELECT DISTINCT workspace_id, value_prefix FROM indexed_responses;
+        INSERT INTO flat_response_value_search_link
+          SELECT r.id, r.workspace_id, r.unitid, r.variableid, v.id
+          FROM indexed_responses r JOIN flat_response_value_search_value v USING (workspace_id, value_prefix);
+        INSERT INTO flat_response_value_search_workspace VALUES (42);
+      `);
+      for (const [index, query] of options.entries()) {
+        await expect(service.findFlatResponses(42, query)).resolves.toEqual(reference[index]);
+        expect(searchStatements[index]?.includes('flat_response_value_search_link')).toBe(index < 4 && !query.regexSearch);
+      }
+      await expect(service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'foreign' })).resolves.toEqual(foreign);
+      expect(searchStatements).toHaveLength(6);
+      expect(searchStatements[5]).not.toContain('flat_response_value_search_link');
+
+      const laterPage = { responseValue: 'answer', page: 2, limit: 2 };
+      const emptyPage = { responseValue: 'answer', page: 100, limit: 2 };
+      const expectedLater = await service.findFlatResponses(42, laterPage);
+      const expectedEmpty = await service.findFlatResponses(42, emptyPage);
+      expect(expectedLater[0].length).toBeGreaterThan(0);
+      await installFirstPageProjection();
+
+      await expect(service.findFlatResponses(42, laterPage)).resolves.toEqual(expectedLater);
+      await expect(service.findFlatResponses(42, emptyPage)).resolves.toEqual(expectedEmpty);
+      await expect(service.findFlatResponses(42, options[1])).resolves.toEqual(reference[1]);
+      expect(projectedStatements).toHaveLength(2);
+
+      await db.query('UPDATE flat_response_first_page_workspace SET ready = false');
+      await expect(service.findFlatResponses(42, laterPage)).resolves.toEqual(expectedLater);
+      expect(searchStatements[searchStatements.length - 1]).toContain('flat_response_value_search_link');
+    } finally {
+      runners.mockRestore();
+      await db.query(`DROP TABLE IF EXISTS flat_response_first_page_workspace, flat_response_first_page_unit,
+        flat_response_first_page_response, flat_response_unit_count`);
+      await db.query(`DROP TABLE IF EXISTS flat_response_value_search_link,
+        flat_response_value_search_value, flat_response_value_search_workspace`);
+    }
   });
 
   it('combines value search with regex, tags and log-derived filters without duplicating rows', async () => {
@@ -257,6 +721,21 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
+  it('returns partial and full pages from the end in forward order across tied and null sort keys', async () => {
+    await db.query(`INSERT INTO unit VALUES (20,5,'NULL_ALIAS',NULL),(21,5,'TIED','UNIT_E'),(22,5,'EMPTY',NULL);
+      INSERT INTO response VALUES
+        (30,20,'0',3,'legacy',NULL),(31,20,NULL,3,'null variable',false),
+        (32,21,'H',3,'tie',false),(33,22,'0',3,'generated',true);`);
+    try {
+      await expectResponses({ page: 3, limit: 3 }, [7, 8, 32], 11);
+      await expectResponses({ page: 4, limit: 3 }, [30, 31], 11);
+      await expectResponses({ page: 4, limit: 2 }, [7, 8], 11);
+      await expectResponses({ page: 5, limit: 3 }, [], 11);
+    } finally {
+      await db.query('DELETE FROM response WHERE id BETWEEN 30 AND 33; DELETE FROM unit WHERE id BETWEEN 20 AND 22;');
+    }
+  });
+
   it.each([60000, 61001])('keeps all fourteen unfiltered facets equal to the complete filtered scope at threshold %i', async threshold => {
     await db.query(`INSERT INTO session VALUES (2,1,'Edge','Linux','small',100),(20,1,NULL,NULL,NULL,100);
       INSERT INTO bookletlog VALUES (40,2,'CURRENT_UNIT_ID','UNIT_B',1);
@@ -273,6 +752,38 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       expect(actual.units).not.toContain('IGNORED');
     } finally {
       await db.query('DELETE FROM session WHERE id IN (2,20); DELETE FROM bookletlog WHERE id=40; UPDATE response SET is_autocoder_generated=false WHERE id=8;');
+    }
+  });
+
+  it('uses the first controller entries by ID when several running and termination events exist', async () => {
+    await db.query(`
+      INSERT INTO persons VALUES (70,44,true,'F','facet-person','fixture');
+      INSERT INTO booklet VALUES (70,70,1);
+      INSERT INTO unit VALUES (70,70,'FACET_UNIT','FACET_UNIT');
+      INSERT INTO response (id,unitid,variableid,status,value) VALUES (70,70,'Z',3,'value');
+      INSERT INTO bookletlog VALUES
+        (90,70,'CONTROLLER','RUNNING',1000),
+        (91,70,'CONTROLLER','TERMINATED',61000),
+        (92,70,'CONTROLLER','RUNNING',2000),
+        (93,70,'CONTROLLER','TERMINATED',3000);
+    `);
+    try {
+      const options = { processingDurationThresholdMs: 60000 };
+      const facets = await filterOptionsService.findFlatResponseFilterOptions(44, options);
+      expect(facets.processingDurations).toEqual(['Lang']);
+      await expect(filterOptionsService.findFlatResponseFilterOptions(44, { ...options, code: '%' }))
+        .resolves.toEqual(facets);
+      await db.query("DELETE FROM bookletlog WHERE bookletid = 70 AND parameter = 'TERMINATED'");
+      const incomplete = await filterOptionsService.findFlatResponseFilterOptions(44, options);
+      expect(incomplete.processingDurations).toEqual(['Unbekannt']);
+    } finally {
+      await db.query(`
+        DELETE FROM bookletlog WHERE bookletid = 70;
+        DELETE FROM response WHERE id = 70;
+        DELETE FROM unit WHERE id = 70;
+        DELETE FROM booklet WHERE id = 70;
+        DELETE FROM persons WHERE id = 70;
+      `);
     }
   });
 
