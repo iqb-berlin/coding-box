@@ -1085,18 +1085,11 @@ export class CodingJobDefinitionsComponent implements OnInit, OnDestroy {
     } catch (error) {
       if (!isCurrentContext()) return;
       const busy = (error as { error?: { code?: string } })?.error?.code === 'CODING_JOB_WORKSPACE_BUSY';
-      if (busy) {
-        this.showError(this.translateService.instant('coding-job-definition-dialog.snackbars.job-creation-workspace-busy'));
-        return;
-      }
-      this.snackBar.open(
-        this.translateService.instant(
-          'coding-job-definition-dialog.snackbars.bulk-creation-failed',
-          { error: error instanceof Error ? error.message : error }
-        ),
-        this.translateService.instant('common.close'),
-        { duration: 5000 }
-      );
+      this.showError(this.translateService.instant(busy ?
+        'coding-job-definition-dialog.snackbars.job-creation-workspace-busy' :
+        'coding-job-definition-dialog.snackbars.bulk-creation-failed',
+      { error: error instanceof Error ? error.message : error }));
+      if (busy) return;
     } finally {
       this.isBulkCreating.set(false);
     }

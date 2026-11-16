@@ -1345,7 +1345,6 @@ describe('CodingJobDefinitionDialogComponent', () => {
           { duration: 5000 }
         );
       });
-
     }
 
     it.each(isEdit ? ['write', 'assignment'] : ['write'])('cancels a pending %s when the dialog is destroyed', async phase => {
