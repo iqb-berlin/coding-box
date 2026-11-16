@@ -482,7 +482,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-distribution.service.ts": {
       "file": {
-        "max-lines": 2194
+        "max-lines": 2193
       },
       "functions": {
         "class CodingJobDistributionService#1/method buildDistributionPlan#1": {
@@ -496,12 +496,9 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-mutation.service.ts": {
       "file": {
-        "max-lines": 1112
+        "max-lines": 1083
       },
       "functions": {
-        "class CodingJobMutationService#1/method createCodingJob#1": {
-          "max-lines-per-function": 108
-        },
         "class CodingJobMutationService#1/method createCodingJobWithUnitSubsetInManager#1": {
           "max-lines-per-function": 104
         },
@@ -554,7 +551,7 @@
       "file": {},
       "functions": {
         "class CodingJobResponsesService#1/method getSlimResponsesForCodingJob#1": {
-          "max-lines-per-function": 122
+          "max-lines-per-function": 119
         }
       }
     },
@@ -1321,7 +1318,7 @@
     },
     "apps/backend/src/app/wsg-admin/coding-job/coding-job.controller.ts": {
       "file": {
-        "max-lines": 1461
+        "max-lines": 1459
       },
       "functions": {
         "class WsgCodingJobController#1/method getCodingJobReplaySession#1": {
@@ -1383,7 +1380,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.component.ts": {
       "file": {
-        "max-lines": 1018
+        "max-lines": 1016
       },
       "functions": {}
     },
@@ -1469,7 +1466,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
       "file": {
-        "max-lines": 1242
+        "max-lines": 1244
       },
       "functions": {
         "class CodingJobBackendService#1/method mapApiCodingJob#1": {

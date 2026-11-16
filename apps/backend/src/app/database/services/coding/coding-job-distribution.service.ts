@@ -12,7 +12,10 @@ import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { JobDefinition } from '../../entities/job-definition.entity';
 import { getAggregationVariableKey } from './aggregation-metrics.util';
 import { JobDefinitionRefreshCoderTaskDeltaDto, JobDefinitionRefreshItemDeltaDto, JobDefinitionRefreshPreviewDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
-import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceTestResultsMutationInTransaction, tryWithWorkspaceTestResultsMutationTransaction, withWorkspaceTestResultsMutationTransaction
+} from '../shared/workspace-test-results-lock.util';
+import { CodingJobWorkspaceBusyException } from './coding-job-workspace-busy.exception';
 import { DERIVE_ERROR_STATUS } from '../../utils/manual-coding-candidate.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingJobDistributionPlanner, DistributionCoderLoad } from './coding-job-distribution-planner';
@@ -2325,9 +2328,7 @@ export class CodingJobDistributionService {
     if (request.jobDefinitionId) {
       await assertCodingResourceMutation(this.codingJobRepository.manager, workspaceId, 'definition', request.jobDefinitionId, actorUserId);
     }
-    this.logger.log(
-      `Creating distributed coding jobs for workspace ${workspaceId}`
-    );
+    this.logger.log(`Creating distributed coding jobs for workspace ${workspaceId}`);
 
     const createdJobs: DistributionCreatedJob[] = [];
 
@@ -2339,8 +2340,7 @@ export class CodingJobDistributionService {
         plan.jobsToCreate.length > 0 ||
         request.jobDefinitionId !== undefined
       ) {
-        await withWorkspaceTestResultsMutationTransaction(this.connection, async manager => {
-          await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId);
+        const attempt = await tryWithWorkspaceTestResultsMutationTransaction(this.connection, workspaceId, async manager => {
           const creatorUserId = request.jobDefinitionId ?
             (await assertCodingResourceMutation(manager, workspaceId, 'definition', request.jobDefinitionId, actorUserId)).creatorUserId :
             await assertCodingResourceCreation(manager, workspaceId, actorUserId);
@@ -2368,16 +2368,15 @@ export class CodingJobDistributionService {
             );
           }
         });
+        if (!attempt.acquired) throw new CodingJobWorkspaceBusyException();
       }
 
-      this.logger.log(
-        `Successfully created ${createdJobs.length} distributed coding jobs`
-      );
+      this.logger.log(`Successfully created ${createdJobs.length} distributed coding jobs`);
       await this.mutation.invalidateIncompleteVariablesCache(workspaceId);
 
       return this.buildDistributedCodingJobsResult(plan, createdJobs);
     } catch (error) {
-      if (error instanceof ForbiddenException) throw error;
+      if (error instanceof ForbiddenException || error instanceof CodingJobWorkspaceBusyException) throw error;
       this.logger.error(
         `Error creating distributed coding jobs: ${getErrorMessage(error)}`,
         getErrorStack(error)

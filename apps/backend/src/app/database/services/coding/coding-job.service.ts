@@ -212,6 +212,10 @@ export class CodingJobService {
     return this.mutation.updateCodingJobDisplayOptionsByDefinitionId(workspaceId, jobDefinitionId, options, manager, actorUserId);
   }
 
+  async startCodingJob(id: number, workspaceId: number, actorUserId: number): Promise<CodingJob> {
+    return this.status.startCodingJob(id, workspaceId, actorUserId);
+  }
+
   async pauseCodingJob(id: number, workspaceId: number, actorUserId?: number): Promise<CodingJob> {
     return this.status.pauseCodingJob(id, workspaceId, actorUserId);
   }

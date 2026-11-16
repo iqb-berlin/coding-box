@@ -46,6 +46,7 @@ const createRepo = () => ({
   find: jest.fn(),
   findOne: jest.fn(),
   create: jest.fn(value => value),
+  insert: jest.fn().mockResolvedValue({}),
   save: jest.fn(value => Promise.resolve(value)),
   delete: jest.fn(),
   update: jest.fn(),
@@ -209,7 +210,7 @@ describe('CodingJobService', () => {
     connection = {
       transaction: jest.fn(callback => callback({
         find: jest.fn().mockResolvedValue([]),
-        query: jest.fn().mockResolvedValue([]),
+        query: jest.fn().mockResolvedValue([{ locked: true }]),
         transaction: jest.fn(async nestedCallback => nestedCallback({ getRepository: entity => (entity === CodingJob ? codingJobRepository : codingJobCoderRepository) })),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
@@ -1803,7 +1804,7 @@ describe('CodingJobService', () => {
   it('locks workspace test-result mutations before selecting direct coding-job units', async () => {
     const transactionManager = {
       find: jest.fn().mockResolvedValue([]),
-      query: jest.fn().mockResolvedValue([]),
+      query: jest.fn().mockResolvedValue([{ locked: true }]),
       getRepository: (entity: unknown) => {
         if (entity === CodingJob) return codingJobRepository;
         if (entity === CodingJobCoder) return codingJobCoderRepository;
@@ -1834,7 +1835,7 @@ describe('CodingJobService', () => {
     } as never);
 
     expect(transactionManager.query).toHaveBeenCalledWith(
-      'SELECT pg_advisory_xact_lock($1::int, $2::int)',
+      'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
       [expect.any(Number), 3]
     );
     expect(
@@ -2036,6 +2037,50 @@ describe('CodingJobService', () => {
       );
     }
   );
+
+  it('starts an assigned pending job under its row lock while the workspace can be importing', async () => {
+    codingJobRepository.findOne.mockResolvedValue({
+      id: 1, workspace_id: 3, status: 'pending', freshness_status: 'stale_source'
+    });
+
+    await expect(service.startCodingJob(1, 3, 7))
+      .resolves.toMatchObject({ status: 'active', freshness_status: 'stale_source' });
+
+    const manager = jest.mocked(JournalService.recordEventInTransaction).mock.lastCall?.[0];
+    expect(manager?.query).toHaveBeenCalledTimes(1);
+    expect(manager?.query).toHaveBeenCalledWith('SELECT id FROM public.workspace WHERE id = $1 FOR KEY SHARE', [3]);
+    expect(connection.transaction).toHaveBeenCalledTimes(1);
+    expect(codingJobRepository.findOne).toHaveBeenCalledWith({
+      where: { id: 1, workspace_id: 3 }, lock: { mode: 'pessimistic_write' }
+    });
+    expect(codingJobCoderRepository.count).toHaveBeenCalledWith({ where: { coding_job_id: 1, user_id: 7 } });
+    expect(JournalService.recordEventInTransaction).toHaveBeenCalledWith(manager, expect.objectContaining({
+      workspaceId: 3,
+      actorUserId: 7,
+      eventType: 'CODING_JOB_UPDATED',
+      details: { changedFields: ['status'], status: 'active' }
+    }));
+  });
+
+  it('rejects starting a pending job by an unassigned coder', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'pending' });
+    codingJobCoderRepository.count.mockResolvedValueOnce(0);
+    jest.mocked(JournalService.recordEventInTransaction).mockClear();
+
+    await expect(service.startCodingJob(1, 3, 7)).rejects.toBeInstanceOf(ForbiddenException);
+
+    expect(codingJobRepository.save).not.toHaveBeenCalled();
+    expect(JournalService.recordEventInTransaction).not.toHaveBeenCalled();
+  });
+
+  it('takes the workspace mutation lock before reopening a completed job', async () => {
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3, status: 'completed' });
+
+    await expect(service.startCodingJob(1, 3, 7)).resolves.toMatchObject({ status: 'active' });
+
+    const manager = jest.mocked(JournalService.recordEventInTransaction).mock.lastCall?.[0];
+    expect(manager?.query).toHaveBeenCalledWith('SELECT pg_advisory_xact_lock($1::int, $2::int)', [expect.any(Number), 3]);
+  });
 
   it('pauses active coding jobs through the coder action', async () => {
     const codingJob = {
@@ -2714,6 +2759,33 @@ describe('CodingJobService', () => {
 
     expectManualCodingCandidateStatusFilter(qb);
     expectCompletedV2Filter(qb);
+  });
+
+  it('inserts a large direct job in bounded batches within the job transaction', async () => {
+    const responses = Array.from({ length: 5000 }, (_, index) => ({
+      id: index + 1,
+      unitName: 'UNIT',
+      variableid: 'VAR',
+      value: String(index + 1)
+    }));
+    responseRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(responses));
+    codingJobRepository.save.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobVariableRepository.find.mockResolvedValue([{ unit_name: 'UNIT', variable_id: 'VAR' }]);
+    codingJobVariableBundleRepository.find.mockResolvedValue([]);
+
+    await service.createCodingJob(3, {
+      name: 'Large direct job',
+      variables: [{ unitName: 'UNIT', variableId: 'VAR' }],
+      maxCodingCases: 5000
+    });
+
+    const batches = codingJobUnitRepository.insert.mock.calls.map(([batch]) => batch);
+    expect(batches.map(batch => batch.length)).toEqual([2000, 2000, 1000]);
+    expect(batches.flatMap(batch => batch.map(row => row.response_id))).toEqual(responses.map(row => row.id));
+    expect(batches[0][0]).toMatchObject({
+      coding_job_id: 1, workspace_id: 3, variable_id: 'VAR', variable_anchor: 'VAR'
+    });
   });
 
   it('counts DERIVE_ERROR distribution cases only for variables with job-definition opt-in', () => {

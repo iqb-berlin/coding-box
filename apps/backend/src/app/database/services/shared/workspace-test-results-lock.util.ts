@@ -114,6 +114,30 @@ export async function withWorkspaceTestResultsMutationTransaction<T>(
     () => factory.transaction(callback));
 }
 
+/** Fail fast without taking a connection away from a mutation already in progress. */
+export async function tryWithWorkspaceTestResultsMutationTransaction<T>(
+  factory: TransactionFactory,
+  workspaceId: number,
+  callback: (manager: EntityManager) => Promise<T>
+): Promise<WorkspaceTestResultsMutationLockAttempt<T>> {
+  const normalizedWorkspaceId = normalizeWorkspaceId(workspaceId);
+  const releaseSlot = await acquireBlockingMutationPoolSlot(factory.connection ?? factory, false);
+  if (!releaseSlot) return { acquired: false };
+
+  try {
+    return await factory.transaction(async manager => {
+      const rows = await manager.query(
+        'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
+        [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizedWorkspaceId]
+      ) as Array<{ locked: boolean }>;
+      if (rows[0]?.locked !== true) return { acquired: false };
+      return { acquired: true, value: await callback(manager) };
+    });
+  } finally {
+    releaseSlot();
+  }
+}
+
 export async function lockWorkspaceTestResultsMutationInTransaction(
   manager: EntityManager,
   workspaceId: number

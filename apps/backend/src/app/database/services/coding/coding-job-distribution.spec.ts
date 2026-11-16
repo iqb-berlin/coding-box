@@ -131,7 +131,9 @@ describe('CodingJobService distribution from job definitions', () => {
     const connection = {
       transaction: jest.fn(callback => callback({
         find: jest.fn().mockResolvedValue([]),
-        query: jest.fn().mockResolvedValue([]),
+        query: jest.fn(async (sql: string) => (
+          sql.includes('pg_try_advisory_xact_lock') ? [{ locked: true }] : []
+        )),
         getRepository: (entity: unknown) => {
           if (entity === CodingJob) return codingJobRepository;
           if (entity === JobDefinition) return jobDefinitionRepository;
