@@ -168,6 +168,26 @@ describe('CodingProgressService variable coverage conflicts', () => {
     );
   });
 
+  it('keeps one aggregation configuration while omitting unused answer values', async () => {
+    const query = createQueryBuilder([]);
+    responseRepository.createQueryBuilder.mockReturnValue(query);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder([]));
+    let thresholdReads = 0;
+    settingRepository.findOne.mockImplementation(async ({ where }) => {
+      if (where.key.endsWith('duplicate-aggregation-threshold')) {
+        thresholdReads += 1;
+        // A concurrent update must not change interpretation after projecting NULL values.
+        return { content: thresholdReads === 1 ? 'disabled' : '2' };
+      }
+      return { content: '{"flags":[]}' };
+    });
+    const result = await service.getCodingProgressOverview(5);
+    expect(thresholdReads).toBe(1);
+    expect(query.addSelect).toHaveBeenCalledWith('NULL', 'value');
+    expect(query.addSelect).not.toHaveBeenCalledWith('response.value', 'value');
+    expect(result.aggregationActive).toBe(false);
+  });
+
   it('keeps covered source responses in status totals but excludes them from progress totals', async () => {
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');

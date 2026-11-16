@@ -48,6 +48,25 @@ containers. Local development can still run ordinary mocked unit tests without
 those services; explicit PostgreSQL test variables are included in their Nx
 cache inputs.
 
+### Skipped-test audit for PR #1161
+
+The reports from [pipeline 107510](https://scm.cms.hu-berlin.de/iqb/coding-box/-/pipelines/107510)
+at `871c82620eaf8f4831b6f802e4edf7692dc73a7a` were compared by file,
+JUnit classname and test name. The 126 skipped cases in `test-backend` comprise:
+
+- 119 PostgreSQL cases that passed in the separate mandatory integration job.
+- Six permanently disabled unit tests in coding validation, statistics and CSV
+  streaming. These tests are now enabled. Validation fixtures provide separate
+  status queries and metadata maps; the CSV failure case checks the emitted
+  error and cache cleanup instead of waiting for successful stream completion.
+- One optional Kappa timing benchmark, also skipped by the integration job.
+
+The original integration report contains 166 passed tests and the one optional
+benchmark. A skipped unit-report entry alone is not a pass; the matching passed
+integration entry provides that evidence. Keep both reports when auditing skips.
+An enabled timing benchmark still does not replace an HTTP/Redis/worker load
+test on representative data.
+
 
 ## Response list and total against PostgreSQL
 
