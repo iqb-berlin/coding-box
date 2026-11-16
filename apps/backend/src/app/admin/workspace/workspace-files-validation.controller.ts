@@ -41,16 +41,12 @@ export class WorkspaceFilesValidationController {
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
   ): Promise<void> {
-    const versionKey =
-      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-        workspaceId
-      );
-    const nextVersion = await this.cacheService.incr(versionKey);
+    const generation = await this.cacheService.invalidateFlatResponseFilterOptions(workspaceId);
     await this.jobQueueService.addFlatResponseFilterOptionsJob(
       workspaceId,
       60000,
       {
-        jobId: `flat-response-filter-options-${workspaceId}-v${nextVersion}-thr60000`,
+        jobId: generation ? `flat-response-filter-options-${workspaceId}-v${generation}-thr60000` : undefined,
         removeOnComplete: true,
         removeOnFail: true
       }
