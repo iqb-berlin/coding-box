@@ -142,6 +142,9 @@ SELECT workspace_id FROM public.flat_response_first_page_workspace WHERE ready;
 -- Serialize it with source writes, so every reader sees either the complete projection or the source query.
 CREATE FUNCTION public.rebuild_flat_response_workspace(target_workspace integer DEFAULT NULL)
 RETURNS void LANGUAGE plpgsql AS $$
+DECLARE
+  lower_id bigint := -2147483649;
+  upper_id integer;
 BEGIN
   LOCK TABLE public.workspace, public.persons, public.bookletinfo, public.booklet, public.unit, public.response
     IN SHARE ROW EXCLUSIVE MODE;
@@ -172,25 +175,53 @@ BEGIN
   WHERE u.consider IS TRUE AND (target_workspace IS NULL OR u.workspace_id = target_workspace)
   GROUP BY 1, 2, 3, 4;
 
-  -- The length must match RESPONSE_VALUE_SEARCH_PREFIX_LENGTH used by the source query.
-  INSERT INTO public.flat_response_value_search_value (workspace_id, value_prefix)
-  SELECT DISTINCT u.workspace_id, left(r.value, 2000)
-  FROM public.flat_response_first_page_unit u
-  JOIN public.response r ON r.unitid = u.unit_id
-  WHERE r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE
-    AND (target_workspace IS NULL OR u.workspace_id = target_workspace);
+  CREATE TEMP TABLE flat_response_value_backfill (
+    id integer NOT NULL,
+    workspace_id integer NOT NULL,
+    unitid integer NOT NULL,
+    variableid text NOT NULL,
+    value_prefix text NOT NULL
+  ) ON COMMIT DROP;
 
-  ANALYZE public.flat_response_value_search_value;
-  INSERT INTO public.flat_response_value_search_link (id, workspace_id, unitid, variableid, value_id)
-  SELECT r.id, u.workspace_id, r.unitid, r.variableid, v.id
-  FROM public.flat_response_first_page_unit u
-  JOIN public.response r ON r.unitid = u.unit_id
-  JOIN public.flat_response_value_search_value v ON v.workspace_id = u.workspace_id
-    AND md5(v.value_prefix) = md5(left(r.value, 2000)) AND v.value_prefix = left(r.value, 2000)
-  WHERE r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE
-    AND (target_workspace IS NULL OR u.workspace_id = target_workspace)
-  ON CONFLICT (id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id,
-    unitid = EXCLUDED.unitid, variableid = EXCLUDED.variableid, value_id = EXCLUDED.value_id;
+  LOOP
+    -- Bound the work for both deduplication and linking by the number of source rows.
+    SELECT max(id) INTO upper_id
+    FROM (SELECT id FROM public.response WHERE id > lower_id ORDER BY id LIMIT 25000) batch;
+    EXIT WHEN upper_id IS NULL;
+
+    -- The length must match RESPONSE_VALUE_SEARCH_PREFIX_LENGTH used by the source query.
+    INSERT INTO pg_temp.flat_response_value_backfill
+    SELECT r.id, u.workspace_id, r.unitid, r.variableid, left(r.value, 2000)
+    FROM public.response r JOIN public.flat_response_first_page_unit u ON u.unit_id = r.unitid
+    WHERE r.id > lower_id AND r.id <= upper_id
+      AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE
+      AND (target_workspace IS NULL OR u.workspace_id = target_workspace);
+
+    INSERT INTO public.flat_response_value_search_value (workspace_id, value_prefix)
+    SELECT workspace_id, value_prefix
+    FROM (SELECT DISTINCT workspace_id, value_prefix FROM pg_temp.flat_response_value_backfill) batch
+    WHERE NOT EXISTS (
+      SELECT 1 FROM public.flat_response_value_search_value v
+      WHERE v.workspace_id = batch.workspace_id AND md5(v.value_prefix) = md5(batch.value_prefix)
+        AND v.value_prefix = batch.value_prefix
+    );
+
+    INSERT INTO public.flat_response_value_search_link (id, workspace_id, unitid, variableid, value_id)
+    SELECT batch.id, batch.workspace_id, batch.unitid, batch.variableid, value_match.id
+    FROM pg_temp.flat_response_value_backfill batch
+    CROSS JOIN LATERAL (
+      SELECT v.id FROM public.flat_response_value_search_value v
+      WHERE v.workspace_id = batch.workspace_id AND md5(v.value_prefix) = md5(batch.value_prefix)
+        AND v.value_prefix = batch.value_prefix
+      ORDER BY v.id LIMIT 1
+    ) value_match
+    ON CONFLICT (id) DO UPDATE SET workspace_id = EXCLUDED.workspace_id,
+      unitid = EXCLUDED.unitid, variableid = EXCLUDED.variableid, value_id = EXCLUDED.value_id;
+
+    TRUNCATE pg_temp.flat_response_value_backfill;
+    lower_id := upper_id;
+  END LOOP;
+  DROP TABLE pg_temp.flat_response_value_backfill;
 
   UPDATE public.flat_response_first_page_workspace SET ready = true
   WHERE target_workspace IS NULL OR workspace_id = target_workspace;
@@ -201,6 +232,7 @@ SELECT public.rebuild_flat_response_workspace();
 
 ANALYZE public.flat_response_first_page_unit;
 ANALYZE public.flat_response_first_page_total;
+ANALYZE public.flat_response_value_search_value;
 ANALYZE public.flat_response_value_search_link;
 
 CREATE FUNCTION public.flat_response_projection_insert_workspace()
