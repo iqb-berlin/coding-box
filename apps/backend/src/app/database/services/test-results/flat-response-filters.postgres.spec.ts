@@ -124,10 +124,11 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   });
 
   it('backfills the migrated projections and reads through a workspace move and rebuild', async () => {
-    const migration = readFileSync(resolvePath(
-      'database/changelog/coding-box.changelog-response-list-search.sql'
-    ), 'utf8').replace(/\bpublic\./g, `"${schema}".`);
-    const changes = migration.split(/^--changeset .*$/m).slice(1);
+    const changes = ['response-list-search', 'first-page-responses'].flatMap(name => (
+      readFileSync(resolvePath(`database/changelog/coding-box.changelog-${name}.sql`), 'utf8')
+        .replace(/\bpublic\./g, `"${schema}".`)
+        .split(/^--changeset .*$/m).slice(1)
+    ));
     const original = await service.findFlatResponses(42, { page: 1, limit: 50 });
     await db.transaction(async manager => {
       await manager.query('CREATE TABLE workspace (id int PRIMARY KEY)');
@@ -136,6 +137,8 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     });
     try {
       await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+      await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id IN (4, 9)'))
+        .resolves.toEqual([{ id: 4 }]);
       await expectResponses({ responseValue: 'answer' }, [4, 5, 6]);
       await db.query(`
         INSERT INTO response VALUES (999, 2, 'NEW', 3, 'new answer', false);
@@ -144,6 +147,14 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await expectResponses({ responseValue: 'edited answer' }, [999]);
       const cachedCounts = 'SELECT COALESCE(sum(total), 0)::int AS n FROM flat_response_first_page_total WHERE workspace_id = $1';
       await expect(db.query(cachedCounts, [42])).resolves.toEqual([{ n: 10 }]);
+      await db.query('UPDATE response SET is_autocoder_generated = true WHERE id = 999');
+      await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
+      await db.query(`
+        UPDATE response SET is_autocoder_generated = NULL, value = repeat('ö', 2001) WHERE id = 999
+      `);
+      const editedRows = await expectResponses({}, [1, 2, 3, 4, 5, 999, 6, 7, 8]);
+      expect(editedRows.find(row => row.responseId === 999)?.responseValue).toBe('ö'.repeat(2000));
+      await db.query("UPDATE response SET value = 'edited answer' WHERE id = 999");
 
       await db.query(`
         INSERT INTO workspace VALUES (44);
@@ -157,6 +168,8 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       });
       expect(cteRows.map(row => row.responseId)).toEqual([1000]);
       expect(cteTotal).toBe(1);
+      await expect(service.findFlatResponses(44, { page: 1, limit: 50 }))
+        .resolves.toEqual([cteRows, 1]);
 
       await db.query('UPDATE persons SET workspace_id = 43 WHERE id = 1');
       await expectResponses({ responseValue: 'answer' }, []);
@@ -166,6 +179,14 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await db.query('DELETE FROM response WHERE id = 999');
       const [deletedRows] = await service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'edited answer' });
       expect(deletedRows).toEqual([]);
+      await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id = 999'))
+        .resolves.toEqual([]);
+      await db.transaction(async manager => {
+        await manager.query('SAVEPOINT before_truncate');
+        await manager.query('TRUNCATE response');
+        await expect(manager.query('SELECT id FROM flat_response_first_page_response')).resolves.toEqual([]);
+        await manager.query('ROLLBACK TO SAVEPOINT before_truncate');
+      });
     } finally {
       await db.transaction(async manager => {
         for (const changeset of [...changes].reverse()) {
@@ -264,7 +285,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
-  async function installFirstPageProjection() {
+  async function installFirstPageProjection(compact = false) {
     await db.query(`
       CREATE TABLE flat_response_first_page_workspace (workspace_id int, ready boolean);
       INSERT INTO flat_response_first_page_workspace VALUES (42, true);
@@ -274,20 +295,22 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
           b.id AS booklet_id, bi.name AS booklet_name, u.name AS unit_name, u.alias AS unit_alias
         FROM unit u JOIN booklet b ON b.id=u.bookletid JOIN bookletinfo bi ON bi.id=b.infoid
         JOIN persons p ON p.id=b.personid WHERE p.workspace_id=42;
-      CREATE TABLE flat_response_first_page_response AS
-        SELECT id, unitid, variableid, status, SUBSTRING(value, 1, 2000) AS value_prefix
-        FROM response WHERE is_autocoder_generated IS NOT TRUE;
       CREATE TABLE flat_response_unit_count AS
         SELECT unitid, COUNT(*) AS total FROM response
         WHERE is_autocoder_generated IS NOT TRUE GROUP BY unitid;
     `);
+    if (compact) {
+      await db.query(`CREATE TABLE flat_response_first_page_response AS
+        SELECT id, unitid, variableid, status, left(value, 2000) AS value_prefix
+        FROM response WHERE is_autocoder_generated IS NOT TRUE`);
+    }
   }
 
-  it.each(['units', 'totals'])('uses the projected first page with %s only while the workspace projection is ready', async countSource => {
+  it.each(['units', 'totals', 'compact'])('uses the projected first page with %s only while the workspace projection is ready', async projection => {
     const options = { page: 1, limit: 3 };
     const reference = await service.findFlatResponses(42, options);
-    await installFirstPageProjection();
-    if (countSource === 'totals') {
+    await installFirstPageProjection(projection === 'compact');
+    if (projection !== 'units') {
       await db.query(`CREATE TABLE flat_response_first_page_total AS
         SELECT u.workspace_id, u.booklet_name, u.unit_name, SUM(n.total) AS total
         FROM flat_response_first_page_unit u JOIN flat_response_unit_count n ON n.unitid=u.unit_id
@@ -296,6 +319,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const createRunner = db.createQueryRunner.bind(db);
     const projectionRowCounts: number[] = [];
     const projectedTotalReads: boolean[] = [];
+    const compactReads: boolean[] = [];
     const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
       const runner = createRunner(...args);
       const query = runner.query.bind(runner);
@@ -304,6 +328,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         if (typeof sql === 'string' && sql.includes('first_page_rows AS MATERIALIZED')) {
           projectionRowCounts.push(result.length);
           projectedTotalReads.push(sql.includes('flat_response_first_page_total'));
+          compactReads.push(sql.includes('flat_response_first_page_response'));
         }
         return result;
       });
@@ -320,12 +345,13 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await db.query('UPDATE flat_response_first_page_workspace SET ready = false');
       await expect(service.findFlatResponses(42, options)).resolves.toEqual(reference);
       expect(projectionRowCounts).toEqual([3, 3, 0]);
-      expect(projectedTotalReads).toEqual(Array(3).fill(countSource === 'totals'));
+      expect(projectedTotalReads).toEqual(Array(3).fill(projection !== 'units'));
+      expect(compactReads).toEqual(Array(3).fill(projection === 'compact'));
     } finally {
       runners.mockRestore();
-      await db.query('DROP TABLE IF EXISTS flat_response_first_page_total');
+      await db.query('DROP TABLE IF EXISTS flat_response_first_page_total, flat_response_first_page_response');
       await db.query(`DROP TABLE flat_response_first_page_workspace, flat_response_first_page_unit,
-        flat_response_first_page_response, flat_response_unit_count`);
+        flat_response_unit_count`);
     }
   });
 

@@ -51,4 +51,5 @@
   <include file="coding-box.changelog-965-geogebra-existence.sql"/>
   <include file="coding-box.changelog-orm-query-hardening.sql"/>
   <include file="coding-box.changelog-response-list-search.sql"/>
+  <include file="coding-box.changelog-first-page-responses.sql"/>
 </databaseChangeLog>

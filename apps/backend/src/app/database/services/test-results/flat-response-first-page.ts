@@ -5,7 +5,7 @@ import {
 } from '../workspace/workspace-exclusion-query.util';
 
 type ProjectedPage = { number: number; size: number };
-export type ResponsePageProjection = 'units' | 'totals' | 'value';
+export type ResponsePageProjection = 'units' | 'totals' | 'compact' | 'value';
 
 export async function findProjectedFlatResponsePage(
   connection: DataSource, workspaceId: number, exclusions: ResolvedWorkspaceExclusions,
@@ -29,16 +29,19 @@ export async function findProjectedFlatResponsePage(
     .getQueryAndParameters();
   const limit = `$${parameters.length + 1}`;
   const valueSearch = projection === 'value';
+  const compact = projection === 'compact';
+  const responseTable = compact ? 'flat_response_first_page_response' : 'response';
+  const valueColumn = compact ? 'value_prefix' : `left(value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) AS value_prefix`;
   const readySearch = valueSearch ?
     'AND EXISTS (SELECT 1 FROM flat_response_value_search_workspace WHERE workspace_id = $1)' : '';
   const idQueries = valueSearch ?
     projectedValuePageIds(sql, limit, `$${parameters.length + 2}`, `$${parameters.length + 3}`) :
-    projectedFirstPageIds(sql, limit);
+    projectedFirstPageIds(sql, limit, responseTable, compact);
   let total = `SELECT COALESCE(SUM(n.total), 0)
     FROM (${sql}) u JOIN flat_response_unit_count n ON n.unitid = u.unit_id`;
   if (valueSearch) {
     total = 'SELECT COUNT(*) FROM projected_value_matches';
-  } else if (projection === 'totals') {
+  } else if (projection === 'totals' || compact) {
     [total] = createScope('flat_response_first_page_total')
       .select('COALESCE(SUM(visible_unit.total), 0)')
       .getQueryAndParameters();
@@ -64,8 +67,8 @@ export async function findProjectedFlatResponsePage(
       SELECT * FROM flat_response_first_page_unit WHERE unit_id = page_id.unit_id LIMIT 1
     ) u ON TRUE
     LEFT JOIN LATERAL (
-      SELECT id, variableid, status, left(value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) AS value_prefix
-      FROM response WHERE id = page_id.id LIMIT 1
+      SELECT id, variableid, status, ${valueColumn}
+      FROM ${responseTable} WHERE id = page_id.id LIMIT 1
     ) answer ON TRUE
     ORDER BY page_id.person_code, page_id.booklet_name, page_id.unit_alias, page_id.variableid, page_id.id
   `, bindings, queryRunner);
@@ -73,7 +76,7 @@ export async function findProjectedFlatResponsePage(
   return { total: Number(rows[0].cnt), raw: rows.filter(row => row.responseId !== null) };
 }
 
-function projectedFirstPageIds(scope: string, limit: string): string {
+function projectedFirstPageIds(scope: string, limit: string, responseTable: string, compact: boolean): string {
   // Use the covering order index to rank tied unit prefixes before reading the response payload.
   return `
     first_page_units AS MATERIALIZED (
@@ -87,8 +90,8 @@ function projectedFirstPageIds(scope: string, limit: string): string {
       FROM first_page_units u
       CROSS JOIN LATERAL (
         SELECT id, variableid
-        FROM response
-        WHERE unitid = u.unit_id AND is_autocoder_generated IS NOT TRUE
+        FROM ${responseTable}
+        WHERE unitid = u.unit_id ${compact ? '' : 'AND is_autocoder_generated IS NOT TRUE'}
         ORDER BY variableid, id
         LIMIT ${limit}
       ) r

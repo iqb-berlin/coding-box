@@ -235,7 +235,9 @@ export class TestResultsResponsesService {
               WHEN to_regclass('flat_response_first_page_workspace') IS NULL THEN NULL
               ${valueSearch ?
                 "WHEN to_regclass('flat_response_value_search_workspace') IS NOT NULL THEN 'value' ELSE NULL" :
-                "WHEN to_regclass('flat_response_first_page_total') IS NOT NULL THEN 'totals' ELSE 'units'"}
+                `WHEN to_regclass('flat_response_first_page_total') IS NOT NULL THEN
+                  CASE WHEN to_regclass('flat_response_first_page_response') IS NOT NULL THEN 'compact' ELSE 'totals' END
+                ELSE 'units'`}
             END AS "projection"` : '';
       const [{ snapshot, postmasterStartedAt, projection }] = await manager.query(
         `SELECT pg_current_snapshot()::text AS snapshot,
