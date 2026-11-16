@@ -272,20 +272,15 @@ export class CodingJobResponsesService {
       .andWhere('person.consider = :consider', { consider: true });
     this.applyManualCodingCandidateStatusFilter(queryBuilder);
 
-    const conditions: string[] = [];
-    const parameters: Record<string, string> = {};
-
-    allVariables.forEach((variable, index) => {
-      const unitParam = `cjUnitName${index}`;
-      const variableParam = `cjVariableId${index}`;
-      conditions.push(
-        `(UPPER(unit.name) = UPPER(:${unitParam}) AND response.variableid = :${variableParam})`
-      );
-      parameters[unitParam] = variable.unit_name;
-      parameters[variableParam] = variable.variable_id;
+    queryBuilder.andWhere(`EXISTS (
+      SELECT 1
+      FROM unnest(CAST(:jobUnitNames AS text[]), CAST(:jobVariableIds AS text[])) AS assigned(unit_name, variable_id)
+      WHERE UPPER(unit.name) = UPPER(assigned.unit_name)
+        AND response.variableid = assigned.variable_id
+    )`, {
+      jobUnitNames: allVariables.map(variable => variable.unit_name),
+      jobVariableIds: allVariables.map(variable => variable.variable_id)
     });
-
-    queryBuilder.andWhere(`(${conditions.join(' OR ')})`, parameters);
     queryBuilder.andWhere(
       '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
       {

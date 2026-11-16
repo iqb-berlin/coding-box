@@ -531,11 +531,13 @@ export class CodingJobBackendService {
 
   createCodingJob(
     workspaceId: number,
-    codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>
+    codingJob: Omit<CodingJob, 'id' | 'createdAt' | 'updatedAt'>,
+    creationRequestId?: string
   ): Observable<CodingJob> {
     const url = `${this.serverUrl}wsg-admin/workspace/${workspaceId}/coding-job`;
-    return this.http.post<CodingJob>(url, codingJob, {
-      headers: this.authHeader
+    return this.http.post<CodingJob>(url, creationRequestId ? { ...codingJob, creationRequestId } : codingJob, {
+      headers: this.authHeader,
+      ...(creationRequestId ? { context: suppressGlobalHttpErrorContext() } : {})
     });
   }
 
@@ -1109,7 +1111,7 @@ export class CodingJobBackendService {
     return this.http.post<DistributedCodingJobsResponse>(
       url,
       {},
-      { headers: this.authHeader }
+      { headers: this.authHeader, context: suppressGlobalHttpErrorContext() }
     );
   }
 

@@ -11,14 +11,15 @@ export interface CodingJobSaveResult {
   assignmentFailed: boolean;
 }
 
-/** One subscription owns the job write and the subsequent coder assignments. */
+/** Job creation includes its coder assignments. Edits use the existing assignment flow. */
 @Injectable()
 export class CodingJobDefinitionPersistence {
   private readonly backend = inject(CodingJobBackendService);
   private readonly jobs = inject(CodingJobService);
 
-  createJob(workspaceId: number, job: CodingJob, coderIds: number[]): Observable<CodingJobSaveResult> {
-    return this.assignCoders(this.backend.createCodingJob(workspaceId, job), coderIds);
+  createJob(workspaceId: number, job: CodingJob, coderIds: number[], creationRequestId: string): Observable<CodingJobSaveResult> {
+    return this.backend.createCodingJob(workspaceId, { ...job, assignedCoders: coderIds }, creationRequestId)
+      .pipe(map(saved => ({ job: saved, assignmentFailed: false })));
   }
 
   updateJob(workspaceId: number, jobId: number, job: CodingJob, coderIds: number[]): Observable<CodingJobSaveResult> {
