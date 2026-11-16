@@ -41,7 +41,7 @@ export class KappaPostgresFixture {
     const changelog = readFileSync(path.join(root, 'coding-box.changelog-root.xml'), 'utf8');
     for (const [, file] of changelog.matchAll(/<include file="([^"]+)"/g)) {
       if (beforeFile?.file === file) await beforeFile.seed(this.db);
-      const input = readFileSync(path.join(root, file), 'utf8').split(/^-- changeset /m).slice(1).map(chunk => {
+      const input = readFileSync(path.join(root, file), 'utf8').split(/^-- ?changeset /m).slice(1).map(chunk => {
         const end = chunk.indexOf('\n');
         const statements = chunk.slice(end + 1);
         return chunk.slice(0, end).includes('runInTransaction:false') ? statements : `BEGIN;\n${statements}\nCOMMIT;`;

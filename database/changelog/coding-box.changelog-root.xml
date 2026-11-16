@@ -53,4 +53,6 @@
   <include file="coding-box.changelog-orm-query-hardening.sql"/>
   <include file="coding-box.changelog-response-query-indexes.sql"/>
   <include file="coding-box.changelog-coding-job-creation.sql"/>
+  <include file="coding-box.changelog-response-list-search.sql"/>
+  <include file="coding-box.changelog-first-page-responses.sql"/>
 </databaseChangeLog>

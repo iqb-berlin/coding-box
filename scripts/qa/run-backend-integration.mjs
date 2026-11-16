@@ -70,7 +70,7 @@ export async function runIntegration(environment = process.env) {
     const changelogRoot = path.join(root, 'database/changelog');
     const changelog = await readFile(path.join(changelogRoot, 'coding-box.changelog-root.xml'), 'utf8');
     for (const [, file] of changelog.matchAll(/<include file="([^"]+)"/g)) {
-      const sql = (await readFile(path.join(changelogRoot, file), 'utf8')).split(/^-- changeset /m).slice(1).map(chunk => {
+      const sql = (await readFile(path.join(changelogRoot, file), 'utf8')).split(/^-- ?changeset /m).slice(1).map(chunk => {
         const end = chunk.indexOf('\n');
         const statements = chunk.slice(end + 1);
         return chunk.slice(0, end).includes('runInTransaction:false') ? statements : `BEGIN;\n${statements}\nCOMMIT;`;

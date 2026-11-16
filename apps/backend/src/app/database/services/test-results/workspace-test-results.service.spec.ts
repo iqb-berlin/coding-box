@@ -1640,6 +1640,28 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('findFlatResponses', () => {
+    beforeEach(() => {
+      jest.mocked(dataSource.transaction).mockImplementation((_, work) => {
+        const queryRunner = dataSource.createQueryRunner();
+        jest.mocked(queryRunner.query).mockImplementation(async sql => (
+          typeof sql === 'string' && sql.includes('pg_current_snapshot()') ?
+            [{ snapshot: '10:10:', postmasterStartedAt: '2026-01-01 00:00:00+00' }] :
+            []
+        ));
+        return work({ queryRunner, query: queryRunner.query } as typeof dataSource.manager);
+      });
+    });
+
+    function mockFilteredPage() {
+      const dataQb = mockQueryBuilder();
+      const countQb = mockQueryBuilder();
+      dataQb.clone.mockReturnValue(countQb);
+      jest.mocked(responseRepository.createQueryBuilder).mockReturnValueOnce(
+        dataQb as unknown as ReturnType<typeof responseRepository.createQueryBuilder>
+      );
+      return { dataQb, countQb };
+    }
+
     it('should filter responses correctly', async () => {
       const workspaceId = 1;
       const options = {
@@ -1656,16 +1678,12 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.findFlatResponses(workspaceId, options);
 
-      expect(qb.where).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
+      expect(qb.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspaceId', { workspaceId });
       expect(qb.andWhere).toHaveBeenCalledWith('person.code ILIKE :code', { code: '%abc%' });
     });
 
     it('should filter variable IDs exactly when wrapped in double quotes', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+      const { dataQb } = mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1673,24 +1691,18 @@ describe('WorkspaceTestResultsService', () => {
         response: ' "01_unique" '
       });
 
-      [dataQb, countQb].forEach(qb => {
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'LOWER(response.variableid) = LOWER(:responseExact)',
-          { responseExact: '01_unique' }
-        );
-        expect(qb.andWhere).not.toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
-          expect.anything()
-        );
-      });
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'LOWER(response.variableid) = LOWER(:responseExact)',
+        { responseExact: '01_unique' }
+      );
+      expect(dataQb.andWhere).not.toHaveBeenCalledWith(
+        'response.variableid ILIKE :response',
+        expect.anything()
+      );
     });
 
     it('should keep the default variable ID contains search', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+      const { dataQb } = mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1698,20 +1710,14 @@ describe('WorkspaceTestResultsService', () => {
         response: '01'
       });
 
-      [dataQb, countQb].forEach(qb => {
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
-          { response: '%01%' }
-        );
-      });
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'response.variableid ILIKE :response',
+        { response: '%01%' }
+      );
     });
 
     it('should apply regex filters identically to data and count queries', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+      const { dataQb, countQb } = mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1725,32 +1731,32 @@ describe('WorkspaceTestResultsService', () => {
         regexSearch: true
       });
 
-      [dataQb, countQb].forEach(qb => {
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'person.code ~ :codeRegex',
-          { codeRegex: '^P-' }
-        );
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'person.group ~ :groupRegex',
-          { groupRegex: '^G[12]$' }
-        );
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'person.login ~ :loginRegex',
-          { loginRegex: 'user-[0-9]+' }
-        );
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'bookletinfo.name ~ :bookletRegex',
-          { bookletRegex: 'Booklet-[AB]' }
-        );
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
-          { unitRegex: '^Unit' }
-        );
-        expect(qb.andWhere).toHaveBeenCalledWith(
-          'response.variableid ~ :responseRegex',
-          { responseRegex: '^VAR_\\d+$' }
-        );
-      });
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'person.code ~ :codeRegex',
+        { codeRegex: '^P-' }
+      );
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'person.group ~ :groupRegex',
+        { groupRegex: '^G[12]$' }
+      );
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'person.login ~ :loginRegex',
+        { loginRegex: 'user-[0-9]+' }
+      );
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'bookletinfo.name ~ :bookletRegex',
+        { bookletRegex: 'Booklet-[AB]' }
+      );
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        '(unit.alias ~ :unitRegex OR unit.name ~ :unitRegex)',
+        { unitRegex: '^Unit' }
+      );
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
+        'response.variableid ~ :responseRegex',
+        { responseRegex: '^VAR_\\d+$' }
+      );
+      expect(dataQb.clone).toHaveBeenCalledTimes(1);
+      expect(countQb.select).toHaveBeenCalledWith('COUNT(response.id)', 'cnt');
 
       const queryRunner = (dataSource.createQueryRunner as jest.Mock).mock.results[0].value;
       expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
@@ -1758,11 +1764,7 @@ describe('WorkspaceTestResultsService', () => {
         'response',
         queryRunner
       );
-      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
-        2,
-        'response',
-        queryRunner
-      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
       expect(queryRunner.query).toHaveBeenCalledWith(
         "SET LOCAL statement_timeout = '3000ms'"
       );
@@ -1806,11 +1808,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it('should not apply the regex timeout without a regex text filter', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+      mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1825,11 +1823,7 @@ describe('WorkspaceTestResultsService', () => {
         'response',
         undefined
       );
-      expect(responseRepository.createQueryBuilder).toHaveBeenNthCalledWith(
-        2,
-        'response',
-        undefined
-      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
     });
 
     it('should retain the response value prefix and timeout on the shared page query', async () => {
@@ -1849,6 +1843,8 @@ describe('WorkspaceTestResultsService', () => {
 
       const queryRunner = (dataSource.createQueryRunner as jest.Mock)
         .mock.results[0].value;
+      expect(dataSource.transaction).toHaveBeenCalledWith('REPEATABLE READ', expect.any(Function));
+      expect(queryRunner.query).toHaveBeenCalledWith('SET TRANSACTION READ ONLY');
       expect(queryRunner.query).toHaveBeenCalledWith(
         "SET LOCAL statement_timeout = '15000ms'"
       );
@@ -1867,27 +1863,20 @@ describe('WorkspaceTestResultsService', () => {
       [{ processingDurationMax: '02:30' }, '<= :processingDurationMaxMs', { processingDurationMinMs: 0, processingDurationMaxMs: 150000 }],
       [{ sessionIds: '5, invalid, -1, 8' }, 's.id IN (:...sessionIds)', { sessionIds: [5, 8] }]
     ])('applies %j to both result rows and their total', async (filter, condition, parameters) => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
+      const { dataQb, countQb } = mockFilteredPage();
       countQb.getRawOne.mockResolvedValue({ cnt: '3' });
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb).mockReturnValueOnce(countQb);
 
       const [, total] = await service.findFlatResponses(1, { page: 1, limit: 10, ...filter });
 
       expect(total).toBe(3);
-      for (const qb of [dataQb, countQb]) {
-        const matches = qb.andWhere.mock.calls.filter(([sql]) => String(sql).includes(String(condition)));
-        expect(matches).toHaveLength(1);
-        if (parameters !== undefined) expect(matches[0][1]).toEqual(parameters);
-      }
+      const matches = dataQb.andWhere.mock.calls.filter(([sql]) => String(sql).includes(String(condition)));
+      expect(matches).toHaveLength(1);
+      if (parameters !== undefined) expect(matches[0][1]).toEqual(parameters);
+      expect(dataQb.clone).toHaveBeenCalledTimes(1);
     });
 
     it('uses the same predicates for combined response, duration and session filters', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb).mockReturnValueOnce(countQb);
+      const { dataQb, countQb } = mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 2,
@@ -1908,7 +1897,10 @@ describe('WorkspaceTestResultsService', () => {
         sessionIds: '5,8'
       });
 
-      expect(countQb.andWhere.mock.calls).toEqual(dataQb.andWhere.mock.calls);
+      expect(dataQb.clone).toHaveBeenCalledTimes(1);
+      const cloneOrder = dataQb.clone.mock.invocationCallOrder[0];
+      expect(Math.max(...dataQb.andWhere.mock.invocationCallOrder)).toBeLessThan(cloneOrder);
+      expect(countQb.select).toHaveBeenCalledWith('COUNT(response.id)', 'cnt');
       expect(dataQb.offset).toHaveBeenCalledWith(15);
       expect(dataQb.limit).toHaveBeenCalledWith(15);
       expect(countQb.offset).not.toHaveBeenCalled();
@@ -1916,11 +1908,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it('should filter tags in the count query without multiplying rows', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
+      const { dataQb, countQb } = mockFilteredPage();
 
       await service.findFlatResponses(1, {
         page: 1,
@@ -1928,8 +1916,8 @@ describe('WorkspaceTestResultsService', () => {
         tags: 'review'
       });
 
-      expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
-      expect(countQb.andWhere).toHaveBeenCalledWith(
+      expect(dataQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
+      expect(dataQb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('FROM unit_tag count_unit_tag'),
         { tags: '%review%' }
       );
@@ -1949,15 +1937,11 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
-      const dataQb = mockQueryBuilder();
-      const countQb = mockQueryBuilder();
+      const { countQb } = mockFilteredPage();
       countQb.getRawOne.mockRejectedValue({
         code: '57014',
         message: 'canceling statement due to statement timeout'
       });
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(dataQb)
-        .mockReturnValueOnce(countQb);
 
       await expect(service.findFlatResponses(1, {
         page: 1,

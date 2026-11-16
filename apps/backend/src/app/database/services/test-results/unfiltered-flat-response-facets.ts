@@ -12,7 +12,7 @@ const dimensions = [
 ] as const;
 type Dimension = typeof dimensions[number][0];
 
-/** Match response existence once per unit; metadata/log facets use booklet grain. */
+/** Collect response dimensions and eligible units in one pass over the covering index. */
 export async function queryUnfilteredFlatResponseFacets(
   units: SelectQueryBuilder<Unit>, connection: DataSource,
   maxOptions: number, processingDurationThresholdMs: number
@@ -20,43 +20,53 @@ export async function queryUnfilteredFlatResponseFacets(
   if (!Number.isSafeInteger(maxOptions) || maxOptions < 1) throw new Error('Invalid facet limit');
   const [scope, parameters] = units.clone()
     .select(['unit.id AS id', 'unit.bookletid AS bookletid', 'COALESCE(unit.alias, unit.name) AS unit'])
-    // EXISTS chose a heap scan per unit on the full-data copy. The aggregate
-    // uses the manual-response covering index, avoiding those cold heap reads.
-    .andWhere(`(SELECT COUNT(*) FROM response eligible_response
-      WHERE eligible_response.unitid = unit.id AND eligible_response.is_autocoder_generated IS NOT TRUE) > 0`)
     .getQueryAndParameters();
   const threshold = `$${parameters.length + 1}`;
   // Identifiers come exclusively from the fixed tuples above. Values stay bound.
-  const sql = `WITH eligible_units AS MATERIALIZED (${scope}),
+  const sql = `WITH scoped_units AS MATERIALIZED (${scope}),
+    response_facets AS MATERIALIZED (
+      SELECT r.unitid, r.variableid, r.status, GROUPING(r.unitid) = 0 AS is_unit
+      FROM response r
+      WHERE r.unitid = ANY(ARRAY(SELECT id FROM scoped_units))
+        AND r.is_autocoder_generated IS NOT TRUE
+      GROUP BY GROUPING SETS ((r.unitid), (r.variableid), (r.status))
+    ), eligible_units AS MATERIALIZED (
+      SELECT u.* FROM scoped_units u JOIN response_facets f ON f.is_unit AND f.unitid = u.id
+    ),
     booklet_ids AS MATERIALIZED (SELECT DISTINCT bookletid FROM eligible_units),
     booklets AS MATERIALIZED (
       SELECT b.id, p.code, p."group" AS person_group, p.login, bi.name AS booklet
       FROM booklet_ids ids JOIN booklet b ON b.id = ids.bookletid
       JOIN persons p ON p.id = b.personid JOIN bookletinfo bi ON bi.id = b.infoid
     ), responses AS MATERIALIZED (
-      SELECT DISTINCT r.variableid, r.status FROM eligible_units u
-      JOIN response r ON r.unitid = u.id WHERE r.is_autocoder_generated IS NOT TRUE
+      SELECT variableid, status FROM response_facets WHERE NOT is_unit
     ), tags AS MATERIALIZED (
       SELECT DISTINCT t.tag FROM eligible_units u JOIN unit_tag t ON t."unitId" = u.id
     ), sessions AS MATERIALIZED (
       SELECT s.id, s.browser, s.os, s.screen FROM booklet_ids b
       JOIN session s ON s.bookletid = b.bookletid
     ), derived AS MATERIALIZED (
-      SELECT CASE WHEN first_duration.duration_ms IS NULL THEN 'Unbekannt'
-        WHEN first_duration.duration_ms < ${threshold} THEN 'Kurz' ELSE 'Lang' END AS duration,
-        CASE WHEN EXISTS (SELECT 1 FROM unit pu WHERE pu.bookletid = b.bookletid AND pu.alias IS NOT NULL)
-          AND NOT EXISTS (
-            SELECT 1 FROM unit pu WHERE pu.bookletid = b.bookletid AND pu.alias IS NOT NULL
-              AND NOT EXISTS (SELECT 1 FROM bookletlog pl WHERE pl.bookletid = b.bookletid
-                AND pl.key = 'CURRENT_UNIT_ID' AND pl.parameter = pu.alias)
-          ) THEN 'complete' ELSE 'incomplete' END AS progress
+      SELECT CASE WHEN first_end.ts IS NULL OR first_start.ts IS NULL THEN 'Unbekannt'
+        WHEN first_end.ts - first_start.ts < ${threshold} THEN 'Kurz' ELSE 'Lang' END AS duration,
+        CASE WHEN progress.complete THEN 'complete' ELSE 'incomplete' END AS progress
       FROM booklet_ids b LEFT JOIN LATERAL (
-        SELECT (bt.ts - br.ts) AS duration_ms FROM bookletlog br
-        JOIN bookletlog bt ON bt.bookletid = br.bookletid
-        WHERE br.bookletid = b.bookletid AND br.key = 'CONTROLLER' AND br.parameter = 'RUNNING'
-          AND bt.key = 'CONTROLLER' AND bt.parameter = 'TERMINATED'
-        ORDER BY br.id, bt.id LIMIT 1
-      ) first_duration ON TRUE
+        SELECT ts FROM bookletlog
+        WHERE bookletid = b.bookletid AND key = 'CONTROLLER' AND parameter = 'RUNNING'
+        ORDER BY id LIMIT 1
+      ) first_start ON TRUE
+      LEFT JOIN LATERAL (
+        SELECT ts FROM bookletlog
+        WHERE bookletid = b.bookletid AND key = 'CONTROLLER' AND parameter = 'TERMINATED'
+        ORDER BY id LIMIT 1
+      ) first_end ON TRUE
+      -- Compare the complete set of aliases once per booklet. NULL yields incomplete.
+      CROSS JOIN LATERAL (
+        SELECT (SELECT array_agg(pu.alias::text) FROM unit pu
+                WHERE pu.bookletid = b.bookletid AND pu.alias IS NOT NULL) <@
+               (SELECT array_agg(pl.parameter) FROM bookletlog pl
+                WHERE pl.bookletid = b.bookletid AND pl.key = 'CURRENT_UNIT_ID' AND pl.parameter IS NOT NULL)
+          AS complete
+      ) progress
     ) ${dimensions.map(([name, column, table]) => `SELECT '${name}' AS facet,
       ARRAY(SELECT DISTINCT "${column}" FROM ${table} WHERE "${column}" IS NOT NULL
         ORDER BY "${column}" LIMIT ${maxOptions})::text[] AS values`).join(' UNION ALL ')}`;
