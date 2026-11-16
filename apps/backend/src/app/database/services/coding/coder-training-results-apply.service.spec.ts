@@ -314,15 +314,9 @@ describe('CoderTrainingResultsApplyService', () => {
     expect(statusUpdateCall?.[0]).toContain('COUNT(cju.id)');
     expect(statusUpdateCall?.[1]).toEqual([1, [700]]);
 
-    expect(queryRunner.manager.update).toHaveBeenCalledWith(
-      ResponseEntity,
-      101,
-      {
-        code_v2: 7,
-        score_v2: 2,
-        status_v2: 5,
-        autocoder_invalidated_version: null
-      }
+    expect(queryRunner.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE response AS target'),
+      [5, 101, 7, 2]
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
       1,
@@ -357,15 +351,9 @@ describe('CoderTrainingResultsApplyService', () => {
       jobConflictStrategy: 'removeFromJobs'
     });
 
-    expect(queryRunner.manager.update).toHaveBeenCalledWith(
-      ResponseEntity,
-      102,
-      {
-        code_v2: -97,
-        score_v2: null,
-        status_v2: 5,
-        autocoder_invalidated_version: null
-      }
+    expect(queryRunner.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE response AS target'),
+      [5, 102, -97, null]
     );
     expect(codingFreshnessService.markManualCodingCurrent).toHaveBeenCalledWith(
       1,
@@ -493,15 +481,9 @@ describe('CoderTrainingResultsApplyService', () => {
       jobConflictStrategy: 'removeFromJobs'
     })).rejects.toThrow('cache failed');
 
-    expect(queryRunner.manager.update).toHaveBeenCalledWith(
-      ResponseEntity,
-      101,
-      {
-        code_v2: 7,
-        score_v2: 2,
-        status_v2: 5,
-        autocoder_invalidated_version: null
-      }
+    expect(queryRunner.manager.query).toHaveBeenCalledWith(
+      expect.stringContaining('UPDATE response AS target'),
+      [5, 101, 7, 2]
     );
     expect(queryRunner.commitTransaction).toHaveBeenCalled();
     expect(queryRunner.release).toHaveBeenCalled();

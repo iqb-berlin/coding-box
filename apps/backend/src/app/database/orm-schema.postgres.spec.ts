@@ -6,6 +6,7 @@ import { MissingsProfile } from './entities/missings-profile.entity';
 import { ResponseEntity } from './entities/response.entity';
 import { readPostgresQueryBatches } from './services/shared/postgres-query-batches.util';
 import { MissingsProfilesService, SnapshotMissingResolver } from './services/coding/missings-profiles.service';
+import { updateResponseCodingBatch } from './services/coding/response-coding-batch.util';
 
 const describePostgres = process.env.KAPPA_QUERY_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -115,5 +116,28 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     const [state] = await fixture.db.query(`SELECT count(*)::int AS active FROM pg_stat_activity
       WHERE datname = current_database() AND state = 'idle in transaction'`);
     expect(state.active).toBe(0);
+  });
+
+  it('writes multiple result batches atomically and preserves null/zero scores in PostgreSQL', async () => {
+    const { workspaceId } = await fixture.workspace('Batch updates');
+    const responseId = await fixture.response(workspaceId, 'BATCH', 'SEED', 'batch-person');
+    const rows: { id: number }[] = await fixture.db.query(`
+      INSERT INTO response(unitid, variableid, status)
+      SELECT unitid, 'BATCH-' || i, 3 FROM response CROSS JOIN generate_series(1, 501) i
+      WHERE id = $1 RETURNING id
+    `, [responseId]);
+    const updates = rows.map((row, index) => ({ responseId: row.id, code: -98, score: index === 500 ? 0 : null }));
+    await expect(fixture.db.transaction(async manager => {
+      await updateResponseCodingBatch(manager, updates, 5);
+      throw new Error('rollback both batches');
+    })).rejects.toThrow('rollback both batches');
+    const afterRollback = await fixture.db.getRepository(ResponseEntity).findOneByOrFail({ id: rows[0].id });
+    expect(afterRollback.code_v2).toBeNull();
+    await fixture.db.transaction(manager => updateResponseCodingBatch(manager, updates, 5));
+    const result = await fixture.db.query(`SELECT code_v2::int, score_v2::int, status_v2 FROM response
+      WHERE id = ANY($1::int[]) ORDER BY id`, [rows.map(row => row.id)]);
+    expect(result).toHaveLength(501);
+    expect(result[0]).toEqual({ code_v2: -98, score_v2: null, status_v2: 5 });
+    expect(result[500]).toEqual({ code_v2: -98, score_v2: 0, status_v2: 5 });
   });
 });

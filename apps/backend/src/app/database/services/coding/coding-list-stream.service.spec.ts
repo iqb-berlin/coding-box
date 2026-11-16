@@ -1386,7 +1386,7 @@ describe('CodingListStreamService', () => {
       expect(output).toBe('');
     });
 
-    it.skip('should handle rejected promises in batch processing', async () => {
+    it('should emit item-building failures and clear caches', async () => {
       mockResponseFilterService.getResponsesBatch
         .mockResolvedValueOnce([createMockResponse(1)])
         .mockResolvedValueOnce([]);
@@ -1399,12 +1399,11 @@ describe('CodingListStreamService', () => {
         'token',
         'http://server'
       );
-      stream.on('data', () => {});
-      await new Promise(resolve => {
-        stream.on('end', resolve);
-      });
+      const failure = new Promise((_, reject) => { stream.on('error', reject); });
+      stream.resume();
+      await expect(failure).rejects.toThrow('Build error');
 
-      expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
+      expect(mockFileCacheService.clearCaches).toHaveBeenCalledTimes(2);
     });
 
     it('should emit error on JSON stream processing failure', async () => {
