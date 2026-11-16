@@ -7,6 +7,11 @@ import { ResponseEntity } from './entities/response.entity';
 import { readPostgresQueryBatches } from './services/shared/postgres-query-batches.util';
 import { MissingsProfilesService, SnapshotMissingResolver } from './services/coding/missings-profiles.service';
 import { updateResponseCodingBatch } from './services/coding/response-coding-batch.util';
+import { TestResultsFilterOptionsService } from './services/test-results/test-results-filter-options.service';
+import { queryFlatResponseFacets } from './services/test-results/flat-response-facets.util';
+import { WorkspaceExclusionService } from './services/workspace/workspace-exclusion.service';
+import Workspace from './entities/workspace.entity';
+import FileUpload from './entities/file_upload.entity';
 
 const describePostgres = process.env.KAPPA_QUERY_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -51,6 +56,13 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
       'idx_coding_freshness_unit', 'idx_bookletlog_booklet_id']) {
       expect(names).toContain(name);
     }
+    const responseCover = indexes.find(index => index.indexname === 'idx_response_manual_unit_variable');
+    expect(responseCover?.indexdef).toContain('(unitid, variableid, id) INCLUDE (status)');
+    expect(responseCover?.indexdef).toContain('is_autocoder_generated IS NOT TRUE');
+    const controllerCover = indexes.find(index => index.indexname === 'idx_bookletlog_controller_covering');
+    expect(controllerCover?.indexdef).toContain('(bookletid, parameter, id) INCLUDE (ts)');
+    expect(controllerCover?.indexdef).toContain("key = 'CONTROLLER'");
+    expect(names).not.toContain('idx_bookletlog_controller_booklet_parameter_id');
   });
 
   it('restores prerequisite indexes on partial primary-key rollback and can reapply it', async () => {
@@ -139,5 +151,43 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     expect(result).toHaveLength(501);
     expect(result[0]).toEqual({ code_v2: -98, score_v2: null, status_v2: 5 });
     expect(result[500]).toEqual({ code_v2: -98, score_v2: 0, status_v2: 5 });
+  });
+
+  it('preserves full-value matches beyond 2000 characters and computes scoped facets in PostgreSQL', async () => {
+    const { workspaceId } = await fixture.workspace('Search facets');
+    const id = await fixture.response(workspaceId, 'SEARCH', 'LONG', 'facet-login');
+    await fixture.db.getRepository(ResponseEntity).update(id, { value: `${'x'.repeat(2100)}needle`, status: 3 });
+    const [counts] = await fixture.db.query(`SELECT
+      COUNT(*) FILTER (WHERE value ILIKE $1) AS full,
+      COUNT(*) FILTER (WHERE LEFT(value, 2000) ILIKE $1) AS prefix
+      FROM response WHERE id = $2`, ['%needle%', id]);
+    expect(counts).toEqual({ full: '1', prefix: '0' });
+    const cache = { get: async () => null, set: async () => undefined };
+    const exclusions = new WorkspaceExclusionService(fixture.db.getRepository(Workspace), fixture.db.getRepository(FileUpload), cache as never);
+    const service = new TestResultsFilterOptionsService(fixture.db.getRepository(ResponseEntity), fixture.db, exclusions);
+    const result = await service.findFlatResponseFilterOptions(workspaceId, {});
+    expect(result.responses).toEqual(['LONG']);
+    expect(result.logins).toEqual(['facet-login']);
+    expect(result.units).toEqual(['SEARCH']);
+    expect(result.responseStatuses).toEqual(['VALUE_CHANGED']);
+  });
+
+  it('limits facet arrays after numeric sorting and omits null session fields', async () => {
+    const { workspaceId } = await fixture.workspace('Numeric facets');
+    const id = await fixture.response(workspaceId, 'NUMERIC', 'FIRST', 'numeric-login');
+    const [unit] = await fixture.db.query('SELECT u.bookletid FROM response r JOIN unit u ON u.id=r.unitid WHERE r.id=$1', [id]);
+    const sessions: { id: number }[] = await fixture.db.query(`INSERT INTO session(bookletid, browser)
+      SELECT $1, CASE WHEN i=1 THEN NULL ELSE 'Chrome' END FROM generate_series(1, 12) i RETURNING id`, [unit.bookletid]);
+    const query = fixture.db.getRepository(ResponseEntity).createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit').innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .leftJoin('unit.tags', 'unitTag')
+      .where('person.workspace_id=:workspaceId', { workspaceId });
+    const facets = await queryFlatResponseFacets(query, fixture.db, 3);
+    expect(facets.sessionIdRows.map(row => row.v)).toEqual(sessions.slice(0, 3).map(row => String(row.id)));
+    expect(facets.sessionBrowserRows).toEqual([{ v: 'Chrome' }]);
+    expect(facets.sessionOsRows).toEqual([]);
+    expect(facets.tagRows).toEqual([]);
   });
 });
