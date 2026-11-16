@@ -1387,7 +1387,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-job-definitions/coding-job-definitions.component.ts": {
       "file": {
-        "max-lines": 1018
+        "max-lines": 1016
       },
       "functions": {}
     },
