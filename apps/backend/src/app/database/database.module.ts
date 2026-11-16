@@ -2,10 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import User from './entities/user.entity';
-import Logs from './entities/logs.entity';
 import Persons from './entities/persons.entity';
 import Workspace from './entities/workspace.entity';
-import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import ResourcePackage from './entities/resource-package.entity';
@@ -104,11 +102,9 @@ export function buildPostgresConnectionOptions(
           ResponseEntity,
           User,
           Workspace,
-          WorkspaceAdmin,
           FileUpload,
           WorkspaceUser,
           ResourcePackage,
-          Logs,
           Persons,
           ChunkEntity,
           UnitTag,

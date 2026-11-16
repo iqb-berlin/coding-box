@@ -1,0 +1,125 @@
+{
+  "description": "Known legacy schema/Entity differences. Do not add exceptions without checking stored data and domain optionality. New drift fails the PostgreSQL contract test.",
+  "differences": [
+    {
+      "table": "session",
+      "column": "bookletid",
+      "entityNullable": true,
+      "databaseNullable": false
+    },
+    {
+      "table": "workspace",
+      "column": "settings",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "persons",
+      "column": "workspace_id",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "persons",
+      "column": "uploaded_at",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "persons",
+      "column": "booklets",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "persons",
+      "column": "source",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "persons",
+      "column": "consider",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "coding_job_unit",
+      "column": "is_open",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "user",
+      "column": "isAdmin",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "filename",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "file_size",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "file_type",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "file_id",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "created_at",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "file_upload",
+      "column": "data",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "replay_statistics",
+      "column": "timestamp",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "resource_package",
+      "column": "name",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "resource_package",
+      "column": "elements",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "resource_package",
+      "column": "created_at",
+      "entityNullable": false,
+      "databaseNullable": true
+    },
+    {
+      "table": "workspace_user",
+      "column": "access_level",
+      "entityNullable": false,
+      "databaseNullable": true
+    }
+  ]
+}
