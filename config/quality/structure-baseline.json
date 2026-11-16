@@ -558,7 +558,7 @@
       "file": {},
       "functions": {
         "class CodingJobResponsesService#1/method getSlimResponsesForCodingJob#1": {
-          "max-lines-per-function": 122
+          "max-lines-per-function": 119
         }
       }
     },
