@@ -145,6 +145,19 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       const cachedCounts = 'SELECT COALESCE(sum(total), 0)::int AS n FROM flat_response_first_page_total WHERE workspace_id = $1';
       await expect(db.query(cachedCounts, [42])).resolves.toEqual([{ n: 10 }]);
 
+      await db.query(`
+        INSERT INTO workspace VALUES (44);
+        WITH people AS (INSERT INTO persons VALUES (44, 44, true, 'CTE', 'cte', 'group') RETURNING id),
+          booklets AS (INSERT INTO booklet SELECT 44, id, 1 FROM people RETURNING id),
+          units AS (INSERT INTO unit SELECT 44, id, 'CTE_UNIT', 'CTE_UNIT' FROM booklets RETURNING id)
+        INSERT INTO response SELECT 1000, id, 'NEW', 3, 'same statement', false FROM units
+      `);
+      const [cteRows, cteTotal] = await service.findFlatResponses(44, {
+        page: 1, limit: 50, responseValue: 'same statement'
+      });
+      expect(cteRows.map(row => row.responseId)).toEqual([1000]);
+      expect(cteTotal).toBe(1);
+
       await db.query('UPDATE persons SET workspace_id = 43 WHERE id = 1');
       await expectResponses({ responseValue: 'answer' }, []);
       await db.query('SELECT rebuild_flat_response_workspace(43)');
@@ -159,7 +172,10 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
           const rollback = [...changeset.matchAll(/^--rollback (.*)$/gm)].map(match => match[1]).join('\n');
           await manager.query(rollback);
         }
-        await manager.query('DELETE FROM response WHERE id = 999');
+        await manager.query('DELETE FROM response WHERE id IN (999, 1000)');
+        await manager.query('DELETE FROM unit WHERE id = 44');
+        await manager.query('DELETE FROM booklet WHERE id = 44');
+        await manager.query('DELETE FROM persons WHERE id = 44');
         await manager.query('UPDATE persons SET workspace_id = 42 WHERE id = 1');
         await manager.query('DROP TABLE workspace');
       });

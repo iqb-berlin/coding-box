@@ -323,6 +323,14 @@ BEGIN
   FROM public.flat_response_first_page_unit u JOIN public.flat_response_first_page_workspace w USING (workspace_id)
   WHERE u.unit_id = NEW.unitid AND w.ready;
   IF target_workspace IS NULL THEN
+    -- A data-modifying CTE can insert the unit and its responses in one statement.
+    -- The unit's AFTER STATEMENT trigger may run after this AFTER ROW trigger.
+    SELECT u.workspace_id INTO target_workspace
+    FROM public.flat_response_first_page_source_unit u
+    JOIN public.flat_response_first_page_workspace w USING (workspace_id)
+    WHERE u.unit_id = NEW.unitid AND w.ready;
+  END IF;
+  IF target_workspace IS NULL THEN
     IF TG_OP = 'UPDATE' THEN DELETE FROM public.flat_response_value_search_link WHERE id = OLD.id; END IF;
     RETURN NULL;
   END IF;
