@@ -1,6 +1,6 @@
 import { createMock } from '@golevelup/ts-jest';
 import { readFileSync } from 'fs';
-import { resolve } from 'path';
+import { resolve as resolvePath } from 'path';
 import { DataSource } from 'typeorm';
 import { PersonQueryService } from './person-query.service';
 import { TestResultsResponsesService } from './test-results-responses.service';
@@ -124,7 +124,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   });
 
   it('backfills the migrated projections and reads through a workspace move and rebuild', async () => {
-    const migration = readFileSync(resolve(
+    const migration = readFileSync(resolvePath(
       'database/changelog/coding-box.changelog-response-list-search.sql'
     ), 'utf8').replace(/\bpublic\./g, `"${schema}".`);
     const changes = migration.split(/^--changeset .*$/m).slice(1);
