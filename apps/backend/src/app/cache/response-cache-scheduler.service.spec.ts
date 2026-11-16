@@ -92,6 +92,7 @@ describe('ResponseCacheSchedulerService', () => {
       'UNIT-ALIAS'
     );
     expect(cacheService.exists).toHaveBeenCalledTimes(4);
+    expect(cacheService.exists).toHaveBeenCalledWith('responses:47:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v7');
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledTimes(4);
   });
 });
