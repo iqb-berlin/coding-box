@@ -20,7 +20,7 @@ import {
   BulkCreationData, BulkCreationResult, CodingJobBulkCreationDialogComponent
 } from '../coding-job-bulk-creation-dialog/coding-job-bulk-creation-dialog.component';
 import { JobDefinitionRefreshDialogComponent } from '../coding-job-definitions/job-definition-refresh-dialog.component';
-import { CodingJobDefinitionPersistence } from './coding-job-definition-persistence.service';
+import { CodingJobDefinitionPersistence, CodingJobSaveResult } from './coding-job-definition-persistence.service';
 import { CodingJobDefinitionRules } from './coding-job-definition-rules';
 import {
   CODING_JOB_DEFINITION_RECOVERY_KEY, CodingJobDefinitionDialogData, JobDefinition
@@ -44,7 +44,7 @@ export class JobDefinitionSaveFacade {
   private readonly destroyRef = inject(DestroyRef);
   private readonly rules = new CodingJobDefinitionRules();
   private workspaceGeneration = 0;
-  private creationRequestId?: string;
+  private creationAttempt?: { id: string; payload: string; uncertain: boolean };
 
   constructor() {
     let workspaceId = this.app.selectedWorkspaceId;
@@ -52,7 +52,7 @@ export class JobDefinitionSaveFacade {
       if (id !== workspaceId) {
         workspaceId = id;
         this.workspaceGeneration += 1;
-        this.creationRequestId = undefined;
+        this.creationAttempt = undefined;
       }
     });
   }
@@ -61,7 +61,11 @@ export class JobDefinitionSaveFacade {
     const workspaceId = this.beginSave();
     if (!workspaceId) return;
     const request = isEdit ? this.persistence.updateJob(workspaceId, job.id!, job, coderIds) :
-      this.persistence.createJob(workspaceId, job, coderIds, this.creationRequestId ??= uuid());
+      this.createJobRequest(workspaceId, job, coderIds);
+    if (!request) {
+      this.saving.set(false);
+      return;
+    }
     this.watch(request, workspaceId).subscribe({
       next: ({ job: savedJob, assignmentFailed }) => {
         this.saving.set(false);
@@ -71,6 +75,7 @@ export class JobDefinitionSaveFacade {
         this.dialogRef.close(savedJob);
       },
       error: error => {
+        if (!isEdit) this.recordCreationFailure(error);
         if (!isEdit && error?.error?.code === 'CODING_JOB_WORKSPACE_BUSY') {
           this.notify('job-creation-workspace-busy', undefined, 7000);
           return;
@@ -78,6 +83,29 @@ export class JobDefinitionSaveFacade {
         this.notify(isEdit ? 'error-updating-job' : 'error-creating-job', { error: this.errorMessage(error) }, 5000);
       }
     });
+  }
+
+  private createJobRequest(workspaceId: number, job: CodingJob, coderIds: number[]): Observable<CodingJobSaveResult> | undefined {
+    // The dialog regenerates timestamps on every submit; they are not creation inputs.
+    // Serialize now so later edits to nested selections cannot change the original attempt.
+    const payload = JSON.stringify({
+      ...job, assignedCoders: coderIds, created_at: undefined, updated_at: undefined
+    });
+    if (this.creationAttempt && this.creationAttempt.payload !== payload) {
+      this.notify('job-creation-inputs-changed', undefined, 10000);
+      return undefined;
+    }
+    this.creationAttempt ??= { id: uuid(), payload, uncertain: false };
+    return this.persistence.createJob(workspaceId, job, coderIds, this.creationAttempt.id);
+  }
+
+  private recordCreationFailure(error: { status?: number; error?: { code?: string } }): void {
+    if (!this.creationAttempt) return;
+    const rejected = [400, 401, 403].includes(error?.status ?? 0) ||
+      error?.error?.code === 'CODING_JOB_WORKSPACE_BUSY';
+    // A later rejection cannot rule out an earlier request that is still committing.
+    if (rejected && !this.creationAttempt.uncertain) this.creationAttempt = undefined;
+    else if (!rejected) this.creationAttempt.uncertain = true;
   }
 
   createDefinition(definition: JobDefinition, forReview = false): void {

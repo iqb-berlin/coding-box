@@ -1332,6 +1332,92 @@ describe('CodingJobDefinitionDialogComponent', () => {
       expect(mockDialogRef.close).toHaveBeenCalledTimes(1);
     });
 
+    if (!isEdit) {
+      it.each([
+        { status: 400 },
+        { status: 409, error: { code: 'CODING_JOB_WORKSPACE_BUSY' } }
+      ])('allows correcting inputs after a definitive first rejection (%j)', async rejection => {
+        const write = prepareSave();
+        write.mockReturnValueOnce(throwError(() => rejection)).mockReturnValue(of(existingJob));
+        await component.onSubmit();
+        component.codingJobForm.patchValue({ allowComments: false });
+        await component.onSubmit();
+
+        expect(write).toHaveBeenCalledTimes(2);
+        expect(write.mock.calls[1][1].allowComments).toBe(false);
+        expect(write.mock.calls[1][2]).not.toBe(write.mock.calls[0][2]);
+        expect(mockDialogRef.close).toHaveBeenCalledWith(existingJob);
+      });
+
+      it('keeps the original attempt after a lost response is followed by a busy retry', async () => {
+        const write = prepareSave();
+        write.mockReturnValueOnce(throwError(() => new Error('HTTP response lost')))
+          .mockReturnValueOnce(throwError(() => ({ status: 409, error: { code: 'CODING_JOB_WORKSPACE_BUSY' } })))
+          .mockReturnValue(of(existingJob));
+        await component.onSubmit();
+        await component.onSubmit();
+        component.codingJobForm.patchValue({ allowComments: false });
+        await component.onSubmit();
+
+        expect(write).toHaveBeenCalledTimes(2);
+        expect(write.mock.calls[1][2]).toBe(write.mock.calls[0][2]);
+        expect(component.isSaving()).toBe(false);
+        expect(mockDialogRef.close).not.toHaveBeenCalled();
+      });
+
+      it.each(['maxCodingCases', 'showScore', 'coder', 'variable'] as const)(
+        'rejects changed %s after a committed creation loses its HTTP response, then recovers the original job',
+        async field => {
+          const write = prepareSave();
+          let committedJob: CodingJob | undefined;
+          write.mockImplementation((_workspaceId: number, payload: CodingJob) => {
+            committedJob ??= { ...payload, id: 202 };
+            return throwError(() => new Error('HTTP response lost after commit'));
+          });
+          await component.onSubmit();
+          const originalPayload = write.mock.calls[0][1] as CodingJob;
+          const originalRequestId = write.mock.calls[0][2];
+          expect(committedJob?.id).toBe(202);
+
+          if (field === 'maxCodingCases') component.codingJobForm.patchValue({ maxCodingCases: 2 });
+          if (field === 'showScore') component.codingJobForm.patchValue({ showScore: !originalPayload.showScore });
+          if (field === 'coder') {
+            component.selectedCoders.clear();
+            component.selectedCoders.select(mockCoders[1]);
+          }
+          if (field === 'variable') {
+            component.selectedVariables().clear();
+            component.selectedVariables().select(mockVariables[1]);
+          }
+          write.mockReturnValue(of(committedJob));
+          await component.onSubmit();
+
+          expect(write).toHaveBeenCalledTimes(1);
+          expect(component.isSaving()).toBe(false);
+          expect(mockDialogRef.close).not.toHaveBeenCalled();
+          expect(mockSnackBar.open).toHaveBeenLastCalledWith(
+            'coding-job-definition-dialog.snackbars.job-creation-inputs-changed',
+            'common.close',
+            { duration: 10000 }
+          );
+          expect(mockCodingJobService.assignCoder).not.toHaveBeenCalled();
+
+          component.codingJobForm.patchValue({
+            maxCodingCases: originalPayload.maxCodingCases ?? null, showScore: originalPayload.showScore
+          });
+          component.selectedCoders.clear();
+          component.selectedCoders.select(mockCoders[0]);
+          component.selectedVariables().clear();
+          component.selectedVariables().select(mockVariables[0]);
+          await component.onSubmit();
+
+          expect(write).toHaveBeenCalledTimes(2);
+          expect(write.mock.calls[1][2]).toBe(originalRequestId);
+          expect(mockDialogRef.close).toHaveBeenCalledWith(committedJob);
+        }
+      );
+    }
+
     if (isEdit) {
       it('retains the saved job and partial-failure feedback if coder assignment fails', async () => {
         prepareSave().mockReturnValue(of(existingJob));
