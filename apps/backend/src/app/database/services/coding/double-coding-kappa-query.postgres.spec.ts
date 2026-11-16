@@ -1,7 +1,6 @@
 import { writeFileSync } from 'fs';
 import { performance } from 'perf_hooks';
 import * as ExcelJS from 'exceljs';
-import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { DoubleCodingReviewQueryService } from './double-coding-review-query.service';
 import { CohensKappaStatisticsService } from './cohens-kappa-statistics.service';
 import { CohensKappaExportService } from './cohens-kappa-export.service';
@@ -214,22 +213,26 @@ describePostgres('Kappa SQL filters against PostgreSQL and the complete Liquibas
       FROM response r JOIN unit u ON u.id=r.unitid JOIN booklet b ON b.id=u.bookletid JOIN persons p ON p.id=b.personid
       CROSS JOIN unnest($2::int[]) j(id) WHERE p.workspace_id=$1`, [bench.workspaceId, benchJobs]);
     await fixture.db.query('ANALYZE');
-    const repository = fixture.db.getRepository(CodingJobUnit);
-    const original = repository.createQueryBuilder.bind(repository);
     let rawRows = 0;
     let batches = 0;
     let firstSql: [string, unknown[]];
-    const spy = jest.spyOn(repository, 'createQueryBuilder').mockImplementation((...args) => {
-      const builder = original(...args);
-      const getRawMany = builder.getRawMany.bind(builder);
-      builder.getRawMany = async () => {
-        if (batches === 0) firstSql = builder.getQueryAndParameters();
-        const rows = await getRawMany();
-        rawRows += rows.length;
-        batches += 1;
-        return rows;
+    const original = fixture.db.createQueryRunner.bind(fixture.db);
+    const spy = jest.spyOn(fixture.db, 'createQueryRunner').mockImplementation((...args) => {
+      const runner = original(...args);
+      const query = runner.query.bind(runner);
+      runner.query = async (...queryArgs) => {
+        const [sql, parameters] = queryArgs;
+        if (sql.startsWith('DECLARE batch_rows')) {
+          firstSql = [sql.replace('DECLARE batch_rows NO SCROLL CURSOR FOR ', ''), parameters || []];
+        }
+        const result = await query(...queryArgs);
+        if (sql.startsWith('FETCH FORWARD')) {
+          rawRows += result.length;
+          batches += 1;
+        }
+        return result;
       };
-      return builder;
+      return runner;
     });
     const results: unknown[] = [];
     try {

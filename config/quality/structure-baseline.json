@@ -805,12 +805,12 @@
     },
     "apps/backend/src/app/database/services/coding/double-coding-review-query.service.ts": {
       "file": {
-        "max-lines": 1527
+        "max-lines": 1516
       },
       "functions": {
         "class DoubleCodingReviewQueryService#1/method getCodedVariablesForKappa#1": {
           "complexity": 31,
-          "max-lines-per-function": 237
+          "max-lines-per-function": 233
         },
         "class DoubleCodingReviewQueryService#1/method getDoubleCodedReviewData#1": {
           "complexity": 102,
