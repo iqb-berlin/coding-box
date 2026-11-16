@@ -1,5 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { KappaPostgresFixture } from './services/coding/kappa-query.postgres.test.factory';
+import { JobDefinition } from './entities/job-definition.entity';
+import { CodingJob } from './entities/coding-job.entity';
+import { MissingsProfile } from './entities/missings-profile.entity';
+import { ResponseEntity } from './entities/response.entity';
+import { readPostgresQueryBatches } from './services/shared/postgres-query-batches.util';
+import { MissingsProfilesService, SnapshotMissingResolver } from './services/coding/missings-profiles.service';
 
 const describePostgres = process.env.KAPPA_QUERY_TEST_DATABASE_URL ? describe : describe.skip;
 
@@ -81,5 +87,33 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     const legacy = JSON.parse(readFileSync('database/legacy-nullability.json', 'utf8')).differences;
     expect(differences).toHaveLength(legacy.length);
     expect(differences).toEqual(expect.arrayContaining(legacy));
+  });
+
+  it('keeps cursor batches on one snapshot and releases the connection after early termination', async () => {
+    const { workspaceId, profileId } = await fixture.workspace('Cursor snapshot');
+    const first = await fixture.response(workspaceId, 'CURSOR', 'FIRST', 'cursor-1');
+    const second = await fixture.response(workspaceId, 'CURSOR', 'SECOND', 'cursor-2');
+    const query = fixture.db.getRepository(ResponseEntity).createQueryBuilder('response')
+      .select('response.id', 'id').addSelect('response.value', 'value')
+      .where('response.id IN (:...ids)', { ids: [first, second] })
+      .orderBy('response.id');
+    const profiles = new MissingsProfilesService(fixture.db.getRepository(MissingsProfile), fixture.db.getRepository(CodingJob), fixture.db.getRepository(JobDefinition), {} as never);
+    let resolveMissing: SnapshotMissingResolver | undefined;
+    const iterator = readPostgresQueryBatches<{ id: number; value: string | null }>(query, 1, async manager => {
+      resolveMissing = await profiles.getMissingResolverForSnapshot(workspaceId, manager);
+    });
+    expect((await iterator.next()).value).toEqual([{ id: first, value: null }]);
+    await fixture.db.getRepository(ResponseEntity).update(second, { value: 'changed concurrently' });
+    await fixture.db.query('UPDATE missings_profile SET missings=$1 WHERE id=$2', [JSON.stringify([
+      {
+        id: 'mir', label: 'Changed concurrently', code: -88, score: 1
+      }
+    ]), profileId]);
+    expect(resolveMissing!(profileId, { id: 'mir' }).code).toBe(-98);
+    expect((await iterator.next()).value).toEqual([{ id: second, value: null }]);
+    await iterator.return(undefined);
+    const [state] = await fixture.db.query(`SELECT count(*)::int AS active FROM pg_stat_activity
+      WHERE datname = current_database() AND state = 'idle in transaction'`);
+    expect(state.active).toBe(0);
   });
 });

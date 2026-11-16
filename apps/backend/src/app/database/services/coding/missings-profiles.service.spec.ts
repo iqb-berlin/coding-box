@@ -44,6 +44,47 @@ describe('MissingsProfilesService', () => {
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());
   });
 
+  it('resolves snapshot profiles without new queries or writes and validates only used entries', async () => {
+    const snapshotRepo = createRepo();
+    snapshotRepo.find.mockResolvedValue([{
+      id: 7,
+      label: 'Custom',
+      missings: JSON.stringify([
+        {
+          id: 'mir', label: 'MIR', code: -18, score: 0
+        },
+        { id: 'bad', label: 'Legacy unused', code: -19 }
+      ])
+    }]);
+    const manager = { getRepository: jest.fn().mockReturnValue(snapshotRepo) };
+    const resolve = await service.getMissingResolverForSnapshot(1, manager as never);
+    expect(resolve(7, { id: 'mir' })).toEqual({
+      id: 'mir', label: 'MIR', code: -18, score: 0
+    });
+    expect(resolve(7, { code: -18 }).score).toBe(0);
+    expect(() => resolve(7, { code: -19 })).toThrow('must define a score');
+    expect(() => resolve(99, { id: 'mir' })).toThrow('Missing profile 99 not found');
+    expect(() => resolve(-1, { id: 'mir' })).toThrow('Invalid missings profile id');
+    expect(() => resolve(7, { id: 'unknown' })).toThrow('not found');
+    expect(snapshotRepo.find).toHaveBeenCalledTimes(1);
+    expect(snapshotRepo.find).toHaveBeenCalledWith({ where: { workspace_id: 1 } });
+    expect(snapshotRepo.save).not.toHaveBeenCalled();
+    expect(repo.findOne).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])('uses canonical defaults in memory when stored=%s', async stored => {
+    const profiles = stored ? [{ id: 8, label: 'IQB-Standard', missings: '[]' }] : [];
+    const snapshotRepo = createRepo();
+    snapshotRepo.find.mockResolvedValue(profiles);
+    const resolve = await service.getMissingResolverForSnapshot(1, { getRepository: () => snapshotRepo } as never);
+    expect(resolve(null, { id: 'mir' }).code).toBe(-98);
+    expect(resolve(0, { id: 'mci' }).score).toBeNull();
+    if (profiles.length) expect(resolve(8, { code: -98 }).score).toBe(0);
+    expect(snapshotRepo.save).not.toHaveBeenCalled();
+    expect(repo.save).not.toHaveBeenCalled();
+    if (profiles.length) expect(profiles[0].missings).toBe('[]');
+  });
+
   it('resolves an export profile strictly without writing it', async () => {
     repo.findOne.mockResolvedValueOnce({
       id: 7,
