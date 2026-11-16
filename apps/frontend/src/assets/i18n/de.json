@@ -2872,6 +2872,7 @@
       "error-create-template": "Fehler beim Erstellen des Kodierauftrags",
       "error-updating-job": "Fehler beim Aktualisieren des Kodierauftrags: {{error}}",
       "job-creation-workspace-busy": "Die Testergebnisse in diesem Arbeitsbereich werden gerade aktualisiert. Speichern Sie den Kodierauftrag erneut, sobald die Aktualisierung abgeschlossen ist.",
+      "job-creation-inputs-changed": "Der vorherige Speicherversuch könnte bereits erfolgreich gewesen sein. Geänderte Angaben werden deshalb nicht gesendet. Stellen Sie für eine Wiederholung die ursprünglichen Angaben wieder her oder prüfen Sie zuerst die Auftragsliste.",
       "error-creating-job": "Fehler beim Erstellen des Kodierauftrags: {{error}}",
       "bulk-created-success": "{{successCount}} Kodieraufträge erfolgreich erstellt",
       "bulk-created-partial": "{{successCount}} Aufträge erstellt, {{errorCount}} fehlgeschlagen",
