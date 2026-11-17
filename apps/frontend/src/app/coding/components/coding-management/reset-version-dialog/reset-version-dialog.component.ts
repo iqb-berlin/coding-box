@@ -531,6 +531,11 @@ export function createResetVersionDialogData(workspaceId: number, version: Reset
       .confirmation-footer { padding: 8px 16px 12px; gap: 8px; }
       .dialog-actions { gap: 8px; }
     }
+
+    @media (max-height: 500px) {
+      .reset-dialog-container { overflow-y: auto; }
+      .dialog-content { overflow: visible; flex-shrink: 0; }
+    }
   `]
 })
 export class ResetVersionDialogComponent {

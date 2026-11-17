@@ -2,10 +2,12 @@ import {
   computed, inject, Injectable, OnDestroy, signal
 } from '@angular/core';
 import {
-  Subscription, switchMap, takeWhile, timer
+  exhaustMap, Subscription, switchMap, takeWhile, timeout, timer
 } from 'rxjs';
 import { CodingVersionService } from '../../../services/coding-version.service';
 import { ResetCodingPreviewResult, ResetCodingScope } from '../../../../../../../../api-dto/coding/reset-coding-preview.dto';
+
+const REQUEST_TIMEOUT_MS = 30_000;
 
 @Injectable()
 export class ResetCodingPreviewState implements OnDestroy {
@@ -44,8 +46,9 @@ export class ResetCodingPreviewState implements OnDestroy {
     this.result.set(null);
     const workspaceId = this.workspaceId;
     this.subscription = this.backend.previewReset(workspaceId, this.scope).pipe(
+      timeout(REQUEST_TIMEOUT_MS),
       switchMap(({ jobId }) => timer(0, 1500).pipe(
-        switchMap(() => this.backend.getResetPreview(workspaceId, jobId)),
+        exhaustMap(() => this.backend.getResetPreview(workspaceId, jobId).pipe(timeout(REQUEST_TIMEOUT_MS))),
         takeWhile(status => ['pending', 'processing'].includes(status.status), true)
       ))
     ).subscribe({
