@@ -32,12 +32,15 @@ Run `npx nx run backend:test-integration` with:
 The runner never falls back to application database settings. It creates a unique
 database, applies the repository's formatted SQL changelogs in include order,
 enables every PostgreSQL suite and the real BullMQ tests, and runs them serially
-without Nx caching. Suites that provision their own schema also receive the
-explicit test server. The runner drops only its own database in cleanup.
+without Nx caching. The reset-preview suite receives this disposable database
+through `RESET_PREVIEW_TEST_DATABASE_URL` and creates its own schema there. Suites
+that provision their own database receive the explicit test server. The runner
+drops only its own database in cleanup.
 
 Missing services, migration errors, failed tests, skipped suites and individually
-skipped mandatory tests fail the gate. Only the optional Kappa benchmark may be
-skipped, and it must pass when explicitly enabled. JUnit and JSON
+skipped mandatory tests fail the gate. Only the optional Kappa and reset-preview
+benchmarks may be skipped; each must pass when enabled with
+`KAPPA_QUERY_BENCHMARK=1` or `RESET_PREVIEW_BENCHMARK=true`, respectively. JUnit and JSON
 results are written separately from unit-test reports under
 `coverage/apps/backend/integration-*`.
 

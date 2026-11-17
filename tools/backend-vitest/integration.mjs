@@ -21,6 +21,8 @@ export async function runIntegration(options) {
   if (options.filter) throw new Error('The mandatory integration selection cannot be filtered.');
   const config = integrationConfiguration(process.env);
   const databaseName = `backend_vitest_${randomUUID().replaceAll('-', '')}`;
+  const integrationDatabase = new URL(config.server);
+  integrationDatabase.pathname = `/${databaseName}`;
   const admin = new Client({ connectionString: config.server.toString(), connectionTimeoutMillis: 5000 });
   const redis = new Redis({ host: config.redisHost, port: config.redisPort, lazyConnect: true,
     connectTimeout: 3000, commandTimeout: 3000, maxRetriesPerRequest: 0, retryStrategy: () => null });
@@ -60,13 +62,14 @@ export async function runIntegration(options) {
       POSTGRES_INTEGRATION_TESTS: 'true', POSTGRES_HOST: config.server.hostname, POSTGRES_PORT: config.server.port || '5432',
       POSTGRES_USER: decodeURIComponent(config.server.username), POSTGRES_PASSWORD: decodeURIComponent(config.server.password), POSTGRES_DB: databaseName,
       WORKSPACE_DELETION_TEST_DATABASE_URL: config.server.toString(), KAPPA_QUERY_TEST_DATABASE_URL: config.server.toString(),
+      RESET_PREVIEW_TEST_DATABASE_URL: integrationDatabase.toString(),
       REDIS_HOST: config.redisHost, REDIS_PORT: String(config.redisPort), REDIS_PREFIX: databaseName
     } });
     const status = await new Promise((resolve, reject) => { child.once('error', reject); child.once('exit', resolve); });
     checkSignal();
     if (status !== 0) throw new Error('Vitest integration tests failed.');
     const report = normalizeResults(JSON.parse(readFileSync(resultsFile, 'utf8')));
-    assertIntegrationResults(report, process.env.KAPPA_QUERY_BENCHMARK === '1');
+    assertIntegrationResults(report, process.env.KAPPA_QUERY_BENCHMARK === '1', process.env.RESET_PREVIEW_BENCHMARK === 'true');
     writeFileSync(path.join(output, 'integration-results-normalized.json'), JSON.stringify(report));
     console.log(`Vitest integration gate: ${report.numPassedTests} passed; ${report.numPendingTests} optional skips.`);
   } finally {
