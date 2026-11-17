@@ -70,13 +70,27 @@ describe('GlobalHttpExceptionFilter', () => {
     );
   });
 
-  it('reports an exhausted database pool as temporary unavailability without exposing driver details', () => {
+  it.each([
+    'timeout exceeded when trying to connect',
+    'Connection terminated due to connection timeout'
+  ])('reports a PostgreSQL connection deadline as 503 without exposing driver details: %s', message => {
     const { host, response } = createHost({ requestId: 'pool-request' });
-    new GlobalHttpExceptionFilter().catch(new Error('timeout exceeded when trying to connect'), host);
+    new GlobalHttpExceptionFilter().catch(new Error(message), host);
     expect(response.status).toHaveBeenCalledWith(503);
     expect(response.json).toHaveBeenCalledWith(expect.objectContaining({
       statusCode: 503, message: 'Internal server error', requestId: 'pool-request'
     }));
+  });
+
+  it.each([
+    'timeout expired',
+    'canceling statement due to statement timeout',
+    'connect ETIMEDOUT',
+    'Redis connection timeout'
+  ])('keeps unrelated timeouts as HTTP 500: %s', message => {
+    const { host, response } = createHost();
+    new GlobalHttpExceptionFilter().catch(new Error(message), host);
+    expect(response.status).toHaveBeenCalledWith(500);
   });
 
   it.each(['provider-unavailable', 'configuration-error'] as const)('preserves safe auth diagnostics for %s with a request id', code => {

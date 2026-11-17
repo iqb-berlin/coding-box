@@ -53,10 +53,26 @@ export function parsePostgresPoolMax(value: string | number | undefined, fallbac
   return parsePositiveInteger(value, fallback);
 }
 
-export function parsePostgresPoolAcquireTimeout(value: string | number | undefined): number {
+function parseOptionalPostgresMilliseconds(value: string | number | undefined): number {
+  const normalizedValue = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalizedValue)) return 0;
   const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 2_147_483_647 ? parsed : 0;
+}
+
+export function parsePostgresPoolAcquireTimeout(value: string | number | undefined): number {
   // pg uses Node timers for pool acquisition as well as establishing a connection.
-  return Number.isSafeInteger(parsed) && parsed > 0 && parsed <= 2_147_483_647 ? parsed : 10_000;
+  // Zero preserves pg's unlimited wait; only an explicit positive value opts in.
+  return parseOptionalPostgresMilliseconds(value);
+}
+
+export function buildPostgresQueryLoggingOptions(value: string | number | undefined): {
+  logger?: QueryPerformanceLogger;
+  maxQueryExecutionTime?: number;
+} {
+  const maxQueryExecutionTime = parseOptionalPostgresMilliseconds(value);
+  // Preserve TypeORM's default logger unless slow-query diagnostics are enabled.
+  return maxQueryExecutionTime > 0 ? { logger: new QueryPerformanceLogger(), maxQueryExecutionTime } : {};
 }
 
 export function parsePostgresIdleInTransactionTimeout(
@@ -142,8 +158,7 @@ export function buildPostgresConnectionOptions(
           TestcenterImportRun
         ],
         synchronize: false,
-        logger: new QueryPerformanceLogger(),
-        maxQueryExecutionTime: parsePositiveInteger(configService.get('POSTGRES_SLOW_QUERY_MS'), 1000),
+        ...buildPostgresQueryLoggingOptions(configService.get('POSTGRES_SLOW_QUERY_MS')),
         extra: {
           max: runtimeConfig.postgresPoolMax,
           connectionTimeoutMillis: parsePostgresPoolAcquireTimeout(
