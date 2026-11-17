@@ -591,6 +591,24 @@ test-backend-integration:
     reports:
       junit: coverage/apps/backend/integration-junit.xml
 
+test-backend-integration-postgres17:
+  extends: test-backend-integration
+  services:
+    - name: ${DOCKER_HUB_PROXY}redis:7.4-alpine
+      alias: integration-redis
+    - name: ${DOCKER_HUB_PROXY}postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
+      alias: integration-postgres
+      variables:
+        POSTGRES_USER: "integration_test"
+        POSTGRES_PASSWORD: "integration_test"
+        POSTGRES_DB: "postgres"
+  variables:
+    BACKEND_INTEGRATION_POSTGRES_VERSION: "17.12"
+  script:
+    - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
+    - npx nx run backend:test-migration-tools
+    - npx nx run backend:test-integration
+
 test-frontend:
   stage: test-units
   retry: *proxy_image_pull_retry

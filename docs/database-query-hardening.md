@@ -111,27 +111,29 @@ gezielt bereinigen; keine pauschalen Indexlöschungen oder Zeilenlöschungen.
 Siehe [PostgreSQL-Sequenzen](https://www.postgresql.org/docs/14/functions-sequence.html)
 und [Concurrent-Indexaufbau](https://www.postgresql.org/docs/14/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY).
 
-## PostgreSQL 17: separates, ausdrücklich aktiviertes Testziel
+## PostgreSQL 17.12: ausdrücklich aktivierter Umstieg
 
 `docker-compose.postgres17.yaml` wird von den normalen Make-/Compose-Aufrufen
 nicht geladen. Der Standard bleibt PostgreSQL 14. Das Overlay wirkt nur, wenn
 es ausdrücklich als zusätzliche, letzte `-f`-Datei angegeben wird.
 
 Es ersetzt für den gewählten Compose-Aufruf das Image des Dienstes `db` durch
-PostgreSQL 17 und hängt `db17_vol` an denselben Datenpfad. Das bisherige
-`db_vol` wird dabei nicht geöffnet oder konvertiert. Ohne bereits befülltes
-`db17_vol` beginnt PostgreSQL 17 mit einer neuen, leeren Datenbank.
-Liquibase kann dort das Anwendungsschema anlegen, übernimmt aber keine
-Benutzerdaten aus PostgreSQL 14.
+das per Digest fixierte PostgreSQL **17.12** und verwendet ein getrenntes Volume.
+`POSTGRES17_VOLUME_NAME` muss ausdrücklich gesetzt sein. Das bisherige `db_vol`
+wird weder geöffnet noch konvertiert. Ein leeres Ziel enthält keine Benutzerdaten.
 
-Für einen echten Umstieg braucht es einen gesonderten, getesteten Datenumzug,
-etwa per Dump/Restore oder `pg_upgrade`. PostgreSQL 17 darf nicht einfach das
-Datenverzeichnis von PostgreSQL 14 öffnen. Für einen unabhängigen Testlauf
-zusätzlich einen eigenen Compose-Projektnamen, freie Hostports und passende
-Test-Zugangsdaten verwenden. Der Dienst heißt weiterhin `db`: ein Overlay in
-der bestehenden Umgebung schaltet diese Umgebung auf den neuen Datenbestand
-um, es fügt keinen zweiten Datenbankdienst hinzu. Beim Rückwechsel zu `db_vol`
-werden zwischenzeitliche Änderungen in PostgreSQL 17 nicht zurückkopiert.
+Das zusätzliche `docker-compose.postgres17.prepare.yaml` stellt den Dienst
+`db17` zum Restore neben der bestehenden Quelle bereit. Beide Overlays verwenden
+dasselbe explizite Zielvolume und dürfen es niemals gleichzeitig öffnen.
+Der [konkrete Migrations- und Rückfallplan](postgresql-17-migration.md) enthält
+Generalprobe, Schreibpause, Backup/Restore mit PG17-Werkzeugen, Inhalts-/Rechtevergleich
+und Freigabekriterien. Insbesondere reicht ein anderer Compose-Projektname zur
+Isolation im vorhandenen externen Netzwerk `app-net` nicht aus.
+
+Ein Rückwechsel auf das unveränderte alte Volume ist nur vor neuen Schreibzugriffen
+ohne Datenverlust möglich. Nach dem GO-Punkt werden Änderungen nicht automatisch
+nach 14 zurückkopiert. [Testergebnisse und Grenzen](qa/postgresql-17.12-validation.md)
+sind separat dokumentiert.
 
 Das Overlay lädt außerdem `pg_stat_statements` vor. Für dessen SQL-Auswertung
 muss die Extension ausdrücklich in der gewünschten Testdatenbank eingerichtet

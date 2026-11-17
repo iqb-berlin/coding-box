@@ -168,6 +168,16 @@
       "cache": false,
       "options": { "command": "node scripts/qa/inspect-postgres.mjs" }
     },
+    "database-migration-snapshot": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node scripts/qa/postgres-migration-snapshot.mjs" }
+    },
+    "test-migration-tools": {
+      "executor": "nx:run-commands",
+      "cache": false,
+      "options": { "command": "node --test scripts/qa/run-backend-integration.test.mjs scripts/qa/postgres-migration-snapshot.test.mjs" }
+    },
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": false,
