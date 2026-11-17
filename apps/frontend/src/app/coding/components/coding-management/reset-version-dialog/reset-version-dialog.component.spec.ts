@@ -1,21 +1,23 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { GermanTranslationsTestingModule } from '../../../../../testing/german-translations';
 import {
   ResetVersionDialogComponent,
   ResetVersionDialogData
 } from './reset-version-dialog.component';
+import { ResetFilterDetailsDialogComponent } from './reset-filter-details-dialog.component';
 
 describe('ResetVersionDialogComponent', () => {
   const dialogRefMock = {
     close: jest.fn()
   };
+  const dialogMock = { open: jest.fn() };
 
   async function setup(data: ResetVersionDialogData): Promise<{
     component: ResetVersionDialogComponent;
     fixture: ComponentFixture<ResetVersionDialogComponent>;
   }> {
-    await TestBed.configureTestingModule({
+    TestBed.configureTestingModule({
       imports: [
         ResetVersionDialogComponent,
         GermanTranslationsTestingModule
@@ -24,7 +26,9 @@ describe('ResetVersionDialogComponent', () => {
         { provide: MatDialogRef, useValue: dialogRefMock },
         { provide: MAT_DIALOG_DATA, useValue: data }
       ]
-    }).compileComponents();
+    });
+    TestBed.overrideProvider(MatDialog, { useValue: dialogMock });
+    await TestBed.compileComponents();
 
     const fixture = TestBed.createComponent(ResetVersionDialogComponent);
     const component = fixture.componentInstance;
@@ -173,6 +177,33 @@ describe('ResetVersionDialogComponent', () => {
     component.onConfirm();
 
     expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: [] });
+  });
+
+  it('lets users inspect every normalized filter in a long selection without confirming a reset', async () => {
+    const { fixture } = await setup({ version: 'v1', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', 'DHB001; DHB002; DHB003; DHB004; DHB001');
+    await enterFilter(fixture, 'variable', 'V1; V2');
+
+    const summary = fixture.nativeElement.querySelector('.scope-summary');
+    expect(summary.textContent).toContain('Units: 4 ausgewählt');
+    expect(summary.textContent).toContain('Variablen: 2 ausgewählt');
+    summary.querySelector('.filter-details-button').click();
+
+    expect(dialogMock.open).toHaveBeenCalledWith(ResetFilterDetailsDialogComponent, expect.objectContaining({
+      data: { unitFilters: ['DHB001', 'DHB002', 'DHB003', 'DHB004'], variableFilters: ['V1', 'V2'] }
+    }));
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+  });
+
+  it('also offers full details for one long name and still makes all variables explicit', async () => {
+    const { fixture } = await setup({ version: 'v1', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', `DHB003_${'long-name'.repeat(8)}`);
+
+    expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('Units: 1 ausgewählt');
+    expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('alle Variablen der betroffenen Units');
+    expect(fixture.nativeElement.querySelector('.filter-details-button')).not.toBeNull();
   });
 
   it('cancels without returning a reset request', async () => {

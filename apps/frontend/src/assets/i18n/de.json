@@ -2012,7 +2012,7 @@
       "scope-global": "Globaler Reset – gesamter Arbeitsbereich",
       "scope-filtered": "Gefilterter Reset – bestimmte Units oder Variablen",
       "filter-help": "Geben Sie die exakten Unit-Namen bzw. Variablen-IDs ein. Trennen Sie mehrere Werte durch Kommas, Semikolons oder Zeilenumbrüche. Groß- und Kleinschreibung wird berücksichtigt.",
-      "units-label": "Unit-Namen (optional bei Variablenfilter)",
+      "units-label": "Unit-Namen",
       "units-placeholder": "z. B. DHB003",
       "variables-label": "Variablen-IDs (optional)",
       "summary-global": "Globaler Reset: Kodierergebnisse im gesamten Arbeitsbereich werden zurückgesetzt.",
@@ -3618,6 +3618,14 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "reset-version-dialog": {
+      "units-hint": "Ohne Unit-Filter gelten die Variablen-IDs für alle Units im Arbeitsbereich.",
+      "selected-units": "Units: {{count}} ausgewählt",
+      "selected-variables": "Variablen: {{count}} ausgewählt",
+      "show-all-filters": "Alle Filter anzeigen",
+      "filter-details-title": "Ausgewählter Bereich",
+      "variables-title": "Variablen-IDs"
+    },
     "app": {
       "title": "IQB-Kodierbox",
       "session-data-load-failed": "Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an."

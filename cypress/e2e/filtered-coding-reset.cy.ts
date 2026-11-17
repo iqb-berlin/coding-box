@@ -49,6 +49,15 @@ describe('Filtered coding version reset', () => {
     cy.get('@dialog').find('.confirmation-footer .scope-summary').should('be.visible');
     cy.get('@dialog').find('.confirmation-footer .confirmation-cascade').should('be.visible');
     cy.get('@dialog').find('.confirm-button').should('be.visible');
+    cy.get('@dialog').find('.scope-summary').should(summary => {
+      summary[0].querySelectorAll<HTMLElement>('.scope-filter-line').forEach(line => {
+        expect(line.scrollWidth, 'full summary width').to.be.at.most(line.clientWidth + 1);
+        expect(line.scrollHeight, 'full summary height').to.be.at.most(line.clientHeight + 1);
+      });
+    });
+    cy.get('@dialog').find('.dialog-content').should(content => {
+      expect(content[0].scrollWidth, 'form width without horizontal scrolling').to.be.at.most(content[0].clientWidth + 1);
+    });
   }
 
   it('resets v1 for DHB003 only and keeps progress and completion feedback', () => {
@@ -152,16 +161,43 @@ describe('Filtered coding version reset', () => {
     });
   }
 
-  it('keeps confirmation visible for long filter lists and exposes the full values', () => {
-    const units = Array.from({ length: 30 }, (_, index) => `DHB${String(index).padStart(3, '0')}`);
-    const variables = Array.from({ length: 30 }, (_, index) => `VAR_${index}`);
+  for (const [width, height] of [[1366, 768], [390, 844], [320, 568]]) {
+    it(`exposes all filters in a scrollable dialog at ${width}x${height}`, () => {
+      cy.viewport(width, height);
+      const units = Array.from({ length: 30 }, (_, index) => `DHB${String(index).padStart(3, '0')}`);
+      const variables = Array.from({ length: 30 }, (_, index) => `VAR_${index}`);
+      cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
+      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(units.join('; '), { delay: 0 });
+      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type(variables.join('; '), { delay: 0 });
+      expectConfirmationVisible();
+      cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: 30 ausgewählt')
+        .and('contain.text', 'Variablen: 30 ausgewählt');
+      cy.get('@dialog').contains('button', 'Alle Filter anzeigen').click();
+      cy.get('coding-box-reset-filter-details-dialog').as('details');
+      cy.get('@details').find('[data-cy="reset-unit-details"] li').should('have.length', units.length).each((item, index) => {
+        expect(item.text()).to.equal(units[index]);
+      });
+      cy.get('@details').find('[data-cy="reset-variable-details"] li').should('have.length', variables.length).each((item, index) => {
+        expect(item.text()).to.equal(variables[index]);
+      });
+      cy.get('@details').find('mat-dialog-content').should(content => {
+        expect(content[0].scrollWidth, 'full detail width').to.be.at.most(content[0].clientWidth + 1);
+      }).scrollTo('bottom', { ensureScrollable: false });
+      cy.get('@details').contains('li', variables.at(-1)!).should('be.visible');
+      cy.get('@details').contains('button', 'Schließen').click();
+      cy.get('coding-box-reset-filter-details-dialog').should('not.exist');
+      cy.get('@dialog').find('.filter-details-button').should('be.focused');
+      expectConfirmationVisible();
+    });
+  }
+
+  it('fully displays the unit-only scope and field guidance at 320px', () => {
+    cy.viewport(320, 568);
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(units.join('; '), { delay: 0 });
-    cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type(variables.join('; '), { delay: 0 });
+    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
+    cy.get('@dialog').find('.scope-summary').should('contain.text', 'Variablen: alle Variablen der betroffenen Units');
+    cy.get('@dialog').find('mat-hint').should('contain.text', 'Ohne Unit-Filter');
+    cy.get('@dialog').find('mat-label').first().should('have.text', 'Unit-Namen');
     expectConfirmationVisible();
-    cy.get('@dialog').find('.scope-filter-line').first()
-      .should('have.attr', 'title', `Units: ${units.join(', ')}`);
-    cy.get('@dialog').find('.scope-filter-line').last()
-      .should('have.attr', 'title', `Variablen: ${variables.join(', ')}`);
   });
 });

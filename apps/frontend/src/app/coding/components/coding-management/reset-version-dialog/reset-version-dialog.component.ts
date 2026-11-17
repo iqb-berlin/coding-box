@@ -3,7 +3,9 @@ import {
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
-import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import {
+  MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef
+} from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
@@ -11,6 +13,7 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatRadioModule } from '@angular/material/radio';
 import { TranslateModule } from '@ngx-translate/core';
+import { ResetFilterDetailsDialogComponent } from './reset-filter-details-dialog.component';
 
 export interface ResetVersionDialogData {
   version: 'v1' | 'v2' | 'v3';
@@ -75,11 +78,12 @@ export interface ResetVersionDialogResult {
         @if (scope() === 'filtered') {
           <div class="filter-fields">
             <p>{{ 'coding-management.reset-dialog.filter-help' | translate }}</p>
-            <mat-form-field appearance="outline">
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
               <mat-label>{{ 'coding-management.reset-dialog.units-label' | translate }}</mat-label>
               <textarea matInput rows="2" data-cy="reset-unit-filters"
                 [ngModel]="unitInput()" (ngModelChange)="unitInput.set($event)"
                 [placeholder]="'coding-management.reset-dialog.units-placeholder' | translate"></textarea>
+              <mat-hint>{{ 'ui-text.reset-version-dialog.units-hint' | translate }}</mat-hint>
             </mat-form-field>
             <mat-form-field appearance="outline">
               <mat-label>{{ 'coding-management.reset-dialog.variables-label' | translate }}</mat-label>
@@ -155,8 +159,28 @@ export interface ResetVersionDialogResult {
             @let variablesText = 'coding-management.reset-dialog.summary-variables' | translate: {
               variables: variableFilters().length ? variableFilters().join(', ') : ('coding-management.reset-dialog.all-variables' | translate)
             };
-            <p class="scope-filter-line" [attr.title]="unitsText">{{ unitsText }}</p>
-            <p class="scope-filter-line" [attr.title]="variablesText">{{ variablesText }}</p>
+            @if (compactFilterSummary()) {
+              <p class="scope-filter-line">
+                @if (unitFilters().length) {
+                  {{ 'ui-text.reset-version-dialog.selected-units' | translate: { count: unitFilters().length } }}
+                } @else {
+                  {{ unitsText }}
+                }
+              </p>
+              <p class="scope-filter-line">
+                @if (variableFilters().length) {
+                  {{ 'ui-text.reset-version-dialog.selected-variables' | translate: { count: variableFilters().length } }}
+                } @else {
+                  {{ variablesText }}
+                }
+              </p>
+              <button mat-button class="filter-details-button" (click)="showFilterDetails()">
+                {{ 'ui-text.reset-version-dialog.show-all-filters' | translate }}
+              </button>
+            } @else {
+              <p class="scope-filter-line">{{ unitsText }}</p>
+              <p class="scope-filter-line">{{ variablesText }}</p>
+            }
           } @else {
             <strong>{{ 'coding-management.reset-dialog.filter-required' | translate }}</strong>
           }
@@ -244,6 +268,12 @@ export interface ResetVersionDialogResult {
         display: flex;
         flex-direction: column;
         gap: 8px;
+        min-width: 0;
+      }
+
+      .filter-fields mat-form-field {
+        width: 100%;
+        min-width: 0;
       }
 
       .warning-text {
@@ -417,9 +447,12 @@ export interface ResetVersionDialogResult {
       }
 
       .scope-filter-line {
-        overflow: hidden;
-        white-space: nowrap;
-        text-overflow: ellipsis;
+        overflow-wrap: anywhere;
+      }
+
+      .filter-details-button {
+        margin-top: 4px;
+        max-width: 100%;
       }
 
       .confirmation-cascade {
@@ -469,6 +502,7 @@ export interface ResetVersionDialogResult {
   `]
 })
 export class ResetVersionDialogComponent {
+  private readonly dialog = inject(MatDialog);
   dialogRef = inject<MatDialogRef<ResetVersionDialogComponent, ResetVersionDialogResult>>(MatDialogRef);
   data = inject<ResetVersionDialogData>(MAT_DIALOG_DATA);
 
@@ -481,6 +515,10 @@ export class ResetVersionDialogComponent {
   protected readonly variableInput = signal('');
   protected readonly unitFilters = computed(() => this.parseFilters(this.unitInput()));
   protected readonly variableFilters = computed(() => this.parseFilters(this.variableInput()));
+  protected readonly compactFilterSummary = computed(() => (
+    [this.unitFilters(), this.variableFilters()].some(filters => filters.length > 3 || filters.join(', ').length > 40)
+  ));
+
   protected readonly canConfirm = computed(() => this.scope() === 'global' ||
     this.unitFilters().length > 0 || this.variableFilters().length > 0);
 
@@ -495,6 +533,14 @@ export class ResetVersionDialogComponent {
 
   protected onCancel(): void {
     this.dialogRef.close();
+  }
+
+  protected showFilterDetails(): void {
+    this.dialog.open(ResetFilterDetailsDialogComponent, {
+      width: '650px',
+      maxWidth: '95vw',
+      data: { unitFilters: this.unitFilters(), variableFilters: this.variableFilters() }
+    });
   }
 
   onConfirm(): void {
