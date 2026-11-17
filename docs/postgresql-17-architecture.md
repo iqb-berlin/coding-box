@@ -5,6 +5,23 @@ Anwendungsdatenbank. Die folgenden Vorschläge beruhen auf den unten verlinkten
 Codestellen und den PostgreSQL-Release-Notes. Sie sind Empfehlungen für gezielte
 Folgeänderungen; ein Nutzen im Produktionsbestand ist erst durch Messungen belegt.
 
+## Abgleich mit der bestehenden PR-Kette
+
+Die unten beschriebenen Codestellen zeigen den Stand von #1186. Der zusätzliche
+Abgleich mit den offenen Folge-PRs am 17.11.2026 ergibt:
+
+| Vorhaben | Bereits bearbeitet? |
+|---|---|
+| Kappa ohne wachsende OFFSET-Abfragen | **Ja, in [#1188](https://github.com/iqb-berlin/coding-box/pull/1188).** Der Code verwendet einen serverseitigen Cursor mit `FETCH` in einer schreibgeschützten Repeatable-Read-Transaktion; Missing-Profile werden über dieselbe Verbindung aufgelöst. Der geschlossene, nicht gemergte #1187 ist darin enthalten. |
+| Personenimport: Upsert-Ergebnisse mit RETURNING nutzen und Nachladen vermeiden | **In den geprüften offenen PRs nicht umgesetzt.** `person-persistence.service.ts` führt weiterhin Upserts und anschließend separate Leseabfragen aus. Die Batch-/Importarbeiten in #1188/#1190 ersetzen diesen konkreten Ablauf nicht. |
+| Dauerhaft getrennte DB-Rollen für API/Worker, Liquibase und Wartung | **Noch offen.** #1186 ergänzt nur den temporären Restore-Administrator; die regulären Dienste verwenden weiterhin dieselben POSTGRES-Zugangsdaten. |
+| Erweiterte I/O-/Planungsdiagnose | **Teilweise in #1186.** Lesende Tabellen-/Index-/Wartezustandsdiagnose, optionale aggregierte `pg_stat_statements`-Daten, Slow-Query-Logging und Benchmark-Pläne sind vorhanden. `pg_stat_io`, `pg_stat_checkpointer` und die erweiterten EXPLAIN-Messungen sind weitere Schritte. |
+
+Die Cursor-Umstellung ist deshalb kein zusätzlich neu zu implementierender
+Folgevorschlag. Zuerst #1188 einschließlich seiner Snapshot-/Pool-Regressionen
+prüfen und übernehmen. Diese Einordnung ersetzt keine vollständige Review der
+weiteren PRs; sie gleicht die hier genannten Architekturvorschläge mit deren Code ab.
+
 ## Bewertung
 
 Die vorhandene Architektur mit NestJS/TypeORM, PostgreSQL, Redis/BullMQ und einem
@@ -58,8 +75,12 @@ behält die gruppierten Ergebnisse in einer Map. Bei tiefen Seiten und großen
 Beständen sind deshalb sowohl wiederholte DB-Arbeit als auch Node-Speicher zu
 messen. PostgreSQL 17 beseitigt diese Eigenschaften des Anwendungscodes nicht.
 
-Empfehlung: Zuerst frühe/späte Batches sowie die Verarbeitung ungefilterter
-Ergebnisse messen. Danach gegebenenfalls auf Cursor-/Keyset-Paginierung umstellen.
+[#1188](https://github.com/iqb-berlin/coding-box/pull/1188) ersetzt diesen OFFSET-Pfad
+bereits durch einen serverseitigen Cursor. Das ist am Code des
+[Batch-Helfers](https://github.com/iqb-berlin/coding-box/blob/609b133d25b5ff6d5960c8f44d33c2c7f3db51bf/apps/backend/src/app/database/services/shared/postgres-query-batches.util.ts)
+und dessen Aufruf in `getCodedVariablesForKappa` geprüft. Nach der Übernahme bleiben
+frühe/späte Batches, ungefilterte Ergebnisse und der Node-Speicherverbrauch zu messen.
+Die nachfolgenden Anforderungen gelten für die Abnahme dieser Änderung:
 Dabei die vollständige aktuelle Sortierung einschließlich `cju.id` und `cjc.id`,
 die verwendete Collation und den Umgang mit NULL erhalten. Bei laufenden
 Kodierungen muss außerdem ein konsistenter Datenstand festgelegt werden. Eine
