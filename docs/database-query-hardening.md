@@ -111,33 +111,33 @@ gezielt bereinigen; keine pauschalen Indexlöschungen oder Zeilenlöschungen.
 Siehe [PostgreSQL-Sequenzen](https://www.postgresql.org/docs/14/functions-sequence.html)
 und [Concurrent-Indexaufbau](https://www.postgresql.org/docs/14/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY).
 
-## PostgreSQL 17.12: ausdrücklich aktivierter Umstieg
+## PostgreSQL 17.12 als regulärer Standard
 
-`docker-compose.postgres17.yaml` wird von den normalen Make-/Compose-Aufrufen
-nicht geladen. Der Standard bleibt PostgreSQL 14. Das Overlay wirkt nur, wenn
-es ausdrücklich als zusätzliche, letzte `-f`-Datei angegeben wird.
+Das reguläre Datenbankimage ist per Digest auf **PostgreSQL 17.12** fixiert.
+Make-/Compose-Aufrufe und die primären CI-/Replay-/Codebook-Tests verwenden diese
+Version. PostgreSQL 14 bleibt nur als Vergleich für den Migrationsquellbestand.
 
-Es ersetzt für den gewählten Compose-Aufruf das Image des Dienstes `db` durch
-das per Digest fixierte PostgreSQL **17.12** und verwendet ein getrenntes Volume.
-`POSTGRES17_VOLUME_NAME` muss ausdrücklich gesetzt sein. Das bisherige `db_vol`
-wird weder geöffnet noch konvertiert. Ein leeres Ziel enthält keine Benutzerdaten.
+Die bisherige Volume-Auswahl bleibt erhalten: Ohne `POSTGRES_DATA_VOLUME` wird
+`<Compose-Projekt>_db_vol` verwendet. PostgreSQL 17 verweigert den Start auf einem
+14er Datenverzeichnis. Es gibt keinen automatischen Umzug und keinen stillen
+Wechsel auf eine leere Datenbank. Nach dem Restore wird das neue Volume dauerhaft
+als `POSTGRES_DATA_VOLUME` in `.env.coding-box` bzw. `.env.dev` ausgewählt.
+`POSTGRES_DATA_VOLUME_EXTERNAL=true` verlangt dann ein bereits vorhandenes Volume,
+statt bei einem falschen Namen eine leere Datenbank anzulegen. Bei neuen
+Installationen bleibt dieser Schalter standardmäßig `false`.
 
-Das zusätzliche `docker-compose.postgres17.prepare.yaml` stellt den Dienst
-`db17` zum Restore neben der bestehenden Quelle bereit. Beide Overlays verwenden
-dasselbe explizite Zielvolume und dürfen es niemals gleichzeitig öffnen.
-Der [konkrete Migrations- und Rückfallplan](postgresql-17-migration.md) enthält
-Generalprobe, Schreibpause, Backup/Restore mit PG17-Werkzeugen, Inhalts-/Rechtevergleich
-und Freigabekriterien. Insbesondere reicht ein anderer Compose-Projektname zur
-Isolation im vorhandenen externen Netzwerk `app-net` nicht aus.
+`docker-compose.postgres17.prepare.yaml` ergänzt nur den zeitweiligen Dienst
+`db17` für den Restore neben der festgehaltenen 14er Quelle. `POSTGRES17_VOLUME_NAME`
+und ein separates Administratorpasswort sind dafür Pflicht. Vor dem normalen
+Start von `db` auf diesem Volume muss `db17` gestoppt sein.
 
-Ein Rückwechsel auf das unveränderte alte Volume ist nur vor neuen Schreibzugriffen
-ohne Datenverlust möglich. Nach dem GO-Punkt werden Änderungen nicht automatisch
-nach 14 zurückkopiert. [Testergebnisse und Grenzen](qa/postgresql-17.12-validation.md)
-sind separat dokumentiert.
+Der [Migrations- und Rückfallplan](postgresql-17-migration.md) enthält Backup,
+Schreibpause, Inhalts-/Rechtevergleich und Freigabekriterien. Das alte Volume und
+Image bleiben erhalten. Ein verlustfreier Rückfall durch bloßes Zurückschalten ist
+nur vor neuen Schreibzugriffen möglich. [Validierung](qa/postgresql-17.12-validation.md)
+und [Architekturprüfung](postgresql-17-architecture.md) dokumentieren Befunde und Grenzen.
 
-Das Overlay lädt außerdem `pg_stat_statements` vor. Für dessen SQL-Auswertung
-muss die Extension ausdrücklich in der gewünschten Testdatenbank eingerichtet
-werden; das Vorladen allein legt die SQL-Extension nicht an. Die Diagnose
-meldet andernfalls `pgStatStatementsAvailable: false`.
-
-Siehe [PostgreSQL: Major-Upgrades](https://www.postgresql.org/docs/17/upgrading.html).
+Pool-Timeout und Slow-Query-Logging bleiben standardmäßig deaktiviert. Auch das
+Vorladen/Anlegen von `pg_stat_statements` wird nicht automatisch aktiviert; diese
+Diagnose bleibt eine gesonderte Betriebseinstellung. Die vorhandene Diagnose
+meldet ohne eingerichtete Extension `pgStatStatementsAvailable: false`.

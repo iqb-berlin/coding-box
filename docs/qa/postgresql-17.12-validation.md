@@ -6,13 +6,13 @@ umgestellt. [Betriebsablauf und Rückfallplan](../postgresql-17-migration.md).
 
 ## Versionen und Konfiguration
 
-- Quelle: Projekt-Dockerfile mit dem unveränderten Standard PostgreSQL **14.24**.
-- Ziel: dasselbe Projekt-Dockerfile mit
+- Quelle: bewusst als Vergleich eingesetztes früheres Projektimage **14.24**.
+- Regulärer Standard: Projekt-Dockerfile ohne Versions-Build-Argument mit
   `postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7`.
 - Tatsächliche Serverversionen per SQL geprüft, nicht nur Image-Tags. Das Ziel
   meldet `PostgreSQL 17.12 on x86_64-pc-linux-musl`.
 - Beide Projektimages mit `musl-locales`, `de_DE.utf8`, `Europe/Berlin`, dem
-  bestehenden gosu-Build und `shared_preload_libraries=pg_stat_statements`;
+  bestehenden gosu-Build, ohne zusätzliche Preload-/Tuning-Einstellungen;
   jeweils 512 MiB Shared Memory. Separates Redis **7.4** ohne Anwendungsdaten.
 - Echte Liquibase **4.28.0** aus `database/Liquibase.Dockerfile` für die
   Transferprobe; Anwendungsschema mit **181 Changesets**.
@@ -21,9 +21,9 @@ umgestellt. [Betriebsablauf und Rückfallplan](../postgresql-17-migration.md).
 
 | Prüfung | PostgreSQL 14.24 | PostgreSQL 17.12 |
 |---|---:|---:|
-| `nx run backend:test-integration` | 25 Suites, 192 bestanden | 25 Suites, 192 bestanden |
+| `nx run backend:test-integration` einschließlich Kappa-Benchmark | 25 Suites, 193 bestanden | 25 Suites, 193 bestanden |
 | Fehlgeschlagene Pflichtprüfungen | 0 | 0 |
-| Optionaler Kappa-Laufzeitbenchmark | 1 übersprungen | 1 übersprungen |
+| Übersprungene Prüfungen in diesem Lauf | 0 | 0 |
 
 Zusätzlicher vollständiger Backend-Lauf mit dem PostgreSQL-17.12-Testserver für
 die Kappa-/Fixture-Prüfungen und Redis 7.4: **284 Suites / 4.599 Tests bestanden**,
@@ -31,6 +31,12 @@ die Kappa-/Fixture-Prüfungen und Redis 7.4: **284 Suites / 4.599 Tests bestande
 beziehungsweise als optionale Prüfungen übersprungen. Die separate verpflichtende
 Integration oben aktiviert alle Datenbank-/Redis-Pflichtprüfungen und bestand sie.
 Backend-Lint und Produktionsbuild ebenfalls erfolgreich.
+
+Mit dem neuen 17.12-Standard zusätzlich `nx run frontend:e2e-replay-live:production`
+ausgeführt: **2 Live-Cypress-Specs / 2 Tests bestanden**, keine übersprungenen
+Prüfungen. Der isolierte Stack initialisierte das Schema mit Liquibase auf 17.12,
+startete Backend, Keycloak und das Produktions-Frontend und prüfte Replay sowie
+den Export einer unvollständigen Item-Matrix durch den Browser.
 
 Der Integration-Runner richtet jeweils eine neue Datenbank aus dem vollständigen
 Liquibase-SQL-Changelog ein, aktiviert PostgreSQL-/Redis-Prüfungen und verwirft sie
@@ -50,38 +56,70 @@ Snapshot-Spec prüft mit echten Tabellen:
 - Abbruch bei geändertem Score trotz gleicher Zeilenzahl;
 - Abbruch bei geänderten Zugriffsrechten trotz gleicher Daten.
 
-`nx run backend:test-migration-tools`: **14 Tests bestanden**. Sie prüfen u. a.
+`nx run backend:test-migration-tools`: **15 Tests bestanden**. Sie prüfen u. a.
 exakte Serverversion, Pflichtprüfungs-Gate, Inhalts-/Sequenz-/Rechtevergleich,
 die eng begrenzte CHECK-Normalisierung und übereinstimmende unveränderliche
-17.12-Image-Referenzen in Vorbereitung, Umschaltung und CI. Die normale
-PG14-Konfiguration bleibt bestehen. Compose-Konfiguration zusätzlich mit Docker
-Compose aufgelöst: Vorbereitung lässt `db` unverändert, `db17` hat keinen Hostport,
-Vorbereitung/Umschaltung verwenden dasselbe explizit benannte Zielvolume und
-ein fehlender Volume-Name bricht ab.
+17.12-Image-Referenzen in regulärem Build, Vorbereitung, primärer CI sowie
+Replay-/Codebook-Tests. Die gesonderte 14.24-Prüfung dient der Migrationsquelle.
+Ohne explizite Änderung bleibt das historische Projektvolume ausgewählt;
+Pool-/Logging-Defaults bleiben unverändert.
 
-Zusätzlich die tatsächlichen Vorbereitungs-/Umschalt-Overlays in einem eigenen
-Compose-Projekt mit privatem Netzwerk ausgeführt: PG14-Quelle restauriert,
-PG17-Dump aus `db17` gegen `db`, Restore auf das neue Volume, `db17` gestoppt,
-Dienst `db` auf 17.12/neues Volume umgeschaltet. Vollvergleich erfolgreich und
-Schreibschutz weiterhin `on`. Anschließend `db` wieder mit 14.24/altem Volume
-gestartet; derselbe Vollvergleich ebenfalls erfolgreich. Die Produktionsbasis
-wurde dabei durch eine minimale, ausschließlich lokale Testbasis ersetzt.
+Zusätzlich die regulären Produktions-Compose-Dateien mit ausschließlich lokalen
+Image-/Port-/Netzwerk-Anpassungen ausgeführt:
+
+1. Historisches Standardvolume mit 14.24, vollständigem Liquibase-Schema und
+   synthetischen Daten angelegt; Image/Volume in einer `legacy`-Datei festgehalten.
+2. Regulärer 17.12-Start auf genau diesem 14er Volume: erwarteter Abbruch
+   `database files are incompatible with server`. Kein neues leeres Volume
+   ausgewählt; erneuter 14er Inhalts-/Rechtevergleich unverändert.
+3. PG17-Dump aus `db17` gegen 14, Restore in ein ausdrücklich angelegtes externes
+   Zielvolume. Danach `db17` gestoppt und das Ziel über `POSTGRES_DATA_VOLUME` plus
+   `POSTGRES_DATA_VOLUME_EXTERNAL=true` ausgewählt.
+4. Normaler Start von `db` auf 17.12 ohne Versions-Overlay: Vollvergleich
+   erfolgreich, Schreibschutz weiterhin `on`. Erneutes Recreate über dieselbe
+   normale Konfiguration: wieder identischer Bestand.
+5. Rückfall mit festgehaltenem 14-Image und altem Volume trotz weiterhin gesetzter
+   neuer Standard-Volume-Variable: Vollvergleich erfolgreich.
+6. Falsch geschriebener externer Zielname: Start abgebrochen, kein Ersatzvolume
+   angelegt. Die vorbereitete Datenbank hat keinen öffentlichen Hostport.
 
 Reproduktion mit eigenen **wegwerfbaren** Testservern und lokalen Abhängigkeiten:
 
 ```bash
 BACKEND_INTEGRATION_TEST_DATABASE_URL=postgresql://TEST_USER:TEST_PASSWORD@127.0.0.1:TEST_PORT/postgres \
 BACKEND_INTEGRATION_POSTGRES_VERSION=17.12 \
+KAPPA_QUERY_BENCHMARK=1 \
 BULLMQ_TEST_REDIS_HOST=127.0.0.1 BULLMQ_TEST_REDIS_PORT=TEST_REDIS_PORT \
 PSQL_BIN=/path/to/psql NX_DAEMON=false npx nx run backend:test-integration
 npx nx run backend:test-migration-tools
 ```
 
 Für die Gegenprobe eine 14.24-Instanz und `BACKEND_INTEGRATION_POSTGRES_VERSION=14.24`
-verwenden. Der bestehende CI-Job bleibt auf seiner bisherigen PG14-Version;
-`test-backend-integration-postgres17` ergänzt ein verpflichtendes, separat auf
-17.12 fixiertes Ziel. Lokal wurde zusätzlich das tatsächliche PG14-Projektimage
-(14.24) als Vergleich verwendet.
+verwenden. Der primäre CI-Job und der normale Backend-/Container-Test verwenden
+17.12. `test-backend-integration-postgres14` prüft zusätzlich die Quelle 14.24.
+Mit `KAPPA_QUERY_BENCHMARK=1` wird auch der sonst optionale Benchmark aktiviert;
+die hier protokollierten Läufe ließen keine Prüfung aus.
+
+## Ergänzende Kappa-Messung
+
+25.000 synthetische Antworten / 50.000 Kodierzeilen, ein Aufwärmdurchlauf und
+fünf Messungen je Variante mit wechselnder Reihenfolge. Median für den bestehenden
+SQL-gefilterten Anwendungspfad, einschließlich Gruppierung in Node; keine HTTP-
+oder Excel-Zeit:
+
+| Filter | Gelesene Rohzeilen | PostgreSQL 14.24 | PostgreSQL 17.12 |
+|---|---:|---:|---:|
+| Keine Einschränkung | 50.000 / 11 Batches | 1.998,3 ms | 1.665,7 ms |
+| Unit | 2.500 / 1 Batch | 58,1 ms | 50,5 ms |
+| Variable | 5.000 / 2 Batches | 115,4 ms | 115,4 ms |
+| Unit und Variable | 250 / 1 Batch | 19,9 ms | 17,9 ms |
+
+Der Vergleichstest prüfte auf beiden Versionen identische fachliche Ergebnisse
+zwischen vorherigem JS-Filter und bestehendem SQL-Filter. Die Zahlen sind lokale
+Einzelmessreihen mit warmem Cache und zeitweise weiterer Betriebsaktivität; sie
+isolieren den Versionseffekt nicht und sind keine Produktionsprognose. Die elf
+ungefilterten OFFSET-Batches und die vollständige Gruppierung bleiben konkrete
+Ansatzpunkte für [gezielte Folgeoptimierungen](../postgresql-17-architecture.md).
 
 ## Durchgeführte Transfer- und Rückfallprobe
 

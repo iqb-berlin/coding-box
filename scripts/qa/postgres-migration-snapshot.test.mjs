@@ -64,22 +64,39 @@ test('only the equivalent varchar literal array rendering is normalized across P
   }
 });
 
-test('staging, cutover and CI use the same immutable PostgreSQL 17.12 image; normal operation keeps PostgreSQL 14', () => {
+test('normal builds, staging, CI and application E2E fixtures use PostgreSQL 17.12; 14 is only a migration source check', () => {
   const image = 'postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7';
-  const cutover = yaml.load(readFileSync('docker-compose.postgres17.yaml', 'utf8'));
   const staging = yaml.load(readFileSync('docker-compose.postgres17.prepare.yaml', 'utf8'));
   const schema = yaml.DEFAULT_SCHEMA.extend([new yaml.Type('!reference', { kind: 'sequence', construct: value => value })]);
   const ci = yaml.load(readFileSync('.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml', 'utf8'), { schema });
-  assert.equal(cutover.services.db.build.args.POSTGRES_IMAGE, image);
+  assert(readFileSync('database/Postgres.Dockerfile', 'utf8').includes(`ARG POSTGRES_IMAGE=${image}`));
   assert.equal(staging.services.db17.build.args.POSTGRES_IMAGE, image);
   assert.equal(staging.services.db, undefined);
-  assert.deepEqual(staging.services.db17.volumes, cutover.services.db.volumes);
-  assert.deepEqual(staging.volumes, cutover.volumes);
   assert.match(staging.volumes.db17_vol.name, /POSTGRES17_VOLUME_NAME:\?/);
-  const gate = ci['test-backend-integration-postgres17'];
-  assert.equal(gate.extends, 'test-backend-integration');
+  assert.equal(staging.volumes.db17_vol.external, true);
+  const gate = ci['test-backend-integration'];
   assert.equal(gate.variables.BACKEND_INTEGRATION_POSTGRES_VERSION, '17.12');
   assert(gate.services.some(service => service.name === `\${DOCKER_HUB_PROXY}${image}`));
-  assert(ci['test-backend-integration'].services.some(service => service.name.includes('postgres:14.')));
-  assert.match(readFileSync('database/Postgres.Dockerfile', 'utf8'), /ARG POSTGRES_IMAGE=postgres:14\./);
+  assert(ci['test-backend'].services.some(service => service.name === `\${DOCKER_HUB_PROXY}${image}`));
+  const legacy = ci['test-backend-integration-postgres14'];
+  assert.equal(legacy.extends, 'test-backend-integration');
+  assert.equal(legacy.variables.BACKEND_INTEGRATION_POSTGRES_VERSION, '14.24');
+  assert(legacy.services.some(service => service.name.includes('postgres:14.24-')));
+  for (const file of ['scripts/e2e/replay/docker-compose.replay.yml', 'scripts/e2e/codebook/docker-compose.yml',
+    'scripts/qa/verify-backend-container.sh']) assert(readFileSync(file, 'utf8').includes(image));
+});
+
+test('normal Compose retains the historical volume unless the restored target is selected explicitly', () => {
+  for (const file of ['docker-compose.yaml', 'docker-compose.coding-box.yaml']) {
+    const config = yaml.load(readFileSync(file, 'utf8'));
+    assert.deepEqual(config.services.db.volumes, ['db_vol:/var/lib/postgresql/data']);
+    assert.equal(config.volumes.db_vol.name, '${POSTGRES_DATA_VOLUME:-${COMPOSE_PROJECT_NAME}_db_vol}');
+    assert.equal(config.volumes.db_vol.external, '${POSTGRES_DATA_VOLUME_EXTERNAL:-false}');
+    assert.equal(config.services.backend.environment.POSTGRES_POOL_ACQUIRE_TIMEOUT_MS, '${POSTGRES_POOL_ACQUIRE_TIMEOUT_MS:-0}');
+    assert.equal(config.services.backend.environment.POSTGRES_SLOW_QUERY_MS, '${POSTGRES_SLOW_QUERY_MS:-0}');
+  }
+  for (const file of ['.env.dev.template', '.env.coding-box.template']) {
+    assert.match(readFileSync(file, 'utf8'), /^POSTGRES_DATA_VOLUME=$/m);
+    assert.match(readFileSync(file, 'utf8'), /^POSTGRES_DATA_VOLUME_EXTERNAL=false$/m);
+  }
 });

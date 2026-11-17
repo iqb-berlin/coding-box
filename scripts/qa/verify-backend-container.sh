@@ -5,7 +5,7 @@ set -eu
 prefix="backend-esm-$(date +%s)-$$"
 network="$prefix-net"
 proof="${BACKEND_CONTAINER_PROOF_DIR:-dist/backend-container-proof}"
-postgres_image="${POSTGRES_TEST_IMAGE:-postgres:14.22-alpine3.22@sha256:7161c8e7347ed8b4cdefc26087702336da5f467137cc964e611c85d745df6112}"
+postgres_image="${POSTGRES_TEST_IMAGE:-postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7}"
 redis_image="${REDIS_TEST_IMAGE:-redis:7.4-alpine}"
 mkdir -p "$proof"
 cleanup() {

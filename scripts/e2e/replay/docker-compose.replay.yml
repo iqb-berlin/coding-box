@@ -1,6 +1,6 @@
 services:
   db:
-    image: postgres:14.22-alpine3.22@sha256:7161c8e7347ed8b4cdefc26087702336da5f467137cc964e611c85d745df6112
+    image: postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
     environment:
       POSTGRES_USER: replay_e2e
       POSTGRES_PASSWORD: replay_e2e

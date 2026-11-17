@@ -1,9 +1,17 @@
 # PostgreSQL 14 → 17.12: Migration und Rückfall
 
-Dieser Ablauf bereitet einen **ausdrücklichen Betriebswechsel** vor. Die normalen
-Make-/Compose-Aufrufe bleiben auf PostgreSQL 14. Datenbankversion, Pool-Timeout,
-Slow-Query-Logging und Anwendungsfunktionen werden nicht automatisch umgestellt.
+**PostgreSQL 17.12 ist der verbindliche Standard** für die Anwendungsdatenbank:
+regulärer Docker-Build, CI sowie Replay-/Codebook-Testumgebungen verwenden 17.12.
+Ein Versions-Overlay ist nicht erforderlich. Pool-Timeout, Slow-Query-Logging und
+Anwendungsfunktionen behalten ihre bisherigen Defaults.
 Die lokalen Testergebnisse stehen in [der Validierung](qa/postgresql-17.12-validation.md).
+
+Bestehende Daten werden nicht automatisch konvertiert. Ohne `POSTGRES_DATA_VOLUME`
+bleibt das bisherige `<Compose-Projekt>_db_vol` ausgewählt. Enthält es Daten von 14,
+verweigert PostgreSQL 17 den Start; es wird kein leerer Ersatzbestand ausgewählt.
+Erst der folgende geprüfte Transfer und die dauerhafte Auswahl des Zielvolumes
+schalten den Bestand um. Normale `make ...-up`-/Update-Befehle vorher nicht ausführen.
+Die separate Keycloak-Datenbank ist nicht Teil dieses Anwendungsdatenbank-Umstiegs.
 
 ## Verfahren und Grenzen
 
@@ -14,9 +22,11 @@ Standardrechte/Eigentümer des Schemas `public` im Dump aus. Ein Restore auf 17
 übernimmt dann dessen andere Defaults. Der getestete Ablauf mit pg_dump 17
 erhält die alten Rechte ausdrücklich; der Vergleich prüft sie zusätzlich.
 
-Die Anwendung einschließlich Liquibase-Schema zuerst auf 14 aktualisieren und
-stabil betreiben. Erst danach mit **denselben Anwendungsimages und demselben
-Schema** die Datenbank wechseln. Schemaänderungen, Berechtigungsbereinigungen,
+Zuerst wie unten beschrieben das tatsächlich laufende 14-Image und Volume sichern.
+Die Anwendung einschließlich Liquibase-Schema mit diesem festgehaltenen 14-Image
+über die `legacy`-Konfiguration aktualisieren und stabil betreiben. Erst danach mit
+**denselben Anwendungsimages und demselben Schema** die Datenbank wechseln.
+Schemaänderungen, Berechtigungsbereinigungen,
 Tuning und neue Timeouts sind eigene Änderungen. Insbesondere keine Log- oder
 Session-Datensätze deduplizieren oder löschen. Die ID-Prüfungen aus
 [database-query-hardening.md](database-query-hardening.md) vorher ausführen.
@@ -64,7 +74,10 @@ Die mitgelieferten Tests ersetzen diese Generalprobe mit dem eigenen Bestand nic
 ## 2. Befehle und getrenntes Ziel vorbereiten
 
 Die folgenden Bash-Befehle gelten für die vorhandene Produktions-Compose-Struktur
-im Installationsverzeichnis. Für andere Setups Dateiliste/Netzwerk/Dienstnamen
+im Installationsverzeichnis mit vollständigem Quellbaum und Images des gewählten
+Releases. Bei einer minimalen Release-Installation zuerst auch Dockerfile,
+Vorbereitungs-Compose-Datei und Snapshot-Skript desselben Releases bereitstellen.
+Für andere Setups Dateiliste/Netzwerk/Dienstnamen
 vorher anpassen. Bei jedem fehlgeschlagenen Schritt anhalten und Schreiber
 gestoppt lassen. Kein `down -v`, kein `--clean`, kein Volume-Prune verwenden.
 
@@ -74,8 +87,6 @@ umask 077
 base=(docker compose --env-file "$PWD/.env.coding-box"
   -f "$PWD/docker-compose.coding-box.yaml"
   -f "$PWD/docker-compose.coding-box.prod.yaml")
-stage=("${base[@]}" -f "$PWD/docker-compose.postgres17.prepare.yaml")
-cutover=("${base[@]}" -f "$PWD/docker-compose.postgres17.yaml")
 backup_dir="$PWD/backups/pg17-$(date -u +%Y%m%dT%H%M%SZ)"
 mkdir -m 700 -p "$backup_dir"
 ```
@@ -104,15 +115,32 @@ services:
   db:
     image: $rollback_image
     pull_policy: never
+volumes:
+  db_vol:
+    name: "$old_volume"
+    external: true
 EOF
+legacy=("${base[@]}" -f "$backup_dir/rollback.yaml")
+stage=("${legacy[@]}" -f "$PWD/docker-compose.postgres17.prepare.yaml")
 "${stage[@]}" config --format json > "$backup_dir/compose-stage.json"
 ```
+
+`legacy` hält Image **und Volume** der Quelle fest, auch wenn anschließend
+`POSTGRES_DATA_VOLUME` auf das neue Ziel zeigt. Für die erste Schema-/Anwendungs-
+Aktualisierung auf 14 ausschließlich `legacy` verwenden: neues Liquibase- und
+Anwendungsimage zum gewünschten Release bereitstellen, mit
+`"${legacy[@]}" run --rm liquibase` das Schema aktualisieren und die Anwendungsdienste
+mit `"${legacy[@]}" up -d --no-deps backend backend-export-worker frontend` starten. Readiness/fachlich prüfen
+und stabilisieren. Die neue reguläre DB-Image-Version 17.12 noch nicht starten.
 
 In `compose-stage.json` den aufgelösten Namen von `volumes.db17_vol.name` prüfen:
 anders als `$old_volume` und **noch nicht vorhanden** (`docker volume inspect NAME`
 muss vor dem ersten Start fehlschlagen). Abbruch bei bereits vorhandenem Ziel;
 keinen alten Testbestand als finalen Bestand weiterverwenden. Private Configdateien
 enthalten Zugangsdaten und bleiben außerhalb von Git. Off-host-Backup einplanen.
+Das frische Zielvolume nach dieser Prüfung mit `docker volume create NAME`
+ausdrücklich anlegen. Der Vorbereitungsdienst nutzt es als externes Volume; dadurch
+gehört es nicht zum automatischen Lebenszyklus eines temporären Compose-Dienstes.
 
 ```bash
 "${stage[@]}" build db17
@@ -134,10 +162,10 @@ Wartungsseite/Ingress-Sperre aktivieren. Alle Nutzer speichern lassen; laufende
 Jobs geordnet beenden. Danach **sämtliche** ermittelten Schreiber stoppen, z. B.:
 
 ```bash
-"${base[@]}" stop frontend backend backend-export-worker
-source_user=$("${base[@]}" exec -T db printenv POSTGRES_USER)
-source_db=$("${base[@]}" exec -T db printenv POSTGRES_DB)
-"${base[@]}" exec -T db sh -ec '
+"${legacy[@]}" stop frontend backend backend-export-worker
+source_user=$("${legacy[@]}" exec -T db printenv POSTGRES_USER)
+source_db=$("${legacy[@]}" exec -T db printenv POSTGRES_DB)
+"${legacy[@]}" exec -T db sh -ec '
   export PGPASSWORD="$POSTGRES_PASSWORD"
   exec psql -X -v ON_ERROR_STOP=1 -v dbname="$POSTGRES_DB" -U "$POSTGRES_USER" -d postgres
 ' <<'SQL'
@@ -250,11 +278,31 @@ unerklärten ungültigen Indizes/Constraints, keine ausstehenden Liquibase-Chang
 und akzeptable Laufzeiten der echten Datenkopie. Andernfalls Quelle wieder
 freigeben und das Fenster abbrechen.
 
+Den tatsächlichen Namen des restaurierten Zielvolumes aus dem `db17`-Mount
+ablesen. In `.env.coding-box` **`POSTGRES_DATA_VOLUME` dauerhaft auf genau diesen
+Namen setzen**, also auf den Wert von `POSTGRES17_VOLUME_NAME`. Außerdem die
+Variable **`POSTGRES_DATA_VOLUME_EXTERNAL=true`** setzen. Damit muss der restaurierte
+Bestand bereits existieren; ein Tippfehler erzeugt keine leere Ersatzdatenbank.
+Die normale Konfiguration mit `"${base[@]}" config --format json` prüfen: `volumes.db_vol.name`
+muss dieses restaurierte Volume sein. Die Quelldaten bleiben durch den expliziten
+Volume-Eintrag in `rollback.yaml` unabhängig von dieser Änderung erreichbar.
+
+Das reguläre DB-Image des neuen Releases muss verfügbar sein und tatsächlich
+17.12 enthalten. Dies vor dem Wechsel ohne Datenbankstart kontrollieren:
+
+```bash
+"${base[@]}" pull db
+"${base[@]}" run --rm --no-deps -T --entrypoint postgres db --version
+```
+
+Bei einer anderen Version abbrechen. Danach den alten Dienst `db` ausschließlich
+mit dem neuen Standardimage und dem ausgewählten Zielvolume neu erzeugen:
+
 ```bash
 "${stage[@]}" stop db17
 test -z "$("${stage[@]}" ps --status running -q db17)"
-"${cutover[@]}" up -d --no-deps --force-recreate db
-"${cutover[@]}" exec -T db sh -ec '
+"${base[@]}" up -d --no-deps --force-recreate db
+"${base[@]}" exec -T db sh -ec '
   export PGPASSWORD="$POSTGRES_PASSWORD"
   exec psql -X -v ON_ERROR_STOP=1 -U "$POSTGRES_USER" -d "$POSTGRES_DB" \
     -c "SHOW server_version;" -c "SHOW default_transaction_read_only;"
@@ -270,14 +318,14 @@ Bis hier ist der Rückfall ohne Verlust neuer Anwendungsdaten möglich. Das Aufh
 des Schreibschutzes und der folgende Anwendungsstart sind der bewusste GO-Punkt:
 
 ```bash
-"${cutover[@]}" exec -T db sh -ec '
+"${base[@]}" exec -T db sh -ec '
   export PGPASSWORD="$POSTGRES_PASSWORD"
   exec psql -X -v ON_ERROR_STOP=1 -v dbname="$POSTGRES_DB" -U "$POSTGRES_USER" -d postgres
 ' <<'SQL'
 ALTER DATABASE :"dbname" SET default_transaction_read_only=off;
 ALTER ROLE pg17_migration_admin NOLOGIN;
 SQL
-"${cutover[@]}" up -d --no-deps backend backend-export-worker frontend
+"${base[@]}" up -d --no-deps backend backend-export-worker frontend
 ```
 
 Nach dem Start Readiness/Anmeldung, Replay, eine kontrollierte Kodierspeicherung
@@ -286,10 +334,10 @@ beobachten. Beim Start können Worker/Cronjobs bereits schreiben: Nicht erst die
 erste manuelle Kodierung definiert diese Grenze. Bootstrap-Rolle bleibt `NOLOGIN`,
 kein ungeprüftes `DROP OWNED`/`DROP ROLE` auf möglicherweise zugeordneten Objekten.
 
-Die aktive Compose-Dateiliste inklusive `docker-compose.postgres17.yaml` und den
-Volume-Namen **dauerhaft in Betriebs-/Deploymentkonfiguration übernehmen**. Alle
-weiteren Starts/Restarts/Updates verwenden sie. Ein normaler alter Make-Aufruf ohne
-Overlay würde sonst wieder die auf 14 stehengebliebene Datenbank starten. Erst nach
+`POSTGRES_DATA_VOLUME` und `POSTGRES_DATA_VOLUME_EXTERNAL=true` bleiben dauerhaft
+in der privaten Umgebungskonfiguration.
+Normale Make-/Compose-Aufrufe verwenden danach 17.12 und dieses Volume, ohne
+zusätzliche Versionsdatei. Den Wert nicht wieder leeren. Erst nach
 abgeschlossener Beobachtungs-/Aufbewahrungsfrist separat über das alte Volume
 entscheiden; dieser Plan löscht es nicht.
 
@@ -299,7 +347,7 @@ Alle Anwendungsdienste bleiben gestoppt, Ingress bleibt gesperrt. Neues Ziel
 stoppen und die Basis mit dem gesicherten **alten** Image verwenden:
 
 ```bash
-"${cutover[@]}" stop frontend backend backend-export-worker db
+"${base[@]}" stop frontend backend backend-export-worker db
 rollback=("${base[@]}" -f "$backup_dir/rollback.yaml")
 "${rollback[@]}" up -d --no-deps --force-recreate db
 ```
@@ -310,6 +358,8 @@ erfolgreichem Vergleich auf der alten Datenbank `default_transaction_read_only=o
 setzen (derselbe ALTER-DATABASE-Befehl wie oben, ohne ALTER ROLE) und dieselben
 Anwendungsimages/Worker wieder starten. Mount/Readiness und fachlichen Smoke-Test
 prüfen. Neues 17-Volume und Backups für die Untersuchung behalten.
+Bis zur erneuten Migration im Rückfallbetrieb ausschließlich `rollback`/`legacy`
+einschließlich des gesicherten 14-Images verwenden; der reguläre Standard bleibt 17.
 
 ## Störung nach neuen Schreibzugriffen
 

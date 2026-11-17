@@ -182,6 +182,15 @@ make dev-volumes-clean
 
 
 ## Installation (Produktivumgebung)
+
+Die Anwendungsdatenbank verwendet **PostgreSQL 17.12**. Bestehende Installationen
+mit PostgreSQL 14 müssen **vor dem ersten Start des neuen DB-Images** den
+[Migrations- und Rückfallplan](docs/postgresql-17-migration.md) durchlaufen.
+Ein Major-Upgrade erfolgt nicht durch bloßes Austauschen des Images. Nach dem
+Restore werden `POSTGRES_DATA_VOLUME` und `POSTGRES_DATA_VOLUME_EXTERNAL=true`
+dauerhaft in der privaten Umgebungskonfiguration gesetzt. Das bisherige Volume
+und Image bleiben als Rückfallbestand erhalten.
+
 Um das Kodiersystem zu verwenden, muss es auf einem Server installiert sein.
 Die technische Basis hierfür ist [Docker](https://www.docker.com/).
 Die Installation, Aktualisierung und Bedienung des Servers kann durch die Ansteuerung sogenannter Make-Targets erfolgen,

@@ -37,6 +37,7 @@ dev-up:
 		then docker network create app-net;\
 	fi
 	docker pull quay.io/keycloak/keycloak:22.0
+	# Separate Keycloak database; the application DB is built from Postgres.Dockerfile (17.12).
 	docker pull postgres:14
 	docker compose --env-file $(CODING_BOX_BASE_DIR)/.env.dev up --no-build --pull never -d
 
