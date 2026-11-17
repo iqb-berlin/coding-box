@@ -122,6 +122,10 @@ const QUEUE_PRESENTATIONS: Record<string, QueuePresentation> = {
     labelKey: 'process-overview.queues.reset-coding-version.label',
     descriptionKey: 'process-overview.queues.reset-coding-version.description'
   },
+  'coding-reset-preview': {
+    labelKey: 'ui-text.reset-version-dialog.process-label',
+    descriptionKey: 'ui-text.reset-version-dialog.process-description'
+  },
   'validation-task': {
     labelKey: 'process-overview.queues.validation-task.label',
     descriptionKey: 'process-overview.queues.validation-task.description'

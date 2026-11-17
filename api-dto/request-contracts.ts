@@ -316,6 +316,11 @@ export const requestBodySchemas = {
     unitFilters: array(string),
     variableFilters: array(string)
   }, ['version']),
+  WorkspaceCodingVersionController_previewReset: object({
+    version: values('v1', 'v2', 'v3'),
+    unitFilters: { ...array({ type: 'string', minLength: 1, maxLength: 100, pattern: '\\S' }), maxItems: 2000 },
+    variableFilters: { ...array({ type: 'string', minLength: 1, maxLength: 255, pattern: '\\S' }), maxItems: 2000 }
+  }, ['version', 'unitFilters', 'variableFilters']),
   WorkspaceCoderTrainingController_generateCoderTrainingPackages: object({
     selectedCoders: array(object({
       id: number,

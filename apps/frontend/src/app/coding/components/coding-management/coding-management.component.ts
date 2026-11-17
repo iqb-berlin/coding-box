@@ -55,7 +55,8 @@ import { CodingVariablesDialogComponent } from '../../../coding-management/codin
 import {
   ResetVersionDialogComponent,
   ResetVersionDialogData,
-  ResetVersionDialogResult
+  ResetVersionDialogResult,
+  createResetVersionDialogData
 } from './reset-version-dialog/reset-version-dialog.component';
 import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
 import {
@@ -1466,17 +1467,10 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
     }
 
     const version = this.selectedStatisticsVersion();
-    const versionLabel = {
-      v1: 'coding-management.statistics.first-autocode-run',
-      v2: 'coding-management.statistics.manual-coding-run',
-      v3: 'coding-management.statistics.second-autocode-run'
-    }[version];
-    const cascadeVersions = { v1: ['v2', 'v3'], v2: ['v3'], v3: [] }[version];
-
     const dialogRef = this.dialog.open<ResetVersionDialogComponent, ResetVersionDialogData, ResetVersionDialogResult>(ResetVersionDialogComponent, {
       width: '650px',
       maxWidth: '95vw',
-      data: { version, versionLabel, cascadeVersions }
+      data: createResetVersionDialogData(workspaceId, version)
     });
 
     dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {

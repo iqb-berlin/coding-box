@@ -3619,6 +3619,19 @@
   },
   "ui-text": {
     "reset-version-dialog": {
+      "preview-help": "Prüfen Sie den gewählten Bereich vor dem Zurücksetzen. Die Prüfung startet nur auf Knopfdruck und verändert keine Daten.",
+      "process-label": "Reset-Vorschau",
+      "process-description": "Prüft die gewählten Units und Variablen und zählt betroffene Antworten, ohne Ergebnisse zu verändern.",
+      "check-scope": "Bereich prüfen",
+      "preview-running": "Bereich wird geprüft und betroffene Antworten werden gezählt. Bei großen Datenmengen kann dies länger dauern.",
+      "preview-failed": "Die Prüfung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut oder grenzen Sie den Bereich weiter ein.",
+      "unknown-units": "Diese Unit-Namen wurden im Arbeitsbereich nicht gefunden: {{values}}",
+      "unknown-variables": "Diese Variablen-IDs wurden im gewählten Unit-Bereich nicht gefunden: {{values}}",
+      "affected-responses": "Betroffene Antworten: {{count}}",
+      "generated-cleanup": "Davon werden {{count}} automatisch erzeugte Antworten ohne verbleibende Kodierergebnisse entfernt.",
+      "no-affected-responses": "In diesem Bereich gibt es keine Antworten, die zurückgesetzt werden können. Der Reset kann nicht gestartet werden.",
+      "preview-snapshot": "Die Anzahl ist eine Momentaufnahme. Ändert sich der Datenbestand, kann die tatsächliche Anzahl beim Start abweichen.",
+      "preview-required": "Vor dem Start: Bereich prüfen.",
       "confirmation-impact": {
         "v1": "Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.",
         "v2": "Die manuelle Kodierung wird zurückgesetzt. Zusätzlich: 2. Autocoder-Lauf.",

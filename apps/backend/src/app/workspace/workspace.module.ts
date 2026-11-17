@@ -77,6 +77,7 @@ import { CohensKappaExportService } from '../database/services/coding/cohens-kap
 
 import { CodingReplayService } from '../database/services/coding/coding-replay.service';
 import { CodingVersionService } from '../database/services/coding/coding-version.service';
+import { CodingResetPreviewService } from '../database/services/coding/coding-reset-preview.service';
 import { CodingJobOperationsService } from '../database/services/coding/coding-job-operations.service';
 import { CodebookGenerationService } from '../database/services/coding/codebook-generation.service';
 import { CodingResponseQueryService } from '../database/services/coding/coding-response-query.service';
@@ -192,6 +193,7 @@ import { CodingModule } from '../coding/coding.module';
     CohensKappaExportService,
     CodingReplayService,
     CodingVersionService,
+    CodingResetPreviewService,
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,
@@ -232,6 +234,7 @@ import { CodingModule } from '../coding/coding.module';
     CohensKappaExportService,
     CodingReplayService,
     CodingVersionService,
+    CodingResetPreviewService,
     CodingJobOperationsService,
     CodebookGenerationService,
     CodingResponseQueryService,

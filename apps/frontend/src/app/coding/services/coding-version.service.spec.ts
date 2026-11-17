@@ -31,6 +31,18 @@ describe('CodingVersionService', () => {
     expect(service).toBeTruthy();
   });
 
+  it('starts a read-only preview with the exact selected scope and polls its result', () => {
+    const scope = { version: 'v1' as const, unitFilters: ['DHB003'], variableFilters: ['V1'] };
+    service.previewReset(5, scope).subscribe();
+    const start = httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/reset-version/preview`);
+    expect(start.request.method).toBe('POST');
+    expect(start.request.body).toEqual(scope);
+    start.flush({ jobId: 'preview-1' });
+    service.getResetPreview(5, 'preview-1').subscribe(status => expect(status.status).toBe('processing'));
+    httpMock.expectOne(`${mockServerUrl}admin/workspace/5/coding/reset-version/preview/preview-1`)
+      .flush({ status: 'processing' });
+  });
+
   it('should reset coding version', () => {
     const mockRes = {
       affectedResponseCount: 10,

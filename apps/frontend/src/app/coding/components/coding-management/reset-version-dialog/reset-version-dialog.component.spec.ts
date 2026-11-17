@@ -1,5 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { MAT_DIALOG_DATA, MatDialog, MatDialogRef } from '@angular/material/dialog';
+import { ResetCodingPreviewState } from './reset-coding-preview-state.service';
 import { GermanTranslationsTestingModule } from '../../../../../testing/german-translations';
 import {
   ResetVersionDialogComponent,
@@ -12,8 +14,18 @@ describe('ResetVersionDialogComponent', () => {
     close: jest.fn()
   };
   const dialogMock = { open: jest.fn() };
+  const previewMock = {
+    busy: signal(false),
+    failed: signal(false),
+    result: signal(null),
+    hasScope: signal(true),
+    canConfirm: signal(true),
+    configure: jest.fn(),
+    matches: jest.fn().mockReturnValue(true),
+    check: jest.fn()
+  };
 
-  async function setup(data: ResetVersionDialogData): Promise<{
+  async function setup(data: Omit<ResetVersionDialogData, 'workspaceId'>): Promise<{
     component: ResetVersionDialogComponent;
     fixture: ComponentFixture<ResetVersionDialogComponent>;
   }> {
@@ -24,10 +36,11 @@ describe('ResetVersionDialogComponent', () => {
       ],
       providers: [
         { provide: MatDialogRef, useValue: dialogRefMock },
-        { provide: MAT_DIALOG_DATA, useValue: data }
+        { provide: MAT_DIALOG_DATA, useValue: { workspaceId: 5, ...data } }
       ]
     });
     TestBed.overrideProvider(MatDialog, { useValue: dialogMock });
+    TestBed.overrideProvider(ResetCodingPreviewState, { useValue: previewMock });
     await TestBed.compileComponents();
 
     const fixture = TestBed.createComponent(ResetVersionDialogComponent);
@@ -41,6 +54,8 @@ describe('ResetVersionDialogComponent', () => {
   beforeEach(() => {
     TestBed.resetTestingModule();
     jest.clearAllMocks();
+    previewMock.canConfirm.set(true);
+    previewMock.matches.mockReturnValue(true);
   });
 
   it('explains that v1 reset cascades while preserving coding jobs', async () => {
@@ -204,6 +219,24 @@ describe('ResetVersionDialogComponent', () => {
     expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('Units: 1 ausgewählt');
     expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('alle Variablen der betroffenen Units');
     expect(fixture.nativeElement.querySelector('.filter-details-button')).not.toBeNull();
+  });
+
+  it('blocks confirmation until the current scope has been checked', async () => {
+    previewMock.canConfirm.set(false);
+    const { fixture, component } = await setup({ version: 'v1', versionLabel: '' });
+    expect(fixture.nativeElement.querySelector('.confirm-button').disabled).toBe(true);
+    component.onConfirm();
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
+  });
+
+  it('blocks a preview result for a different scope', async () => {
+    const { component, fixture } = await setup({ version: 'v1', versionLabel: '' });
+    await selectScope(fixture, 'filtered');
+    await enterFilter(fixture, 'unit', 'DHB003');
+    previewMock.matches.mockReturnValue(false);
+    await enterFilter(fixture, 'unit', 'DHB004');
+    component.onConfirm();
+    expect(dialogRefMock.close).not.toHaveBeenCalled();
   });
 
   it('cancels without returning a reset request', async () => {

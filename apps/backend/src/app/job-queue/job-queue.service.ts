@@ -10,6 +10,7 @@ import {
   Queue, JobsOptions, Job, JobType
 } from 'bullmq';
 import { requireJobId, withQueueJobId } from './job-queue.util';
+import { addCodingResetPreviewJob, ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
 import { ValidationTask } from '../database/entities/validation-task.entity';
@@ -20,6 +21,8 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+
+export type { ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 
 /** Retain only cleanup pointers, never uploaded buffers or analysis result payloads. */
 export interface WorkspaceDeletionJob {
@@ -102,14 +105,6 @@ export interface CodebookJobResult {
   workspaceId: number;
   exportFormat: CodebookExportFormat;
   createdAt: number;
-}
-
-export interface ResetCodingVersionJobData {
-  workspaceId: number;
-  requestedByUserId?: number | string;
-  version: 'v1' | 'v2' | 'v3';
-  unitFilters?: string[];
-  variableFilters?: string[];
 }
 
 export interface ValidationTaskJobData {
@@ -273,7 +268,8 @@ export class JobQueueService {
     @InjectQueue('external-coding-import') private externalCodingImportQueue: Queue,
     @InjectQueue('database-export') private databaseExportQueue: Queue<DatabaseExportJobData>,
     @InjectRepository(ValidationTask)
-    private readonly validationTaskRepository: Repository<ValidationTask>
+    private readonly validationTaskRepository: Repository<ValidationTask>,
+    @InjectQueue('coding-reset-preview') private readonly resetPreviewQueue: Queue
   ) { }
 
   private getQueue(name: string): Queue | undefined {
@@ -289,6 +285,7 @@ export class JobQueueService {
       ['test-results-upload', this.testResultsUploadQueue],
       ['codebook-generation', this.codebookGenerationQueue],
       ['reset-coding-version', this.resetCodingVersionQueue],
+      ['coding-reset-preview', this.resetPreviewQueue],
       ['validation-task', this.validationTaskQueue],
       ['response-analysis', this.responseAnalysisQueue],
       ['variable-analysis', this.variableAnalysisQueue],
@@ -1122,6 +1119,10 @@ export class JobQueueService {
   }
 
   // --- Reset Coding Version Queue Methods ---
+
+  async addResetCodingPreviewJob(data: ResetCodingPreviewJobData): Promise<Job<ResetCodingPreviewJobData>> {
+    return addCodingResetPreviewJob(this.resetPreviewQueue, data);
+  }
 
   async addResetCodingVersionJob(
     data: ResetCodingVersionJobData,

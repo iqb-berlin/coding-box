@@ -5,6 +5,24 @@ import { JournalService } from '../../database/services/shared';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
 describe('WorkspaceCodingVersionController', () => {
+  it('queues a normalized read-only preview separately from actual resets', async () => {
+    const addResetCodingPreviewJob = jest.fn().mockResolvedValue({ id: 'preview' });
+    const controller = new WorkspaceCodingVersionController({} as CodingStatisticsService, {} as JournalService, { addResetCodingPreviewJob } as unknown as JobQueueService);
+    await expect(controller.previewReset(7, {
+      version: 'v1', unitFilters: [' DHB003 ', 'DHB003'], variableFilters: ['V2', 'V1']
+    })).resolves.toEqual({ jobId: 'preview' });
+    expect(addResetCodingPreviewJob).toHaveBeenCalledWith({
+      workspaceId: 7, scope: { version: 'v1', unitFilters: ['DHB003'], variableFilters: ['V1', 'V2'] }
+    });
+  });
+
+  it('does not disclose preview results from another workspace', async () => {
+    const getWorkspaceJob = jest.fn().mockResolvedValue(null);
+    const controller = new WorkspaceCodingVersionController({} as CodingStatisticsService, {} as JournalService, { getWorkspaceJob } as unknown as JobQueueService);
+    await expect(controller.getResetPreview(7, 'foreign')).resolves.toEqual({ status: 'not_found' });
+    expect(getWorkspaceJob).toHaveBeenCalledWith(7, 'coding-reset-preview', 'foreign');
+  });
+
   it('does not disclose the status of a reset job outside the requested workspace', async () => {
     const getWorkspaceJob = jest.fn().mockResolvedValue(null);
     const controller = new WorkspaceCodingVersionController(

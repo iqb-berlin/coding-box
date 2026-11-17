@@ -805,8 +805,8 @@
       "file": {},
       "functions": {
         "class CodingVersionService#1/method resetCodingVersion#1": {
-          "complexity": 27,
-          "max-lines-per-function": 191
+          "complexity": 21,
+          "max-lines-per-function": 165
         }
       }
     },
@@ -1493,7 +1493,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-management/coding-management.component.ts": {
       "file": {
-        "max-lines": 1414
+        "max-lines": 1409
       },
       "functions": {
         "class CodingManagementComponent#1/method fetchResponsesByStatus#1/function next#1/anonymous:9e93dd2ca83edb03#1": {

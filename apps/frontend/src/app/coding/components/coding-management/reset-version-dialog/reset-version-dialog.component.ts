@@ -1,5 +1,5 @@
 import {
-  Component, ChangeDetectionStrategy, computed, inject, signal
+  Component, ChangeDetectionStrategy, computed, effect, inject, signal
 } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 
@@ -13,9 +13,14 @@ import { MatFormFieldModule } from '@angular/material/form-field';
 import { MatInputModule } from '@angular/material/input';
 import { MatRadioModule } from '@angular/material/radio';
 import { TranslateModule } from '@ngx-translate/core';
+import { DecimalPipe } from '@angular/common';
 import { ResetFilterDetailsDialogComponent } from './reset-filter-details-dialog.component';
+import { ResetCodingPreviewState } from './reset-coding-preview-state.service';
+import { ResetCodingPreviewComponent } from './reset-coding-preview.component';
+import { ResetCodingScope } from '../../../../../../../../api-dto/coding/reset-coding-preview.dto';
 
 export interface ResetVersionDialogData {
+  workspaceId: number;
   version: 'v1' | 'v2' | 'v3';
   versionLabel: string;
   affectedCount?: number;
@@ -27,11 +32,27 @@ export interface ResetVersionDialogResult {
   variableFilters: string[];
 }
 
+export function createResetVersionDialogData(workspaceId: number, version: ResetVersionDialogData['version']): ResetVersionDialogData {
+  return {
+    workspaceId,
+    version,
+    versionLabel: {
+      v1: 'coding-management.statistics.first-autocode-run',
+      v2: 'coding-management.statistics.manual-coding-run',
+      v3: 'coding-management.statistics.second-autocode-run'
+    }[version],
+    cascadeVersions: { v1: ['v2', 'v3'], v2: ['v3'], v3: [] }[version]
+  };
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-reset-version-dialog',
   standalone: true,
+  providers: [ResetCodingPreviewState],
   imports: [
+    DecimalPipe,
+    ResetCodingPreviewComponent,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -94,6 +115,8 @@ export interface ResetVersionDialogResult {
           </div>
         }
 
+        <coding-box-reset-coding-preview></coding-box-reset-coding-preview>
+
         <div class="result-impact-info">
           <p class="info-heading">
             <mat-icon class="info-icon">rule</mat-icon>
@@ -151,7 +174,7 @@ export interface ResetVersionDialogResult {
         <div class="scope-summary" aria-live="polite">
           @if (scope() === 'global') {
             <strong>{{ 'coding-management.reset-dialog.confirmation-global' | translate }}</strong>
-          } @else if (canConfirm()) {
+          } @else if (hasValidScope()) {
             <strong>{{ 'coding-management.reset-dialog.confirmation-filtered' | translate }}</strong>
             @let unitsText = 'coding-management.reset-dialog.summary-units' | translate: {
               units: unitFilters().length ? unitFilters().join(', ') : ('coding-management.reset-dialog.all-units' | translate)
@@ -186,6 +209,13 @@ export interface ResetVersionDialogResult {
           }
           <p class="confirmation-cascade">
             {{ confirmationImpactKey | translate }}
+          </p>
+          <p class="confirmation-count" aria-live="polite">
+            @if (preview.matches(data.workspaceId, previewScope()) && preview.result()?.status === 'valid') {
+              {{ 'ui-text.reset-version-dialog.affected-responses' | translate: { count: preview.result()?.affectedResponseCount | number } }}
+            } @else {
+              {{ 'ui-text.reset-version-dialog.preview-required' | translate }}
+            }
           </p>
         </div>
 
@@ -493,9 +523,18 @@ export interface ResetVersionDialogResult {
         }
       }
     }
+
+    @media (max-width: 400px) {
+      .dialog-header { padding: 16px; gap: 8px; }
+      .dialog-header .dialog-title { font-size: 18px; }
+      .dialog-content { padding: 16px; }
+      .confirmation-footer { padding: 8px 16px 12px; gap: 8px; }
+      .dialog-actions { gap: 8px; }
+    }
   `]
 })
 export class ResetVersionDialogComponent {
+  protected readonly preview = inject(ResetCodingPreviewState);
   private readonly dialog = inject(MatDialog);
   dialogRef = inject<MatDialogRef<ResetVersionDialogComponent, ResetVersionDialogResult>>(MatDialogRef);
   data = inject<ResetVersionDialogData>(MAT_DIALOG_DATA);
@@ -515,8 +554,17 @@ export class ResetVersionDialogComponent {
     [this.unitFilters(), this.variableFilters()].some(filters => filters.length > 3 || filters.join(', ').length > 40)
   ));
 
-  protected readonly canConfirm = computed(() => this.scope() === 'global' ||
+  protected readonly hasValidScope = computed(() => this.scope() === 'global' ||
     this.unitFilters().length > 0 || this.variableFilters().length > 0);
+
+  protected readonly previewScope = computed<ResetCodingScope | null>(() => (this.hasValidScope() ? {
+    version: this.data.version,
+    unitFilters: this.scope() === 'filtered' ? this.unitFilters() : [],
+    variableFilters: this.scope() === 'filtered' ? this.variableFilters() : []
+  } : null));
+
+  protected readonly canConfirm = computed(() => this.hasValidScope() && this.preview.canConfirm() &&
+    this.preview.matches(this.data.workspaceId, this.previewScope()));
 
   constructor() {
     const data = this.data;
@@ -527,6 +575,7 @@ export class ResetVersionDialogComponent {
     this.resultImpactKey = `coding-management.reset-dialog.result-impact.${data.version}`;
     this.confirmationImpactKey = `ui-text.reset-version-dialog.confirmation-impact.${data.version}`;
     this.cascadeImpactKey = `ui-text.reset-version-dialog.cascade-impact.${data.version}`;
+    effect(() => this.preview.configure(data.workspaceId, this.previewScope()));
   }
 
   protected onCancel(): void {

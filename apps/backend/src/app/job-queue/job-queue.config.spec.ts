@@ -6,8 +6,8 @@ describe('BullMQ connection configuration', () => {
     expect(createJobQueueOptions(new ConfigService({
       REDIS_HOST: 'queue-host', REDIS_PORT: '6380', REDIS_PREFIX: 'tenant'
     }))).toEqual({ connection: { host: 'queue-host', port: 6380 }, prefix: 'tenant:bullmq' });
-    expect(JOB_QUEUE_NAMES).toHaveLength(12);
-    expect(new Set(JOB_QUEUE_NAMES).size).toBe(12);
+    expect(JOB_QUEUE_NAMES).toHaveLength(13);
+    expect(new Set(JOB_QUEUE_NAMES).size).toBe(13);
   });
 
   it('provides the existing development connection defaults with a new queue namespace', () => {
