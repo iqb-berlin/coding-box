@@ -86,8 +86,9 @@ vergeben, z. B. `coding_box_pg17_final_20261117`. Der Name ist Pflicht; ein
 versehentlich weggelassenes Overlay-Ziel bricht die Konfiguration ab. Das Passwort
 gehört zum separaten Bootstrap-Administrator `pg17_migration_admin` und darf nicht
 das Anwendungspasswort sein. Diese Rolle darf auf der Quelle noch nicht existieren.
-Die Anwendungsrolle und -datenbank dürfen nicht `pg17_migration_admin`, `postgres`,
-`template0` oder `template1` heißen; Sonderfälle benötigen einen angepassten Plan.
+Die Anwendungsdatenbank darf nicht `postgres`, `template0` oder `template1` heißen;
+Sonderfälle benötigen einen angepassten Plan. Eine Quellrolle namens `postgres`
+ist dagegen mit dem getrennten Zieladministrator kompatibel.
 
 ```bash
 "${base[@]}" config --format json > "$backup_dir/compose-before.json"
@@ -170,7 +171,10 @@ sha256sum "$backup_dir/roles.sql" "$backup_dir/database.dump" > "$backup_dir/SHA
 Die Rollen-Sicherung enthält Passwort-Hashes; streng vertraulich behandeln.
 Mit einem administrativen Quellkonto sichern, das alle Rollen, Eigentümer,
 Tabellen und Sequenzen lesen kann. Die lokal getestete Installation verwendet
-dafür `POSTGRES_USER`. Bei abweichenden Rechten das Backup-Konto anpassen.
+dafür `POSTGRES_USER`. Die administrativen Befehle dieses Plans setzen ein solches
+Installationskonto voraus. Bei abweichenden Rechten sowohl Backup als auch die
+administrativen Restore-/Freigabebefehle an das tatsächliche Administrationskonto
+anpassen; die Anwendung behält ihr bisheriges Konto.
 
 Für den inhalts- und rechtebasierten Vergleich läuft das Werkzeug als separater
 Node-Prozess im bestehenden Backendimage; es startet keine Anwendung/Queue.

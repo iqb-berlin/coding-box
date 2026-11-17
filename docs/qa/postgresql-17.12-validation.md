@@ -25,6 +25,13 @@ umgestellt. [Betriebsablauf und Rückfallplan](../postgresql-17-migration.md).
 | Fehlgeschlagene Pflichtprüfungen | 0 | 0 |
 | Optionaler Kappa-Laufzeitbenchmark | 1 übersprungen | 1 übersprungen |
 
+Zusätzlicher vollständiger Backend-Lauf mit dem PostgreSQL-17.12-Testserver für
+die Kappa-/Fixture-Prüfungen und Redis 7.4: **284 Suites / 4.599 Tests bestanden**,
+17 Suites und insgesamt 152 Tests ohne entsprechende zusätzliche Aktivierung
+beziehungsweise als optionale Prüfungen übersprungen. Die separate verpflichtende
+Integration oben aktiviert alle Datenbank-/Redis-Pflichtprüfungen und bestand sie.
+Backend-Lint und Produktionsbuild ebenfalls erfolgreich.
+
 Der Integration-Runner richtet jeweils eine neue Datenbank aus dem vollständigen
 Liquibase-SQL-Changelog ein, aktiviert PostgreSQL-/Redis-Prüfungen und verwirft sie
 danach. Er bricht bei fehlender Infrastruktur, falscher angeforderter Serverversion
