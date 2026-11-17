@@ -2,8 +2,9 @@ describe('Antwortwerte aus dem Kodierschema', () => {
   it('shows observed schema answers and toggles missing alternatives without changing their counts', () => {
     cy.viewport(1400, 900);
     const frequencies = [
-      { unitId: 1, variableId: 'ANIMALS', value: 'Hai', score: 1, code: 1, count: 2, percentage: 200 / 3, isFromSchema: true },
-      { unitId: 1, variableId: 'ANIMALS', value: 'Elefant', score: 0, code: 0, count: 1, percentage: 100 / 3, isFromSchema: true },
+      { unitId: 1, variableId: 'ANIMALS', value: 'Hai', score: 1, code: 1, count: 2, percentage: 50, isFromSchema: true },
+      { unitId: 1, variableId: 'ANIMALS', value: 'Elefant', score: 0, code: 0, count: 1, percentage: 25, isFromSchema: true },
+      { unitId: 1, variableId: 'ANIMALS', value: `${' '.repeat(500)}... [truncated 1000 chars, md5:test]`, isEmptyValue: true, count: 1, percentage: 25 },
       { unitId: 1, variableId: 'ANIMALS', value: 'Zebra', score: 0, code: 0, count: 0, percentage: 0, isFromSchema: true, isSchemaOnly: true }
     ];
     cy.mockKeycloakAuthentication();
@@ -11,7 +12,7 @@ describe('Antwortwerte aus dem Kodierschema', () => {
     cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
     cy.intercept('GET', '**/api/admin/workspace/5/test-results/?*', { body: { data: [], total: 0 } });
     cy.intercept('GET', '**/api/admin/workspace/5/test-results/overview', {
-      body: { testPersons: 1, testGroups: 1, uniqueBooklets: 1, uniqueUnits: 1, uniqueResponses: 3 }
+      body: { testPersons: 1, testGroups: 1, uniqueBooklets: 1, uniqueUnits: 1, uniqueResponses: 4 }
     }).as('overview');
     cy.intercept('GET', '**/api/admin/workspace/5/results/export/jobs', { body: [] });
     cy.intercept('GET', '**/api/admin/workspace/5/variable-analysis/jobs', { body: [{
@@ -20,7 +21,7 @@ describe('Antwortwerte aus dem Kodierschema', () => {
     }] });
     cy.intercept('GET', '**/api/admin/workspace/5/variable-analysis/jobs/job-1/results/page?*', request => {
       request.reply({ body: {
-        variableCombos: [{ unitId: 1, unitName: 'Tiere', variableId: 'ANIMALS', totalCount: 3, validCount: 3, distinctValueCount: 2 }],
+        variableCombos: [{ unitId: 1, unitName: 'Tiere', variableId: 'ANIMALS', totalCount: 4, validCount: 3, emptyCount: 1, distinctValueCount: 3 }],
         frequencies: { '1:ANIMALS': frequencies.filter(row => request.query.includeSchemaCodes === 'true' || row.count > 0) },
         total: 1, unfilteredTotal: 1, page: 1, pageSize: 50, totalPages: 1
       } });
@@ -38,6 +39,8 @@ describe('Antwortwerte aus dem Kodierschema', () => {
     cy.get('@shark').find('.mat-column-score').should('contain.text', '1');
     cy.get('@shark').find('.mat-column-count').should('contain.text', '2');
     cy.contains('tr', 'Elefant').find('.mat-column-score').should('contain.text', '0');
+    cy.get('.analysis-table td.mat-column-value .empty-value').should('have.length', 1).and('have.text', '[Leer]');
+    cy.contains('.analysis-table tbody tr', '[Leer]').find('.mat-column-validOccurrenceCount').should('have.text', '0');
     cy.contains('tr', 'Zebra').should('not.exist');
     cy.contains('mat-slide-toggle', 'Nicht beobachtete Antwortwerte aus dem Kodierschema anzeigen').click();
     cy.wait('@answers').its('request.query.includeSchemaCodes').should('equal', 'true');

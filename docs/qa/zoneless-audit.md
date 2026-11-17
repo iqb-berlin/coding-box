@@ -1,4 +1,11 @@
-# Zoneless-Prüfung: risikobasierte Freigabe
+# Historischer Zoneless-Prüfbericht
+
+> Seit 09.11.2026 ist das generierte Migrationsinventar einschließlich Generator,
+> Inventartests und Nx-/CI-Pflichtprüfung entfernt. Die unten genannten
+> Inventarbefehle und Freigabestände dokumentieren die damalige Migration und
+> sind keine aktuellen Arbeitsanweisungen. Die Verhaltenstests laufen weiter in
+> den regulären Unit-, Komponenten-, Browser- und Live-Suiten. Aktuelle Prüfungen:
+> [Frontend quality gates](frontend-quality-gates.md).
 
 ## Status
 

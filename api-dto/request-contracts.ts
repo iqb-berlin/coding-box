@@ -118,6 +118,14 @@ export const requestBodySchemas = {
     server: string,
     url: string
   }, ['username', 'password', 'server', 'url']),
+  TestcenterInstanceInput: {
+    ...object({ label: nonEmptyString, baseUrl: nonEmptyString }, ['label', 'baseUrl']),
+    additionalProperties: false
+  },
+  TestcenterTargetInput: {
+    ...object({ baseUrl: nonEmptyString }, ['baseUrl']),
+    additionalProperties: false
+  },
   WorkspaceFilesController_excludePersons: object({
     logins: array(string)
   }, ['logins']),

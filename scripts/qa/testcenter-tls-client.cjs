@@ -10,11 +10,12 @@ require('ts-node').register({
 
 const axios = require('axios');
 const { HttpService } = require('@nestjs/axios');
+const { ConfigService } = require('@nestjs/config');
 const { TestcenterService } = require('../../apps/backend/src/app/database/services/test-results/testcenter.service.ts');
 
 async function main() {
   const http = new HttpService(axios.create({ proxy: false, family: 4, timeout: 5000 }));
-  const service = new TestcenterService(null, http, null, null, null, null);
+  const service = new TestcenterService(null, http, null, null, null, null, undefined, undefined, new ConfigService({ TESTCENTER_ALLOWED_URLS: process.argv[2] }));
   const credentials = { username: 'tls-fixture', password: 'synthetic-password', server: '', url: process.argv[2] };
   const session = await service.authenticate(credentials);
   assert.equal(session.token, 'synthetic-token');
@@ -24,6 +25,6 @@ async function main() {
 }
 
 main().catch(error => {
-  console.log(JSON.stringify({ error: error.message }));
+  console.log(JSON.stringify({ error: error.cause?.message || error.message }));
   process.exitCode = 1;
 });

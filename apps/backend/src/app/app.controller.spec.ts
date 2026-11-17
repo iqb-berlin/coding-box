@@ -1,5 +1,6 @@
 import { BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import { createMock } from '@golevelup/ts-jest';
 import { AppController } from './app.controller';
 import { UsersService } from './database/services/users';
@@ -31,7 +32,7 @@ describe('AppController', () => {
           useValue: workspaceUsersService
         }
       ]
-    }).compile();
+    }).overrideGuard(ThrottlerGuard).useValue({ canActivate: () => true }).compile();
 
     controller = module.get<AppController>(AppController);
   });

@@ -1,4 +1,6 @@
-export interface VariableAnalysisJobDto {
+import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-analysis-options';
+
+export interface VariableAnalysisJobDto extends VariableAnalysisOptions {
   id: number | string;
   workspace_id: number;
 

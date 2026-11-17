@@ -237,34 +237,6 @@
       "cache": false,
       "options": { "command": "node --test scripts/qa/e2e-quality.test.mjs" }
     },
-    "zoneless-inventory": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs"
-      }
-    },
-    "zoneless-approval": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs --require-risk-coverage"
-      }
-    },
-    "zoneless-exhaustive-approval": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "node scripts/qa/zoneless-inventory.mjs --require-complete"
-      }
-    },
-    "zoneless-inventory-test": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "command": "node --test scripts/qa/zoneless-inventory.test.mjs"
-      }
-    },
     "serve-static": {
       "executor": "@nx/web:file-server",
       "continuous": true,

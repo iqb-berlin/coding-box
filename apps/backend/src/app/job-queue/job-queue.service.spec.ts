@@ -37,7 +37,7 @@ describe('JobQueueService', () => {
   let service: JobQueueService;
 
   beforeEach(() => {
-    queues = Array.from({ length: 13 }, () => createQueue());
+    queues = Array.from({ length: 14 }, () => createQueue());
     validationTaskRepository = {
       find: jest.fn().mockResolvedValue([{ id: 7, workspace_id: 1 }])
     };
@@ -55,20 +55,21 @@ describe('JobQueueService', () => {
       queues[10] as never,
       queues[11] as never,
       validationTaskRepository as never,
-      queues[12] as never
+      queues[12] as never,
+      queues[13] as never
     );
   });
 
   it('bounds preview concurrency globally and reuses an in-flight request for the same scope', async () => {
     const data = { workspaceId: 1, scope: { version: 'v1' as const, unitFilters: ['DHB003'], variableFilters: [] } };
-    queues[12].getJobs.mockResolvedValue([]);
+    queues[13].getJobs.mockResolvedValue([]);
     await service.addResetCodingPreviewJob(data);
-    expect(queues[12].setGlobalConcurrency).toHaveBeenCalledWith(1);
-    expect(queues[12].add).toHaveBeenCalledWith('coding-reset-preview', data, expect.objectContaining({ attempts: 1 }));
-    queues[12].add.mockClear();
-    queues[12].getJobs.mockResolvedValue([createJob(data)]);
+    expect(queues[13].setGlobalConcurrency).toHaveBeenCalledWith(1);
+    expect(queues[13].add).toHaveBeenCalledWith('coding-reset-preview', data, expect.objectContaining({ attempts: 1 }));
+    queues[13].add.mockClear();
+    queues[13].getJobs.mockResolvedValue([createJob(data)]);
     await expect(service.addResetCodingPreviewJob(data)).resolves.toHaveProperty('id', 'job-1');
-    expect(queues[12].add).not.toHaveBeenCalled();
+    expect(queues[13].add).not.toHaveBeenCalled();
     await expect(service.addResetCodingPreviewJob({ ...data, scope: { ...data.scope, unitFilters: ['other'] } }))
       .rejects.toBeInstanceOf(ConflictException);
   });
@@ -406,6 +407,27 @@ describe('JobQueueService', () => {
     await expect(service.cancelVariableAnalysisJob('missing', 1)).resolves.toBe(false);
   });
 
+  it.each(['active', 'completed'])('presents Content-Pool %s jobs with numeric progress and useful sanitized metadata', async state => {
+    const job = {
+      ...createJob({
+        workspaceId: 1, operation: 'upload-files', acpId: 'fixture-acp', fileIds: [4, 8], changelog: 'private'
+      }, state),
+      progress: {
+        progress: state === 'completed' ? 100 : 45, message: 'Dateien werden übertragen', processedFiles: 1, totalFiles: 2
+      }
+    };
+    queues[12].getJobs.mockResolvedValue([job] as never);
+    const result = (await service.getAllWorkspaceJobs(1)).find(row => row.queueName === 'content-pool');
+    expect(result).toMatchObject({
+      progress: state === 'completed' ? 100 : 45,
+      data: {
+        operation: 'upload-files', acpId: 'fixture-acp', fileCount: 2, progressMessage: 'Dateien werden übertragen'
+      }
+    });
+    expect(result?.data).not.toHaveProperty('changelog');
+    expect(result?.data).not.toHaveProperty('fileIds');
+  });
+
   it('lists workspace jobs and queue-specific jobs', async () => {
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
     expect(workspaceJobs.length).toBeGreaterThan(0);
@@ -442,6 +464,7 @@ describe('JobQueueService', () => {
       'codebook-generation',
       'coding-reset-preview',
       'coding-statistics',
+      'content-pool',
       'data-export',
       'database-export',
       'external-coding-import',

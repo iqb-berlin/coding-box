@@ -2,6 +2,9 @@ import { Module, Type } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import { AdminTestcenterInstancesController } from '../testcenter/testcenter-instances.controller';
+import { TestcenterInstancesController } from '../testcenter/testcenter-discovery.controller';
+import { TestcenterInstancesModule } from '../../testcenter/testcenter-instances.module';
 import { DatabaseModule } from '../../database/database.module';
 import { UserModule } from '../../user/user.module';
 import { WorkspaceModule } from '../../workspace/workspace.module';
@@ -27,7 +30,7 @@ import { DatabaseExportService } from '../database/database-export.service';
 import { Setting } from '../../database/entities/setting.entity';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { ContentPoolSettingsController } from '../content-pool/content-pool-settings.controller';
-import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
+import { ContentPoolModule } from '../content-pool/content-pool.module';
 import { LegalNoticeController } from '../legal-notice/legal-notice.controller';
 import { LegalNoticeService } from '../legal-notice/legal-notice.service';
 import { getEnabledProcessorNames } from '../../job-queue/job-queue-processor-selection';
@@ -54,7 +57,9 @@ export function getEnabledCoreAdminProcessors(
 
 @Module({
   imports: [
+    TestcenterInstancesModule,
     DatabaseModule,
+    ContentPoolModule,
     UserModule,
     WorkspaceModule,
     AuthModule,
@@ -68,6 +73,8 @@ export function getEnabledCoreAdminProcessors(
     JobQueueModule
   ],
   controllers: [
+    AdminTestcenterInstancesController,
+    TestcenterInstancesController,
     UsersController,
     LogoController,
     UnitTagsController,
@@ -89,7 +96,6 @@ export function getEnabledCoreAdminProcessors(
     LogoUploadInterceptor,
     DatabaseExportService,
     ...getEnabledCoreAdminProcessors(),
-    ContentPoolIntegrationService,
     LegalNoticeService,
     SystemNotificationService
   ]

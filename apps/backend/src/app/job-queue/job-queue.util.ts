@@ -39,3 +39,15 @@ export async function rethrowJobError(
   }
   throw toError(error);
 }
+
+export function jobMatchesWorkspace(
+  job: Pick<Job, 'data'> | null | undefined,
+  workspaceId: number
+): boolean {
+  const jobWorkspaceId = Number(
+    (job?.data as { workspaceId?: unknown } | undefined)?.workspaceId
+  );
+  const requestedWorkspaceId = Number(workspaceId);
+  return Number.isSafeInteger(requestedWorkspaceId) && requestedWorkspaceId > 0 &&
+      Number.isSafeInteger(jobWorkspaceId) && jobWorkspaceId === requestedWorkspaceId;
+}

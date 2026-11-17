@@ -1,0 +1,74 @@
+{
+  "checkedAt": "2026-11-04T13:25:13.933306+00:00",
+  "codingBoxCommit": "d70925db22239e9b1b1e92069185fe2712f72938",
+  "runtime": "Official linux/amd64 backend images under Docker Desktop emulation; Node 24.22.1 on macOS arm64",
+  "transport": "HTTP on isolated loopback gateway; HTTPS trust is covered separately",
+  "databasePersistenceTested": false,
+  "versions": [
+    {
+      "version": "17.6.1",
+      "authenticated": true,
+      "groupFound": true,
+      "fileDownloaded": true,
+      "responseRows": 1,
+      "logRows": 2,
+      "parsedResponses": 1,
+      "parsedLogs": 3,
+      "parserWarnings": 0,
+      "persistedToCodingBox": false,
+      "sourceCommit": "01b776e3787539e09695f47b97888eeab33050f8",
+      "backendImage": "iqbberlin/testcenter-backend:17.6.1",
+      "backendDigest": "sha256:d36fe2969ed87c9b16f6dab2e1324f90725b169ed23545dcb5d5f56ecb9c9803",
+      "authentication": "direct",
+      "invalidCredentialsStatus": 422,
+      "authenticationRequests": [
+        "PUT /tc17/api/session/admin 200"
+      ]
+    },
+    {
+      "version": "18.3.1",
+      "authenticated": true,
+      "groupFound": true,
+      "fileDownloaded": true,
+      "responseRows": 1,
+      "logRows": 2,
+      "parsedResponses": 1,
+      "parsedLogs": 3,
+      "parserWarnings": 0,
+      "persistedToCodingBox": false,
+      "sourceCommit": "3191d481575160b25c9869842f5198969648ff68",
+      "backendImage": "iqbberlin/testcenter-backend:18.3.1",
+      "backendDigest": "sha256:b2dd6b525d97dbdc5195e6289b9450eeb9514587ff036a253e85bb88715057dd",
+      "authentication": "challenge",
+      "invalidCredentialsStatus": 422,
+      "authenticationRequests": [
+        "PUT /tc18/api/session/admin 400",
+        "POST /tc18/api/session/challenge 200",
+        "PUT /tc18/api/session 200"
+      ]
+    },
+    {
+      "version": "19.0.1",
+      "authenticated": true,
+      "groupFound": true,
+      "fileDownloaded": true,
+      "responseRows": 1,
+      "logRows": 2,
+      "parsedResponses": 1,
+      "parsedLogs": 3,
+      "parserWarnings": 0,
+      "persistedToCodingBox": false,
+      "sourceCommit": "d93ba401e35d21a671cb70c56a89bea6cc0b6563",
+      "backendImage": "iqbberlin/testcenter-backend:19.0.1",
+      "backendDigest": "sha256:abcc547ab79011b8608788485e29ee3353dea240061c99b40711a6707cd0f71e",
+      "authentication": "challenge",
+      "invalidCredentialsStatus": 422,
+      "authenticationRequests": [
+        "PUT /tc19/api/session/admin 400",
+        "POST /tc19/api/session/challenge 200",
+        "PUT /tc19/api/session 200"
+      ]
+    }
+  ],
+  "testcenter19FixtureXmlSchemaValidation": false
+}

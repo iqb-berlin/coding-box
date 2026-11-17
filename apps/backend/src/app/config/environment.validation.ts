@@ -1,6 +1,7 @@
 import { EXPORT_WORKER_ROLE } from '../export-worker/export-worker-role';
 import { parseAuthRateLimitConfig } from '../auth/auth-rate-limit.config';
 import { parseTrustedProxies } from '../http/trusted-proxies';
+import { parseAllowedTestcenterUrls } from '../database/services/test-results/testcenter-target';
 
 /** Validate effective configuration before infrastructure providers are created. */
 export function validateEnvironment(config: Record<string, unknown>): Record<string, unknown> {
@@ -56,6 +57,12 @@ export function validateEnvironment(config: Record<string, unknown>): Record<str
 
   if (role !== EXPORT_WORKER_ROLE) {
     try {
+      if (config.TESTCENTER_ALLOWED_URLS !== undefined && typeof config.TESTCENTER_ALLOWED_URLS !== 'string') {
+        throw new Error('TESTCENTER_ALLOWED_URLS must be a comma-separated list of base URLs');
+      }
+      try { parseAllowedTestcenterUrls(config.TESTCENTER_ALLOWED_URLS as string | undefined); } catch {
+        throw new Error('TESTCENTER_ALLOWED_URLS must contain HTTP(S) base URLs without credentials, query or fragment');
+      }
       parseAuthRateLimitConfig(config);
       parseTrustedProxies(config.HTTP_TRUSTED_PROXIES);
     } catch (error) {

@@ -33,7 +33,17 @@
       "invalidCount": 1,
       "emptyCount": 1,
       "emptyPercentage": 25,
-      "distinctValueCount": 3
+      "distinctValueCount": 4
+    },
+    {
+      "unitName": "UNIT_REF",
+      "variableId": "VAR_MULTI_ONLY_EMPTY",
+      "totalCount": 2,
+      "validCount": 0,
+      "invalidCount": 2,
+      "emptyCount": 2,
+      "emptyPercentage": 100,
+      "distinctValueCount": 1
     }
   ],
   "frequencies": [
@@ -46,8 +56,7 @@
       "percentageTotal": 40,
       "percentageValid": 50,
       "isSchemaOnly": false,
-      "label": "Alpha",
-      "score": 1
+      "label": "Alpha"
     },
     {
       "unitName": "UNIT_REF",
@@ -58,8 +67,7 @@
       "percentageTotal": 20,
       "percentageValid": 25,
       "isSchemaOnly": false,
-      "label": "Beta",
-      "score": 0
+      "label": "Beta"
     },
     {
       "unitName": "UNIT_REF",
@@ -80,8 +88,7 @@
       "percentageTotal": 0,
       "percentageValid": 0,
       "isSchemaOnly": true,
-      "label": "Gamma",
-      "score": 0
+      "label": "Gamma"
     },
     {
       "unitName": "UNIT_REF",
@@ -125,6 +132,26 @@
       "percentageValid": 33.33333333333333,
       "isSchemaOnly": false,
       "label": "Gamma"
+    },
+    {
+      "unitName": "UNIT_REF",
+      "variableId": "VAR_MULTI",
+      "value": "",
+      "count": 1,
+      "validOccurrenceCount": 0,
+      "percentageTotal": 25,
+      "percentageValid": 0,
+      "isSchemaOnly": false
+    },
+    {
+      "unitName": "UNIT_REF",
+      "variableId": "VAR_MULTI_ONLY_EMPTY",
+      "value": "",
+      "count": 2,
+      "validOccurrenceCount": 0,
+      "percentageTotal": 100,
+      "percentageValid": null,
+      "isSchemaOnly": false
     }
   ]
 }

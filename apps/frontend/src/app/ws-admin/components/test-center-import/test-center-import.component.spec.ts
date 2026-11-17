@@ -42,7 +42,8 @@ describe('TestCenterImportComponent', () => {
 
   beforeEach(async () => {
     const userBackendMock = {
-      authenticate: jest.fn()
+      authenticate: jest.fn(),
+      getTestcenterInstances: jest.fn(() => of([{ label: 'Testcenter 1', baseUrl: 'https://iqb-testcenter1.de', source: 'standard' }]))
     };
     const importMock = {
       importTestcenterGroups: jest.fn(),
@@ -92,6 +93,33 @@ describe('TestCenterImportComponent', () => {
     fixture = TestBed.createComponent(TestCenterImportComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+  });
+
+  it('uses a centrally approved named instance for login and retains its base path for imports', () => {
+    userBackendService.getTestcenterInstances.mockReturnValue(of([
+      { label: 'Study server', baseUrl: 'https://study.example/tci', source: 'administrator' }
+    ]));
+    component.loadTestcenterInstances();
+    component.loginForm.patchValue({ name: 'user', pw: 'password', testCenter: 7 });
+    component.isIndividualTcSelected(7);
+    userBackendService.authenticate.mockReturnValue(of({ success: true, token: 'fixture', claims: { workspaceAdmin: [] } }));
+    component.authenticate();
+    expect(userBackendService.authenticate).toHaveBeenCalledWith('user', 'password', '', 'https://study.example/tci');
+    expect(workspaceAdminService.setLastUrl).toHaveBeenCalledWith('https://study.example/tci');
+  });
+
+  it('explains an unapproved URL separately from rejected Testcenter credentials', () => {
+    component.loginForm.patchValue({
+      name: 'user', pw: 'password', testCenter: 6, testCenterIndividual: 'https://not-approved.example'
+    });
+    component.isIndividualTcSelected(6);
+    userBackendService.authenticate.mockReturnValue(throwError(() => ({ status: 403, error: { message: 'Testcenter target is not allowed' } })));
+    component.authenticate();
+    expect(component.authenticationMessage()).toContain('noch nicht freigegeben');
+    expect(component.authenticating()).toBe(false);
+    userBackendService.authenticate.mockReturnValue(throwError(() => ({ status: 422 })));
+    component.authenticate();
+    expect(component.authenticationMessage()).toContain('Zugangsdaten abgelehnt');
   });
 
   it('should create', () => {

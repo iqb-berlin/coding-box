@@ -50,6 +50,14 @@ describe('startup environment validation', () => {
     expect(() => validateEnvironment({ ...api, [key]: '  ' })).toThrow(key);
   });
 
+  it('validates configured Testcenter targets without printing credentials', () => {
+    expect(() => validateEnvironment({ ...api, TESTCENTER_ALLOWED_URLS: 'https://custom.test/tci, http://127.0.0.1:15444' })).not.toThrow();
+    for (const value of ['https://user:private-secret@custom.test', 'file:///private', 'https://custom.test?token=private-secret', 42]) {
+      expect(() => validateEnvironment({ ...api, TESTCENTER_ALLOWED_URLS: value })).toThrow('TESTCENTER_ALLOWED_URLS');
+      expect(() => validateEnvironment({ ...api, TESTCENTER_ALLOWED_URLS: value })).not.toThrow('private-secret');
+    }
+  });
+
   it('requires infrastructure but no API auth settings for the export worker', () => {
     expect(validateEnvironment({ ...database, APP_ROLE: 'export-worker', KEYCLOAK_URL: '' }))
       .toMatchObject({ APP_ROLE: 'export-worker' });

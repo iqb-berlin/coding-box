@@ -184,7 +184,8 @@ export type ItemDatasetMappingIssueCode =
 
 export type ItemDatasetMappingWarningCode =
   | 'vomd-fallback-used'
-  | 'vomd-fallback-ignored';
+  | 'vomd-fallback-ignored'
+  | 'variable-order-fallback';
 
 interface ItemDatasetMappingDiagnosticDto {
   message: string;

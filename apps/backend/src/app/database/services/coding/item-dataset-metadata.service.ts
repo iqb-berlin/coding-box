@@ -1,7 +1,9 @@
-import { Inject, BadRequestException, Injectable } from '@nestjs/common';
+import {
+  Inject, BadRequestException, Injectable, Logger
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import * as cheerio from 'cheerio';
-import { Repository } from 'typeorm';
+import { In, Repository } from 'typeorm';
 import {
   ItemDatasetMappingIssueDto,
   ItemDatasetMappingWarningDto,
@@ -26,6 +28,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
+import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
 
 const fixedHeaders = [
   'person_login',
@@ -40,9 +43,23 @@ export interface ItemDatasetColumnResolution {
   warnings: ItemDatasetMappingWarningDto[];
 }
 
+interface UnitPositionMetadata {
+  definition?: string;
+  definitionRef?: string;
+  codingSchemeRef?: string;
+  variables: Array<{ id: string; alias?: string; page?: string }>;
+}
+
+const variableOrderFallbackMessages = {
+  'missing-page': 'Keine Seitenposition verfügbar; die Reihenfolge wird anhand der Variablennamen geschätzt.',
+  'unresolved-source': 'Quellvariablen fehlen oder sind mehrdeutig; die eigene Seitenposition oder der Variablenname bestimmt die Reihenfolge.',
+  'cyclic-source': 'Die Ableitung enthält einen Zirkelbezug oder hängt davon ab; die eigene Seitenposition oder der Variablenname bestimmt die Reihenfolge.'
+};
+
 @Injectable()
 export class ItemDatasetMetadataService {
   private static readonly yieldEveryItems = 50;
+  private readonly logger = new Logger(ItemDatasetMetadataService.name);
 
   constructor(
     @InjectRepository(Unit)
@@ -340,6 +357,134 @@ export class ItemDatasetMetadataService {
       });
     });
     return result;
+  }
+
+  async getVariableOrder(
+    workspaceId: number,
+    columns: ItemDatasetColumn[],
+    checkCancellation?: () => Promise<void>
+  ): Promise<{ positions: Map<string, number>; warnings: ItemDatasetMappingWarningDto[] }> {
+    if (!columns.length) return { positions: new Map(), warnings: [] };
+    const units = new Map<string, ItemDatasetColumn[]>();
+    for (const column of columns) {
+      const unitColumns = units.get(column.unitName) || [];
+      unitColumns.push(column);
+      units.set(column.unitName, unitColumns);
+    }
+    const unitMetadata = await this.getUnitPositionMetadata(workspaceId, new Set(
+      [...units.keys()].map(normalizeItemDatasetUnitId)
+    ), checkCancellation);
+    const byId = await this.getVariableOrderResources(workspaceId, units.keys(), unitMetadata);
+    const result = new Map<string, number>();
+    const warnings: ItemDatasetMappingWarningDto[] = [];
+    for (const [unitName, unitColumns] of units) {
+      await checkCancellation?.();
+      try {
+        const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
+        const codingScheme = this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)
+          .map(fileId => byId.get(fileId))
+          .find(data => data !== undefined);
+        const { positions, diagnostics } = buildItemDatasetVariablePositions(
+          unitName,
+          [
+            ...(metadata?.variables || []),
+            ...unitColumns.map(column => ({ id: column.sourceVariableId, alias: column.variableId }))
+          ],
+          metadata?.definition ?? byId.get(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`)),
+          codingScheme,
+          unitColumns.map(column => column.sourceVariableId)
+        );
+        positions.forEach((position, key) => result.set(key, position));
+        for (const diagnostic of diagnostics) {
+          const column = unitColumns.find(entry => entry.sourceVariableId === diagnostic.variableId);
+          const variableId = column?.variableId || diagnostic.variableId;
+          warnings.push({
+            code: 'variable-order-fallback',
+            unitId: normalizeItemDatasetUnitId(unitName),
+            variableId,
+            message: `${unitName}/${variableId}: ${variableOrderFallbackMessages[diagnostic.reason]}`,
+            suggestedAction: 'Seitenangaben und Quellvariablen in den Aufgaben- und Kodierschemadaten prüfen. Die MNR-Zuordnung kann von der tatsächlichen Testreihenfolge abweichen.'
+          });
+        }
+        if (diagnostics.length) {
+          this.logger.warn(`${unitName}: Variablenreihenfolge für ${diagnostics.length} Variable(n) geschätzt; Details in den Item-Metadatenwarnungen.`);
+        }
+      } catch (error) {
+        throw new BadRequestException(
+          `Variablenreihenfolge für '${unitName}' konnte nicht gelesen werden: ${(error as Error).message}`
+        );
+      }
+      await this.yieldToEventLoop();
+    }
+    return { positions: result, warnings: this.uniqueWarnings(warnings) };
+  }
+
+  private async getVariableOrderResources(
+    workspaceId: number,
+    unitNames: Iterable<string>,
+    unitMetadata: Map<string, UnitPositionMetadata>
+  ): Promise<Map<string, string>> {
+    const fileIds = new Set<string>();
+    for (const unitName of unitNames) {
+      const metadata = unitMetadata.get(normalizeItemDatasetUnitId(unitName));
+      if (metadata?.definition === undefined) {
+        fileIds.add(this.normalizeResourceRef(metadata?.definitionRef || `${unitName}.VOUD`));
+      }
+      for (const fileId of this.getCodingSchemeResourceIds(metadata?.codingSchemeRef || `${unitName}.VOCS`)) {
+        fileIds.add(fileId);
+      }
+    }
+    const files = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
+      select: ['file_id', 'data']
+    });
+    return new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
+  }
+
+  private async getUnitPositionMetadata(
+    workspaceId: number,
+    unitIds: Set<string>,
+    checkCancellation?: () => Promise<void>
+  ): Promise<Map<string, UnitPositionMetadata>> {
+    const files = await this.fileUploadRepository.find({
+      where: { workspace_id: workspaceId, file_type: 'Unit' },
+      select: ['file_id', 'data']
+    });
+    const result = new Map<string, UnitPositionMetadata>();
+    for (let index = 0; index < files.length; index += 1) {
+      await checkCancellation?.();
+      if (index > 0 && index % ItemDatasetMetadataService.yieldEveryItems === 0) {
+        await this.yieldToEventLoop();
+      }
+      const file = files[index];
+      const $ = cheerio.load(file.data, { xmlMode: true });
+      const unitId = normalizeItemDatasetUnitId($('Metadata > Id').first().text() || file.file_id);
+      if (!unitIds.has(unitId)) continue;
+      const definition = $('Definition').first();
+      const variables: UnitPositionMetadata['variables'] = [];
+      $('BaseVariables Variable, DerivedVariables Variable').each((_, element) => {
+        const variable = $(element);
+        const id = String(variable.attr('id') || variable.attr('alias') || '').trim();
+        const alias = variable.attr('alias')?.trim() || undefined;
+        if (id) variables.push({ id, alias, page: variable.attr('page') });
+      });
+      result.set(unitId, {
+        definition: definition.length ? definition.text() : undefined,
+        definitionRef: $('DefinitionRef').first().text().trim() || undefined,
+        codingSchemeRef: $('CodingSchemeRef').first().text().trim() || undefined,
+        variables
+      });
+    }
+    return result;
+  }
+
+  private normalizeResourceRef(reference: string): string {
+    return reference.trim().replace(/\\/g, '/').split('/').pop()!.toUpperCase();
+  }
+
+  private getCodingSchemeResourceIds(reference: string): string[] {
+    const fileId = this.normalizeResourceRef(reference);
+    return fileId.endsWith('.VOCS') ? [fileId] : [fileId, `${fileId}.VOCS`];
   }
 
   private async getUnitAliases(

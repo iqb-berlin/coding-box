@@ -1,3 +1,5 @@
+import { parseUnitDefinition } from './parse-unit-definition.util';
+
 interface CollectedVariable {
   id: string;
   markingPanels?: string[];
@@ -117,13 +119,14 @@ interface VariableDependency {
   variable_dependency_page_always_visible: boolean | null;
 }
 
+export function extractVariableLocationsFromDefinition(definition: unknown): VariablePage[] {
+  return findDependencies(collectIdsWithKeyedPaths(definition));
+}
+
 export const extractVariableLocation = function extractVariableLocations(definitions: UnitWithDefinition[]): UnitWithDefinition[] {
   return definitions.map((unit: UnitWithDefinition) => {
     if (typeof unit.definition !== 'string') throw new TypeError('Unit definition must be a JSON string');
-    const definitionParsed: unknown = JSON.parse(unit.definition);
-
-    const data = collectIdsWithKeyedPaths(definitionParsed);
-    unit.variable_pages = findDependencies(data);
+    unit.variable_pages = extractVariableLocationsFromDefinition(parseUnitDefinition(unit.definition));
 
     delete unit.definition;
 

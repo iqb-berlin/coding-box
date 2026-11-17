@@ -35,12 +35,12 @@ import {
   ResolvedMissingValue
 } from './missings-profiles.service';
 import {
-  ItemDatasetBookletDesign,
+  ItemDatasetBookletDesign as BookletDesign,
   ItemDatasetCellResolver,
-  ItemDatasetColumn,
-  ItemDatasetProfile,
-  ItemDatasetResponseValue,
-  ResolvedItemDatasetCell
+  ItemDatasetColumn as MatrixColumn,
+  ItemDatasetProfile as ProfileDefinitions,
+  ItemDatasetResponseValue as ResponseValue,
+  ResolvedItemDatasetCell as ResolvedCell
 } from './item-dataset-cell-resolver';
 import {
   ItemDatasetCellExportError,
@@ -63,8 +63,6 @@ export interface ItemMatrixExportConfiguration {
   recodeTrailingOmissions?: boolean;
   items?: ItemDatasetSelection[];
 }
-
-type MatrixColumn = ItemDatasetColumn;
 
 interface MatrixRow {
   bookletId: number;
@@ -95,14 +93,6 @@ interface RawResponseValueRow {
   scoreV3: number | string | null;
 }
 
-type ResponseValue = ItemDatasetResponseValue;
-
-type BookletDesign = ItemDatasetBookletDesign;
-
-type ProfileDefinitions = ItemDatasetProfile;
-
-type ResolvedCell = ResolvedItemDatasetCell;
-
 interface MatrixContext {
   rows: MatrixRow[];
   columns: MatrixColumn[];
@@ -110,6 +100,7 @@ interface MatrixContext {
   bookletDesigns: Map<string, BookletDesign>;
   profile: ProfileDefinitions;
   derivedSources: Map<string, string[]>;
+  variablePositions: Map<string, number>;
 }
 
 interface ItemMatrixDiagnosticsCollector {
@@ -156,6 +147,8 @@ export class CodingItemMatrixExportService {
     workspaceId: number
   ): Promise<ItemDatasetOptionsDto> {
     const result = await this.buildColumns(workspaceId);
+    const orderWarnings = result.issues.length ? [] :
+      (await this.metadataService.getVariableOrder(workspaceId, result.columns)).warnings;
     return {
       items: result.columns.map(column => ({
         unitId: column.unitId,
@@ -168,7 +161,7 @@ export class CodingItemMatrixExportService {
         columnName: column.header
       })),
       mappingIssues: result.issues,
-      mappingWarnings: result.warnings
+      mappingWarnings: [...result.warnings, ...orderWarnings]
     };
   }
 
@@ -466,7 +459,12 @@ export class CodingItemMatrixExportService {
       analysisColumns: orderedColumns,
       bookletDesigns,
       profile,
-      derivedSources
+      derivedSources,
+      variablePositions: (await this.metadataService.getVariableOrder(
+        workspaceId,
+        orderedColumns,
+        checkCancellation
+      )).positions
     };
   }
 
@@ -511,11 +509,7 @@ export class CodingItemMatrixExportService {
     selection?: ItemDatasetSelection[],
     checkCancellation?: () => Promise<void>
   ): Promise<ItemDatasetColumnResolution> {
-    return this.metadataService.buildColumns(
-      workspaceId,
-      selection,
-      checkCancellation
-    );
+    return this.metadataService.buildColumns(workspaceId, selection, checkCancellation);
   }
 
   private filterColumns(
@@ -624,16 +618,16 @@ export class CodingItemMatrixExportService {
             `Booklet-Struktur für Itemdatensatz nicht gefunden: ${row.bookletName}`
           );
         }
-        const responseValues = valuesByBooklet.get(row.bookletId) || new Map();
         const analysisColumns = context.analysisColumns || context.columns;
         const cells = await this.resolveRowCells(
           analysisColumns,
           design,
-          responseValues,
+          valuesByBooklet.get(row.bookletId) || new Map(),
           context.profile,
           context.derivedSources,
           configuration,
-          checkCancellation
+          checkCancellation,
+          context.variablePositions
         );
         const exportRow: Record<string, string | number> = {
           person_login: row.personLogin,
@@ -753,7 +747,8 @@ export class CodingItemMatrixExportService {
     profile: ProfileDefinitions,
     derivedSources: Map<string, string[]>,
     configuration: ItemMatrixExportConfiguration,
-    checkCancellation?: () => Promise<void>
+    checkCancellation?: () => Promise<void>,
+    variablePositions?: ReadonlyMap<string, number>
   ): Promise<ResolvedCell[]> {
     await checkCancellation?.();
     const resolution = this.cellResolver.resolveIncrementally(
@@ -762,7 +757,7 @@ export class CodingItemMatrixExportService {
       responseValues,
       profile,
       derivedSources,
-      configuration
+      { ...configuration, variablePositions }
     );
     let step = resolution.next();
     while (!step.done) {

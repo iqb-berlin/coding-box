@@ -10,6 +10,8 @@
   @if(!authenticated()) {
   <coding-box-test-center-login-step [form]="loginForm" [testCenters]="testCenters"
     [authenticationError]="authenticationError()" (submitted)="authenticate()"
+    [authenticationMessage]="authenticationMessage()" [authenticating]="authenticating()"
+    [instancesError]="instancesError()" (reloadInstances)="loadTestcenterInstances()"
     (serverSelected)="isIndividualTcSelected($event)" />
   } @else { @if (workspaces()){
   <div class="session-info">

@@ -1,5 +1,5 @@
 import {
-  ChangeDetectionStrategy, Component, input, output
+  ChangeDetectionStrategy, Component, effect, input, output, untracked
 } from '@angular/core';
 import { ReactiveFormsModule } from '@angular/forms';
 import { TranslateModule } from '@ngx-translate/core';
@@ -23,6 +23,21 @@ export class TestCenterLoginStepComponent {
   readonly form = input.required<TestCenterLoginForm>();
   readonly testCenters = input.required<readonly Testcenter[]>();
   readonly authenticationError = input(false);
+  readonly authenticationMessage = input('');
+  readonly authenticating = input(false);
+  readonly instancesError = input(false);
+  readonly reloadInstances = output<void>();
   readonly submitted = output<void>();
   readonly serverSelected = output<number>();
+
+  constructor() {
+    effect(() => {
+      const control = this.form().controls.testCenter;
+      const pending = this.authenticating();
+      untracked(() => {
+        if (pending) control.disable({ emitEvent: false });
+        else control.enable({ emitEvent: false });
+      });
+    });
+  }
 }

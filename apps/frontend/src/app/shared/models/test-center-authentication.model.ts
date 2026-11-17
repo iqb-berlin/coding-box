@@ -10,4 +10,5 @@ export interface WorkspaceAdmin {
 export interface Testcenter {
   id: number;
   label: string;
+  url?: string;
 }

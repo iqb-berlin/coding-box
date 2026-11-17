@@ -15,7 +15,7 @@ import { WorkspaceFilesInfoController } from '../workspace/workspace-files-info.
 import { GithubReleasesController } from '../workspace/github-releases.controller';
 import { GithubReleasesService } from '../workspace/github-releases.service';
 import { WorkspaceContentPoolController } from '../workspace/workspace-content-pool.controller';
-import { ContentPoolIntegrationService } from '../content-pool/content-pool-integration.service';
+import { ContentPoolModule } from '../content-pool/content-pool.module';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { Setting } from '../../database/entities/setting.entity';
 
@@ -23,6 +23,7 @@ import { Setting } from '../../database/entities/setting.entity';
   imports: [
     WorkspaceSettingsModule,
     DatabaseModule,
+    ContentPoolModule,
     CodingModule,
     WorkspaceModule,
     AuthModule,
@@ -40,8 +41,7 @@ import { Setting } from '../../database/entities/setting.entity';
     WorkspaceContentPoolController
   ],
   providers: [
-    GithubReleasesService,
-    ContentPoolIntegrationService
+    GithubReleasesService
   ]
 })
 export class WorkspaceFilesAdminModule { }

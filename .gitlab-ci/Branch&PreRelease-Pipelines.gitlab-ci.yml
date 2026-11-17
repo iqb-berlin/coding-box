@@ -611,8 +611,6 @@ test-frontend:
   script:
     - npx nx run frontend:test-quality-gates
     - npx nx run frontend:test --configuration=ci --maxWorkers=2
-    - npx nx run frontend:zoneless-inventory-test
-    - npx nx run frontend:zoneless-approval
     - npx nx run frontend:e2e-coverage
   variables:
     FORCE_COLOR: "0"

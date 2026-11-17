@@ -1,8 +1,11 @@
 import {
   BadRequestException, Controller, ForbiddenException, Get, NotFoundException, Post, Query, Req, UseGuards
 } from '@nestjs/common';
-import { ApiOkResponse, ApiTags } from '@nestjs/swagger';
+import {
+  ApiBearerAuth, ApiOkResponse, ApiResponse, ApiTags
+} from '@nestjs/swagger';
 import { Request } from 'express';
+import { ThrottlerGuard } from '@nestjs/throttler';
 import type { RequestBody } from '../../../../api-dto/request-contracts';
 import { ValidatedBody } from './http/validated-body.decorator';
 import { AuthDataDto } from '../../../../api-dto/auth-data-dto';
@@ -67,6 +70,18 @@ export class AppController {
   }
 
   @Post('tc_authentication')
+  @ApiTags('auth')
+  @ApiBearerAuth()
+  @ApiResponse({ status: 201, description: 'Testcenter session created', schema: { type: 'object', additionalProperties: true } })
+  @ApiResponse({ status: 400, description: 'Invalid request body or Testcenter URL' })
+  @ApiResponse({ status: 401, description: 'Application authentication is invalid' })
+  @ApiResponse({ status: 403, description: 'Testcenter target or access is not allowed' })
+  @ApiResponse({ status: 422, description: 'Testcenter credentials are invalid; the application session remains valid' })
+  @ApiResponse({ status: 429, description: 'Authentication rate limit exceeded; retry after the Retry-After interval' })
+  @ApiResponse({ status: 502, description: 'Invalid upstream Testcenter response' })
+  @ApiResponse({ status: 503, description: 'Testcenter authentication is unavailable' })
+  @ApiResponse({ status: 504, description: 'Testcenter authentication timed out' })
+  @UseGuards(JwtAuthGuard, ThrottlerGuard)
   async authenticateTestCenter(
     @ValidatedBody('AppController_authenticateTestCenter') credentials: RequestBody<'AppController_authenticateTestCenter'>
   ): Promise<Record<string, unknown>> {

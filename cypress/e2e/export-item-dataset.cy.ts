@@ -35,6 +35,12 @@ describe('Itemdatensatz-Export', () => {
             variableId: 'VAR1',
             sourceFile: 'unit-one.vomd',
             suggestedAction: 'variableId im VOMD-Item korrigieren.'
+          }, {
+            code: 'variable-order-fallback',
+            message: 'UNIT2/VAR2: Keine Seitenposition verfügbar; die Reihenfolge wird anhand der Variablennamen geschätzt.',
+            unitId: 'UNIT2',
+            variableId: 'VAR2',
+            suggestedAction: 'Seitenangaben und MNR-Zuordnung prüfen.'
           }]
         }
       }
@@ -74,7 +80,7 @@ describe('Itemdatensatz-Export', () => {
       'IQB-Standard'
     );
     cy.get('[data-cy="item-dataset-mapping-warnings"]')
-      .should('contain.text', 'Item-Metadatenwarnungen: 1')
+      .should('contain.text', 'Item-Metadatenwarnungen: 2')
       .and('contain.text', 'Details anzeigen')
       .and('not.contain.text', 'unit-one.vomd');
     cy.get('[data-cy="item-dataset-mapping-warnings-details"]').click();
@@ -85,6 +91,10 @@ describe('Itemdatensatz-Export', () => {
       .and('contain.text', 'Ziel-variableId: VAR1');
     cy.get('[data-cy="item-dataset-diagnostics-dialog"] .mapping-diagnostic')
       .should('have.length', 1);
+    cy.contains('mat-expansion-panel-header', 'Geschätzte Variablenreihenfolge').click();
+    cy.get('[data-cy="item-dataset-diagnostics-dialog"]')
+      .should('contain.text', 'anhand der Variablennamen geschätzt')
+      .and('contain.text', 'Seitenangaben und MNR-Zuordnung prüfen');
     cy.contains('mat-dialog-actions button', 'Schließen').click();
     cy.get('[data-cy="start-export"]').should('not.be.disabled');
     cy.get('[data-cy="item-dataset-search"]').type('Aufgabe2');

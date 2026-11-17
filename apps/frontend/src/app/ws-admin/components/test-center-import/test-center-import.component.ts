@@ -15,15 +15,16 @@ import {
 } from '@angular/material/dialog';
 import { MatIcon } from '@angular/material/icon';
 import {
-  catchError, exhaustMap, firstValueFrom, interval, of, startWith, Subscription, switchMap
+  exhaustMap, firstValueFrom, interval, startWith, Subscription, switchMap
 } from 'rxjs';
 import { mergeTestCenterImportResults, testCenterImportErrorMessage } from './test-center-import-results';
+import { TestCenterLoginState } from './test-center-login.state';
+import { testcenterChoices } from './test-center-instance-selection';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestCenterLoginStepComponent } from './test-center-login-step.component';
 import { TestCenterOptionsStepComponent } from './test-center-options-step.component';
 import { TestCenterGroupsStepComponent } from './test-center-groups-step.component';
 import { TestCenterImportProgressComponent, TestCenterImportProgressView } from './test-center-import-progress.component';
-import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import { ImportService, ImportOptions, Result } from '../../../shared/services/file/import.service';
 import { AppService } from '../../../core/services/app.service';
 import { WorkspaceAdmin, Testcenter } from '../../../shared/models/test-center-authentication.model';
@@ -62,6 +63,7 @@ export interface ImportFormValues {
   selector: 'coding-box-test-center-import',
   templateUrl: 'test-center-import.component.html',
   styleUrls: ['./test-center-import.component.scss'],
+  providers: [TestCenterLoginState],
   imports: [
     TestCenterImportProgressComponent,
     TestCenterGroupsStepComponent,
@@ -78,7 +80,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private readonly uiTranslate = injectUiTranslator();
 
   private readonly destroyRef = inject(DestroyRef);
-  private userBackendService = inject(UserBackendService);
+  private readonly loginState = inject(TestCenterLoginState);
   private importService = inject(ImportService);
   private dialogRef = inject(MatDialogRef<TestCenterImportComponent>);
   protected data = inject<{
@@ -90,28 +92,11 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   private dialog = inject(MatDialog);
   private translate = inject(TranslateService);
 
-  private readonly localizedTestCenters = computed<Testcenter[]>(() => ([
-    {
-      id: 1,
-      label: this.uiTranslate('ui-text.test-center-import.instance-1')
-    },
-    {
-      id: 2,
-      label: this.uiTranslate('ui-text.test-center-import.instance-2')
-    },
-    {
-      id: 3,
-      label: this.uiTranslate('ui-text.test-center-import.instance-3')
-    },
-    {
-      id: 4,
-      label: this.uiTranslate('ui-text.test-center-import.instance-4')
-    },
-    {
-      id: 5,
-      label: this.uiTranslate('ui-text.test-center-import.instance-5')
-    }
-  ]));
+  readonly approvedInstances = this.loginState.instances;
+  readonly instancesError = this.loginState.instancesError;
+  readonly authenticationMessage = this.loginState.message;
+  readonly authenticating = this.loginState.pending;
+  private readonly localizedTestCenters = computed(() => testcenterChoices(this.approvedInstances()));
 
   protected get testCenters(): Testcenter[] { return this.localizedTestCenters(); }
 
@@ -222,6 +207,7 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   ngOnInit(): void {
+    this.loadTestcenterInstances();
     // Ensure we always start with a clean state when the dialog opens
     this.uploadData.set(null);
     this.isUploadingTestFiles.set(false);
@@ -244,6 +230,14 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
         }
       }
     }
+  }
+
+  loadTestcenterInstances(): void {
+    if (this.authenticating()) return;
+    if (!this.authenticated() && Number(this.loginForm.controls.testCenter.value) > 6) {
+      this.loginForm.patchValue({ testCenter: '', testCenterIndividual: '' });
+    }
+    this.loginState.load();
   }
 
   ngOnDestroy(): void {
@@ -272,30 +266,29 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   authenticate(): void {
     const {
-      name, pw, testCenter, testCenterIndividual: url
+      name, pw, testCenter, testCenterIndividual
     } = this.loginForm.getRawValue();
+    if (this.authenticating()) return;
+    const selected = this.testCenters.find(instance => instance.id === testCenter);
+    const url = selected?.url || (testCenter === 6 ? testCenterIndividual : '');
     if (this.loginForm.invalid || testCenter === '') {
       this.loginForm.markAllAsTouched();
       return;
     }
+    this.loginForm.controls.testCenterIndividual.setValue(url);
+    this.authenticationError.set(false);
     this.authenticationRequestId += 1;
     const requestId = this.authenticationRequestId;
     this.testCenterInstance.set(this.testCenters.filter(
       testcenter => testcenter.id === testCenter
     ));
     // The backend selects a custom URL only when no numbered server is sent.
-    const server = testCenter === 6 ? '' : testCenter.toString();
-    this.userBackendService
-      .authenticate(name, pw, server, url)
-      .pipe(
-        catchError(() => {
-          if (requestId === this.authenticationRequestId) this.authenticationError.set(true);
-          return of();
-        }),
-        takeUntilDestroyed(this.destroyRef)
-      )
-      .subscribe((response: { token?: string; claims?: { workspaceAdmin: WorkspaceAdmin[] } }) => {
-        if (requestId !== this.authenticationRequestId) return;
+    const server = testCenter === 6 || selected?.url ? '' : testCenter.toString();
+    this.loginState.login(name, pw, server, url)
+      .pipe(takeUntilDestroyed(this.destroyRef))
+      .subscribe(response => {
+        if (requestId !== this.authenticationRequestId || this.loginForm.controls.testCenter.value !== testCenter ||
+            this.loginForm.controls.testCenterIndividual.value !== url) return;
         if (!response || !response.token || !response.claims) {
           this.authenticationError.set(true);
           return;
@@ -317,7 +310,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
   }
 
   logout(): boolean {
+    this.loginState.reset();
     this.authenticationRequestId += 1;
+    this.loginForm.reset();
     this.testGroupsRequestId += 1;
     this.stopTestGroupsProgressPolling();
     this.isLoadingTestGroups.set(false);
@@ -343,6 +338,9 @@ export class TestCenterImportComponent implements OnInit, OnDestroy {
 
   isIndividualTcSelected(value: number): void {
     updateIndividualTestCenterControl(this.loginForm, value);
+    const selected = this.testCenters.find(instance => instance.id === value);
+    if (selected?.url) this.loginForm.controls.testCenterIndividual.setValue(selected.url);
+    this.authenticationError.set(false);
   }
 
   getTestGroups(): void {

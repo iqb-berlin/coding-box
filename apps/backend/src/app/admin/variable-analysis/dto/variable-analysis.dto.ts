@@ -1,3 +1,4 @@
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { VariableFrequencyDto } from './variable-frequency.dto';
 
 export interface VariableStatusCountDto {
@@ -6,7 +7,7 @@ export interface VariableStatusCountDto {
   percentage: number;
 }
 
-export interface VariableCombo {
+export interface VariableCombo extends VariableAnalysisOptions {
   unitId: number;
   unitName: string;
   variableId: string;

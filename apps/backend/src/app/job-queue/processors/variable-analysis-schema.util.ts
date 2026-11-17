@@ -8,6 +8,8 @@ export interface SchemaValueDefinition {
   code?: number | string;
   order: number;
   isFromSchema?: boolean;
+  /** Alternative persisted status of the same code; do not add an unobserved duplicate. */
+  isObservedOnly?: boolean;
 }
 
 type AnalysisVariable = Pick<VariableDetailDto, 'coding' | 'type' | 'multiple'>;

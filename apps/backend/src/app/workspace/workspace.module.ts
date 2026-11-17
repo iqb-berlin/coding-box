@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { HttpModule } from '@nestjs/axios';
 import { JwtService } from '@nestjs/jwt';
+import { TestcenterInstancesModule } from '../testcenter/testcenter-instances.module';
 import { WorkspaceFileQueryService } from '../database/services/workspace/workspace-file-query.service';
 import { WorkspaceFileFreshnessService } from '../database/services/workspace/workspace-file-freshness.service';
 import { WorkspaceFileCacheService } from '../database/services/workspace/workspace-file-cache.service';
@@ -95,6 +96,7 @@ import { CodingModule } from '../coding/coding.module';
 
 @Module({
   imports: [
+    TestcenterInstancesModule,
     WorkspaceDataModule,
     TypeOrmModule.forFeature([
       Workspace,

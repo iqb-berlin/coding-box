@@ -31,7 +31,7 @@ describe('OIDC replay callback startup', () => {
     cy.wait('@delayedAuthData');
     cy.wait('@replayRequest');
     cy.get('coding-box-replay').should('exist');
-    cy.get('mat-snack-bar-container').should('contain.text', 'Berechtigung');
+    cy.get('mat-snack-bar-container').should('have.length', 1).and('contain.text', 'Berechtigung');
     cy.window().then(win => expect(win.localStorage.getItem('refresh_token')).to.equal('new-refresh'));
     cy.location('search').should('eq', '');
     cy.location('hash').should('include', '/replay/person/UNIT');

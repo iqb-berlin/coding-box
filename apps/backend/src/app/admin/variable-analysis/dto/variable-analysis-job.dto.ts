@@ -1,9 +1,11 @@
-export interface VariableAnalysisJobInput {
+import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
+
+export interface VariableAnalysisJobInput extends VariableAnalysisOptions {
   id: string | number;
   workspaceId?: number;
   unitId?: number;
   variableId?: string;
-  data?: {
+  data?: VariableAnalysisOptions & {
     workspaceId?: number;
     unitId?: number;
     variableId?: string;
@@ -18,7 +20,9 @@ export interface VariableAnalysisJobInput {
 
 // import { VariableAnalysisJob } from '../../../database/entities/variable-analysis-job.entity';
 
-export class VariableAnalysisJobDto {
+export class VariableAnalysisJobDto implements VariableAnalysisOptions {
+  analysisMode?: VariableAnalysisOptions['analysisMode'];
+  codingVersion?: VariableAnalysisOptions['codingVersion'];
   id: string; // Changed from number to string to support Bull IDs
   workspace_id?: number;
 
@@ -61,6 +65,8 @@ export class VariableAnalysisJobDto {
     dto.created_at = new Date(job.timestamp ?? job.created_at ?? Date.now());
     dto.updated_at = new Date(job.finishedOn || Date.now());
     dto.type = 'variable-analysis';
+    dto.analysisMode = job.analysisMode ?? job.data?.analysisMode ?? 'values';
+    dto.codingVersion = dto.analysisMode === 'codes' ? job.codingVersion ?? job.data?.codingVersion ?? 'v1' : undefined;
     return dto;
   }
 }

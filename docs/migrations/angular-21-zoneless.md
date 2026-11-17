@@ -32,8 +32,10 @@ their own supported update APIs.
 
 Tests assign writable signal values with `set()` and verify the derived values and
 views. Native zoneless tests wait for Angular stability after delayed results,
-progress, timer callbacks and context changes. The inventory records source
-changes; test execution and CI remain separate validation requirements.
+progress, timer callbacks and context changes. The migration inventory formerly
+recorded source fingerprints; it and its CI checks were retired on 2026-11-09.
+The normal tests and CI continue to validate zoneless behavior without requiring
+inventory updates after source changes.
 
 ### Local signal migration validation (2026-10-02)
 
@@ -146,7 +148,9 @@ Since 2026-10-01, PR acceptance uses the user-approved risk-based scope in
 [the audit](../qa/zoneless-audit.md) and `docs/qa/zoneless-risk-coverage.json`.
 Representative workflows and asynchronous mechanisms, regression tests for
 confirmed defects, successful final checks and CI are required. Individual
-inventory bindings are no longer separate release gates. The documented
+inventory bindings are no longer separate release gates. Since 2026-11-09,
+the generated inventory, generator and structural approval checks are removed;
+the audit and risk matrix remain historical documentation. The documented
 residual limits apply; production rollout remains a separate operation.
 
 A successful smoke test is not evidence that all application views are zoneless
