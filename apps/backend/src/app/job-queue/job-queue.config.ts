@@ -9,6 +9,7 @@ export const JOB_QUEUE_NAMES = [
   'test-results-upload',
   'codebook-generation',
   'reset-coding-version',
+  'coding-reset-preview',
   'validation-task',
   'response-analysis',
   'variable-analysis',

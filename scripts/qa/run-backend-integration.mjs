@@ -26,17 +26,28 @@ export function integrationConfiguration(environment) {
   return { server, redisHost: environment.BULLMQ_TEST_REDIS_HOST, redisPort: Number(environment.BULLMQ_TEST_REDIS_PORT) };
 }
 
-export function assertIntegrationResults(results, benchmarkEnabled = false) {
+export function assertIntegrationResults(results, kappaBenchmarkEnabled = false, resetPreviewBenchmarkEnabled = false) {
   if (!results.success || !results.numPassedTests || results.numPendingTestSuites || !results.testResults?.length) {
     throw new Error('Integration gate requires executed, successful suites; skipped suites are not accepted.');
   }
+  const optionalBenchmarks = [
+    {
+      enabled: kappaBenchmarkEnabled,
+      suite: 'double-coding-kappa-query.postgres.spec.ts',
+      fullName: 'Kappa SQL filters against PostgreSQL and the complete Liquibase schema measures the former and filtered retrieval on identical synthetic data'
+    },
+    {
+      enabled: resetPreviewBenchmarkEnabled,
+      suite: 'coding-reset-preview.postgres.spec.ts',
+      fullName: 'Reset preview against isolated PostgreSQL data measures global and selective previews with one million responses'
+    }
+  ];
   let skippedBenchmarks = 0;
   for (const suite of results.testResults) {
     for (const assertion of suite.assertionResults) {
       if (assertion.status === 'passed') continue;
-      if (!benchmarkEnabled && assertion.status === 'pending' &&
-          path.basename(suite.name) === 'double-coding-kappa-query.postgres.spec.ts' &&
-          assertion.fullName === 'Kappa SQL filters against PostgreSQL and the complete Liquibase schema measures the former and filtered retrieval on identical synthetic data') {
+      if (assertion.status === 'pending' && optionalBenchmarks.some(benchmark => !benchmark.enabled &&
+          path.basename(suite.name) === benchmark.suite && assertion.fullName === benchmark.fullName)) {
         skippedBenchmarks += 1;
         continue;
       }
@@ -44,7 +55,7 @@ export function assertIntegrationResults(results, benchmarkEnabled = false) {
     }
   }
   if (results.numPendingTests !== skippedBenchmarks || results.numTodoTests) {
-    throw new Error('Only the optional Kappa benchmark may be skipped by the integration gate.');
+    throw new Error('Only the optional integration benchmarks may be skipped by the integration gate.');
   }
 }
 
@@ -93,6 +104,7 @@ export async function runIntegration(environment = process.env) {
         POSTGRES_USER: decodeURIComponent(config.server.username), POSTGRES_PASSWORD: decodeURIComponent(config.server.password),
         POSTGRES_DB: databaseName, WORKSPACE_DELETION_TEST_DATABASE_URL: config.server.toString(),
         KAPPA_QUERY_TEST_DATABASE_URL: config.server.toString(),
+        RESET_PREVIEW_TEST_DATABASE_URL: integrationDatabase.toString(),
         VARIABLE_ANALYSIS_TEST_DB_URL: integrationDatabase.toString(),
         REDIS_HOST: config.redisHost, REDIS_PORT: String(config.redisPort), REDIS_PREFIX: databaseName
       }
@@ -103,7 +115,7 @@ export async function runIntegration(environment = process.env) {
     });
     if (code !== 0) throw new Error('Backend integration tests failed.');
     const results = JSON.parse(await readFile(resultsFile, 'utf8'));
-    assertIntegrationResults(results, environment.KAPPA_QUERY_BENCHMARK === '1');
+    assertIntegrationResults(results, environment.KAPPA_QUERY_BENCHMARK === '1', environment.RESET_PREVIEW_BENCHMARK === 'true');
     console.log(`Backend integration gate passed: ${results.numPassedTests} tests, ${results.numPendingTests} optional tests skipped.`);
   } finally {
     redis.disconnect();

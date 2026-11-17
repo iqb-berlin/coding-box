@@ -10,6 +10,7 @@ import { FlatResponseFilterOptionsProcessor } from './processors/flat-response-f
 import { UploadResultsProcessor } from './processors/upload-results.processor';
 import { CodebookGenerationProcessor } from './processors/codebook-generation.processor';
 import { ResetCodingVersionProcessor } from './processors/reset-coding-version.processor';
+import { CodingResetPreviewProcessor } from './processors/coding-reset-preview.processor';
 import { ValidationTaskProcessor } from './processors/validation-task.processor';
 import { CodingAnalysisProcessor } from './processors/coding-analysis.processor';
 import { VariableAnalysisProcessor } from './processors/variable-analysis.processor';
@@ -32,6 +33,7 @@ const processorProviders = {
   'test-results-upload': UploadResultsProcessor,
   'codebook-generation': CodebookGenerationProcessor,
   'reset-coding-version': ResetCodingVersionProcessor,
+  'coding-reset-preview': CodingResetPreviewProcessor,
   'validation-task': ValidationTaskProcessor,
   'response-analysis': CodingAnalysisProcessor,
   'variable-analysis': VariableAnalysisProcessor,

@@ -10,6 +10,8 @@ import { Job, Queue, QueueEvents } from 'bullmq';
 import { JobQueueService, TestPersonCodingJobData } from './job-queue.service';
 import { AutocoderRunService } from './autocoder-run.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
+import { CodingResetPreviewProcessor } from './processors/coding-reset-preview.processor';
+import { CodingResetPreviewService } from '../database/services/coding/coding-reset-preview.service';
 import { createJobQueueOptions, JOB_QUEUE_NAMES } from './job-queue.config';
 import { requireJobId } from './job-queue.util';
 import { ValidationTask } from '../database/entities/validation-task.entity';
@@ -28,6 +30,7 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
   let events: QueueEvents;
   let service: JobQueueService;
   const run = jest.fn();
+  const previewRun = jest.fn().mockResolvedValue({ status: 'valid', affectedResponseCount: 123 });
   const result = { totalResponses: 1, statusCounts: { CODED: 1 } };
   const legacyPrefix = `bullmq-test-${randomUUID()}`;
   const options = createJobQueueOptions(new ConfigService({
@@ -43,7 +46,8 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
         BullModule.registerQueue(...JOB_QUEUE_NAMES.map(name => ({ name })))
       ],
       providers: [
-        JobQueueService, TestPersonCodingProcessor,
+        JobQueueService, TestPersonCodingProcessor, CodingResetPreviewProcessor,
+        { provide: CodingResetPreviewService, useValue: { preview: previewRun } },
         { provide: getDataSourceToken(), useValue: {} },
         { provide: AutocoderRunService, useValue: { run } },
         { provide: getRepositoryToken(ValidationTask), useValue: { find: jest.fn().mockResolvedValue([]) } }
@@ -92,6 +96,22 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     expect(app.get(TestPersonCodingProcessor).worker.opts.concurrency).toBe(1);
     await expect(service.getTestPersonCodingJob('missing')).resolves.toBeNull();
     await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: true });
+  });
+
+  it('persists preview results in a separate queue with a Redis-enforced global concurrency limit', async () => {
+    const previewQueue = app.get<Queue>(getQueueToken('coding-reset-preview'));
+    const previewEvents = new QueueEvents('coding-reset-preview', options);
+    await previewEvents.waitUntilReady();
+    try {
+      const scope = { version: 'v1' as const, unitFilters: ['DHB003'], variableFilters: [] };
+      const job = await service.addResetCodingPreviewJob({ workspaceId: 7, scope });
+      await expect(job.waitUntilFinished(previewEvents, 5_000)).resolves.toMatchObject({ affectedResponseCount: 123 });
+      expect(await previewQueue.getGlobalConcurrency()).toBe(1);
+      expect(previewRun).toHaveBeenCalledWith(7, scope);
+      await expect(service.getWorkspaceJob(8, 'coding-reset-preview', requireJobId(job))).resolves.toBeNull();
+    } finally {
+      await previewEvents.close();
+    }
   });
 
   it('does not consume or overwrite the previous Bull namespace', async () => {

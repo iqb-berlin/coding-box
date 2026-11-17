@@ -34,6 +34,10 @@ import { environment } from '../../../../environments/environment';
 import { Success } from '../../models/success.model';
 import { TestPersonCodingDialogComponent } from '../test-person-coding-dialog/test-person-coding-dialog.component';
 import { CodingFreshnessJobResultDto } from '../../../../../../../api-dto/coding/coding-freshness.dto';
+import {
+  ResetVersionDialogComponent,
+  ResetVersionDialogResult
+} from './reset-version-dialog/reset-version-dialog.component';
 
 describe('CodingManagementComponent', () => {
   let component: CodingManagementComponent;
@@ -1939,6 +1943,61 @@ describe('CodingManagementComponent', () => {
   });
 
   describe('Dialog Methods', () => {
+    it.each([
+      { unitFilters: ['DHB003'], variableFilters: [] },
+      { unitFilters: ['DHB003'], variableFilters: ['V1'] },
+      { unitFilters: [], variableFilters: ['V1'] },
+      { unitFilters: [], variableFilters: [] }
+    ])('forwards the confirmed reset scope %j', result => {
+      mockDialog.open!.mockReturnValue({ afterClosed: () => of(result) } as never);
+      fixture.nativeElement.querySelector('.reset-version-button').click();
+
+      expect(mockDialog.open).toHaveBeenCalledWith(ResetVersionDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ version: 'v1', cascadeVersions: ['v2', 'v3'] })
+      }));
+      expect(mockCodingManagementService.resetCodingVersion).toHaveBeenCalledWith('v1', result.unitFilters, result.variableFilters);
+    });
+
+    it.each([
+      ['v1', ['v2', 'v3']],
+      ['v2', ['v3']],
+      ['v3', []]
+    ] as const)('describes the cascade for %s', (version, cascadeVersions) => {
+      component.selectedStatisticsVersion.set(version);
+      fixture.nativeElement.querySelector('.reset-version-button').click();
+
+      expect(mockDialog.open).toHaveBeenCalledWith(ResetVersionDialogComponent, expect.objectContaining({
+        data: expect.objectContaining({ version, cascadeVersions })
+      }));
+    });
+
+    it('does not start a reset when the dialog is cancelled or dismissed', () => {
+      mockDialog.open!.mockReturnValue({ afterClosed: () => of(undefined) } as never);
+      fixture.nativeElement.querySelector('.reset-version-button').click();
+
+      expect(mockCodingManagementService.resetCodingVersion).not.toHaveBeenCalled();
+    });
+
+    it('resets the version shown when the dialog was opened', () => {
+      const result = new Subject<ResetVersionDialogResult>();
+      mockDialog.open!.mockReturnValue({ afterClosed: () => result } as never);
+      fixture.nativeElement.querySelector('.reset-version-button').click();
+      component.selectedStatisticsVersion.set('v3');
+      result.next({ unitFilters: ['DHB003'], variableFilters: [] });
+
+      expect(mockCodingManagementService.resetCodingVersion).toHaveBeenCalledWith('v1', ['DHB003'], []);
+    });
+
+    it('does not reset a different workspace after the dialog was opened', () => {
+      const result = new Subject<ResetVersionDialogResult>();
+      mockDialog.open!.mockReturnValue({ afterClosed: () => result } as never);
+      fixture.nativeElement.querySelector('.reset-version-button').click();
+      mockAppService.selectedWorkspaceId = 2;
+      result.next({ unitFilters: ['DHB003'], variableFilters: [] });
+
+      expect(mockCodingManagementService.resetCodingVersion).not.toHaveBeenCalled();
+    });
+
     it('should navigate to manual coding route', () => {
       component.openManualCoding();
 

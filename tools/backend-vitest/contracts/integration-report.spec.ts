@@ -17,4 +17,12 @@ describe('unchanged integration gate with native Vitest JSON', () => {
     expect(() => assertIntegrationResults({ ...normalizeResults(report('mandatory', 'passed')), success: false })).toThrow();
     expect(() => assertIntegrationResults({ ...normalizeResults(report('mandatory', 'passed')), testResults: [] })).toThrow();
   });
+  it('accepts the exact optional reset-preview benchmark skip unless enabled', () => {
+    const normalized = normalizeResults(report(
+      'Reset preview against isolated PostgreSQL data measures global and selective previews with one million responses',
+      'skipped', 'coding-reset-preview.postgres.spec.ts'
+    ));
+    expect(() => assertIntegrationResults(normalized)).not.toThrow();
+    expect(() => assertIntegrationResults(normalized, false, true)).toThrow();
+  });
 });

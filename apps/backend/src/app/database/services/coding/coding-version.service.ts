@@ -6,6 +6,9 @@ import { EntityManager, In, Repository } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
+import {
+  codingFieldsEmpty, codingResetConditions, codingResetScopeQuery, codingResetVersions
+} from './coding-reset-scope.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { CodingFreshnessVersion } from '../../../../../../../api-dto/coding/coding-freshness.dto';
 import { CodingAnalysisService } from './coding-analysis.service';
@@ -58,42 +61,9 @@ export class CodingVersionService {
 
       if (progressCallback) await progressCallback(0);
 
-      // Determine which versions to reset and build the appropriate WHERE clause
-      const versionsToReset: ResetCodingVersion[] = [version];
-
-      const baseQueryBuilder = this.responseRepository
-        .createQueryBuilder('response')
-        .leftJoin('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        // Only reset responses that are counted in "total responses" statistic:
-        // 1. Status must be one of: NOT_REACHED (1), DISPLAYED (2), VALUE_CHANGED (3)
-        .andWhere('response.status IN (:...codedStatuses)', { codedStatuses: [1, 2, 3] });
-
-      if (version === 'v1') {
-        versionsToReset.push('v2', 'v3'); // Cascade: resetting v1 also resets v2 and v3
-        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v1', 'v2', 'v3']));
-      } else if (version === 'v2') {
-        versionsToReset.push('v3'); // Cascade: resetting v2 also resets v3
-        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v2', 'v3']));
-        baseQueryBuilder.andWhere('(response.code_v2 IS NULL OR response.code_v2 != -111)');
-      } else {
-        baseQueryBuilder.andWhere(this.buildResetTargetCondition(['v3']));
-      }
-
-      if (unitFilters && unitFilters.length > 0) {
-        baseQueryBuilder.andWhere('unit.name IN (:...unitNames)', {
-          unitNames: unitFilters
-        });
-      }
-
-      if (variableFilters && variableFilters.length > 0) {
-        baseQueryBuilder.andWhere('response.variableid IN (:...variableIds)', {
-          variableIds: variableFilters
-        });
-      }
+      const versionsToReset = codingResetVersions(version);
+      const baseQueryBuilder = codingResetScopeQuery(this.responseRepository, workspaceId, unitFilters, variableFilters);
+      codingResetConditions(version).forEach(condition => baseQueryBuilder.andWhere(condition));
 
       if (progressCallback) await progressCallback(5);
 
@@ -270,15 +240,6 @@ export class CodingVersionService {
     });
   }
 
-  private buildResetTargetCondition(versions: ResetCodingVersion[]): string {
-    const fields = ['status', 'code', 'score'];
-    const conditions = versions.flatMap(version => fields.map(
-      field => `response.${field}_${version} IS NOT NULL`
-    ));
-
-    return `(${conditions.join(' OR ')})`;
-  }
-
   private async deleteEmptyAutocoderGeneratedResponses(
     workspaceId: number,
     unitFilters?: string[],
@@ -334,17 +295,7 @@ export class CodingVersionService {
   }
 
   private buildEmptyCodingColumnsCondition(): string {
-    return [
-      'response.status_v1 IS NULL',
-      'response.code_v1 IS NULL',
-      'response.score_v1 IS NULL',
-      'response.status_v2 IS NULL',
-      'response.code_v2 IS NULL',
-      'response.score_v2 IS NULL',
-      'response.status_v3 IS NULL',
-      'response.code_v3 IS NULL',
-      'response.score_v3 IS NULL'
-    ].join(' AND ');
+    return codingFieldsEmpty(['v1', 'v2', 'v3']);
   }
 
   private async invalidateStatisticsCaches(

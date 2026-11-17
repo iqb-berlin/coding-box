@@ -52,7 +52,12 @@ import {
 import { ExportCodingBookComponent } from '../export-coding-book/export-coding-book.component';
 import { VariableAnalysisDialogComponent } from '../variable-analysis-dialog/variable-analysis-dialog.component';
 import { CodingVariablesDialogComponent } from '../../../coding-management/coding-variables-dialog/coding-variables-dialog.component';
-import { ResetVersionDialogComponent } from './reset-version-dialog/reset-version-dialog.component';
+import {
+  ResetVersionDialogComponent,
+  ResetVersionDialogData,
+  ResetVersionDialogResult,
+  createResetVersionDialogData
+} from './reset-version-dialog/reset-version-dialog.component';
 import { DownloadCodingResultsDialogComponent } from './download-coding-results-dialog/download-coding-results-dialog.component';
 import {
   CodingManagementService,
@@ -1461,33 +1466,18 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       return;
     }
 
-    const versionOption = [
-      { value: 'v1', label: 'coding-management.statistics.first-autocode-run' },
-      { value: 'v2', label: 'coding-management.statistics.manual-coding-run' },
-      { value: 'v3', label: 'coding-management.statistics.second-autocode-run' }
-    ].find(opt => opt.value === this.selectedStatisticsVersion());
-
-    const versionLabel = versionOption?.label || '';
-    const cascadeVersions = this.selectedStatisticsVersion() === 'v2' ? ['v3'] : [];
-
-    const dialogRef = this.dialog.open(ResetVersionDialogComponent, {
-      width: '500px',
-      data: {
-        version: this.selectedStatisticsVersion(),
-        versionLabel: versionLabel,
-        cascadeVersions: cascadeVersions
-      }
+    const version = this.selectedStatisticsVersion();
+    const dialogRef = this.dialog.open<ResetVersionDialogComponent, ResetVersionDialogData, ResetVersionDialogResult>(ResetVersionDialogComponent, {
+      width: '650px',
+      maxWidth: '95vw',
+      data: createResetVersionDialogData(workspaceId, version)
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe((result: boolean | undefined) => {
-      if (result === true) {
-        this.resetCodingVersion(this.selectedStatisticsVersion());
+    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+      if (result && this.appService.selectedWorkspaceId === workspaceId) {
+        this.codingManagementService.resetCodingVersion(version, result.unitFilters, result.variableFilters);
       }
     });
-  }
-
-  private resetCodingVersion(version: 'v1' | 'v2' | 'v3'): void {
-    this.codingManagementService.resetCodingVersion(version);
   }
 
   private openDownloadCodingResultsDialog(): void {

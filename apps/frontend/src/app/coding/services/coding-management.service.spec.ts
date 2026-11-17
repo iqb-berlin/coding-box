@@ -262,6 +262,19 @@ describe('CodingManagementService', () => {
   });
 
   describe('resetCodingVersion', () => {
+    it.each([
+      [undefined, undefined],
+      [['DHB003'], []],
+      [['DHB003', 'DHB004'], ['V1', 'V2']],
+      [[], ['V1']]
+    ])('forwards unit %j and variable %j filters to the reset service', (unitFilters, variableFilters) => {
+      versionServiceMock.resetCodingVersion.mockReturnValue(EMPTY);
+
+      service.resetCodingVersion('v1', unitFilters, variableFilters);
+
+      expect(versionServiceMock.resetCodingVersion).toHaveBeenCalledWith(1, 'v1', unitFilters, variableFilters);
+    });
+
     it('should keep the reset guard active after a transient polling error', async () => {
       jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
       try {
@@ -286,7 +299,9 @@ describe('CodingManagementService', () => {
             }
           }));
 
-        service.resetCodingVersion('v1');
+        service.resetCodingVersion('v1', ['DHB003'], ['V1']);
+
+        expect(versionServiceMock.resetCodingVersion).toHaveBeenCalledWith(1, 'v1', ['DHB003'], ['V1']);
 
         expect(setJobRunningSpy).toHaveBeenCalledWith(
           1,

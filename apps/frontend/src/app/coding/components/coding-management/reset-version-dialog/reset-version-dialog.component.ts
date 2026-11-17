@@ -1,27 +1,66 @@
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import {
+  Component, ChangeDetectionStrategy, computed, effect, inject, signal
+} from '@angular/core';
+import { FormsModule } from '@angular/forms';
 
-import { MatDialogModule, MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
+import {
+  MatDialog, MatDialogModule, MAT_DIALOG_DATA, MatDialogRef
+} from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
+import { MatFormFieldModule } from '@angular/material/form-field';
+import { MatInputModule } from '@angular/material/input';
+import { MatRadioModule } from '@angular/material/radio';
 import { TranslateModule } from '@ngx-translate/core';
+import { DecimalPipe } from '@angular/common';
+import { ResetFilterDetailsDialogComponent } from './reset-filter-details-dialog.component';
+import { ResetCodingPreviewState } from './reset-coding-preview-state.service';
+import { ResetCodingPreviewComponent } from './reset-coding-preview.component';
+import { ResetCodingScope } from '../../../../../../../../api-dto/coding/reset-coding-preview.dto';
 
 export interface ResetVersionDialogData {
+  workspaceId: number;
   version: 'v1' | 'v2' | 'v3';
   versionLabel: string;
   affectedCount?: number;
   cascadeVersions?: string[];
 }
 
+export interface ResetVersionDialogResult {
+  unitFilters: string[];
+  variableFilters: string[];
+}
+
+export function createResetVersionDialogData(workspaceId: number, version: ResetVersionDialogData['version']): ResetVersionDialogData {
+  return {
+    workspaceId,
+    version,
+    versionLabel: {
+      v1: 'coding-management.statistics.first-autocode-run',
+      v2: 'coding-management.statistics.manual-coding-run',
+      v3: 'coding-management.statistics.second-autocode-run'
+    }[version],
+    cascadeVersions: { v1: ['v2', 'v3'], v2: ['v3'], v3: [] }[version]
+  };
+}
+
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-reset-version-dialog',
   standalone: true,
+  providers: [ResetCodingPreviewState],
   imports: [
+    DecimalPipe,
+    ResetCodingPreviewComponent,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
     MatDividerModule,
+    FormsModule,
+    MatFormFieldModule,
+    MatInputModule,
+    MatRadioModule,
     TranslateModule
   ],
   template: `
@@ -42,6 +81,41 @@ export interface ResetVersionDialogData {
           <p class="version-label">{{ 'coding-management.reset-dialog.version-to-reset' | translate }}</p>
           <p class="version-value">{{ versionLabel | translate }}</p>
         </div>
+
+        <mat-radio-group
+          [ngModel]="scope()"
+          (ngModelChange)="scope.set($event)"
+          [attr.aria-label]="'coding-management.reset-dialog.scope-label' | translate"
+          class="scope-selection"
+        >
+          <mat-radio-button value="global">
+            {{ 'coding-management.reset-dialog.scope-global' | translate }}
+          </mat-radio-button>
+          <mat-radio-button value="filtered">
+            {{ 'coding-management.reset-dialog.scope-filtered' | translate }}
+          </mat-radio-button>
+        </mat-radio-group>
+
+        @if (scope() === 'filtered') {
+          <div class="filter-fields">
+            <p>{{ 'coding-management.reset-dialog.filter-help' | translate }}</p>
+            <mat-form-field appearance="outline" subscriptSizing="dynamic">
+              <mat-label>{{ 'coding-management.reset-dialog.units-label' | translate }}</mat-label>
+              <textarea matInput rows="2" data-cy="reset-unit-filters"
+                [ngModel]="unitInput()" (ngModelChange)="unitInput.set($event)"
+                [placeholder]="'coding-management.reset-dialog.units-placeholder' | translate"></textarea>
+              <mat-hint>{{ 'ui-text.reset-version-dialog.units-hint' | translate }}</mat-hint>
+            </mat-form-field>
+            <mat-form-field appearance="outline">
+              <mat-label>{{ 'coding-management.reset-dialog.variables-label' | translate }}</mat-label>
+              <textarea matInput rows="2" data-cy="reset-variable-filters"
+                [ngModel]="variableInput()" (ngModelChange)="variableInput.set($event)"></textarea>
+            </mat-form-field>
+            <p>{{ 'coding-management.reset-dialog.filter-combination' | translate }}</p>
+          </div>
+        }
+
+        <coding-box-reset-coding-preview></coding-box-reset-coding-preview>
 
         <div class="result-impact-info">
           <p class="info-heading">
@@ -70,7 +144,7 @@ export interface ResetVersionDialogData {
               {{ 'coding-management.reset-dialog.cascade-warning' | translate }}
             </p>
             <p class="cascade-versions">
-              {{ 'coding-management.reset-dialog.cascade-versions' | translate }}: <strong>{{ cascadeVersions.join(', ') }}</strong>
+              {{ cascadeImpactKey | translate }}
             </p>
             <p class="cascade-explanation">
               {{ 'coding-management.reset-dialog.cascade-explanation' | translate }}
@@ -96,24 +170,79 @@ export interface ResetVersionDialogData {
 
       <mat-divider></mat-divider>
 
-      <div class="dialog-actions">
-        <button
-          mat-raised-button
-          (click)="onCancel()"
-          class="cancel-button"
-        >
-          <mat-icon>cancel</mat-icon>
-          {{ 'coding-management.reset-dialog.cancel-button' | translate }}
-        </button>
-        <button
-          mat-raised-button
-          color="warn"
-          (click)="onConfirm()"
-          class="confirm-button"
-        >
-          <mat-icon>restart_alt</mat-icon>
-          {{ 'coding-management.reset-dialog.confirm-button' | translate }}
-        </button>
+      <div class="confirmation-footer">
+        <div class="scope-summary" aria-live="polite">
+          @if (scope() === 'global') {
+            <strong>{{ 'coding-management.reset-dialog.confirmation-global' | translate }}</strong>
+          } @else if (hasValidScope()) {
+            <strong>{{ 'coding-management.reset-dialog.confirmation-filtered' | translate }}</strong>
+            @let unitsText = 'coding-management.reset-dialog.summary-units' | translate: {
+              units: unitFilters().length ? unitFilters().join(', ') : ('coding-management.reset-dialog.all-units' | translate)
+            };
+            @let variablesText = 'coding-management.reset-dialog.summary-variables' | translate: {
+              variables: variableFilters().length ? variableFilters().join(', ') : ('coding-management.reset-dialog.all-variables' | translate)
+            };
+            @if (compactFilterSummary()) {
+              <p class="scope-filter-line">
+                @if (unitFilters().length) {
+                  {{ 'ui-text.reset-version-dialog.selected-units' | translate: { count: unitFilters().length } }}
+                } @else {
+                  {{ unitsText }}
+                }
+              </p>
+              <p class="scope-filter-line">
+                @if (variableFilters().length) {
+                  {{ 'ui-text.reset-version-dialog.selected-variables' | translate: { count: variableFilters().length } }}
+                } @else {
+                  {{ variablesText }}
+                }
+              </p>
+              <button mat-button class="filter-details-button" (click)="showFilterDetails()">
+                {{ 'ui-text.reset-version-dialog.show-all-filters' | translate }}
+              </button>
+            } @else {
+              <p class="scope-filter-line">{{ unitsText }}</p>
+              <p class="scope-filter-line">{{ variablesText }}</p>
+            }
+          } @else {
+            <strong>{{ 'coding-management.reset-dialog.filter-required' | translate }}</strong>
+          }
+          <p class="confirmation-cascade">
+            {{ confirmationImpactKey | translate }}
+          </p>
+          <p class="confirmation-count" aria-live="polite">
+            @if (preview.matches(data.workspaceId, previewScope()) && preview.result()?.status === 'valid') {
+              {{ 'ui-text.reset-version-dialog.affected-responses' | translate: { count: preview.result()?.affectedResponseCount | number } }}
+            } @else {
+              {{ 'ui-text.reset-version-dialog.preview-required' | translate }}
+            }
+          </p>
+        </div>
+
+        <div class="dialog-actions">
+          <button
+            mat-raised-button
+            (click)="onCancel()"
+            class="cancel-button"
+          >
+            <mat-icon>cancel</mat-icon>
+            {{ 'coding-management.reset-dialog.cancel-button' | translate }}
+          </button>
+          <button
+            mat-raised-button
+            color="warn"
+            (click)="onConfirm()"
+            [disabled]="!canConfirm()"
+            class="confirm-button"
+          >
+            <mat-icon>restart_alt</mat-icon>
+            @if (scope() === 'global') {
+              {{ 'coding-management.reset-dialog.confirm-global' | translate }}
+            } @else {
+              {{ 'coding-management.reset-dialog.confirm-filtered' | translate }}
+            }
+          </button>
+        </div>
       </div>
     </div>
   `,
@@ -122,11 +251,14 @@ export interface ResetVersionDialogData {
       display: flex;
       flex-direction: column;
       gap: 0;
-      min-width: 450px;
+      min-width: 0;
+      max-height: 90vh;
+      overflow: hidden;
     }
 
     .dialog-header {
       display: flex;
+      flex-shrink: 0;
       align-items: center;
       gap: 12px;
       padding: 24px 24px 16px 24px;
@@ -148,10 +280,25 @@ export interface ResetVersionDialogData {
     }
 
     .dialog-content {
+      overflow-y: auto;
+      min-height: 0;
       padding: 24px;
       display: flex;
       flex-direction: column;
       gap: 16px;
+
+      .scope-selection,
+      .filter-fields {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        min-width: 0;
+      }
+
+      .filter-fields mat-form-field {
+        width: 100%;
+        min-width: 0;
+      }
 
       .warning-text {
         margin: 0;
@@ -302,10 +449,46 @@ export interface ResetVersionDialogData {
       }
     }
 
+    .confirmation-footer {
+      flex-shrink: 0;
+      padding: 12px 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .scope-summary {
+      padding: 8px 12px;
+      border: 2px solid #ff9800;
+      border-radius: 4px;
+      background-color: #fff8e1;
+      color: #5d4037;
+      font-size: 13px;
+      line-height: 1.4;
+
+      p {
+        margin: 4px 0 0;
+      }
+
+      .scope-filter-line {
+        overflow-wrap: anywhere;
+      }
+
+      .filter-details-button {
+        margin-top: 4px;
+        max-width: 100%;
+      }
+
+      .confirmation-cascade {
+        font-weight: 600;
+      }
+    }
+
     .dialog-actions {
       display: flex;
+      flex-wrap: wrap;
+      flex-shrink: 0;
       gap: 12px;
-      padding: 16px 24px;
       justify-content: flex-end;
 
       button {
@@ -331,23 +514,62 @@ export interface ResetVersionDialogData {
       }
 
       .confirm-button {
-        background-color: #d32f2f;
+        &:not(:disabled) {
+          background-color: #d32f2f;
+        }
 
-        &:hover {
+        &:hover:not(:disabled) {
           background-color: #b71c1c;
         }
       }
     }
+
+    @media (max-width: 400px) {
+      .dialog-header { padding: 16px; gap: 8px; }
+      .dialog-header .dialog-title { font-size: 18px; }
+      .dialog-content { padding: 16px; }
+      .confirmation-footer { padding: 8px 16px 12px; gap: 8px; }
+      .dialog-actions { gap: 8px; }
+    }
+
+    @media (max-height: 500px) {
+      .reset-dialog-container { overflow-y: auto; }
+      .dialog-content { overflow: visible; flex-shrink: 0; }
+    }
   `]
 })
 export class ResetVersionDialogComponent {
-  dialogRef = inject<MatDialogRef<ResetVersionDialogComponent>>(MatDialogRef);
+  protected readonly preview = inject(ResetCodingPreviewState);
+  private readonly dialog = inject(MatDialog);
+  dialogRef = inject<MatDialogRef<ResetVersionDialogComponent, ResetVersionDialogResult>>(MatDialogRef);
   data = inject<ResetVersionDialogData>(MAT_DIALOG_DATA);
 
   protected versionLabel: string;
   protected cascadeVersions: string[] = [];
   protected resetVersions: string[] = [];
+  protected confirmationImpactKey: string;
+  protected cascadeImpactKey: string;
   resultImpactKey: string;
+  protected readonly scope = signal<'global' | 'filtered'>('global');
+  protected readonly unitInput = signal('');
+  protected readonly variableInput = signal('');
+  protected readonly unitFilters = computed(() => this.parseFilters(this.unitInput()));
+  protected readonly variableFilters = computed(() => this.parseFilters(this.variableInput()));
+  protected readonly compactFilterSummary = computed(() => (
+    [this.unitFilters(), this.variableFilters()].some(filters => filters.length > 3 || filters.join(', ').length > 40)
+  ));
+
+  protected readonly hasValidScope = computed(() => this.scope() === 'global' ||
+    this.unitFilters().length > 0 || this.variableFilters().length > 0);
+
+  protected readonly previewScope = computed<ResetCodingScope | null>(() => (this.hasValidScope() ? {
+    version: this.data.version,
+    unitFilters: this.scope() === 'filtered' ? this.unitFilters() : [],
+    variableFilters: this.scope() === 'filtered' ? this.variableFilters() : []
+  } : null));
+
+  protected readonly canConfirm = computed(() => this.hasValidScope() && this.preview.canConfirm() &&
+    this.preview.matches(this.data.workspaceId, this.previewScope()));
 
   constructor() {
     const data = this.data;
@@ -356,13 +578,32 @@ export class ResetVersionDialogComponent {
     this.cascadeVersions = data.cascadeVersions || [];
     this.resetVersions = [data.version, ...this.cascadeVersions];
     this.resultImpactKey = `coding-management.reset-dialog.result-impact.${data.version}`;
+    this.confirmationImpactKey = `ui-text.reset-version-dialog.confirmation-impact.${data.version}`;
+    this.cascadeImpactKey = `ui-text.reset-version-dialog.cascade-impact.${data.version}`;
+    effect(() => this.preview.configure(data.workspaceId, this.previewScope()));
   }
 
   protected onCancel(): void {
-    this.dialogRef.close(false);
+    this.dialogRef.close();
+  }
+
+  protected showFilterDetails(): void {
+    this.dialog.open(ResetFilterDetailsDialogComponent, {
+      width: '650px',
+      maxWidth: '95vw',
+      data: { unitFilters: this.unitFilters(), variableFilters: this.variableFilters() }
+    });
   }
 
   onConfirm(): void {
-    this.dialogRef.close(true);
+    if (!this.canConfirm()) return;
+    this.dialogRef.close({
+      unitFilters: this.scope() === 'filtered' ? this.unitFilters() : [],
+      variableFilters: this.scope() === 'filtered' ? this.variableFilters() : []
+    });
+  }
+
+  private parseFilters(value: string): string[] {
+    return [...new Set(value.split(/[,;\r\n]+/).map(filter => filter.trim()).filter(Boolean))];
   }
 }

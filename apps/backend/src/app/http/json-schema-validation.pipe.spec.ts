@@ -4,7 +4,19 @@ import { requestBodySchemas } from './request-body.schemas';
 
 describe('JSON request contracts', () => {
   it.each([
+    { version: 'v1', unitFilters: [], variableFilters: [] },
+    { version: 'v1', unitFilters: ['DHB003', 'Unit with spaces'], variableFilters: ['V1'] }
+  ])('accepts valid global and filtered reset previews', payload => {
+    const pipe = new JsonSchemaValidationPipe(requestBodySchemas.WorkspaceCodingVersionController_previewReset);
+    expect(() => pipe.transform(payload)).not.toThrow();
+  });
+
+  it.each([
     ['WorkspaceCodingVersionController_resetCodingVersion', { version: 'v4' }],
+    ['WorkspaceCodingVersionController_previewReset', { version: 'v4', unitFilters: [], variableFilters: [] }],
+    ['WorkspaceCodingVersionController_previewReset', { version: 'v1', unitFilters: ['   '], variableFilters: [] }],
+    ['WorkspaceCodingVersionController_previewReset', { version: 'v1', unitFilters: ['U'.repeat(101)], variableFilters: [] }],
+    ['WorkspaceCodingVersionController_previewReset', { version: 'v1', unitFilters: [], variableFilters: Array(2001).fill('V') }],
     ['WorkspaceCoderTrainingController_saveDiscussionResult', { responseId: 1, code: '1', score: 0 }],
     ['WorkspaceCodingStatisticsController_calculateDistribution', {
       selectedVariables: [{ unitName: 'U1', variableId: 12 }], selectedCoders: []

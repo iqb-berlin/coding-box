@@ -43,6 +43,13 @@ const benchmark = {
     status: 'pending'
   }]
 };
+const resetPreviewBenchmark = {
+  name: '/test/coding-reset-preview.postgres.spec.ts',
+  assertionResults: [{
+    fullName: 'Reset preview against isolated PostgreSQL data measures global and selective previews with one million responses',
+    status: 'pending'
+  }]
+};
 
 test('successful mandatory integration tests pass the gate', () => {
   assert.doesNotThrow(() => assertIntegrationResults(successfulResults));
@@ -64,6 +71,26 @@ test('only the exact optional Kappa benchmark may be skipped unless explicitly e
   const wrongSuite = structuredClone(results);
   wrongSuite.testResults[1].name = '/test/another.postgres.spec.ts';
   assert.throws(() => assertIntegrationResults(wrongSuite), /every mandatory test/);
+});
+
+test('only the exact optional reset-preview benchmark may be skipped unless explicitly enabled', () => {
+  const results = { ...successfulResults, numPendingTests: 1, testResults: [...successfulResults.testResults, resetPreviewBenchmark] };
+  assert.doesNotThrow(() => assertIntegrationResults(results));
+  assert.throws(() => assertIntegrationResults(results, false, true), /every mandatory test/);
+  const mandatoryTest = structuredClone(results);
+  mandatoryTest.testResults[1].assertionResults[0].fullName = 'counts the exact reset and cleanup scope';
+  assert.throws(() => assertIntegrationResults(mandatoryTest), /every mandatory test/);
+  const wrongSuite = structuredClone(results);
+  wrongSuite.testResults[1].name = '/test/another.postgres.spec.ts';
+  assert.throws(() => assertIntegrationResults(wrongSuite), /every mandatory test/);
+});
+
+test('both optional benchmark skips are counted and their enable flags remain independent', () => {
+  const results = { ...successfulResults, numPendingTests: 2, testResults: [...successfulResults.testResults, benchmark, resetPreviewBenchmark] };
+  assert.doesNotThrow(() => assertIntegrationResults(results));
+  assert.throws(() => assertIntegrationResults(results, true), /every mandatory test/);
+  assert.throws(() => assertIntegrationResults(results, false, true), /every mandatory test/);
+  assert.throws(() => assertIntegrationResults({ ...results, numPendingTests: 3 }), /Only the optional/);
 });
 
 test('failed, empty or skipped suites cannot satisfy the integration gate', () => {

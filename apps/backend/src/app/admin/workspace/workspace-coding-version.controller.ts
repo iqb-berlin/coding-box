@@ -5,6 +5,7 @@ import {
   ApiOkResponse, ApiParam, ApiTags, ApiConflictResponse
 } from '@nestjs/swagger';
 import { Request } from 'express';
+import { ResetCodingPreviewJobStatus, ResetCodingScope } from '../../../../../../api-dto/coding/reset-coding-preview.dto';
 import { requireJobId } from '../../job-queue/job-queue.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
@@ -35,6 +36,64 @@ export class WorkspaceCodingVersionController {
     private journalService: JournalService,
     private jobQueueService: JobQueueService
   ) { }
+
+  @Post(':workspace_id/coding/reset-version/preview')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiOkResponse({
+    description: 'Read-only reset preview queued; no results are changed.',
+    schema: { type: 'object', properties: { jobId: { type: 'string' } } }
+  })
+  async previewReset(
+    @WorkspaceId() workspaceId: number,
+    @ValidatedBody('WorkspaceCodingVersionController_previewReset') body: RequestBody<'WorkspaceCodingVersionController_previewReset'>
+  ): Promise<{ jobId: string }> {
+    const scope: ResetCodingScope = {
+      version: body.version,
+      unitFilters: [...new Set(body.unitFilters.map(value => value.trim()).filter(Boolean))].sort(),
+      variableFilters: [...new Set(body.variableFilters.map(value => value.trim()).filter(Boolean))].sort()
+    };
+    const job = await this.jobQueueService.addResetCodingPreviewJob({ workspaceId, scope });
+    return { jobId: requireJobId(job) };
+  }
+
+  @Get(':workspace_id/coding/reset-version/preview/:jobId')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiTags('coding')
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({
+    description: 'Filter validation and exact reset counts for the requested workspace.',
+    schema: {
+      type: 'object',
+      properties: {
+        status: { type: 'string', enum: ['pending', 'processing', 'completed', 'failed', 'not_found'] },
+        result: {
+          type: 'object',
+          properties: {
+            status: { type: 'string', enum: ['valid', 'invalid-filters'] },
+            unknownUnits: { type: 'array', items: { type: 'string' } },
+            unknownVariables: { type: 'array', items: { type: 'string' } },
+            affectedResponseCount: { type: 'integer', nullable: true },
+            resetResponseCount: { type: 'integer', nullable: true },
+            deletedGeneratedResponseCount: { type: 'integer', nullable: true },
+            checkedAt: { type: 'string', format: 'date-time' }
+          }
+        }
+      }
+    }
+  })
+  async getResetPreview(@WorkspaceId() workspaceId: number, @Param('jobId') jobId: string): Promise<ResetCodingPreviewJobStatus> {
+    const job = await this.jobQueueService.getWorkspaceJob(workspaceId, 'coding-reset-preview', jobId);
+    if (!job) return { status: 'not_found' };
+    const state = await job.getState();
+    if (state === 'completed') return { status: 'completed', result: job.returnvalue };
+    if (state === 'failed') return { status: 'failed' };
+    return { status: state === 'active' ? 'processing' : 'pending' };
+  }
 
   @Post(':workspace_id/coding/reset-version')
   @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)

@@ -2045,7 +2045,28 @@
     },
     "reset-dialog": {
       "title": "Kodierversion zurücksetzen",
-      "warning-message": "Sie sind dabei, eine Kodierversion zurückzusetzen. Dies löscht alle kodierten Daten dieser Version.",
+      "warning-message": "Sie sind dabei, die Kodierergebnisse im unten angegebenen Bereich zurückzusetzen. Prüfen Sie den Bereich vor dem Start.",
+      "scope-label": "Bereich des Resets",
+      "scope-global": "Globaler Reset – gesamter Arbeitsbereich",
+      "scope-filtered": "Gefilterter Reset – bestimmte Units oder Variablen",
+      "filter-help": "Geben Sie die exakten Unit-Namen bzw. Variablen-IDs ein. Trennen Sie mehrere Werte durch Kommas, Semikolons oder Zeilenumbrüche. Groß- und Kleinschreibung wird berücksichtigt.",
+      "units-label": "Unit-Namen",
+      "units-placeholder": "z. B. DHB003",
+      "variables-label": "Variablen-IDs (optional)",
+      "summary-global": "Globaler Reset: Kodierergebnisse im gesamten Arbeitsbereich werden zurückgesetzt.",
+      "summary-filtered": "Gefilterter Reset: Nur Kodierergebnisse im folgenden Bereich werden zurückgesetzt.",
+      "summary-units": "Units: {{units}}",
+      "summary-variables": "Variablen: {{variables}}",
+      "all-units": "alle Units im Arbeitsbereich",
+      "all-variables": "alle Variablen der betroffenen Units",
+      "filter-combination": "Wenn beide Filter gesetzt sind, müssen Unit und Variable übereinstimmen. Auch die Kaskade gilt nur für den angegebenen Bereich.",
+      "filter-required": "Geben Sie mindestens einen Unit-Namen oder eine Variablen-ID ein. Ohne Filter kann kein gefilterter Reset gestartet werden.",
+      "confirm-global": "Gesamten Arbeitsbereich zurücksetzen",
+      "confirm-filtered": "Gefilterten Bereich zurücksetzen",
+      "confirmation-global": "Globaler Reset: gesamter Arbeitsbereich",
+      "confirmation-filtered": "Gefilterter Reset",
+      "confirmation-cascade": "Reset: {{version}} · Kaskade: {{versions}}",
+      "confirmation-no-cascade": "Reset: {{version}} · keine Kaskade",
       "version-to-reset": "Zu resettierende Version",
       "result-impact-title": "Welche Ergebnisse werden zurückgesetzt?",
       "result-impact": {
@@ -2058,7 +2079,7 @@
       "jobs-preserved-text": "Bestehende Kodierjobs, Zuweisungen und Joblisten werden dadurch nicht gelöscht. Zurückgesetzt werden die gespeicherten Kodierergebnisse an den Antworten.",
       "cascade-warning": "Diese Version und alle später im Prozess folgenden Versionen werden zurückgesetzt",
       "cascade-versions": "Folgende Versionen werden ebenfalls gelöscht",
-      "cascade-explanation": "Alle nachfolgenden Kodierversionen (später im Prozess) werden ebenfalls vollständig gelöscht. Dies ist notwendig, um die Konsistenz des Kodierungsprozesses zu gewährleisten",
+      "cascade-explanation": "Die Ergebnisse der nachfolgenden Kodierversionen werden im oben angegebenen Bereich ebenfalls zurückgesetzt. Dies erhält die Konsistenz des Kodierungsprozesses.",
       "irreversible-warning": "Diese Aktion kann nicht rückgängig gemacht werden! Stellen Sie sicher, dass Sie ein Backup der Daten haben.",
       "cancel-button": "Abbrechen",
       "confirm-button": "Ja, zurücksetzen",
@@ -3635,6 +3656,37 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "reset-version-dialog": {
+      "preview-help": "Prüfen Sie den gewählten Bereich vor dem Zurücksetzen. Die Prüfung startet nur auf Knopfdruck und verändert keine Daten.",
+      "process-label": "Reset-Vorschau",
+      "process-description": "Prüft die gewählten Units und Variablen und zählt betroffene Antworten, ohne Ergebnisse zu verändern.",
+      "check-scope": "Bereich prüfen",
+      "preview-running": "Bereich wird geprüft und betroffene Antworten werden gezählt. Bei großen Datenmengen kann dies länger dauern.",
+      "preview-failed": "Die Prüfung konnte nicht abgeschlossen werden. Bitte versuchen Sie es erneut oder grenzen Sie den Bereich weiter ein.",
+      "unknown-units": "Diese Unit-Namen wurden im Arbeitsbereich nicht gefunden: {{values}}",
+      "unknown-variables": "Diese Variablen-IDs wurden im gewählten Unit-Bereich nicht gefunden: {{values}}",
+      "affected-responses": "Betroffene Antworten: {{count}}",
+      "generated-cleanup": "Davon werden {{count}} automatisch erzeugte Antworten ohne verbleibende Kodierergebnisse entfernt.",
+      "no-affected-responses": "In diesem Bereich gibt es keine Antworten, die zurückgesetzt werden können. Der Reset kann nicht gestartet werden.",
+      "preview-snapshot": "Die Anzahl ist eine Momentaufnahme. Ändert sich der Datenbestand, kann die tatsächliche Anzahl beim Start abweichen.",
+      "preview-required": "Vor dem Start: Bereich prüfen.",
+      "confirmation-impact": {
+        "v1": "Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.",
+        "v2": "Die manuelle Kodierung wird zurückgesetzt. Zusätzlich: 2. Autocoder-Lauf.",
+        "v3": "Nur der 2. Autocoder-Lauf wird zurückgesetzt."
+      },
+      "cascade-impact": {
+        "v1": "Zusätzlich werden die manuelle Kodierung und der 2. Autocoder-Lauf im gewählten Bereich zurückgesetzt.",
+        "v2": "Zusätzlich wird der 2. Autocoder-Lauf im gewählten Bereich zurückgesetzt.",
+        "v3": "Der 1. Autocoder-Lauf und die manuelle Kodierung bleiben erhalten."
+      },
+      "units-hint": "Ohne Unit-Filter gelten die Variablen-IDs für alle Units im Arbeitsbereich.",
+      "selected-units": "Units: {{count}} ausgewählt",
+      "selected-variables": "Variablen: {{count}} ausgewählt",
+      "show-all-filters": "Alle Filter anzeigen",
+      "filter-details-title": "Ausgewählter Bereich",
+      "variables-title": "Variablen-IDs"
+    },
     "app": {
       "title": "IQB-Kodierbox",
       "session-data-load-failed": "Ihre Anmeldung wurde erkannt, aber die Sitzungsdaten konnten nicht geladen werden. Bitte laden Sie die Seite neu oder melden Sie sich erneut an."

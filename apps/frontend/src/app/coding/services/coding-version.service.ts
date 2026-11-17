@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable, catchError, of } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
+import { ResetCodingPreviewJobStatus, ResetCodingScope } from '../../../../../../api-dto/coding/reset-coding-preview.dto';
 
 export const RESET_VERSION_JOB_STATUS_POLL_ERROR = 'Failed to get reset job status';
 
@@ -31,6 +32,15 @@ export interface ActiveResetJob {
 export class CodingVersionService {
   readonly serverUrl = inject(SERVER_URL);
   private http = inject(HttpClient);
+
+  previewReset(workspaceId: number, scope: ResetCodingScope): Observable<{ jobId: string }> {
+    return this.http.post<{ jobId: string }>(`${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/preview`, scope, { context: suppressGlobalHttpErrorContext() });
+  }
+
+  getResetPreview(workspaceId: number, jobId: string): Observable<ResetCodingPreviewJobStatus> {
+    return this.http.get<ResetCodingPreviewJobStatus>(`${this.serverUrl}admin/workspace/${workspaceId}/coding/reset-version/preview/${jobId}`,
+      { context: suppressGlobalHttpErrorContext() });
+  }
 
   resetCodingVersion(
     workspaceId: number,
