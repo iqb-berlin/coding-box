@@ -7,7 +7,7 @@ import { compareSnapshots, normalizeConstraintDefinition, quoteIdentifier, snaps
 const snapshot = () => ({ formatVersion: 1, server: 'PostgreSQL 14.24', extensions: [], preserved: {
   database: { encoding: 'UTF8', datcollate: 'de_DE.utf8', datctype: 'de_DE.utf8', owner: 'root' },
   access: { schemas: [{ nspname: 'public', owner: 'root', acl: ['=UC/root'] }], relations: [] },
-  columns: [], constraints: [], indexes: [], sequences: [{ sequencename: 'response_id_seq', last_value: '7', is_called: true }],
+  enums: [], columns: [], constraints: [], indexes: [], sequences: [{ sequencename: 'response_id_seq', last_value: '7', is_called: true }],
   tables: [{ name: 'response', rows: 3, sha256: 'all-values-codes-and-scores' }]
 } });
 
@@ -17,7 +17,7 @@ test('expected server/extension version changes do not hide data or schema chang
   after.server = 'PostgreSQL 17.12';
   after.extensions.push({ extname: 'pg_stat_statements', extversion: '1.11' });
   assert.deepEqual(compareSnapshots(before, after), []);
-  for (const key of ['tables', 'columns', 'constraints', 'indexes', 'sequences']) {
+  for (const key of ['tables', 'enums', 'columns', 'constraints', 'indexes', 'sequences']) {
     const changed = structuredClone(after);
     changed.preserved[key].push({ changed: true });
     assert.deepEqual(compareSnapshots(before, changed), [key]);

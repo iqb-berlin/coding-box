@@ -6,12 +6,143 @@ Ein Versions-Overlay ist nicht erforderlich. Pool-Timeout, Slow-Query-Logging un
 Anwendungsfunktionen behalten ihre bisherigen Defaults.
 Die lokalen Testergebnisse stehen in [der Validierung](qa/postgresql-17.12-validation.md).
 
-Bestehende Daten werden nicht automatisch konvertiert. Ohne `POSTGRES_DATA_VOLUME`
+Normales Starten konvertiert bestehende Daten nicht. Ohne `POSTGRES_DATA_VOLUME`
 bleibt das bisherige `<Compose-Projekt>_db_vol` ausgewählt. Enthält es Daten von 14,
 verweigert PostgreSQL 17 den Start; es wird kein leerer Ersatzbestand ausgewählt.
 Erst der folgende geprüfte Transfer und die dauerhafte Auswahl des Zielvolumes
 schalten den Bestand um. Normale `make ...-up`-/Update-Befehle vorher nicht ausführen.
 Die separate Keycloak-Datenbank ist nicht Teil dieses Anwendungsdatenbank-Umstiegs.
+
+## Automatisierter Umstieg mit Make (empfohlener Weg)
+
+Im Installationsverzeichnis, **während die bisherige 14er Datenbank und das Backend
+noch gesund laufen**:
+
+```bash
+make coding-box-postgres17-migrate
+make coding-box-postgres17-status
+```
+
+Voraussetzungen: Linux, Python **3.9 oder neuer**, Make, Docker mit Compose v2 und
+Zugriff auf denselben Docker-Daemon wie die Installation. Lokales Node/npm ist
+nicht erforderlich; der Vergleich läuft mit `pg` im bestehenden Backendimage.
+Die aktualisierten Produktions-Compose-Dateien und `.env.coding-box` müssen das
+gewählte Release mit seinem 17.12-DB-Image benennen. Installer und Updater liefern
+Make-Datei, Python-Programm und Vergleichsskript mit. Erkennt der Updater eine noch
+laufende 14er Quelle, lässt er sie laufen und verweist auf diesen Befehl.
+Bei privater Registry bei Bedarf vorher mit `docker login` anmelden.
+
+Der Befehl:
+
+1. Prüft Quelle, Administratorzugang, Objektumfang, Images und Backup-Speicherplatz.
+   Er hält die tatsächlich laufenden Images, Umgebungen und Startbefehle fest.
+2. Sichert das alte DB-Image, die Konfiguration und Authentifizierungsdateien;
+   initialisiert ein **neues** Volume mit 17.12 und übernimmt Quelleinstellungen.
+3. Stoppt API, Export-Worker und Frontend für die Schreibpause. Eine temporäre
+   `pg_hba.conf` lässt Zugriffe auf die Anwendungsdatenbank nur aus dem privaten
+   Migrationsnetz zu. Verbleibende externe Sitzungen führen zum Abbruch.
+4. Erstellt Rollenbackup und vollständigen Custom-Dump mit den 17.12-Werkzeugen,
+   Prüfsummen und einen konsistenten Ausgangsbericht. Antwortwerte stehen nur im
+   geschützten Dump, im Bericht lediglich Zeilenzahlen und SHA-256-Hashes.
+5. Stellt ins neue Volume wieder her, vergleicht alle `public`-Tabellen vollständig,
+   inklusive Spalten, Enum-Typen, Constraints, Indizes, Sequenzständen, Ownern,
+   Rechten und Datenbank-Locale. Führt `ANALYZE` aus.
+6. Setzt die Volume-Auswahl in `.env.coding-box` dauerhaft und atomar, startet den
+   regulären DB-Dienst auf 17.12 und vergleicht erneut. Erst danach öffnet er die
+   Schreibfreigabe und startet die zuvor laufenden Anwendungsdienste mit deren
+   bisherigen Images. Backend-Readiness und die Verbindung des Workers werden geprüft.
+
+Das ist ein **Datenbankwechsel**. Er startet weder Liquibase noch neue
+Anwendungsimages. Die zum laufenden Backend passende Schemafassung bleibt erhalten.
+Ein gewünschtes Anwendungs-/Schema-Update anschließend separat durchführen.
+Timeouts, Slow-Query-Logging und fachliche Funktionen werden nicht umgestellt.
+
+### Status, kontrollierte Freigabe und Rückfall
+
+Für eine getrennte Prüfung vor der Schreibfreigabe:
+
+```bash
+make coding-box-postgres17-migrate PG17_PREPARE_ONLY=1
+make coding-box-postgres17-status
+# Nach Prüfung genau einen dieser beiden Befehle ausführen:
+make coding-box-postgres17-finish
+make coding-box-postgres17-rollback
+```
+
+`PREPARE_ONLY=1` lässt die Anwendung gestoppt und die verifizierte 17er Datenbank
+schreibgeschützt. `finish` prüft Backup-Prüfsummen und Datenbestand erneut.
+Ein Fehler **vor** der Schreibfreigabe führt automatisch zur alten 14er Quelle
+zurück; deren Identität und, sofern vorhanden, Ausgangsbericht werden geprüft,
+die ursprüngliche Konfiguration wiederhergestellt und die Anwendung gestartet.
+Ein wiederholter Rückfallbefehl nach erfolgreichem Rückfall verändert nichts.
+Nach einem Rückfall läuft der alte Bestand mit seinem festgehaltenen Image.
+Das konfigurierte neue Release bleibt ein 17er Release: Ein normales
+`make coding-box-up` würde erneut 17 starten wollen. Bis zum erneuten Transfer
+für einen DB-Neustart die gesicherte Konfiguration verwenden (Pfad aus `status`):
+
+```bash
+docker compose -f /pfad/zum/lauf/compose-source.json up -d --no-deps --no-build db
+```
+
+Diese Datei ist bereits für Compose maskiert; `source.json` ist das interne,
+unmaskierte Journal. Anwendungscontainer im Rückfallbetrieb mit `docker start`
+und ihren IDs aus `state.json` starten; kein separates Anwendungsupdate einmischen.
+
+**Ab der Schreibfreigabe ist der Rückfall auf 14 gesperrt.** Der Freigabemarker wird
+dauerhaft geschrieben, bevor der Zugriff geöffnet wird. Auch bei anschließendem
+Fehler oder Prozessabbruch darf der möglicherweise neuere 17er Bestand nicht durch
+die ältere Quelle ersetzt werden. Bei einem erkannten Startfehler stoppt der Befehl
+die Anwendung, schaltet 17 wieder schreibgeschützt und versucht einen zusätzlichen
+`recovery17-*.dump`. Status `needs_attention`: Ursache auf 17 beheben, neuen Bestand
+sichern und Anwendung kontrolliert wieder freigeben; keine 14er Rückschaltung.
+
+Nach Stromausfall/SIGKILL zuerst `status` aufrufen. Ohne Schreibfreigabe kann
+`rollback` anhand des Journals fortsetzen. Mit Schreibfreigabe Dienste gestoppt
+halten und auf 17 weiterarbeiten. Ein physischer Wechsel zurück auf 14 nach neuen
+Schreibzugriffen erfordert einen gesondert getesteten Rücktransfer dieser Änderungen.
+
+Backups und Journal liegen standardmäßig unter
+`backup/postgres17/<Zeitstempel>-<Zufall>/`, Verzeichnisrechte `0700`, Dateien `0600`.
+Sie enthalten Zugangsdaten und Rollenpassworthashes und gehören auf einen geschützten
+Backup-Datenträger. `latest.json` verweist auf den letzten Lauf. **Kein** Befehl
+löscht das alte oder neue Datenvolume oder die Backups; deren Aufbewahrung und
+eine zusätzliche Kopie auf einem unabhängigen Datenträger bleiben Betreiberaufgabe.
+
+Optionen (bei Folgeaufrufen denselben Lauf angeben):
+
+```bash
+make coding-box-postgres17-migrate PG17_MIGRATION_DIR=/sicherer/datentraeger/pg17-lauf
+make coding-box-postgres17-status PG17_MIGRATION_DIR=/sicherer/datentraeger/pg17-lauf
+make coding-box-postgres17-rollback PG17_MIGRATION_DIR=/sicherer/datentraeger/pg17-lauf
+```
+
+Das neue Laufverzeichnis darf noch nicht existieren. `PG17_WAIT_SECONDS` steuert
+die Bereitschaftswartezeit pro Dienst (Standard 180 Sekunden),
+`MIGRATION_SNAPSHOT_TIMEOUT_MS` den SQL-Timeout des Vollvergleichs (Standard 900000).
+Ein Dateilock verhindert gleichzeitige Migration/Rückfall derselben Installation.
+Konfigurationsänderungen während des Transfers führen zum Abbruch statt zum
+Überschreiben fremder Änderungen. Wechsel des Docker-Daemons wird zurückgewiesen.
+
+Automatisch unterstützt wird die reguläre Produktionsstruktur mit einer eigenen
+Anwendungsdatenbank auf einem benannten Standard-Datenvolume. Weitere Datenbanken,
+Benutzerschemas, Views, Funktionen, Trigger, RLS, Large Objects, Replikation,
+zusätzliche Extensions, TLS und besondere Tablespaces führen **vor der Schreibpause**
+zum Abbruch. Für diese Installationen ist der untenstehende manuelle Ablauf
+anzupassen und um deren Prüfungen zu ergänzen. Generalprobe mit einer Kopie der
+echten Daten sowie ein ausreichend großes Wartungsfenster bleiben erforderlich.
+
+### Reproduktion der Automatisierungstests
+
+Der Nx-Target `backend:test-postgres17-migration` benötigt vier ausdrücklich
+gesetzte Testimages: `PG17_TEST_BACKEND_IMAGE`, `PG17_TEST_POSTGRES14_IMAGE`,
+`PG17_TEST_POSTGRES17_IMAGE` und `PG17_TEST_LIQUIBASE_IMAGE`. Die DB-Images müssen
+14.24 bzw. 17.12 enthalten, Liquibase den aktuellen Changelog. Es werden ausschließlich
+eigene Compose-Projekte mit synthetischen Daten angelegt. API/Worker werden für die
+Orchestrierungsprüfung durch kleine DB-Clients im Backendimage simuliert; die
+Anwendungstests laufen separat über `backend:test-integration`.
+`PG17_TEST_DIRECTORY` kann ein vorhandenes, für den Docker-Daemon freigegebenes
+Hostverzeichnis vorgeben (Docker Desktop bzw. gemeinsames `/builds` bei DinD).
+`backend:test-migration-tools` prüft Vergleich, Journal, Freigabegrenze und Make-/Update-Anbindung.
 
 ## Verfahren und Grenzen
 
@@ -22,7 +153,7 @@ Standardrechte/Eigentümer des Schemas `public` im Dump aus. Ein Restore auf 17
 übernimmt dann dessen andere Defaults. Der getestete Ablauf mit pg_dump 17
 erhält die alten Rechte ausdrücklich; der Vergleich prüft sie zusätzlich.
 
-Zuerst wie unten beschrieben das tatsächlich laufende 14-Image und Volume sichern.
+Für den manuellen Alternativweg zuerst wie unten beschrieben das tatsächlich laufende 14-Image und Volume sichern.
 Die Anwendung einschließlich Liquibase-Schema mit diesem festgehaltenen 14-Image
 über die `legacy`-Konfiguration aktualisieren und stabil betreiben. Erst danach mit
 **denselben Anwendungsimages und demselben Schema** die Datenbank wechseln.

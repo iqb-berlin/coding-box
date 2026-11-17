@@ -186,6 +186,12 @@ make dev-volumes-clean
 Die Anwendungsdatenbank verwendet **PostgreSQL 17.12**. Bestehende Installationen
 mit PostgreSQL 14 müssen **vor dem ersten Start des neuen DB-Images** den
 [Migrations- und Rückfallplan](docs/postgresql-17-migration.md) durchlaufen.
+Der eigene Befehl `make coding-box-postgres17-migrate` übernimmt Backup, Transfer,
+vollständigen Datenvergleich und Freigabe mit den bisherigen Anwendungsimages.
+Er benötigt Python 3.9+ und eine noch laufende 14er Quelle. Vor Schreibfreigabe
+führt ein Fehler automatisch zurück; danach ist ein Rückwechsel zum alten Bestand
+gesperrt, damit neue Daten erhalten bleiben. `make coding-box-postgres17-status`
+zeigt Zustand und Backup-Verzeichnis.
 Ein Major-Upgrade erfolgt nicht durch bloßes Austauschen des Images. Nach dem
 Restore werden `POSTGRES_DATA_VOLUME` und `POSTGRES_DATA_VOLUME_EXTERNAL=true`
 dauerhaft in der privaten Umgebungskonfiguration gesetzt. Das bisherige Volume

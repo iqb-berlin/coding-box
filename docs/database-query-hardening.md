@@ -119,14 +119,21 @@ Version. PostgreSQL 14 bleibt nur als Vergleich für den Migrationsquellbestand.
 
 Die bisherige Volume-Auswahl bleibt erhalten: Ohne `POSTGRES_DATA_VOLUME` wird
 `<Compose-Projekt>_db_vol` verwendet. PostgreSQL 17 verweigert den Start auf einem
-14er Datenverzeichnis. Es gibt keinen automatischen Umzug und keinen stillen
+14er Datenverzeichnis. Normales Starten löst keinen Umzug aus und keinen stillen
 Wechsel auf eine leere Datenbank. Nach dem Restore wird das neue Volume dauerhaft
 als `POSTGRES_DATA_VOLUME` in `.env.coding-box` bzw. `.env.dev` ausgewählt.
 `POSTGRES_DATA_VOLUME_EXTERNAL=true` verlangt dann ein bereits vorhandenes Volume,
 statt bei einem falschen Namen eine leere Datenbank anzulegen. Bei neuen
 Installationen bleibt dieser Schalter standardmäßig `false`.
 
-`docker-compose.postgres17.prepare.yaml` ergänzt nur den zeitweiligen Dienst
+`make coding-box-postgres17-migrate` automatisiert den ausdrücklichen Wechsel
+einschließlich Backup, Schreibpause, Vollvergleich und Rückfall vor Schreibfreigabe.
+Es behält die laufenden Anwendungsimages bei und löscht keine Datenvolumes.
+`coding-box-postgres17-status`, `-finish` und `-rollback` dienen der Kontrolle bzw.
+der getrennten Freigabe mit `PG17_PREPARE_ONLY=1`. Die Anleitung beschreibt die
+Voraussetzungen und die gesperrte Rückschaltung nach Schreibfreigabe.
+
+Als manueller Alternativweg ergänzt `docker-compose.postgres17.prepare.yaml` nur den zeitweiligen Dienst
 `db17` für den Restore neben der festgehaltenen 14er Quelle. `POSTGRES17_VOLUME_NAME`
 und ein separates Administratorpasswort sind dafür Pflicht. Vor dem normalen
 Start von `db` auf diesem Volume muss `db17` gestoppt sein.

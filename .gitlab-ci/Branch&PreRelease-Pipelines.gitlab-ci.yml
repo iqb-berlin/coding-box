@@ -413,6 +413,13 @@ test-backend-container:
     - cat container-startup.log
     - grep -F 'JWT_SECRET must be a non-empty string' container-startup.log
     - BACKEND_IMAGE=coding-box-backend:ci-${CI_JOB_ID} POSTGRES_TEST_IMAGE=${DOCKER_HUB_PROXY}postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7 REDIS_TEST_IMAGE=${DOCKER_HUB_PROXY}redis:7.4-alpine sh scripts/qa/verify-backend-container.sh
+    # This Docker-only runner has no host Nx/Node installation.
+    - apk add --no-cache python3 make
+    - docker build --progress plain --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --file database/Postgres.Dockerfile --tag coding-box-db17:ci-${CI_JOB_ID} .
+    - docker build --progress plain --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --build-arg POSTGRES_IMAGE=postgres:14.24-alpine3.24@sha256:862ffc2556a2db763f0439c8323490000cd01975d2798a845e4a8dd3a905862f --file database/Postgres.Dockerfile --tag coding-box-db14:ci-${CI_JOB_ID} .
+    - docker build --progress plain --build-arg REGISTRY_PATH=${DOCKER_HUB_PROXY} --file database/Liquibase.Dockerfile --tag coding-box-liquibase:ci-${CI_JOB_ID} .
+    - mkdir -p dist/pg17-automation-fixtures
+    - PG17_TEST_DIRECTORY=${CI_PROJECT_DIR}/dist/pg17-automation-fixtures PG17_TEST_BACKEND_IMAGE=coding-box-backend:ci-${CI_JOB_ID} PG17_TEST_POSTGRES14_IMAGE=coding-box-db14:ci-${CI_JOB_ID} PG17_TEST_POSTGRES17_IMAGE=coding-box-db17:ci-${CI_JOB_ID} PG17_TEST_LIQUIBASE_IMAGE=coding-box-liquibase:ci-${CI_JOB_ID} python3 scripts/tests/postgres17_migration_docker.py
   artifacts:
     when: always
     paths:
@@ -581,7 +588,7 @@ test-backend-integration:
     BULLMQ_TEST_REDIS_HOST: "integration-redis"
     BULLMQ_TEST_REDIS_PORT: "6379"
   script:
-    - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client
+    - apt-get update -qq && apt-get install -y --no-install-recommends postgresql-client python3
     - npx nx run backend:test-migration-tools
     - npx nx run backend:test-integration
   artifacts:

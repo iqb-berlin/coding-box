@@ -462,6 +462,13 @@ update_files() {
   download_file "docker-compose.${APP_NAME}.yaml" docker-compose.yaml
   download_file "docker-compose.${APP_NAME}.prod.yaml" "docker-compose.${APP_NAME}.prod.yaml"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
+  if grep -Fq 'scripts/make/postgres17.mk' "${APP_DIR}/scripts/make/${APP_NAME}.mk"; then
+    mkdir -p "${APP_DIR}/scripts/qa" "${APP_DIR}/docs"
+    download_file scripts/make/postgres17.mk scripts/make/postgres17.mk
+    download_file scripts/postgres17_migration.py scripts/postgres17_migration.py
+    download_file scripts/qa/postgres-migration-snapshot.mjs scripts/qa/postgres-migration-snapshot.mjs
+    download_file docs/postgresql-17-migration.md docs/postgresql-17-migration.md
+  fi
 
   printf "File download done.\n\n"
 }
@@ -586,8 +593,27 @@ customize_settings() {
   load_docker_environment_variables
 }
 
+postgres17_migration_pending() {
+  # Keep the only running copy of the 14 cluster available for the explicit
+  # transfer command. A normal restart would try 17 against its old data files.
+  grep -Fq 'scripts/make/postgres17.mk' "${APP_DIR}/scripts/make/${APP_NAME}.mk" || return 1
+  declare db_container
+  db_container=$(docker compose --env-file "${APP_DIR}/.env.${APP_NAME}" \
+    --file "${APP_DIR}/docker-compose.${APP_NAME}.yaml" \
+    --file "${APP_DIR}/docker-compose.${APP_NAME}.prod.yaml" ps -q db) || return 1
+  [[ -n ${db_container} ]] || return 1
+  docker exec "${db_container}" postgres --version | grep -Eq 'PostgreSQL\) 14\.'
+}
+
 finalize_update() {
   printf "9. Summary\n"
+  if postgres17_migration_pending; then
+    printf 'PostgreSQL 14 remains running. Review the updated configuration, then run:\n'
+    printf '  make coding-box-postgres17-migrate\n'
+    printf 'Backup, comparison and rollback: docs/postgresql-17-migration.md\n'
+    printf 'The database command retains the running application images; apply the application update afterwards.\n'
+    return 0
+  fi
   if ${HAS_ENV_FILE_UPDATE} || ${HAS_CONFIG_FILE_UPDATE} || ${HAS_MIGRATION_FILES}; then
     if ${HAS_ENV_FILE_UPDATE} && ${HAS_CONFIG_FILE_UPDATE}; then
       printf -- '- Version, environment, and configuration update applied!\n\n'

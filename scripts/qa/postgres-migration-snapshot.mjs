@@ -3,7 +3,7 @@ import { readFile, writeFile } from 'node:fs/promises';
 import { pathToFileURL } from 'node:url';
 import pg from 'pg';
 
-const preservedFields = ['database', 'access', 'columns', 'constraints', 'indexes', 'sequences', 'tables'];
+const preservedFields = ['database', 'access', 'enums', 'columns', 'constraints', 'indexes', 'sequences', 'tables'];
 export const quoteIdentifier = value => `"${value.replaceAll('"', '""')}"`;
 
 // PostgreSQL 17 deparses varchar[] -> text[] casts element by element. Restrict
@@ -72,6 +72,11 @@ export async function snapshotDatabase(client, timeoutMs = 900000) {
         FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
         WHERE n.nspname='public' AND c.relkind IN ('r','p','S','v','m','f') ORDER BY c.relname COLLATE "C"`)
     };
+    const enums = await rows(`SELECT t.typname, pg_get_userbyid(t.typowner) AS owner,
+      ARRAY(SELECT acl::text FROM unnest(t.typacl) acl ORDER BY acl::text COLLATE "C") AS acl,
+      ARRAY(SELECT enumlabel FROM pg_enum e WHERE e.enumtypid=t.oid ORDER BY enumsortorder) AS labels
+      FROM pg_type t JOIN pg_namespace n ON n.oid=t.typnamespace
+      WHERE n.nspname='public' AND t.typtype='e' ORDER BY t.typname COLLATE "C"`);
     const columns = await rows(`SELECT t.relname AS table_name, a.attname AS column_name,
       row_number() OVER (PARTITION BY t.oid ORDER BY a.attnum)::integer AS position,
       format_type(a.atttypid,a.atttypmod) AS type, a.attnotnull AS not_null, a.attidentity, a.attgenerated,
@@ -116,7 +121,7 @@ export async function snapshotDatabase(client, timeoutMs = 900000) {
     const extensions = await rows('SELECT extname, extversion FROM pg_extension ORDER BY extname COLLATE "C"');
     await client.query('COMMIT');
     return { formatVersion: 1, measuredAt: new Date().toISOString(), server: server.version, extensions,
-      preserved: { database, access, columns, constraints, indexes, sequences, tables } };
+      preserved: { database, access, enums, columns, constraints, indexes, sequences, tables } };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

@@ -154,6 +154,9 @@ coding-box-restore-db-data-only:
 coding-box-update:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 
+coding-box-postgres17-migrate coding-box-postgres17-finish coding-box-postgres17-rollback coding-box-postgres17-status:
+	$(MAKE) -f $(MK_FILE_DIR)/postgres17.mk -C $(CODING_BOX_BASE_DIR) $@
+
 coding-box-redis-monitor:
 	$(MAKE) -f $(MK_FILE_DIR)/prod.mk -C $(MK_FILE_DIR) $@
 coding-box-redis-info:

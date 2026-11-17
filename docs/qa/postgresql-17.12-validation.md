@@ -56,7 +56,7 @@ Snapshot-Spec prüft mit echten Tabellen:
 - Abbruch bei geändertem Score trotz gleicher Zeilenzahl;
 - Abbruch bei geänderten Zugriffsrechten trotz gleicher Daten.
 
-`nx run backend:test-migration-tools`: **15 Tests bestanden**. Sie prüfen u. a.
+`nx run backend:test-migration-tools`: **32 Tests bestanden** (15 Node, 17 Python). Sie prüfen u. a.
 exakte Serverversion, Pflichtprüfungs-Gate, Inhalts-/Sequenz-/Rechtevergleich,
 die eng begrenzte CHECK-Normalisierung und übereinstimmende unveränderliche
 17.12-Image-Referenzen in regulärem Build, Vorbereitung, primärer CI sowie
@@ -153,6 +153,44 @@ Ansatzpunkte für [gezielte Folgeoptimierungen](../postgresql-17-architecture.md
 9. Neues Ziel gestoppt, Schreibschutz der unveränderten 14-Quelle aufgehoben,
    Schreibtransaktion mit anschließendem ROLLBACK möglich. Erneuter Vergleich mit
    dem Ausgangs-Snapshot erfolgreich, einschließlich aller Rechte und Sequenzen.
+
+## Automatischer Make-Transfer und Fehlerfälle
+
+`nx run backend:test-postgres17-migration`: **6 echte Docker-Szenarien bestanden**,
+Laufzeit insgesamt 132,5 Sekunden. Für jeden Fall wurde eine eigene 14.24-Quelle
+mit dem vollständigen Liquibase-Schema angelegt. Verglichener Bestand:
+**43 Tabellen, 204 Zeilen, 37 Sequenzen**, einschließlich der Enum-Typen und Rechte.
+Ein Passwort mit literalem `$` prüft die unveränderte Übernahme der Zugangsdaten.
+
+1. Vollständiger `make coding-box-postgres17-migrate`: regulärer DB-Dienst auf
+   17.12, Datenvergleich erfolgreich, API-/Worker-Clients wieder verbunden.
+   Anschließend geschriebener Score `42` bleibt bei verweigertem 14er Rückfall
+   erhalten. Erneutes `finish` verändert den abgeschlossenen Betrieb nicht.
+2. Externer SQL-Client bleibt verbunden: Abbruch vor dem Dump, Rückkehr in den
+   14er Betrieb ohne Neustart des Quellcontainers und ohne Abbruch dieser Sitzung.
+3. Absichtlicher Fehler nach einer neuen Score-Schreiboperation auf 17:
+   Status `needs_attention`, Score `77` erhalten, 17 schreibgeschützt,
+   Anwendung gestoppt, zusätzlicher Recovery-Dump vorhanden, 14er Rückfall gesperrt.
+4. `PG17_PREPARE_ONLY=1` und separater Make-Rückfall: geprüfter 17er Bestand
+   zunächst gesperrt; Rückkehr auf 14.24 mit identischer Umgebungskonfiguration,
+   allen Ausgangsdaten und gesunden Clients. Wiederholter Rückfall bleibt wirkungslos.
+5. Score im Restore absichtlich verändert: Hashvergleich schlägt fehl, automatischer
+   Rückfall erhält den ursprünglichen Score `2` und den gesamten 14er Bestand.
+6. Zusätzliches Benutzerschema: Ablehnung vor dem Stoppen der Schreiber, Quellserver
+   und API laufen weiter, zusätzlicher Datensatz bleibt erhalten.
+
+Die Orchestrierungsprüfung verwendet kleine API-/Worker-DB-Clients im vorhandenen
+Backendimage; sie ersetzt nicht die oben aufgeführten Nest-/Replay-Tests.
+Die neuen Fälle sind zusätzlich im Produktionscontainer-CI-Job verdrahtet; ein
+Ergebnis des entfernten CI-Laufs liegt diesem lokalen Nachweis noch nicht zugrunde.
+Alle eigenen Testcontainer, Netze und Testvolumes wurden danach entfernt.
+Produktionsbestände wurden nicht verwendet oder umgestellt.
+
+Die 17 Python-Tests sichern unter anderem die dauerhafte Freigabegrenze, verweigerten
+Rückfall nach Freigabe, beschädigte Backups, Konfigurationsdrift, exklusive Sperre,
+streamenden Restore und Make-/Updater-Anbindung ab. Ein Make-Regressionstest
+stellt sicher, dass der bisherige Standardtarget der Produktions-Make-Datei erhalten
+bleibt. Backend-Lint, Shell-Syntaxprüfung und Installer-/Upgrade-Regressionen bestanden.
 
 ## Verbleibende Freigabekriterien für den echten Betrieb
 
