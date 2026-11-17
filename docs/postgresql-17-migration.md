@@ -72,7 +72,7 @@ make coding-box-postgres17-rollback
 `PREPARE_ONLY=1` lässt die Anwendung gestoppt und die verifizierte 17er Datenbank
 schreibgeschützt. `finish` prüft Backup-Prüfsummen und Datenbestand erneut.
 Ein Fehler **vor** der Schreibfreigabe führt automatisch zur alten 14er Quelle
-zurück; deren Identität und, sofern vorhanden, Ausgangsbericht werden geprüft,
+zurück; deren Identität und, sofern vollständig und dauerhaft gespeichert, Ausgangsbericht werden geprüft,
 die ursprüngliche Konfiguration wiederhergestellt und die Anwendung gestartet.
 Ein wiederholter Rückfallbefehl nach erfolgreichem Rückfall verändert nichts.
 Nach einem Rückfall läuft der alte Bestand mit seinem festgehaltenen Image.

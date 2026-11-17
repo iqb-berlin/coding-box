@@ -239,6 +239,8 @@ class Migration:
             args.append(f"--compareWith=/migration/{baseline}")
         self.compose("stage.json", *args, extra_env={"POSTGRES_PASSWORD": self.admin_password,
                      "MIGRATION_SNAPSHOT_TIMEOUT_MS": os.environ.get("MIGRATION_SNAPSHOT_TIMEOUT_MS", "900000")})
+        with (self.run_dir / name).open("rb") as report:
+            os.fsync(report.fileno())
 
     def load(self):
         if not self.run_dir:
@@ -489,6 +491,7 @@ class Migration:
             raise MigrationError("External database clients are still connected. They were not terminated; coordinate them before retrying.")
         self.save("backing_up")
         self.snapshot("pg17_source", "before.json")
+        self.save(baseline_ready=True)
         for command, name in ((["pg_dumpall", "--roles-only", "--database=postgres"], "roles.sql"),
                               (["pg_dump", "--format=custom", "--create", f"--dbname={self.state['database']}"], "database.dump")):
             self.compose("stage.json", "exec", "-T", "-e", "PGPASSWORD", "pg17_stage", *command,
@@ -644,7 +647,7 @@ class Migration:
         db = self.attach_source(self.wait("source.json", "db"))
         if self.sql(db, "SELECT system_identifier::text FROM pg_control_system()").strip() != self.state["system_id"]:
             raise MigrationError("The rollback cluster identity differs. Writers remain stopped.")
-        if (self.run_dir / "before.json").exists():
+        if self.state.get("baseline_ready"):
             self.snapshot("pg17_source", f"rollback-{secrets.token_hex(4)}.json", "before.json")
         self.write_container_file(db, "pg_hba.conf", (self.run_dir / "pg_hba.conf").read_text())
         self.sql(db, "SELECT pg_reload_conf()")

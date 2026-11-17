@@ -156,8 +156,8 @@ Ansatzpunkte für [gezielte Folgeoptimierungen](../postgresql-17-architecture.md
 
 ## Automatischer Make-Transfer und Fehlerfälle
 
-`nx run backend:test-postgres17-migration`: **6 echte Docker-Szenarien bestanden**,
-Laufzeit insgesamt 132,5 Sekunden. Für jeden Fall wurde eine eigene 14.24-Quelle
+`nx run backend:test-postgres17-migration`: **7 echte Docker-Szenarien bestanden**,
+Laufzeit insgesamt 169,0 Sekunden. Für jeden Fall wurde eine eigene 14.24-Quelle
 mit dem vollständigen Liquibase-Schema angelegt. Verglichener Bestand:
 **43 Tabellen, 204 Zeilen, 37 Sequenzen**, einschließlich der Enum-Typen und Rechte.
 Ein Passwort mit literalem `$` prüft die unveränderte Übernahme der Zugangsdaten.
@@ -178,6 +178,9 @@ Ein Passwort mit literalem `$` prüft die unveränderte Übernahme der Zugangsda
    Rückfall erhält den ursprünglichen Score `2` und den gesamten 14er Bestand.
 6. Zusätzliches Benutzerschema: Ablehnung vor dem Stoppen der Schreiber, Quellserver
    und API laufen weiter, zusätzlicher Datensatz bleibt erhalten.
+7. Unterbrochener Ausgangsbericht mit unvollständigem JSON: Rückfall auf die noch
+   unveränderte 14er Quelle erfolgreich. Nur ein vollständig geschriebener und
+   per `fsync` gesicherter Bericht wird als Vergleichsbasis verwendet.
 
 Die Orchestrierungsprüfung verwendet kleine API-/Worker-DB-Clients im vorhandenen
 Backendimage; sie ersetzt nicht die oben aufgeführten Nest-/Replay-Tests.

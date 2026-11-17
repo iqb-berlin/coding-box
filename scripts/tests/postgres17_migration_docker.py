@@ -239,6 +239,22 @@ class DockerMigrationTests(unittest.TestCase):
         self.assertEqual(self.inspect('backend')['State']['Health']['Status'], 'healthy')
         self.assertEqual((self.root / '.env.coding-box').read_bytes(), self.original_env)
 
+    def test_interrupted_initial_report_does_not_prevent_return_to_untouched_source(self):
+        class FailDuringSnapshot(pg17.Migration):
+            def snapshot(operation, host, name, baseline=None):
+                if name == 'before.json':
+                    pg17.private_write(operation.run_dir / name, '{"incomplete":')
+                    raise pg17.MigrationError('Injected interrupted snapshot write')
+                return super().snapshot(host, name, baseline)
+        from unittest.mock import patch
+        with patch.object(pg17, 'Migration', FailDuringSnapshot):
+            self.assertEqual(pg17.main(['migrate', '--directory', str(self.root), '--wait-seconds', '35']), 1)
+        self.assertEqual(self.journal()[1]['phase'], 'rolled_back')
+        self.assertEqual(self.sql('SHOW server_version'), '14.24')
+        self.assertEqual(self.sql('SELECT count(*) FROM response'), '3')
+        self.assertEqual((self.root / '.env.coding-box').read_bytes(), self.original_env)
+        self.assertEqual(self.inspect('backend')['State']['Health']['Status'], 'healthy')
+
 
 if __name__ == '__main__':
     unittest.main(verbosity=2)
