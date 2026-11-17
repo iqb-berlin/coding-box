@@ -3619,6 +3619,16 @@
   },
   "ui-text": {
     "reset-version-dialog": {
+      "confirmation-impact": {
+        "v1": "Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.",
+        "v2": "Die manuelle Kodierung wird zurückgesetzt. Zusätzlich: 2. Autocoder-Lauf.",
+        "v3": "Nur der 2. Autocoder-Lauf wird zurückgesetzt."
+      },
+      "cascade-impact": {
+        "v1": "Zusätzlich werden die manuelle Kodierung und der 2. Autocoder-Lauf im gewählten Bereich zurückgesetzt.",
+        "v2": "Zusätzlich wird der 2. Autocoder-Lauf im gewählten Bereich zurückgesetzt.",
+        "v3": "Der 1. Autocoder-Lauf und die manuelle Kodierung bleiben erhalten."
+      },
       "units-hint": "Ohne Unit-Filter gelten die Variablen-IDs für alle Units im Arbeitsbereich.",
       "selected-units": "Units: {{count}} ausgewählt",
       "selected-variables": "Variablen: {{count}} ausgewählt",

@@ -121,7 +121,7 @@ export interface ResetVersionDialogResult {
               {{ 'coding-management.reset-dialog.cascade-warning' | translate }}
             </p>
             <p class="cascade-versions">
-              {{ 'coding-management.reset-dialog.cascade-versions' | translate }}: <strong>{{ cascadeVersions.join(', ') }}</strong>
+              {{ cascadeImpactKey | translate }}
             </p>
             <p class="cascade-explanation">
               {{ 'coding-management.reset-dialog.cascade-explanation' | translate }}
@@ -185,13 +185,7 @@ export interface ResetVersionDialogResult {
             <strong>{{ 'coding-management.reset-dialog.filter-required' | translate }}</strong>
           }
           <p class="confirmation-cascade">
-            @if (cascadeVersions.length) {
-              {{ 'coding-management.reset-dialog.confirmation-cascade' | translate: {
-                version: data.version, versions: cascadeVersions.join(', ')
-              } }}
-            } @else {
-              {{ 'coding-management.reset-dialog.confirmation-no-cascade' | translate: { version: data.version } }}
-            }
+            {{ confirmationImpactKey | translate }}
           </p>
         </div>
 
@@ -509,6 +503,8 @@ export class ResetVersionDialogComponent {
   protected versionLabel: string;
   protected cascadeVersions: string[] = [];
   protected resetVersions: string[] = [];
+  protected confirmationImpactKey: string;
+  protected cascadeImpactKey: string;
   resultImpactKey: string;
   protected readonly scope = signal<'global' | 'filtered'>('global');
   protected readonly unitInput = signal('');
@@ -529,6 +525,8 @@ export class ResetVersionDialogComponent {
     this.cascadeVersions = data.cascadeVersions || [];
     this.resetVersions = [data.version, ...this.cascadeVersions];
     this.resultImpactKey = `coding-management.reset-dialog.result-impact.${data.version}`;
+    this.confirmationImpactKey = `ui-text.reset-version-dialog.confirmation-impact.${data.version}`;
+    this.cascadeImpactKey = `ui-text.reset-version-dialog.cascade-impact.${data.version}`;
   }
 
   protected onCancel(): void {

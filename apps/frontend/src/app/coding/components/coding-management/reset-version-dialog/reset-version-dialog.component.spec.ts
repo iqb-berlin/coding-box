@@ -55,7 +55,7 @@ describe('ResetVersionDialogComponent', () => {
     expect(component.resultImpactKey).toBe('coding-management.reset-dialog.result-impact.v1');
     expect(text).toContain('Der erste Autocoder-Lauf wird zurückgesetzt.');
     expect(text).toContain('Bestehende Kodierjobs, Zuweisungen und Joblisten werden dadurch nicht gelöscht.');
-    expect(text).toContain('Folgende Versionen werden ebenfalls gelöscht');
+    expect(text).toContain('Zusätzlich werden die manuelle Kodierung und der 2. Autocoder-Lauf im gewählten Bereich zurückgesetzt.');
     expect(text).toContain('status_v1');
     expect(text).toContain('code_v1');
     expect(text).toContain('score_v1');
@@ -94,7 +94,7 @@ describe('ResetVersionDialogComponent', () => {
     component.onConfirm();
 
     expect(fixture.nativeElement.querySelector('.confirmation-footer .scope-summary').textContent).toContain('gesamter Arbeitsbereich');
-    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Reset: v2 · Kaskade: v3');
+    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Die manuelle Kodierung wird zurückgesetzt. Zusätzlich: 2. Autocoder-Lauf.');
     expect(fixture.nativeElement.querySelector('.confirm-button').textContent).toContain('Gesamten Arbeitsbereich zurücksetzen');
     expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: [] });
   });
@@ -134,7 +134,7 @@ describe('ResetVersionDialogComponent', () => {
     expect(summary).toContain('Gefilterter Reset');
     expect(summary).toContain('Units: DHB003');
     expect(summary).toContain('alle Variablen der betroffenen Units');
-    expect(summary).toContain('Reset: v1 · Kaskade: v2, v3');
+    expect(summary).toContain('Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.');
     expect(fixture.nativeElement.querySelector('.filter-fields').textContent).toContain('Kaskade gilt nur für den angegebenen Bereich');
     expect(fixture.nativeElement.querySelector('.confirm-button').textContent).toContain('Gefilterten Bereich zurücksetzen');
     fixture.nativeElement.querySelector('.confirm-button').click();
@@ -162,7 +162,7 @@ describe('ResetVersionDialogComponent', () => {
     await enterFilter(fixture, 'variable', 'V1');
 
     expect(fixture.nativeElement.querySelector('.scope-summary').textContent).toContain('Units: alle Units im Arbeitsbereich');
-    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Reset: v3 · keine Kaskade');
+    expect(fixture.nativeElement.querySelector('.confirmation-footer .confirmation-cascade').textContent).toContain('Nur der 2. Autocoder-Lauf wird zurückgesetzt.');
     component.onConfirm();
 
     expect(dialogRefMock.close).toHaveBeenCalledWith({ unitFilters: [], variableFilters: ['V1'] });

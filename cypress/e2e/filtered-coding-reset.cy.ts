@@ -78,7 +78,7 @@ describe('Filtered coding version reset', () => {
     expectConfirmationVisible();
     cy.get('@dialog').find('.scope-summary').should('be.visible').and('contain.text', 'Units: DHB003')
       .and('contain.text', 'alle Variablen der betroffenen Units');
-    cy.get('@dialog').find('.confirmation-cascade').should('contain.text', 'Reset: v1 · Kaskade: v2, v3');
+    cy.get('@dialog').find('.confirmation-cascade').should('contain.text', 'Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.');
     cy.screenshot('filtered-reset-DHB003');
     cy.get('@dialog').find('.confirm-button').should('contain.text', 'Gefilterten Bereich zurücksetzen').click();
 
@@ -167,8 +167,8 @@ describe('Filtered coding version reset', () => {
       const units = Array.from({ length: 30 }, (_, index) => `DHB${String(index).padStart(3, '0')}`);
       const variables = Array.from({ length: 30 }, (_, index) => `VAR_${index}`);
       cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(units.join('; '), { delay: 0 });
-      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type(variables.join('; '), { delay: 0 });
+      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(units.join('; ')).should('have.value', units.join('; '));
+      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type(variables.join('; ')).should('have.value', variables.join('; '));
       expectConfirmationVisible();
       cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: 30 ausgewählt')
         .and('contain.text', 'Variablen: 30 ausgewählt');
