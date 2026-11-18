@@ -1,0 +1,12 @@
+{
+  "name": "@coding-box/picomatch-patched",
+  "version": "4.0.7",
+  "private": true,
+  "description": "Local picomatch 4.0.7 with a guard for GHSA-fc5q-39xc-vjpf",
+  "license": "MIT",
+  "main": "index.js",
+  "sideEffects": false,
+  "engines": {
+    "node": ">=12"
+  }
+}
