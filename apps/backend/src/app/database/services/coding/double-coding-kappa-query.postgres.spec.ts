@@ -215,7 +215,7 @@ describePostgres('Kappa SQL filters against PostgreSQL and the complete Liquibas
     await fixture.db.query('ANALYZE');
     let rawRows = 0;
     let batches = 0;
-    let firstSql: [string, unknown[]];
+    let cursorQuery: [string, unknown[]];
     const original = fixture.db.createQueryRunner.bind(fixture.db);
     const spy = jest.spyOn(fixture.db, 'createQueryRunner').mockImplementation((...args) => {
       const runner = original(...args);
@@ -223,7 +223,7 @@ describePostgres('Kappa SQL filters against PostgreSQL and the complete Liquibas
       runner.query = async (...queryArgs) => {
         const [sql, parameters] = queryArgs;
         if (sql.startsWith('DECLARE batch_rows')) {
-          firstSql = [sql.replace('DECLARE batch_rows NO SCROLL CURSOR FOR ', ''), parameters || []];
+          cursorQuery = [sql, parameters || []];
         }
         const result = await query(...queryArgs);
         if (sql.startsWith('FETCH FORWARD')) {
@@ -252,9 +252,10 @@ describePostgres('Kappa SQL filters against PostgreSQL and the complete Liquibas
             if (mode === 'before') before = items; else after = items;
             if (round > 0) samples[mode].push(ms);
             if (round === 5) {
-              const plan = await fixture.db.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${firstSql![0]}`, firstSql![1]);
+              const [sql, parameters] = cursorQuery!;
+              const [plan] = await fixture.db.query(`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${sql}`, parameters);
               evidence[mode] = {
-                rawRows, batches, items: items.length, firstBatchPlan: plan[0]['QUERY PLAN']
+                rawRows, batches, items: items.length, cursorPlan: plan['QUERY PLAN']
               };
             }
           }
