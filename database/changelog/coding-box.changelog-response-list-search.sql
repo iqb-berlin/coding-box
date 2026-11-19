@@ -429,7 +429,11 @@ BEGIN
     RETURN NULL;
   END IF;
   IF TG_OP = 'TRUNCATE' THEN
-    TRUNCATE public.flat_response_value_search_link, public.flat_response_value_search_value;
+    -- Both heaps are already empty when the workspace cascade includes them.
+    IF pg_relation_size('public.flat_response_value_search_link') > 0
+      OR pg_relation_size('public.flat_response_value_search_value') > 0 THEN
+      TRUNCATE public.flat_response_value_search_link, public.flat_response_value_search_value;
+    END IF;
     RETURN NULL;
   END IF;
 
@@ -569,7 +573,11 @@ BEGIN
     WHEN 'DELETE' THEN
       changes := 'SELECT unitid, -total AS delta FROM old_counts';
     WHEN 'TRUNCATE' THEN
-      TRUNCATE public.flat_response_all_totals;
+      -- A workspace cascade already truncated this heap before the AFTER triggers.
+      -- A physical emptiness check also sees inserts newer than the caller's snapshot.
+      IF pg_relation_size('public.flat_response_all_totals') > 0 THEN
+        TRUNCATE public.flat_response_all_totals;
+      END IF;
       RETURN NULL;
   END CASE;
   -- The source hierarchy is visible even when a writable CTE inserted the
