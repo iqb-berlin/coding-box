@@ -38,7 +38,7 @@ export class CodingJobResponsesService {
     private readonly missingsProfilesService?: MissingsProfilesService
   ) {}
 
-  private async getDefaultMirCode(workspaceId: number): Promise<number> {
+  private async getDefaultMirCode(workspaceId: number, manager?: EntityManager): Promise<number> {
     if (!this.missingsProfilesService) {
       return IQB_STANDARD_MISSING_CODES.mir;
     }
@@ -47,7 +47,8 @@ export class CodingJobResponsesService {
       await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
         workspaceId,
         null,
-        'mir'
+        'mir',
+        manager
       );
     return missing.code;
   }
@@ -285,7 +286,7 @@ export class CodingJobResponsesService {
       '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
       {
         aggregatedCode: -111,
-        defaultMirCode: await this.getDefaultMirCode(workspaceId)
+        defaultMirCode: await this.getDefaultMirCode(workspaceId, manager)
       }
     );
     queryBuilder.andWhere(
@@ -406,7 +407,7 @@ export class CodingJobResponsesService {
         '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
         {
           aggregatedCode: -111,
-          defaultMirCode: await this.getDefaultMirCode(workspaceId)
+          defaultMirCode: await this.getDefaultMirCode(workspaceId, manager)
         }
       )
       .andWhere('(response.status_v2 IS NULL OR response.status_v2 != :completedV2Status)', {
@@ -494,7 +495,7 @@ export class CodingJobResponsesService {
         manager,
         loadQueryContext: async () => {
           const [defaultMirCode, exclusions] = await Promise.all([
-            this.getDefaultMirCode(workspaceId),
+            this.getDefaultMirCode(workspaceId, manager),
             this.workspaceExclusionService.resolveExclusionsForQueries(
               workspaceId
             )
