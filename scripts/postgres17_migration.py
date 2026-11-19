@@ -427,8 +427,12 @@ class Migration:
           'unsupported',
             EXISTS(SELECT 1 FROM pg_namespace WHERE nspname NOT IN ('public','information_schema') AND left(nspname,3)<>'pg_')
             OR EXISTS(SELECT 1 FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace WHERE n.nspname='public' AND c.relkind NOT IN ('r','S','i') AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.objid=c.oid AND d.classid='pg_class'::regclass AND d.deptype='e'))
-            OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public' AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND d.deptype='e'))
-            OR EXISTS(SELECT 1 FROM pg_trigger WHERE NOT tgisinternal)
+            OR EXISTS(SELECT 1 FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace WHERE n.nspname='public'
+              AND p.oid IS DISTINCT FROM to_regprocedure('public.record_flat_response_filter_purge()')
+              AND NOT EXISTS(SELECT 1 FROM pg_depend d WHERE d.objid=p.oid AND d.classid='pg_proc'::regclass AND d.deptype='e'))
+            OR EXISTS(SELECT 1 FROM pg_trigger WHERE NOT tgisinternal AND (
+              tgname <> 'queue_flat_response_filter_purge' OR tgrelid IS DISTINCT FROM to_regclass('public.journal_entries')
+              OR tgfoid IS DISTINCT FROM to_regprocedure('public.record_flat_response_filter_purge()')))
             OR EXISTS(SELECT 1 FROM pg_event_trigger)
             OR EXISTS(SELECT 1 FROM pg_subscription)
             OR EXISTS(SELECT 1 FROM pg_publication)

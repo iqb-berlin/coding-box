@@ -54,6 +54,6 @@ describe('TestResultsMutationService with real result-cache invalidation', () =>
     await f.cache.invalidateCachesAfterTestResultDeletion(7);
     expect(f.incomplete).toHaveBeenCalledWith(7);
     expect(f.statistics).toHaveBeenCalledWith(7);
-    expect(f.workspaceStats).toHaveBeenCalledWith(7);
+    expect(f.workspaceStats).toHaveBeenCalledWith(7, { purgeFilterOptions: true });
   });
 });

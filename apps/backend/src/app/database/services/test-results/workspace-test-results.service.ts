@@ -77,6 +77,10 @@ export class WorkspaceTestResultsService {
     return this.cache.invalidateWorkspaceStatsCache(workspaceId);
   }
 
+  invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
+    return this.cache.invalidateCachesAfterTestResultDeletion(workspaceId);
+  }
+
   async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
     return this.cache.invalidateCodingStatisticsCache(workspaceId);
   }

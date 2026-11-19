@@ -303,7 +303,7 @@ describe('test results export/import roundtrip', () => {
       createMock<ResponseManagementService>(),
       createMock<WorkspaceCoreService>(),
       createMock<WorkspaceExclusionService>(),
-      new WorkspaceStatsCacheService((createMock<CacheService>()) as never)
+      new WorkspaceStatsCacheService(createMock<CacheService>(), createMock<JobQueueService>())
     );
   };
 

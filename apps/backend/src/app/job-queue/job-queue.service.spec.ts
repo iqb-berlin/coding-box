@@ -176,7 +176,6 @@ describe('JobQueueService', () => {
       autoCoderRun: 1
     })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addCodingStatisticsJob(1, 'v2')).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.addFlatResponseFilterOptionsJob(1, 250, 'g2-current')).resolves.toBeNull();
     await expect(service.addCodebookGenerationJob({
       workspaceId: 1,
       missingsProfile: 1,

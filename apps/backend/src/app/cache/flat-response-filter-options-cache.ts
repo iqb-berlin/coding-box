@@ -19,6 +19,15 @@ const PUBLISH_CURRENT_GENERATION = `
   redis.call('SET', KEYS[2], ARGV[2], 'EX', ARGV[3])
   return 1
 `;
+const DELETE_RETIRED_OPTIONS = `
+  local generation = redis.call('GET', KEYS[1])
+  local currentPrefix = generation and ARGV[1] .. generation .. ':thr'
+  for i = 2, #KEYS do
+    if not currentPrefix or string.sub(KEYS[i], 1, #currentPrefix) ~= currentPrefix then
+      redis.call('DEL', KEYS[i])
+    end
+  end
+`;
 
 type Coalesce<T> = (
   key: string,
@@ -30,10 +39,20 @@ export function flatResponseFilterOptionsVersionKey(workspaceId: number): string
   return `flat_response_filter_options:version:${workspaceId}`;
 }
 
+export function flatResponseFilterOptionsValueKeyPrefix(workspaceId: number): string {
+  return `flat_response_filter_options:${workspaceId}:v`;
+}
+
 export function flatResponseFilterOptionsCacheKey(
   workspaceId: number, generation: string | number, threshold: number
 ): string {
-  return `flat_response_filter_options:${workspaceId}:v${generation}:thr${threshold}`;
+  return `${flatResponseFilterOptionsValueKeyPrefix(workspaceId)}${generation}:thr${threshold}`;
+}
+
+export function deleteRetiredFlatResponseFilterOptions(
+  redis: Redis, versionKey: string, prefixedValueKeyPrefix: string, keys: string[]
+): Promise<unknown> {
+  return redis.eval(DELETE_RETIRED_OPTIONS, keys.length + 1, versionKey, ...keys, prefixedValueKeyPrefix);
 }
 
 async function publishIfCurrent<T>(

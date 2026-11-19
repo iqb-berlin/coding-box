@@ -23,6 +23,12 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+import {
+  FLAT_RESPONSE_FILTER_OPTIONS_PURGE_JOB,
+  FLAT_RESPONSE_FILTER_OPTIONS_REPAIR_OPTIONS,
+  FlatResponseFilterOptionsJobData,
+  flatResponseFilterOptionsWarmupOptions
+} from './flat-response-filter-options-job';
 
 /** Retain only cleanup pointers, never uploaded buffers or analysis result payloads. */
 export interface WorkspaceDeletionJob {
@@ -69,12 +75,6 @@ export interface TestPersonCodingJobData {
   freshnessVersion?: 'v1' | 'v3';
   freshnessStates?: ('PENDING' | 'STALE')[];
   freshnessSourceRevision?: number;
-}
-
-export interface FlatResponseFilterOptionsJobData {
-  generation?: string | null;
-  workspaceId: number;
-  processingDurationThresholdMs: number;
 }
 
 export interface CodebookGenerationJobData {
@@ -735,26 +735,18 @@ export class JobQueueService {
     workspaceId: number,
     processingDurationThresholdMs: number,
     generation: string | null
-  ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
-    // A running warmup may already have read the stale generation. Always enqueue repairs.
-    if (generation && await this.findActiveJob<FlatResponseFilterOptionsJobData>(
-      this.flatResponseFilterOptionsQueue, data => data.workspaceId === workspaceId
-    )) {
-      this.logger.debug(`Skipping filter-options warmup for workspace ${workspaceId}: already queued`);
-      return null;
-    }
-    const options: JobsOptions = generation ? {
-      jobId: `flat-response-filter-options-${workspaceId}-v${generation}-thr${processingDurationThresholdMs}`,
-      removeOnFail: true
-    } : {
-      attempts: 5,
-      backoff: { type: 'exponential', delay: 1000 },
-      removeOnFail: { count: 100 }
-    };
+  ): Promise<Job<FlatResponseFilterOptionsJobData>> {
     this.logger.log(`Adding filter-options job for workspace ${workspaceId}`);
-    const data: FlatResponseFilterOptionsJobData = { workspaceId, processingDurationThresholdMs, generation };
-    const jobOptions = withQueueJobId({ ...options, removeOnComplete: true });
-    return this.flatResponseFilterOptionsQueue.add('flat-response-filter-options', data, jobOptions);
+    const jobOptions = flatResponseFilterOptionsWarmupOptions(workspaceId, processingDurationThresholdMs, generation);
+    return this.flatResponseFilterOptionsQueue.add(
+      'flat-response-filter-options', { workspaceId, processingDurationThresholdMs, generation }, jobOptions
+    );
+  }
+
+  addFlatResponseFilterOptionsPurgeJob(workspaceId: number): Promise<Job<FlatResponseFilterOptionsJobData>> {
+    return this.flatResponseFilterOptionsQueue.add(
+      FLAT_RESPONSE_FILTER_OPTIONS_PURGE_JOB, { workspaceId }, withQueueJobId(FLAT_RESPONSE_FILTER_OPTIONS_REPAIR_OPTIONS)
+    );
   }
 
   async addUploadJob(

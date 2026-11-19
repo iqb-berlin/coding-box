@@ -948,13 +948,7 @@
       "file": {},
       "functions": {
         "class ResponseManagementService#1/method resolveDuplicateResponses#1": {
-          "max-lines-per-function": 129
-        },
-        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1": {
           "max-lines-per-function": 113
-        },
-        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1/anonymous:2653e2fc49fa5649#1": {
-          "complexity": 25
         },
         "class ResponseManagementService#1/method updateResponsesInDatabase#1": {
           "max-lines-per-function": 266
@@ -1267,7 +1261,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1206
+        "max-lines": 1199
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {

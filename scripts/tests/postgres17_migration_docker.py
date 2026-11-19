@@ -143,7 +143,10 @@ class DockerMigrationTests(unittest.TestCase):
         before = json.loads((directory / 'before.json').read_text())['preserved']
         after = json.loads((directory / 'cutover.json').read_text())['preserved']
         self.assertEqual(before, after)
-        self.assertEqual(len(before['tables']), 43)
+        self.assertEqual(len(before['tables']), 44)
+        self.assertIn('flat_response_filter_purge', [table['name'] for table in before['tables']])
+        self.assertIn('record_flat_response_filter_purge', before['purgeFunction']['definition'])
+        self.assertEqual(before['purgeTrigger']['enabled'], 'O')
         self.make('coding-box-postgres17-rollback')
         self.assertEqual(self.journal()[1]['phase'], 'rolled_back')
         self.assertEqual(self.sql('SHOW server_version'), '14.24')

@@ -111,6 +111,7 @@ describe('WorkspaceTestResultsService', () => {
     delete: jest.Mock;
     deleteByPattern: jest.Mock;
     invalidateFlatResponseFilterOptions: jest.Mock;
+    purgeFlatResponseFilterOptions: jest.Mock;
     incr: jest.Mock;
   };
   let dataSource: DataSource;
@@ -164,6 +165,7 @@ describe('WorkspaceTestResultsService', () => {
       delete: jest.fn().mockResolvedValue(undefined),
       deleteByPattern: jest.fn().mockResolvedValue(undefined),
       invalidateFlatResponseFilterOptions: jest.fn().mockResolvedValue('g2-next'),
+      purgeFlatResponseFilterOptions: jest.fn().mockResolvedValue(true),
       incr: jest.fn().mockResolvedValue(1)
     };
 
@@ -248,7 +250,7 @@ describe('WorkspaceTestResultsService', () => {
       responseManagementService,
       workspaceCoreService,
       workspaceExclusionService,
-      new WorkspaceStatsCacheService((cacheService as unknown as CacheService) as never),
+      new WorkspaceStatsCacheService(cacheService as unknown as CacheService, { addFlatResponseFilterOptionsPurgeJob: jest.fn() }),
       undefined,
       codingStatisticsService
     );
@@ -2908,6 +2910,7 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.deleteTestPersons(workspaceId, testPersonIds, userId);
 
+      expect(cacheService.purgeFlatResponseFilterOptions).toHaveBeenCalledWith(workspaceId);
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
@@ -2935,6 +2938,7 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.deleteUnit(workspaceId, unitId, userId);
 
+      expect(cacheService.purgeFlatResponseFilterOptions).toHaveBeenCalledWith(workspaceId);
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);
@@ -2975,6 +2979,7 @@ describe('WorkspaceTestResultsService', () => {
 
       await service.deleteBooklet(workspaceId, bookletId, userId);
 
+      expect(cacheService.purgeFlatResponseFilterOptions).toHaveBeenCalledWith(workspaceId);
       expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(workspaceId);
       expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(workspaceId);
       expect(cacheService.delete).toHaveBeenCalledWith(`workspace-overview-stats-${workspaceId}`);

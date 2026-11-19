@@ -673,27 +673,13 @@ export class ResponseManagementService {
         let resolvedCount = 0;
 
         for (const [key, selectedResponseId] of Object.entries(resolutionMap)) {
-          if (!selectedResponseId) {
-            continue;
-          }
+          if (!selectedResponseId) continue;
 
-          const parts = key.split('|');
-          if (parts.length !== 6) {
-            this.logger.warn(`Invalid duplicate resolution key: ${key}`);
-            continue;
-          }
-
-          const unitName = decodeURIComponent(parts[0] || '');
-          const variableId = decodeURIComponent(parts[1] || '');
-          const subform = decodeURIComponent(parts[2] || '');
-          const testTakerLogin = decodeURIComponent(parts[3] || '');
-          const testTakerCode = decodeURIComponent(parts[4] || '');
-          const testTakerGroup = decodeURIComponent(parts[5] || '');
-
-          if (!unitName || !variableId || !testTakerLogin) {
-            this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
-            continue;
-          }
+          const selection = this.parseDuplicateResponseKey(key);
+          if (!selection) continue;
+          const {
+            unitName, variableId, subform, testTakerLogin, testTakerCode, testTakerGroup
+          } = selection;
 
           const responses = await manager
             .createQueryBuilder(ResponseEntity, 'response')
@@ -718,9 +704,7 @@ export class ResponseManagementService {
             .getMany();
 
           const ids = (responses || []).map(r => r.id);
-          if (ids.length <= 1) {
-            continue;
-          }
+          if (ids.length <= 1) continue;
 
           if (!ids.includes(selectedResponseId)) {
             this.logger.warn(
@@ -730,9 +714,7 @@ export class ResponseManagementService {
           }
 
           const deleteIds = ids.filter(id => id !== selectedResponseId);
-          if (deleteIds.length === 0) {
-            continue;
-          }
+          if (deleteIds.length === 0) continue;
 
           const unitId = responses[0]?.unitid;
           if (unitId) {
@@ -787,13 +769,33 @@ export class ResponseManagementService {
             'RESULT_DELETED'
           );
           await Promise.all([
-            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId, { purgeFilterOptions: true }),
             this.codingStatisticsService.invalidateCache(workspaceId)
           ]);
         }
         return result;
       });
     });
+  }
+
+  private parseDuplicateResponseKey(key: string) {
+    const parts = key.split('|');
+    if (parts.length !== 6) {
+      this.logger.warn(`Invalid duplicate resolution key: ${key}`);
+      return null;
+    }
+
+    const [unitName, variableId, subform, testTakerLogin, testTakerCode, testTakerGroup] = parts.map(
+      part => decodeURIComponent(part)
+    );
+    if (!unitName || !variableId || !testTakerLogin) {
+      this.logger.warn(`Invalid duplicate resolution key parts: ${key}`);
+      return null;
+    }
+
+    return {
+      unitName, variableId, subform, testTakerLogin, testTakerCode, testTakerGroup
+    };
   }
 
   async deleteResponse(
@@ -876,7 +878,7 @@ export class ResponseManagementService {
             'RESULT_DELETED'
           );
           await Promise.all([
-            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId),
+            this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId, { purgeFilterOptions: true }),
             this.codingStatisticsService.invalidateCache(workspaceId)
           ]);
         }

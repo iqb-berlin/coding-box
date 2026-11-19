@@ -804,9 +804,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
   };
 
   const mockWorkspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
-    invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
-    invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
+    invalidateCachesAfterTestResultDeletion: jest.fn().mockResolvedValue(undefined)
   };
 
   function makeService(): WorkspaceFilesService {
@@ -837,7 +835,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteInvalidResponses(1, [10, 11]);
 
     expect(deletedCount).toBe(2);
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCachesAfterTestResultDeletion).toHaveBeenCalledWith(1);
   });
 
   it('should not invalidate workspace stats when no invalid responses were deleted', async () => {
@@ -847,7 +845,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteInvalidResponses(1, [10]);
 
     expect(deletedCount).toBe(0);
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).not.toHaveBeenCalled();
+    expect(mockWorkspaceTestResultsService.invalidateCachesAfterTestResultDeletion).not.toHaveBeenCalled();
   });
 
   it('invalidates all affected views after a later deletion batch fails', async () => {
@@ -855,9 +853,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     mockWorkspaceResponseValidationService.deleteInvalidResponses.mockRejectedValueOnce(new Error('audit unavailable'));
     await expect(service.deleteInvalidResponses(1, [10, 11], { actorUserId: 7, jobId: 'task-1' })).rejects.toThrow('audit unavailable');
     expect(mockWorkspaceResponseValidationService.deleteInvalidResponses).toHaveBeenCalledWith(1, [10, 11], { actorUserId: 7, jobId: 'task-1' });
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
-    expect(mockWorkspaceTestResultsService.invalidateCodingStatisticsCache).toHaveBeenCalledWith(1);
-    expect(mockWorkspaceTestResultsService.invalidateCodingAvailabilityCache).toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCachesAfterTestResultDeletion).toHaveBeenCalledWith(1);
   });
 
   it('should invalidate workspace stats after deleting all invalid responses', async () => {
@@ -867,7 +863,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
     const deletedCount = await service.deleteAllInvalidResponses(1, 'variables');
 
     expect(deletedCount).toBe(3);
-    expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+    expect(mockWorkspaceTestResultsService.invalidateCachesAfterTestResultDeletion).toHaveBeenCalledWith(1);
   });
 });
 

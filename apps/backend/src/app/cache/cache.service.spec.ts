@@ -20,7 +20,7 @@ describe('CacheService', () => {
       eval: jest.fn(),
       scan: jest.fn()
     };
-    service = new CacheService(redis as never);
+    service = new CacheService(redis as never, { pendingEvent: jest.fn(), complete: jest.fn() });
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'log').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'warn').mockImplementation(jest.fn());
     jest.spyOn((service as unknown as { logger: { log: jest.Mock; warn: jest.Mock; error: jest.Mock } }).logger, 'error').mockImplementation(jest.fn());

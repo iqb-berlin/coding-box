@@ -1,14 +1,17 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { ValidationResultDto } from '../../../../../api-dto/coding/validation-result.dto';
 import {
+  deleteRetiredFlatResponseFilterOptions,
   flatResponseFilterOptionsCacheKey,
+  flatResponseFilterOptionsValueKeyPrefix,
   flatResponseFilterOptionsVersionKey,
   getOrComputeFlatResponseFilterOptions as computeFlatOptions,
   invalidateFlatResponseFilterOptions as invalidateFlatOptions
 } from './flat-response-filter-options-cache';
+import { FlatResponseFilterPurgeStore } from './flat-response-filter-purge.store';
 
 export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
 
@@ -17,7 +20,11 @@ export class CacheService {
   private readonly logger = new Logger(CacheService.name);
   private readonly DEFAULT_TTL = 86400; // 24 Stunden in Sekunden
   private readonly computations = new Map<string, Promise<unknown>>();
-  constructor(@InjectRedis() private readonly redis: Redis) {}
+  constructor(
+    @InjectRedis() private readonly redis: Redis,
+    @Inject(FlatResponseFilterPurgeStore)
+    private readonly purges: Pick<FlatResponseFilterPurgeStore, 'pendingEvent' | 'complete'>
+  ) {}
 
   /** Coalesce cache misses within this process; versioned keys isolate concurrent invalidations. */
   async getOrCompute<T>(
@@ -43,9 +50,10 @@ export class CacheService {
     }
   }
 
-  getOrComputeFlatResponseFilterOptions<T>(
+  async getOrComputeFlatResponseFilterOptions<T>(
     workspaceId: number, threshold: number, compute: () => Promise<T>
   ): Promise<T> {
+    if (await this.purges.pendingEvent(workspaceId) !== undefined) return compute();
     return computeFlatOptions(this.redis, (key, factory, publish) => (
       this.getOrCompute(key, factory, undefined, publish)
     ), workspaceId, threshold, compute);
@@ -53,6 +61,24 @@ export class CacheService {
 
   invalidateFlatResponseFilterOptions(workspaceId: number): Promise<string | null> {
     return invalidateFlatOptions(this.redis, workspaceId);
+  }
+
+  clearFlatResponseFilterOptionsGeneration(workspaceId: number): Promise<boolean> {
+    return this.delete(flatResponseFilterOptionsVersionKey(workspaceId));
+  }
+
+  async purgeFlatResponseFilterOptions(workspaceId: number): Promise<boolean> {
+    const eventId = await this.purges.pendingEvent(workspaceId);
+    if (!await this.clearFlatResponseFilterOptionsGeneration(workspaceId)) return false;
+    const prefix = flatResponseFilterOptionsValueKeyPrefix(workspaceId);
+    const versionKey = flatResponseFilterOptionsVersionKey(workspaceId);
+    const prefixedValueKeyPrefix = this.getKeyPrefix() + prefix;
+    // A read can create a fresh generation during SCAN. Redis checks which generation is current before deleting.
+    const cleared = await this.deleteMatchingKeys(`${prefix}*:thr*`, keys => (
+      deleteRetiredFlatResponseFilterOptions(this.redis, versionKey, prefixedValueKeyPrefix, keys)
+    ));
+    if (cleared && eventId !== undefined) await this.purges.complete(workspaceId, eventId);
+    return cleared;
   }
 
   removeLegacyFlatResponseFilterOptions(): Promise<boolean> {
@@ -433,7 +459,13 @@ export class CacheService {
    * Delete values by pattern
    * @param pattern The pattern to match (e.g. "prefix:*")
    */
-  async deleteByPattern(pattern: string, matches?: (key: string) => boolean): Promise<boolean> {
+  deleteByPattern(pattern: string, matches?: (key: string) => boolean): Promise<boolean> {
+    return this.deleteMatchingKeys(pattern, keys => this.redis.del(...keys), matches);
+  }
+
+  private async deleteMatchingKeys(
+    pattern: string, deleteKeys: (keys: string[]) => Promise<unknown>, matches?: (key: string) => boolean
+  ): Promise<boolean> {
     try {
       const keyPrefix = this.getKeyPrefix();
       const scanPattern = `${keyPrefix.replace(/[\\*?[\]]/g, '\\$&')}${pattern}`;
@@ -444,7 +476,7 @@ export class CacheService {
         const logicalKeys = this.toLogicalKeys(reply[1], keyPrefix);
         const keys = matches ? logicalKeys.filter(matches) : logicalKeys;
         if (keys.length > 0) {
-          await this.redis.del(...keys);
+          await deleteKeys(keys);
         }
       } while (cursor !== '0');
       return true;

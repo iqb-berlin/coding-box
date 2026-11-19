@@ -561,7 +561,7 @@ export class TestResultsMutationService {
     await this.assertLogDeleteCompleted(snapshot);
 
     await onProgress?.(97, 'Caches und Statistiken werden aktualisiert...');
-    await this.cache.invalidateWorkspaceStatsCache(workspaceId);
+    await this.cache.invalidateWorkspaceStatsAfterDeletion(workspaceId);
 
     const deletedTargetCount =
       deletedCounts.deletedBookletLogs +

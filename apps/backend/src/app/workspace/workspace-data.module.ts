@@ -1,6 +1,7 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheClientModule } from '../cache/cache-client.module';
+import { JobQueueClientModule } from '../job-queue/job-queue-client.module';
 import FileUpload from '../database/entities/file_upload.entity';
 import Workspace from '../database/entities/workspace.entity';
 import Persons from '../database/entities/persons.entity';
@@ -21,6 +22,7 @@ import { DERIVED_VARIABLE_READER } from '../database/services/workspace/derived-
 @Module({
   imports: [
     CacheClientModule,
+    JobQueueClientModule,
     TypeOrmModule.forFeature([FileUpload, Workspace, Persons, ResponseEntity, Unit, Booklet, BookletInfo, JournalEntry])
   ],
   providers: [

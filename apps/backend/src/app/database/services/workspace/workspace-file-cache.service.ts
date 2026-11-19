@@ -39,11 +39,7 @@ export class WorkspaceFileCacheService {
 
   async invalidateResponseDeletionCaches(workspaceId: number): Promise<void> {
     try {
-      await Promise.all([
-        this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId),
-        this.workspaceTestResultsService.invalidateCodingStatisticsCache(workspaceId),
-        this.workspaceTestResultsService.invalidateCodingAvailabilityCache(workspaceId)
-      ]);
+      await this.workspaceTestResultsService.invalidateCachesAfterTestResultDeletion(workspaceId);
     } catch (error) {
       this.logger.error(`Could not invalidate response deletion caches for workspace ${workspaceId}: ${getErrorMessage(error)}`);
     }
