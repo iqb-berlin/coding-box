@@ -191,7 +191,7 @@ export class ResponseCacheSchedulerService {
     let missingKeyCount = 0;
 
     while (true) {
-      // Leading with bookletid uses the existing booklet index and avoids sorting the entire person page per request.
+      // Keep the sort order and cursor aligned with idx_unit_bookletid_id.
       const query = this.unitRepository
         .createQueryBuilder('unit')
         .select('unit.id', 'id')
