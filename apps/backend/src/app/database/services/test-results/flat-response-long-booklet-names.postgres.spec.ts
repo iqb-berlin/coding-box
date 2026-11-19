@@ -30,19 +30,34 @@ describePostgres('Response projections for long booklet names', () => {
       workspaceId = await fixture.insert('workspace', { name: 'Long booklet names' });
       const { db } = fixture;
       const importer = new PersonPersistenceService(
-        db.getRepository(Persons), db.getRepository(Booklet), db.getRepository(Unit), db.getRepository(UnitLastState),
-        db.getRepository(BookletInfo), db.getRepository(ResponseEntity), db.getRepository(ChunkEntity),
-        db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog)
+        db.getRepository(Persons),
+        db.getRepository(Booklet),
+        db.getRepository(Unit),
+        db.getRepository(UnitLastState),
+        db.getRepository(BookletInfo),
+        db.getRepository(ResponseEntity),
+        db.getRepository(ChunkEntity),
+        db.getRepository(BookletLog),
+        db.getRepository(Session),
+        db.getRepository(UnitLog)
       );
       // The import order and the aliases both favor the wrong long booklet if
       // the sort loses the distinguishing final character.
       const result = await importer.processPersonBooklets([{
-        workspace_id: workspaceId, code: text.slice(0, 100), login: 'login', group: 'group',
+        workspace_id: workspaceId,
+        code: text.slice(0, 100),
+        login: 'login',
+        group: 'group',
         booklets: ['C', secondLong, firstLong, 'A'].map((id, index) => ({
-          id, sessions: [], logs: [],
+          id,
+          sessions: [],
+          logs: [],
           units: [{
-            id: text.slice(100, 200), alias: `${index}${text.slice(200, 299)}`,
-            laststate: [], chunks: [], logs: [],
+            id: text.slice(100, 200),
+            alias: `${index}${text.slice(200, 299)}`,
+            laststate: [],
+            chunks: [],
+            logs: [],
             subforms: [{ id: '', responses: [{ id: 'V', status: 'VALUE_CHANGED', value: 'match' }] }]
           }]
         }))
@@ -60,8 +75,12 @@ describePostgres('Response projections for long booklet names', () => {
 
       const page = (projection: 'compact' | 'value', number: number, ignoredBooklets: string[] = []) => (
         findProjectedFlatResponsePage(
-          fixture.db, workspaceId, { globalIgnoredUnits: [], testletIgnoredUnits: [], ignoredBooklets },
-          { number, size: 2 }, projection, 'match'
+          fixture.db,
+          workspaceId,
+          { globalIgnoredUnits: [], testletIgnoredUnits: [], ignoredBooklets },
+          { number, size: 2 },
+          projection,
+          'match'
         )
       );
       const firstPage = { raw: [{ booklet: 'A' }, { booklet: firstLong }], total: 4 };
