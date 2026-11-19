@@ -4,6 +4,8 @@
 --comment: Store small response payloads for the first unfiltered response page.
 SET LOCAL lock_timeout = '5s';
 LOCK TABLE public.response IN SHARE ROW EXCLUSIVE MODE;
+-- A writer whose snapshot predates this backfill cannot see the new payload rows.
+UPDATE public.flat_response_rebuild_generation SET generation = generation + 1;
 
 -- The payload depends only on response fields. Workspace membership and
 -- visibility are still resolved by the existing unit projection at read time.

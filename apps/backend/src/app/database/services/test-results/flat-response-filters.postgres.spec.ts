@@ -51,7 +51,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await db.query(`
       CREATE UNLOGGED TABLE "${schema}".persons (
         id INT PRIMARY KEY, workspace_id INT, consider BOOLEAN, code TEXT, login TEXT, "group" TEXT);
-      CREATE UNLOGGED TABLE "${schema}".bookletinfo (id INT PRIMARY KEY, name TEXT);
+      CREATE TABLE "${schema}".bookletinfo (id INT PRIMARY KEY, name TEXT);
       CREATE UNLOGGED TABLE "${schema}".booklet (id INT PRIMARY KEY, personid INT, infoid INT);
       CREATE UNLOGGED TABLE "${schema}".unit (id INT PRIMARY KEY, bookletid INT, name TEXT, alias TEXT);
       CREATE UNLOGGED TABLE "${schema}".response (
@@ -132,6 +132,9 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     let original: Awaited<ReturnType<typeof service.findFlatResponses>>;
     const dictionary = 'SELECT value_prefix FROM flat_response_value_search_value WHERE value_prefix = $1';
 
+    const rollbackSql = (changeset: string) => [...changeset.matchAll(/^--rollback (.*)$/gm)]
+      .map(match => match[1]).join('\n');
+
     beforeEach(async () => {
       original = await service.findFlatResponses(42, { page: 1, limit: 50 });
       await db.transaction(async manager => {
@@ -147,17 +150,60 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     afterEach(async () => {
       await db.transaction(async manager => {
         for (const changeset of [...changes].reverse()) {
-          const rollback = [...changeset.matchAll(/^--rollback (.*)$/gm)].map(match => match[1]).join('\n');
-          await manager.query(rollback);
+          await manager.query(rollbackSql(changeset));
         }
         await manager.query('DELETE FROM response WHERE id IN (999, 1000, 1001)');
         await manager.query('DELETE FROM unit WHERE id = 44');
         await manager.query('DELETE FROM booklet WHERE id = 44');
+        await manager.query('DELETE FROM bookletinfo WHERE id = 44');
         await manager.query('DELETE FROM persons WHERE id = 44');
         await manager.query('UPDATE persons SET workspace_id = 42, consider = true WHERE id = 1');
         await manager.query('DROP TABLE workspace');
       });
       await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+    });
+
+    it('retries a delete whose snapshot predates the compact payload installation', async () => {
+      const payloadChangeset = changes[changes.length - 1];
+      await db.query(rollbackSql(payloadChangeset));
+      await db.query("INSERT INTO response VALUES (999, 1, 'NEW', 3, 'before installation', false)");
+      const remove = 'DELETE FROM response WHERE id = 999';
+      await expect(db.transaction('REPEATABLE READ', async writer => {
+        await writer.query('SELECT pg_current_snapshot()');
+        await db.transaction(installer => installer.query(payloadChangeset));
+        await writer.query(remove);
+      })).rejects.toMatchObject({ code: '40001' });
+
+      await db.transaction('REPEATABLE READ', writer => writer.query(remove));
+      await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id = 999')).resolves.toEqual([]);
+      await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+    });
+
+    it('retries a booklet rename when the first workspace association committed after its snapshot', async () => {
+      await db.query("INSERT INTO bookletinfo VALUES (44, 'BEFORE_RENAME')");
+      const rename = "UPDATE bookletinfo SET name = 'AFTER_RENAME' WHERE id = 44";
+      await expect(db.transaction('REPEATABLE READ', async editor => {
+        await editor.query('SELECT pg_current_snapshot()');
+        await db.query(`
+          INSERT INTO booklet VALUES (44, 1, 44);
+          INSERT INTO unit VALUES (44, 44, 'NEW_UNIT', 'NEW_UNIT');
+          INSERT INTO response VALUES (999, 44, 'NEW', 3, 'rename test', false);
+        `);
+        await editor.query(rename);
+      })).rejects.toMatchObject({ code: '40001' });
+
+      await db.transaction('REPEATABLE READ', editor => editor.query(rename));
+      await expect(db.query('SELECT workspace_id, ready FROM flat_response_first_page_workspace ORDER BY workspace_id'))
+        .resolves.toEqual([{ workspace_id: 42, ready: false }, { workspace_id: 43, ready: true }]);
+      const rows = await expectResponses({ responseValue: 'rename test' }, [999]);
+      expect(rows[0].booklet).toBe('AFTER_RENAME');
+      await db.query('SELECT rebuild_flat_response_workspace(42)');
+      for (const filters of [{}, { responseValue: 'rename test' }]) {
+        jest.mocked(exclusionService.resolveExclusionsForQueries).mockResolvedValueOnce({
+          globalIgnoredUnits: ['IGNORED'], ignoredBooklets: ['AFTER_RENAME'], testletIgnoredUnits: []
+        });
+        await expectResponses(filters, filters.responseValue ? [] : original[0].map(row => row.responseId));
+      }
     });
 
     it('backfills the projections and reads through a workspace move and rebuild', async () => {

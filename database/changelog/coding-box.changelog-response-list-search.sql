@@ -94,7 +94,7 @@ CREATE TABLE public.flat_response_first_page_workspace (
 CREATE VIEW public.flat_response_first_page_source_unit AS
 SELECT u.id AS unit_id, p.workspace_id, p.id AS person_id,
   p.code AS person_code, p.login AS person_login, p."group" AS person_group,
-  b.id AS booklet_id, bi.name AS booklet_name, u.name AS unit_name, u.alias AS unit_alias
+  b.id AS booklet_id, bi.id AS booklet_info_id, bi.name AS booklet_name, u.name AS unit_name, u.alias AS unit_alias
 FROM public.unit u
 JOIN public.booklet b ON b.id = u.bookletid
 JOIN public.bookletinfo bi ON bi.id = b.infoid
@@ -104,8 +104,14 @@ JOIN public.flat_response_first_page_workspace w ON w.workspace_id = p.workspace
 CREATE TABLE public.flat_response_unit_data AS
 SELECT * FROM public.flat_response_first_page_source_unit WITH NO DATA;
 
+-- A rename must also account for units committed after the editor's snapshot.
+-- PostgreSQL's cascading FK raises 40001 if it encounters such a reference.
+CREATE UNIQUE INDEX flat_response_booklet_identity ON public.bookletinfo (id, name);
 ALTER TABLE public.flat_response_unit_data
-  ADD PRIMARY KEY (unit_id);
+  ADD PRIMARY KEY (unit_id),
+  ADD FOREIGN KEY (booklet_info_id, booklet_name) REFERENCES public.bookletinfo (id, name)
+    ON UPDATE CASCADE ON DELETE CASCADE;
+CREATE INDEX flat_response_unit_by_booklet_info ON public.flat_response_unit_data (booklet_info_id);
 CREATE INDEX flat_response_first_page_unit_order
   ON public.flat_response_unit_data (workspace_id, person_code, booklet_name, unit_alias);
 CREATE INDEX flat_response_unit_by_person ON public.flat_response_unit_data (person_id);
@@ -343,6 +349,10 @@ $$;
 CREATE FUNCTION public.flat_response_first_page_insert_unit()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
+  -- At READ COMMITTED a rename can commit while the import waits. Take the
+  -- parent key lock before reading the name for the new FK in the next statement.
+  PERFORM bi.id FROM new_units i JOIN public.booklet b ON b.id = i.bookletid
+    JOIN public.bookletinfo bi ON bi.id = b.infoid ORDER BY bi.id FOR KEY SHARE OF bi;
   DELETE FROM public.flat_response_unit_data stored USING new_units i WHERE stored.unit_id = i.id;
   INSERT INTO public.flat_response_unit_data
   SELECT u.* FROM new_units i
@@ -627,5 +637,6 @@ CREATE TRIGGER flat_response_first_page_total_truncate AFTER TRUNCATE ON public.
 --rollback DROP INDEX public.flat_response_excluded_person;
 --rollback DROP TABLE public.flat_response_all_totals;
 --rollback DROP TABLE public.flat_response_unit_data;
+--rollback DROP INDEX public.flat_response_booklet_identity;
 --rollback DROP VIEW public.flat_response_first_page_source_unit;
 --rollback DROP TABLE public.flat_response_first_page_workspace;

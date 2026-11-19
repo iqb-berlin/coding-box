@@ -385,6 +385,11 @@ Schreibzugriffe. Schreibt eine Transaktion mit `REPEATABLE READ` oder
 `SERIALIZABLE` nach dem Neuaufbau mit einem älteren Snapshot in diese Tabellen,
 meldet PostgreSQL `40001`. Die Transaktion kann mit frischem Snapshot wiederholt
 werden. Das gilt auch bei einem Neuaufbau für einen einzelnen Arbeitsbereich.
+Dieselbe Wiederholung ist nötig, wenn ein älterer Snapshot eine Antwort nach
+dem erstmaligen Aufbau der kompakten Antwortseite löschen will. Beim Umbenennen
+eines Testhefts sichert ein Fremdschlüssel die Kombination aus Testheft-ID und
+Name. Hat ein paralleler Import seit dem Snapshot die ersten Units für dieses
+Testheft angelegt, meldet PostgreSQL beim Umbenennen ebenfalls `40001`.
 Entstehen Units und ihr Arbeitsbereich in derselben SQL-Anweisung, verwendet
 der neue Arbeitsbereich bis zum Neuaufbau die Quellabfrage.
 Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
