@@ -1834,6 +1834,8 @@ describe('CodingJobService', () => {
       variables: [{ unitName: 'UNIT', variableId: 'VAR' }]
     } as never);
 
+    expect(missingsProfilesService.getMissingByIdForProfileOrDefault)
+      .toHaveBeenCalledWith(3, null, 'mir', transactionManager);
     expect(transactionManager.query).toHaveBeenCalledWith(
       'SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked',
       [expect.any(Number), 3]
