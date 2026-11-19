@@ -2,6 +2,8 @@
 
 -- changeset iqb:orm-manual-coding-job-candidate-index runInTransaction:false
 -- comment: Find job candidates by unit and variable among CODING_INCOMPLETE (8) and INTENDED_INCOMPLETE (12) responses.
+-- An interrupted concurrent build can leave an invalid index behind.
+DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_manual_job_candidates;
 CREATE INDEX CONCURRENTLY idx_response_manual_job_candidates
   ON public.response(unitid, variableid, id)
   WHERE status_v1 IN (8, 12);

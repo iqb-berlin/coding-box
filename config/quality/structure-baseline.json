@@ -496,7 +496,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-mutation.service.ts": {
       "file": {
-        "max-lines": 1083
+        "max-lines": 1082
       },
       "functions": {
         "class CodingJobMutationService#1/method createCodingJobWithUnitSubsetInManager#1": {

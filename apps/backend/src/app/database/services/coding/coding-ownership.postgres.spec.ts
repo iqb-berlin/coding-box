@@ -9,7 +9,9 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import {
   assertCodingResourceMutation, codingResourceEntities
 } from '../shared/coding-ownership.policy';
-import { lockWorkspaceTestResultsMutationInTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceTestResultsMutationInTransaction, tryWithWorkspaceTestResultsMutationTransaction, withWorkspaceTestResultsMutationLock
+} from '../shared/workspace-test-results-lock.util';
 import { CodingJobService } from './coding-job.service';
 import { CodingJobMutationService } from './coding-job-mutation.service';
 import { CodingJobAccessService } from './coding-job-access.service';
@@ -199,6 +201,25 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       await db.manager.update(WorkspaceUser, { workspaceId, userId: owner.id }, { accessLevel: 2 });
     }
   }, 15000);
+
+  it('waits for capacity in a free workspace while rejecting the locked workspace', async () => {
+    const pool = await new DataSource({ ...db.options, extra: { max: 2 } }).initialize();
+    const freeWorkspaceId = workspaceId + 1;
+    const write = jest.fn().mockResolvedValue('created');
+    let queued: Promise<unknown> | undefined;
+    try {
+      await withWorkspaceTestResultsMutationLock(pool, workspaceId, async () => {
+        queued = tryWithWorkspaceTestResultsMutationTransaction(pool, freeWorkspaceId, write);
+        const busy = await tryWithWorkspaceTestResultsMutationTransaction(pool, workspaceId, write);
+        expect(busy).toEqual({ acquired: false });
+        expect(write).not.toHaveBeenCalled();
+      });
+      await expect(queued).resolves.toEqual({ acquired: true, value: 'created' });
+      expect(write).toHaveBeenCalledTimes(1);
+    } finally {
+      await pool.destroy();
+    }
+  });
 
   it('starts a pending job while an import holds the workspace lock', async () => {
     const id = resources.get('job')![0];

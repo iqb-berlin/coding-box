@@ -813,8 +813,6 @@ export class CodingJobMutationService {
     const repo = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
-    // Preserve the random sample and localize PostgreSQL's foreign-key checks.
-    responses.sort((left, right) => left.id - right.id);
     // Twelve bound values per case keep a batch well within PostgreSQL's parameter limit.
     const batchSize = 2000;
     for (let i = 0; i < responses.length; i += batchSize) {
