@@ -354,13 +354,22 @@ Fehlnachweise. Der vollständige HTTP-Dauerlastnachweis bleibt ein eigener Schri
 
 ## Antwortlisten-Projektionen
 
-Die Hilfstabellen werden aus den Originaltabellen befüllt und über Trigger
-aktualisiert. Bei bestimmten Änderungen an Personen oder der Testheftstruktur
-markieren die Trigger die Projektion des Arbeitsbereichs als ungültig. Antwortliste
-und Antwortwertsuche lesen danach wieder aus den Originaltabellen. Das erneute
-Einschließen einer Testperson aktiviert die Projektion nicht. Dazu ist derzeit
-ein expliziter Neuaufbau nötig, der Schreibsperren auf den Quelltabellen hält.
+Liquibase befüllt die Hilfstabellen aus den Originaltabellen. Während des Aufbaus
+blockieren die Changesets Schreibzugriffe auf die jeweils gesperrten Quelltabellen.
+Das Sperrzeitlimit von fünf Sekunden begrenzt die Wartezeit beim Erwerb der Sperre.
+Die Sperre bleibt anschließend bis zum Ende des jeweiligen Changesets bestehen.
 
-Vor einer Freigabe den Ablauf Ausschließen, Wiedereinschließen und anschließenden
-Import auf repräsentativen Daten prüfen. Dabei die Ergebnisgleichheit und die
-Antwortzeiten für Liste und Suche einschließlich des Neuaufbaus erfassen.
+Liste und Wertsuche lesen die aktuelle Berücksichtigung jeder Testperson im selben
+Datenbanksnapshot wie die Antworten. Die erste Seite zieht die Antwortzahlen
+ausgeschlossener Personen von der Summe ab. Auch während eines Ausschlusses
+importierte Antworten sind nach dem Wiedereinschließen sofort sichtbar. Beim
+Löschen oder Ersetzen der letzten Zuordnung zu einem Wert entfernt die Datenbank
+dessen Suchpräfix.
+
+Bei Änderungen an Sortiermerkmalen, Verschiebungen oder Löschungen in der
+Testheftstruktur wechselt der betroffene Arbeitsbereich zur Quellabfrage.
+`SELECT public.rebuild_flat_response_workspace(42);` baut die Hilfsdaten für
+Arbeitsbereich 42 neu auf. Die ID muss dem gewünschten Arbeitsbereich entsprechen.
+Auch dieser Neuaufbau sperrt die Quelltabellen arbeitsbereichsübergreifend für
+Schreibzugriffe. Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
+Dauer anhand einer Kopie des Zielbestands zu bestimmen ist.

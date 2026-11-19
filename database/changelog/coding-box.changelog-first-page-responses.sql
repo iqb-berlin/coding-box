@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset iqb:flat-response-first-page-payload splitStatements:false
+-- changeset iqb:flat-response-first-page-payload splitStatements:false
 --comment: Store small response payloads for the first unfiltered response page.
 SET LOCAL lock_timeout = '5s';
 LOCK TABLE public.response IN SHARE ROW EXCLUSIVE MODE;

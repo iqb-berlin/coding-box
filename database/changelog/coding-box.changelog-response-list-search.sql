@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset iqb:flat-response-unit-count splitStatements:false
+-- changeset iqb:flat-response-unit-count splitStatements:false
 --comment: Install exact per-unit counts. The response write lock keeps the initial scan and trigger activation in sync.
 SET LOCAL lock_timeout = '5s';
 LOCK TABLE public.response IN SHARE ROW EXCLUSIVE MODE;
@@ -73,7 +73,7 @@ ANALYZE public.flat_response_unit_count;
 --rollback DROP FUNCTION public.update_flat_response_unit_counts();
 --rollback DROP TABLE public.flat_response_unit_count;
 
---changeset iqb:flat-response-list-and-value-projections splitStatements:false
+-- changeset iqb:flat-response-list-and-value-projections splitStatements:false
 --comment: Build and maintain the authenticated list projections in the same database as the responses.
 SET LOCAL lock_timeout = '5s';
 LOCK TABLE public.workspace, public.persons, public.bookletinfo, public.booklet, public.unit, public.response
@@ -85,7 +85,7 @@ CREATE TABLE public.flat_response_first_page_workspace (
 );
 
 CREATE VIEW public.flat_response_first_page_source_unit AS
-SELECT u.id AS unit_id, p.workspace_id, p.consider, p.id AS person_id,
+SELECT u.id AS unit_id, p.workspace_id, p.id AS person_id,
   p.code AS person_code, p.login AS person_login, p."group" AS person_group,
   b.id AS booklet_id, bi.name AS booklet_name, u.name AS unit_name, u.alias AS unit_alias
 FROM public.unit u
@@ -94,18 +94,26 @@ JOIN public.bookletinfo bi ON bi.id = b.infoid
 JOIN public.persons p ON p.id = b.personid
 JOIN public.flat_response_first_page_workspace w ON w.workspace_id = p.workspace_id;
 
-CREATE TABLE public.flat_response_first_page_unit AS
+CREATE TABLE public.flat_response_unit_data AS
 SELECT * FROM public.flat_response_first_page_source_unit WITH NO DATA;
 
-ALTER TABLE public.flat_response_first_page_unit
+ALTER TABLE public.flat_response_unit_data
   ADD PRIMARY KEY (unit_id);
 CREATE INDEX flat_response_first_page_unit_order
-  ON public.flat_response_first_page_unit (workspace_id, person_code, booklet_name, unit_alias) WHERE consider IS TRUE;
+  ON public.flat_response_unit_data (workspace_id, person_code, booklet_name, unit_alias);
+CREATE INDEX flat_response_unit_by_person ON public.flat_response_unit_data (person_id);
+CREATE INDEX flat_response_excluded_person ON public.persons (workspace_id, id) WHERE consider IS NOT TRUE;
 
-ALTER TABLE public.flat_response_first_page_unit
+-- Read visibility in the same snapshot as the page, including during concurrent imports.
+CREATE VIEW public.flat_response_first_page_unit AS
+SELECT u.*, p.consider
+FROM public.flat_response_unit_data u
+JOIN public.persons p ON p.id = u.person_id AND p.workspace_id = u.workspace_id;
+
+ALTER TABLE public.flat_response_unit_data
   ADD FOREIGN KEY (workspace_id) REFERENCES public.flat_response_first_page_workspace(workspace_id) ON DELETE CASCADE;
 
-CREATE TABLE public.flat_response_first_page_total (
+CREATE TABLE public.flat_response_all_totals (
   workspace_id integer NOT NULL REFERENCES public.flat_response_first_page_workspace(workspace_id) ON DELETE CASCADE,
   booklet_name text NOT NULL,
   unit_name text NOT NULL,
@@ -114,6 +122,16 @@ CREATE TABLE public.flat_response_first_page_total (
   PRIMARY KEY (workspace_id, booklet_name, unit_name, shard)
 );
 
+
+-- Subtract excluded persons' current unit counts from the compact workspace totals.
+CREATE VIEW public.flat_response_first_page_total AS
+SELECT workspace_id, booklet_name, unit_name, shard, total FROM public.flat_response_all_totals
+UNION ALL
+SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id % 8)::smallint, -c.total
+FROM public.persons p
+JOIN public.flat_response_unit_data u ON u.person_id = p.id AND u.workspace_id = p.workspace_id
+JOIN public.flat_response_unit_count c ON c.unitid = u.unit_id
+WHERE p.consider IS NOT TRUE;
 
 CREATE TABLE public.flat_response_value_search_value (
   id bigint GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
@@ -128,7 +146,7 @@ CREATE TABLE public.flat_response_value_search_link (
   workspace_id integer NOT NULL REFERENCES public.flat_response_first_page_workspace(workspace_id) ON DELETE CASCADE,
   unitid integer NOT NULL,
   variableid text NOT NULL,
-  value_id bigint NOT NULL REFERENCES public.flat_response_value_search_value(id) ON DELETE CASCADE
+  value_id bigint NOT NULL REFERENCES public.flat_response_value_search_value(id)
 );
 CREATE INDEX flat_response_value_search_by_value
   ON public.flat_response_value_search_link (value_id, workspace_id) INCLUDE (id, unitid, variableid);
@@ -155,24 +173,24 @@ BEGIN
 
   DELETE FROM public.flat_response_value_search_link WHERE target_workspace IS NULL OR workspace_id = target_workspace;
   DELETE FROM public.flat_response_value_search_value WHERE target_workspace IS NULL OR workspace_id = target_workspace;
-  DELETE FROM public.flat_response_first_page_total WHERE target_workspace IS NULL OR workspace_id = target_workspace;
-  DELETE FROM public.flat_response_first_page_unit WHERE target_workspace IS NULL OR workspace_id = target_workspace;
+  DELETE FROM public.flat_response_all_totals WHERE target_workspace IS NULL OR workspace_id = target_workspace;
+  DELETE FROM public.flat_response_unit_data WHERE target_workspace IS NULL OR workspace_id = target_workspace;
 
   -- Moved units can still have a stale row in a different, invalidated workspace.
-  DELETE FROM public.flat_response_first_page_unit stored
+  DELETE FROM public.flat_response_unit_data stored
   USING public.flat_response_first_page_source_unit current_unit
   WHERE stored.unit_id = current_unit.unit_id
     AND (target_workspace IS NULL OR current_unit.workspace_id = target_workspace);
 
-  INSERT INTO public.flat_response_first_page_unit
+  INSERT INTO public.flat_response_unit_data
   SELECT * FROM public.flat_response_first_page_source_unit
   WHERE target_workspace IS NULL OR workspace_id = target_workspace;
 
-  INSERT INTO public.flat_response_first_page_total (workspace_id, booklet_name, unit_name, shard, total)
+  INSERT INTO public.flat_response_all_totals (workspace_id, booklet_name, unit_name, shard, total)
   SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id % 8)::smallint, sum(c.total)
-  FROM public.flat_response_first_page_unit u
+  FROM public.flat_response_unit_data u
   JOIN public.flat_response_unit_count c ON c.unitid = u.unit_id
-  WHERE u.consider IS TRUE AND (target_workspace IS NULL OR u.workspace_id = target_workspace)
+  WHERE target_workspace IS NULL OR u.workspace_id = target_workspace
   GROUP BY 1, 2, 3, 4;
 
   CREATE TEMP TABLE flat_response_value_backfill (
@@ -192,7 +210,7 @@ BEGIN
     -- The length must match RESPONSE_VALUE_SEARCH_PREFIX_LENGTH used by the source query.
     INSERT INTO pg_temp.flat_response_value_backfill
     SELECT r.id, u.workspace_id, r.unitid, r.variableid, left(r.value, 2000)
-    FROM public.response r JOIN public.flat_response_first_page_unit u ON u.unit_id = r.unitid
+    FROM public.response r JOIN public.flat_response_unit_data u ON u.unit_id = r.unitid
     WHERE r.id > lower_id AND r.id <= upper_id
       AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE
       AND (target_workspace IS NULL OR u.workspace_id = target_workspace);
@@ -230,8 +248,8 @@ $$;
 
 SELECT public.rebuild_flat_response_workspace();
 
-ANALYZE public.flat_response_first_page_unit;
-ANALYZE public.flat_response_first_page_total;
+ANALYZE public.flat_response_unit_data;
+ANALYZE public.flat_response_all_totals;
 ANALYZE public.flat_response_value_search_value;
 ANALYZE public.flat_response_value_search_link;
 
@@ -246,8 +264,8 @@ $$;
 CREATE FUNCTION public.flat_response_first_page_insert_unit()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  DELETE FROM public.flat_response_first_page_unit stored USING new_units i WHERE stored.unit_id = i.id;
-  INSERT INTO public.flat_response_first_page_unit
+  DELETE FROM public.flat_response_unit_data stored USING new_units i WHERE stored.unit_id = i.id;
+  INSERT INTO public.flat_response_unit_data
   SELECT u.* FROM new_units i
   JOIN public.flat_response_first_page_source_unit u ON u.unit_id = i.id;
   RETURN NULL;
@@ -262,6 +280,7 @@ DECLARE
   new_workspace integer;
 BEGIN
   IF TG_OP = 'TRUNCATE' THEN
+    DELETE FROM public.flat_response_unit_data;
     UPDATE public.flat_response_first_page_workspace SET ready = false WHERE ready;
     RETURN NULL;
   END IF;
@@ -276,6 +295,9 @@ BEGIN
         SELECT workspace_id INTO new_workspace FROM public.persons WHERE id = NEW.personid;
       END IF;
     WHEN 'unit' THEN
+      IF TG_OP = 'DELETE' THEN
+        DELETE FROM public.flat_response_unit_data WHERE unit_id = OLD.id;
+      END IF;
       SELECT p.workspace_id INTO old_workspace
       FROM public.booklet b JOIN public.persons p ON p.id = b.personid WHERE b.id = OLD.bookletid;
       IF TG_OP = 'UPDATE' THEN
@@ -320,7 +342,7 @@ BEGIN
   IF NEW.is_autocoder_generated IS TRUE OR NEW.value IS NULL THEN RETURN NULL; END IF;
 
   SELECT u.workspace_id INTO target_workspace
-  FROM public.flat_response_first_page_unit u JOIN public.flat_response_first_page_workspace w USING (workspace_id)
+  FROM public.flat_response_unit_data u JOIN public.flat_response_first_page_workspace w USING (workspace_id)
   WHERE u.unit_id = NEW.unitid AND w.ready;
   IF target_workspace IS NULL THEN
     -- A data-modifying CTE can insert the unit and its responses in one statement.
@@ -338,7 +360,7 @@ BEGIN
   prefix := left(NEW.value, 2000);
   SELECT id INTO matched_id FROM public.flat_response_value_search_value v
   WHERE v.workspace_id = target_workspace AND md5(v.value_prefix) = md5(prefix) AND v.value_prefix = prefix
-  ORDER BY id LIMIT 1;
+  ORDER BY id LIMIT 1 FOR KEY SHARE;
   -- Concurrent inserts can retain separate dictionary IDs for the same text. Both still match ILIKE.
   IF matched_id IS NULL THEN
     INSERT INTO public.flat_response_value_search_value (workspace_id, value_prefix) VALUES (target_workspace, prefix)
@@ -353,15 +375,48 @@ BEGIN
 END
 $$;
 
+-- Serialize removals of the last links for each dictionary entry. A lookup
+-- inserting another link holds KEY SHARE until its transaction commits.
+CREATE FUNCTION public.prune_flat_response_search_values()
+RETURNS trigger LANGUAGE plpgsql AS $$
+DECLARE
+  old_ids bigint[];
+BEGIN
+  IF TG_OP = 'UPDATE' THEN
+    SELECT array_agg(DISTINCT o.value_id) INTO old_ids
+    FROM old_links o JOIN new_links n USING (id) WHERE o.value_id <> n.value_id;
+  ELSE
+    SELECT array_agg(DISTINCT value_id) INTO old_ids FROM old_links;
+  END IF;
+  IF old_ids IS NULL THEN RETURN NULL; END IF;
+
+  PERFORM id FROM public.flat_response_value_search_value
+    WHERE id = ANY(old_ids) ORDER BY id FOR UPDATE;
+  -- Version surviving rows too, so concurrent last-link removals at REPEATABLE
+  -- READ retry on a write conflict instead of keeping an orphan in an old snapshot.
+  UPDATE public.flat_response_value_search_value SET value_prefix = value_prefix WHERE id = ANY(old_ids);
+  DELETE FROM public.flat_response_value_search_value v
+    WHERE v.id = ANY(old_ids)
+      AND NOT EXISTS (SELECT FROM public.flat_response_value_search_link l WHERE l.value_id = v.id);
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER flat_response_value_cleanup_delete AFTER DELETE ON public.flat_response_value_search_link
+  REFERENCING OLD TABLE AS old_links FOR EACH STATEMENT EXECUTE FUNCTION public.prune_flat_response_search_values();
+CREATE TRIGGER flat_response_value_cleanup_update AFTER UPDATE ON public.flat_response_value_search_link
+  REFERENCING OLD TABLE AS old_links NEW TABLE AS new_links
+  FOR EACH STATEMENT EXECUTE FUNCTION public.prune_flat_response_search_values();
+
 CREATE TRIGGER flat_response_projection_workspace_insert AFTER INSERT ON public.workspace
   FOR EACH ROW EXECUTE FUNCTION public.flat_response_projection_insert_workspace();
 CREATE TRIGGER flat_response_first_page_unit_insert AFTER INSERT ON public.unit
   REFERENCING NEW TABLE AS new_units FOR EACH STATEMENT EXECUTE FUNCTION public.flat_response_first_page_insert_unit();
 
 CREATE TRIGGER flat_response_projection_person_update
-  AFTER UPDATE OF id, workspace_id, consider, code, login, "group" ON public.persons
-  FOR EACH ROW WHEN ((OLD.id, OLD.workspace_id, OLD.consider, OLD.code, OLD.login, OLD."group")
-    IS DISTINCT FROM (NEW.id, NEW.workspace_id, NEW.consider, NEW.code, NEW.login, NEW."group"))
+  AFTER UPDATE OF id, workspace_id, code, login, "group" ON public.persons
+  FOR EACH ROW WHEN ((OLD.id, OLD.workspace_id, OLD.code, OLD.login, OLD."group")
+    IS DISTINCT FROM (NEW.id, NEW.workspace_id, NEW.code, NEW.login, NEW."group"))
   EXECUTE FUNCTION public.flat_response_projection_invalidate();
 CREATE TRIGGER flat_response_projection_booklet_update AFTER UPDATE OF id, infoid, personid ON public.booklet
   FOR EACH ROW WHEN ((OLD.id, OLD.infoid, OLD.personid) IS DISTINCT FROM (NEW.id, NEW.infoid, NEW.personid))
@@ -415,16 +470,15 @@ BEGIN
     WHEN 'DELETE' THEN
       changes := 'SELECT unitid, -total AS delta FROM old_counts';
     WHEN 'TRUNCATE' THEN
-      TRUNCATE public.flat_response_first_page_total;
+      TRUNCATE public.flat_response_all_totals;
       RETURN NULL;
   END CASE;
   EXECUTE format('
-    INSERT INTO public.flat_response_first_page_total AS stored
+    INSERT INTO public.flat_response_all_totals AS stored
     SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id %% 8)::smallint, sum(c.delta)
     FROM (%s) c
-    JOIN public.flat_response_first_page_unit u ON u.unit_id = c.unitid
+    JOIN public.flat_response_unit_data u ON u.unit_id = c.unitid
     JOIN public.flat_response_first_page_workspace w ON w.workspace_id = u.workspace_id AND w.ready
-    WHERE u.consider IS TRUE
     GROUP BY 1, 2, 3, 4
     HAVING sum(c.delta) <> 0
     ORDER BY 1, 2, 3, 4
@@ -473,9 +527,15 @@ CREATE TRIGGER flat_response_first_page_total_truncate AFTER TRUNCATE ON public.
 --rollback DROP FUNCTION public.flat_response_projection_insert_workspace();
 --rollback DROP FUNCTION public.rebuild_flat_response_workspace(integer);
 --rollback DROP VIEW public.flat_response_value_search_workspace;
+--rollback DROP TRIGGER flat_response_value_cleanup_update ON public.flat_response_value_search_link;
+--rollback DROP TRIGGER flat_response_value_cleanup_delete ON public.flat_response_value_search_link;
+--rollback DROP FUNCTION public.prune_flat_response_search_values();
 --rollback DROP TABLE public.flat_response_value_search_link;
 --rollback DROP TABLE public.flat_response_value_search_value;
---rollback DROP TABLE public.flat_response_first_page_total;
---rollback DROP TABLE public.flat_response_first_page_unit;
+--rollback DROP VIEW public.flat_response_first_page_total;
+--rollback DROP VIEW public.flat_response_first_page_unit;
+--rollback DROP INDEX public.flat_response_excluded_person;
+--rollback DROP TABLE public.flat_response_all_totals;
+--rollback DROP TABLE public.flat_response_unit_data;
 --rollback DROP VIEW public.flat_response_first_page_source_unit;
 --rollback DROP TABLE public.flat_response_first_page_workspace;

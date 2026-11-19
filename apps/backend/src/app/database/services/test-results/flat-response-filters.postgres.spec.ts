@@ -123,19 +123,41 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
-  it('backfills the migrated projections and reads through a workspace move and rebuild', async () => {
+  describe('migrated response projections', () => {
     const changes = ['response-list-search', 'first-page-responses'].flatMap(name => (
       readFileSync(resolvePath(`database/changelog/coding-box.changelog-${name}.sql`), 'utf8')
         .replace(/\bpublic\./g, `"${schema}".`)
-        .split(/^--changeset .*$/m).slice(1)
+        .split(/^-- changeset .*$/m).slice(1)
     ));
-    const original = await service.findFlatResponses(42, { page: 1, limit: 50 });
-    await db.transaction(async manager => {
-      await manager.query('CREATE TABLE workspace (id int PRIMARY KEY)');
-      await manager.query('INSERT INTO workspace VALUES (42), (43)');
-      for (const sql of changes) await manager.query(sql);
+    let original: Awaited<ReturnType<typeof service.findFlatResponses>>;
+    const dictionary = 'SELECT value_prefix FROM flat_response_value_search_value WHERE value_prefix = $1';
+
+    beforeEach(async () => {
+      original = await service.findFlatResponses(42, { page: 1, limit: 50 });
+      await db.transaction(async manager => {
+        await manager.query('CREATE TABLE workspace (id int PRIMARY KEY)');
+        await manager.query('INSERT INTO workspace VALUES (42), (43)');
+        for (const sql of changes) await manager.query(sql);
+      });
     });
-    try {
+
+    afterEach(async () => {
+      await db.transaction(async manager => {
+        for (const changeset of [...changes].reverse()) {
+          const rollback = [...changeset.matchAll(/^--rollback (.*)$/gm)].map(match => match[1]).join('\n');
+          await manager.query(rollback);
+        }
+        await manager.query('DELETE FROM response WHERE id IN (999, 1000, 1001)');
+        await manager.query('DELETE FROM unit WHERE id = 44');
+        await manager.query('DELETE FROM booklet WHERE id = 44');
+        await manager.query('DELETE FROM persons WHERE id = 44');
+        await manager.query('UPDATE persons SET workspace_id = 42, consider = true WHERE id = 1');
+        await manager.query('DROP TABLE workspace');
+      });
+      await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+    });
+
+    it('backfills the projections and reads through a workspace move and rebuild', async () => {
       await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
       await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id IN (4, 9)'))
         .resolves.toEqual([{ id: 4 }]);
@@ -179,6 +201,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await db.query('DELETE FROM response WHERE id = 999');
       const [deletedRows] = await service.findFlatResponses(43, { page: 1, limit: 50, responseValue: 'edited answer' });
       expect(deletedRows).toEqual([]);
+      await expect(db.query(dictionary, ['edited answer'])).resolves.toEqual([]);
       await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id = 999'))
         .resolves.toEqual([]);
       await db.transaction(async manager => {
@@ -187,21 +210,40 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         await expect(manager.query('SELECT id FROM flat_response_first_page_response')).resolves.toEqual([]);
         await manager.query('ROLLBACK TO SAVEPOINT before_truncate');
       });
-    } finally {
-      await db.transaction(async manager => {
-        for (const changeset of [...changes].reverse()) {
-          const rollback = [...changeset.matchAll(/^--rollback (.*)$/gm)].map(match => match[1]).join('\n');
-          await manager.query(rollback);
-        }
-        await manager.query('DELETE FROM response WHERE id IN (999, 1000)');
-        await manager.query('DELETE FROM unit WHERE id = 44');
-        await manager.query('DELETE FROM booklet WHERE id = 44');
-        await manager.query('DELETE FROM persons WHERE id = 44');
-        await manager.query('UPDATE persons SET workspace_id = 42 WHERE id = 1');
-        await manager.query('DROP TABLE workspace');
+    });
+
+    it('keeps the projected page, count and value search current across a concurrent import and visibility change', async () => {
+      await db.transaction(async importer => {
+        await importer.query("INSERT INTO response VALUES (999, 2, 'NEW', 3, 'imported answer', false)");
+        await db.query('UPDATE persons SET consider = false WHERE id = 1');
       });
-    }
-    await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+      await expectResponses({}, []);
+      await expectResponses({ responseValue: 'answer' }, []);
+      await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42'))
+        .resolves.toEqual([{ ready: true }]);
+      await db.query('UPDATE persons SET consider = true WHERE id = 1');
+      await expectResponses({}, [1, 2, 3, 4, 5, 999, 6, 7, 8]);
+      await expectResponses({ responseValue: 'imported answer' }, [999]);
+      await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42'))
+        .resolves.toEqual([{ ready: true }]);
+    });
+
+    it('removes an obsolete prefix when concurrent writers release its last links', async () => {
+      await db.query(`
+        INSERT INTO response VALUES (999, 1, 'A2', 3, 'shared prefix', false),
+          (1001, 2, 'B2', 3, 'shared prefix', false)
+      `);
+      await expect(db.query(dictionary, ['shared prefix'])).resolves.toHaveLength(1);
+      let removal: Promise<unknown> | undefined;
+      await db.transaction(async writer => {
+        await writer.query("UPDATE response SET value = 'replacement' WHERE id = 999");
+        // The second writer starts before the first commits. It must recheck the remaining links.
+        removal = db.query('DELETE FROM response WHERE id = 1001');
+      });
+      await removal;
+      await expect(db.query(dictionary, ['shared prefix'])).resolves.toEqual([]);
+      await expectResponses({ responseValue: 'replacement' }, [999]);
+    });
   });
 
   it('counts only in-scope answers in upload statistics, including legacy null autocoder flags', async () => {
