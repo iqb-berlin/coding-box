@@ -110,6 +110,7 @@ describe('WorkspaceTestResultsService', () => {
     set: jest.Mock;
     delete: jest.Mock;
     deleteByPattern: jest.Mock;
+    invalidateFlatResponseFilterOptions: jest.Mock;
     incr: jest.Mock;
   };
   let dataSource: DataSource;
@@ -162,6 +163,7 @@ describe('WorkspaceTestResultsService', () => {
       set: jest.fn().mockResolvedValue(undefined),
       delete: jest.fn().mockResolvedValue(undefined),
       deleteByPattern: jest.fn().mockResolvedValue(undefined),
+      invalidateFlatResponseFilterOptions: jest.fn().mockResolvedValue('g2-next'),
       incr: jest.fn().mockResolvedValue(1)
     };
 

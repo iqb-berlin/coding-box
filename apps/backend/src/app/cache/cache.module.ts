@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, OnModuleInit } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheClientModule } from './cache-client.module';
+import { CacheService } from './cache.service';
 import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
 import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache-scheduler.service';
 import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
@@ -29,4 +30,10 @@ import { CodingModule } from '../coding/coding.module';
   ],
   exports: [CacheClientModule]
 })
-export class CacheModule { }
+export class CacheModule implements OnModuleInit {
+  constructor(private readonly cacheService: CacheService) {}
+
+  onModuleInit(): void {
+    this.cacheService.removeLegacyFlatResponseFilterOptions();
+  }
+}

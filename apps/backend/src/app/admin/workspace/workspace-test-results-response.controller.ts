@@ -49,20 +49,8 @@ export class WorkspaceTestResultsResponseController {
   private async invalidateFlatResponseFilterOptionsCache(
     workspaceId: number
   ): Promise<void> {
-    const versionKey =
-      this.cacheService.generateFlatResponseFilterOptionsVersionKey(
-        workspaceId
-      );
-    const nextVersion = await this.cacheService.incr(versionKey);
-    await this.jobQueueService.addFlatResponseFilterOptionsJob(
-      workspaceId,
-      60000,
-      {
-        jobId: `flat-response-filter-options-${workspaceId}-v${nextVersion}-thr60000`,
-        removeOnComplete: true,
-        removeOnFail: true
-      }
-    );
+    const generation = await this.cacheService.invalidateFlatResponseFilterOptions(workspaceId);
+    await this.jobQueueService.addFlatResponseFilterOptionsJob(workspaceId, 60000, generation);
   }
 
   @Delete(':workspace_id/responses/:responseId')

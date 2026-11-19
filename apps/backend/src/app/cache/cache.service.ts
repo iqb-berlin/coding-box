@@ -3,6 +3,12 @@ import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { ValidationResultDto } from '../../../../../api-dto/coding/validation-result.dto';
+import {
+  flatResponseFilterOptionsCacheKey,
+  flatResponseFilterOptionsVersionKey,
+  getOrComputeFlatResponseFilterOptions as computeFlatOptions,
+  invalidateFlatResponseFilterOptions as invalidateFlatOptions
+} from './flat-response-filter-options-cache';
 
 export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
 
@@ -10,7 +16,50 @@ export const VALIDATION_CACHE_KEY_PREFIX = 'validation:v2';
 export class CacheService {
   private readonly logger = new Logger(CacheService.name);
   private readonly DEFAULT_TTL = 86400; // 24 Stunden in Sekunden
+  private readonly computations = new Map<string, Promise<unknown>>();
   constructor(@InjectRedis() private readonly redis: Redis) {}
+
+  /** Coalesce cache misses within this process; versioned keys isolate concurrent invalidations. */
+  async getOrCompute<T>(
+    key: string, compute: () => Promise<T>, ttl?: number,
+    publish?: (value: T) => Promise<boolean>
+  ): Promise<T> {
+    const active = this.computations.get(key);
+    if (active) return active as Promise<T>;
+
+    const computation = (async () => {
+      const cached = await this.get<T>(key);
+      if (cached !== null) return cached;
+      const value = await compute();
+      if (publish) await publish(value);
+      else await this.set(key, value, ttl);
+      return value;
+    })();
+    this.computations.set(key, computation);
+    try {
+      return await computation;
+    } finally {
+      if (this.computations.get(key) === computation) this.computations.delete(key);
+    }
+  }
+
+  getOrComputeFlatResponseFilterOptions<T>(
+    workspaceId: number, threshold: number, compute: () => Promise<T>
+  ): Promise<T> {
+    return computeFlatOptions(this.redis, (key, factory, publish) => (
+      this.getOrCompute(key, factory, undefined, publish)
+    ), workspaceId, threshold, compute);
+  }
+
+  invalidateFlatResponseFilterOptions(workspaceId: number): Promise<string | null> {
+    return invalidateFlatOptions(this.redis, workspaceId);
+  }
+
+  removeLegacyFlatResponseFilterOptions(): Promise<boolean> {
+    return this.deleteByPattern('flat_response_filter_options:[0-9]*:v[0-9]*:thr*', key => (
+      /^flat_response_filter_options:\d+:v\d+:thr-?\d+(?:e\+\d+)?$/.test(key)
+    ));
+  }
 
   async getNumber(key: string, fallback: number): Promise<number> {
     try {
@@ -39,15 +88,15 @@ export class CacheService {
   }
 
   generateFlatResponseFilterOptionsVersionKey(workspaceId: number): string {
-    return `flat_response_filter_options:version:${workspaceId}`;
+    return flatResponseFilterOptionsVersionKey(workspaceId);
   }
 
   generateFlatResponseFilterOptionsCacheKey(
     workspaceId: number,
-    cacheVersion: number,
+    cacheVersion: string | number,
     processingDurationThresholdMs: number
   ): string {
-    return `flat_response_filter_options:${workspaceId}:v${cacheVersion}:thr${processingDurationThresholdMs}`;
+    return flatResponseFilterOptionsCacheKey(workspaceId, cacheVersion, processingDurationThresholdMs);
   }
 
   /** Read ownership/cleanup metadata without treating Redis failures as cache misses. */
@@ -384,15 +433,16 @@ export class CacheService {
    * Delete values by pattern
    * @param pattern The pattern to match (e.g. "prefix:*")
    */
-  async deleteByPattern(pattern: string): Promise<boolean> {
+  async deleteByPattern(pattern: string, matches?: (key: string) => boolean): Promise<boolean> {
     try {
       const keyPrefix = this.getKeyPrefix();
-      const scanPattern = keyPrefix ? `${keyPrefix}${pattern}` : pattern;
+      const scanPattern = `${keyPrefix.replace(/[\\*?[\]]/g, '\\$&')}${pattern}`;
       let cursor = '0';
       do {
         const reply = await this.redis.scan(cursor, 'MATCH', scanPattern, 'COUNT', 100);
         cursor = reply[0];
-        const keys = this.toLogicalKeys(reply[1], keyPrefix);
+        const logicalKeys = this.toLogicalKeys(reply[1], keyPrefix);
+        const keys = matches ? logicalKeys.filter(matches) : logicalKeys;
         if (keys.length > 0) {
           await this.redis.del(...keys);
         }

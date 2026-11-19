@@ -72,6 +72,7 @@ export interface TestPersonCodingJobData {
 }
 
 export interface FlatResponseFilterOptionsJobData {
+  generation?: string | null;
   workspaceId: number;
   processingDurationThresholdMs: number;
 }
@@ -733,27 +734,27 @@ export class JobQueueService {
   async addFlatResponseFilterOptionsJob(
     workspaceId: number,
     processingDurationThresholdMs: number,
-    options?: JobsOptions
+    generation: string | null
   ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
-    const existing = await this.findActiveJob<FlatResponseFilterOptionsJobData>(
-      this.flatResponseFilterOptionsQueue,
-      d => d.workspaceId === workspaceId
-    );
-    if (existing) {
-      this.logger.debug(
-        `Skipping flat-response-filter-options job for workspace ${workspaceId} — already queued (job ${existing.id})`
-      );
+    // A running warmup may already have read the stale generation. Always enqueue repairs.
+    if (generation && await this.findActiveJob<FlatResponseFilterOptionsJobData>(
+      this.flatResponseFilterOptionsQueue, data => data.workspaceId === workspaceId
+    )) {
+      this.logger.debug(`Skipping filter-options warmup for workspace ${workspaceId}: already queued`);
       return null;
     }
-    this.logger.log(
-      `Adding flat response filter-options cache job for workspace ${workspaceId}`
-    );
-    return this.flatResponseFilterOptionsQueue.add(
-      'flat-response-filter-options', {
-        workspaceId,
-        processingDurationThresholdMs
-      }, withQueueJobId(options)
-    );
+    const options: JobsOptions = generation ? {
+      jobId: `flat-response-filter-options-${workspaceId}-v${generation}-thr${processingDurationThresholdMs}`,
+      removeOnFail: true
+    } : {
+      attempts: 5,
+      backoff: { type: 'exponential', delay: 1000 },
+      removeOnFail: { count: 100 }
+    };
+    this.logger.log(`Adding filter-options job for workspace ${workspaceId}`);
+    const data: FlatResponseFilterOptionsJobData = { workspaceId, processingDurationThresholdMs, generation };
+    const jobOptions = withQueueJobId({ ...options, removeOnComplete: true });
+    return this.flatResponseFilterOptionsQueue.add('flat-response-filter-options', data, jobOptions);
   }
 
   async addUploadJob(

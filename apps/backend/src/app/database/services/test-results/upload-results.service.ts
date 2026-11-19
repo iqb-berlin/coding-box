@@ -112,11 +112,14 @@ export class UploadResultsService {
     issues: TestResultsUploadIssueDto[]
   ): Promise<boolean> {
     try {
-      await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
-      return false;
+      if (await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId) !== false) return false;
+      throw new Error('Cache invalidation failed');
     } catch (error) {
-      const detail = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.warn(`Could not invalidate workspace overview cache after import: ${detail}`);
+      this.logger.warn(`Could not invalidate workspace overview cache after import: ${getErrorMessage(error)}`);
+      // A missing generation tells the worker to invalidate before warming the cache.
+      await this.jobQueueService.addFlatResponseFilterOptionsJob(workspaceId, 60000, null).catch(queueError => {
+        this.logger.warn(`Could not queue filter-options repair after import for workspace ${workspaceId}: ${getErrorMessage(queueError)}`);
+      });
       issues.push({
         level: 'warning',
         category: 'other',
@@ -491,9 +494,8 @@ export class UploadResultsService {
     this.logger.log(`Processing upload job ${job.id} for workspace ${workspaceId}, file: ${file.originalname}`);
 
     const issues: TestResultsUploadIssueDto[] = [];
-    const beforeStats = await this.readWorkspaceUploadStats(workspaceId, 'before', issues);
-    const before = beforeStats.stats;
-    let overviewPending = beforeStats.failed;
+    const { stats: before, failed: beforeStatsFailed } = await this.readWorkspaceUploadStats(workspaceId, 'before', issues);
+    let overviewPending = beforeStatsFailed;
     const importSummaryAgg = this.createUploadSummaryAccumulator();
     // Initialize aggregation structures locally for this job
     const expectedAgg = {
@@ -845,8 +847,8 @@ export class UploadResultsService {
       });
     }
 
-    overviewPending = overviewPending ||
-      await this.invalidateWorkspaceOverviewCache(workspaceId, issues);
+    // Invalidate even when the initial statistics read failed.
+    overviewPending = await this.invalidateWorkspaceOverviewCache(workspaceId, issues) || overviewPending;
 
     const afterStats = await this.readWorkspaceUploadStats(workspaceId, 'after', issues);
     const after = afterStats.stats;
