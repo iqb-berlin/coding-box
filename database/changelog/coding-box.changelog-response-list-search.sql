@@ -112,8 +112,16 @@ ALTER TABLE public.flat_response_unit_data
   ADD FOREIGN KEY (booklet_info_id, booklet_name) REFERENCES public.bookletinfo (id, name)
     ON UPDATE CASCADE ON DELETE CASCADE;
 CREATE INDEX flat_response_unit_by_booklet_info ON public.flat_response_unit_data (booklet_info_id);
+-- Person code and alias are each at most 100 characters. Keep the full order
+-- index for ordinary names and only the bounded leading keys for wide names.
 CREATE INDEX flat_response_first_page_unit_order
-  ON public.flat_response_unit_data (workspace_id, person_code, booklet_name, unit_alias);
+  ON public.flat_response_unit_data (workspace_id, person_code, booklet_name, unit_alias)
+  WHERE octet_length(booklet_name) <= 1024;
+CREATE INDEX flat_response_first_page_wide_unit_order
+  ON public.flat_response_unit_data (workspace_id, person_code)
+  WHERE octet_length(booklet_name) > 1024;
+-- Let ANALYZE estimate the rare wide-name branch before joining persons and counts.
+CREATE STATISTICS public.flat_response_booklet_name_bytes ON (octet_length(booklet_name)) FROM public.flat_response_unit_data;
 CREATE INDEX flat_response_unit_by_person ON public.flat_response_unit_data (person_id);
 CREATE INDEX flat_response_excluded_person ON public.persons (workspace_id, id) WHERE consider IS NOT TRUE;
 
@@ -128,17 +136,18 @@ ALTER TABLE public.flat_response_unit_data
 
 CREATE TABLE public.flat_response_all_totals (
   workspace_id integer NOT NULL REFERENCES public.flat_response_first_page_workspace(workspace_id) ON DELETE CASCADE,
-  booklet_name text NOT NULL,
+  booklet_info_id integer NOT NULL,
   unit_name text NOT NULL,
   shard smallint NOT NULL,
   total bigint NOT NULL,
-  PRIMARY KEY (workspace_id, booklet_name, unit_name, shard)
+  PRIMARY KEY (workspace_id, booklet_info_id, unit_name, shard)
 );
 
 
 -- Subtract excluded persons' current unit counts from the compact workspace totals.
 CREATE VIEW public.flat_response_first_page_total AS
-SELECT workspace_id, booklet_name, unit_name, shard, total FROM public.flat_response_all_totals
+SELECT t.workspace_id, bi.name AS booklet_name, t.unit_name, t.shard, t.total
+FROM public.flat_response_all_totals t JOIN public.bookletinfo bi ON bi.id = t.booklet_info_id
 UNION ALL
 SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id % 8)::smallint, -c.total
 FROM public.persons p
@@ -240,8 +249,8 @@ BEGIN
   SELECT * FROM public.flat_response_first_page_source_unit
   WHERE target_workspace IS NULL OR workspace_id = target_workspace;
 
-  INSERT INTO public.flat_response_all_totals (workspace_id, booklet_name, unit_name, shard, total)
-  SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id % 8)::smallint, sum(c.total)
+  INSERT INTO public.flat_response_all_totals (workspace_id, booklet_info_id, unit_name, shard, total)
+  SELECT u.workspace_id, u.booklet_info_id, u.unit_name, (u.unit_id % 8)::smallint, sum(c.total)
   FROM public.flat_response_unit_data u
   JOIN public.flat_response_unit_count c ON c.unitid = u.unit_id
   WHERE target_workspace IS NULL OR u.workspace_id = target_workspace
@@ -567,14 +576,14 @@ BEGIN
   -- response before the unit's AFTER STATEMENT trigger populated unit_data.
   EXECUTE format('
     INSERT INTO public.flat_response_all_totals AS stored
-    SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id %% 8)::smallint, sum(c.delta)
+    SELECT u.workspace_id, u.booklet_info_id, u.unit_name, (u.unit_id %% 8)::smallint, sum(c.delta)
     FROM (%s) c
     JOIN public.flat_response_first_page_source_unit u ON u.unit_id = c.unitid
     JOIN public.flat_response_first_page_workspace w ON w.workspace_id = u.workspace_id AND w.ready
     GROUP BY 1, 2, 3, 4
     HAVING sum(c.delta) <> 0
     ORDER BY 1, 2, 3, 4
-    ON CONFLICT (workspace_id, booklet_name, unit_name, shard)
+    ON CONFLICT (workspace_id, booklet_info_id, unit_name, shard)
     DO UPDATE SET total = stored.total + EXCLUDED.total', changes);
   RETURN NULL;
 END

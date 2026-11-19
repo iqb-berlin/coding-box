@@ -77,14 +77,21 @@ export async function findProjectedFlatResponsePage(
 }
 
 function projectedFirstPageIds(scope: string, limit: string, responseTable: string, compact: boolean): string {
-  // Use the covering order index to rank tied unit prefixes before reading the response payload.
-  return `
-    first_page_units AS MATERIALIZED (
+  // Match the order indexes' byte predicates. Each eligible unit contributes at
+  // least one row, so the first N units plus ties from each branch cover the global top N.
+  const unitCandidates = (comparison: '<=' | '>') => `(
       SELECT u.unit_id, u.person_code, u.booklet_name, u.unit_alias
       FROM (${scope}) u
       JOIN flat_response_unit_count n ON n.unitid = u.unit_id AND n.total > 0
+      WHERE octet_length(u.booklet_name) ${comparison} 1024
       ORDER BY u.person_code, u.booklet_name, u.unit_alias
       FETCH FIRST ${limit} ROWS WITH TIES
+    )`;
+  return `
+    first_page_units AS MATERIALIZED (
+      ${unitCandidates('<=')}
+      UNION ALL
+      ${unitCandidates('>')}
     ), first_page_rows AS MATERIALIZED (
       SELECT u.*, r.id, r.variableid
       FROM first_page_units u
