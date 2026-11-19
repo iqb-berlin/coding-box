@@ -235,14 +235,6 @@
         }
       }
     },
-    "apps/backend/src/app/cache/response-cache-scheduler.service.ts": {
-      "file": {},
-      "functions": {
-        "class ResponseCacheSchedulerService#1/method processWorkspace#1": {
-          "max-depth": 5
-        }
-      }
-    },
     "apps/backend/src/app/database/services/coding/autocoder-output-shadow.util.ts": {
       "file": {},
       "functions": {
