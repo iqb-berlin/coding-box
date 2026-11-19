@@ -4,12 +4,15 @@ const serverUrl = process.env.KAPPA_QUERY_TEST_DATABASE_URL;
 const describePostgres = serverUrl ? describe : describe.skip;
 
 describePostgres('Response projections after TRUNCATE', () => {
-  it.each(['TRUNCATE workspace CASCADE', 'TRUNCATE response CASCADE'])(
+  it.each(['TRUNCATE workspace CASCADE', 'TRUNCATE persons CASCADE', 'TRUNCATE response CASCADE'])(
     'clears counts, payloads and search values for %s', async statement => {
       const fixture = new KappaPostgresFixture();
       try {
         await fixture.open(serverUrl!);
         const counts = () => fixture.db.query(`SELECT
+          (SELECT count(*)::int FROM persons) AS persons,
+          (SELECT count(*)::int FROM unit) AS source_units,
+          (SELECT count(*)::int FROM flat_response_unit_data) AS projected_units,
           (SELECT count(*)::int FROM response) AS responses,
           (SELECT count(*)::int FROM flat_response_unit_count) AS units,
           (SELECT count(*)::int FROM flat_response_all_totals) AS totals,
@@ -23,12 +26,29 @@ describePostgres('Response projections after TRUNCATE', () => {
           const responseId = await fixture.response(workspaceId, 'UNIT', 'V', 'login');
           await fixture.db.query("UPDATE response SET value = 'answer' WHERE id = $1", [responseId]);
           await expect(counts()).resolves.toEqual([{
-            responses: 1, units: 1, totals: 1, payloads: 1, links: 1, prefixes: 1
+            persons: 1,
+            source_units: 1,
+            projected_units: 1,
+            responses: 1,
+            units: 1,
+            totals: 1,
+            payloads: 1,
+            links: 1,
+            prefixes: 1
           }]);
           await truncator.query(statement);
         });
+        const remainingHierarchyRows = statement === 'TRUNCATE response CASCADE' ? 1 : 0;
         await expect(counts()).resolves.toEqual([{
-          responses: 0, units: 0, totals: 0, payloads: 0, links: 0, prefixes: 0
+          persons: remainingHierarchyRows,
+          source_units: remainingHierarchyRows,
+          projected_units: remainingHierarchyRows,
+          responses: 0,
+          units: 0,
+          totals: 0,
+          payloads: 0,
+          links: 0,
+          prefixes: 0
         }]);
       } finally {
         await fixture.close();

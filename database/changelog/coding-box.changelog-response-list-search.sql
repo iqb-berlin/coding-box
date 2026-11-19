@@ -378,7 +378,11 @@ DECLARE
   new_workspace integer;
 BEGIN
   IF TG_OP = 'TRUNCATE' THEN
-    DELETE FROM public.flat_response_unit_data;
+    -- TRUNCATE also removes imports committed after the caller's snapshot.
+    -- A workspace or bookletinfo cascade may already have truncated this table.
+    IF pg_relation_size('public.flat_response_unit_data') > 0 THEN
+      TRUNCATE public.flat_response_unit_data;
+    END IF;
     UPDATE public.flat_response_first_page_workspace SET ready = false WHERE ready;
     RETURN NULL;
   END IF;
