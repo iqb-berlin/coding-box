@@ -1,7 +1,7 @@
 import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { MoreThan, Repository } from 'typeorm';
 import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../database/services/workspace/workspace-constants';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { CacheService } from './cache.service';
@@ -14,8 +14,21 @@ import {
   RuntimeConfigService
 } from '../config/runtime-config.service';
 
+const PERSON_PAGE_SIZE = 100;
+const UNIT_PAGE_SIZE = 500;
+const CACHE_CHECK_BATCH_SIZE = 100;
+
+interface ResponseCacheUnitRow {
+  id: number;
+  name: string;
+  alias: string | null;
+  login: string;
+  code: string;
+  group: string;
+  bookletName: string;
+}
+
 interface ResponseCacheWarmupItem {
-  workspaceId: number;
   connector: string;
   unitId: string;
   cacheKey: string;
@@ -58,7 +71,7 @@ export class ResponseCacheSchedulerService {
   }
 
   private async runCacheAllResponses(): Promise<void> {
-    this.logger.log('Starting nightly task to cache all responses');
+    this.logger.log(`Starting nightly task to cache all responses (${this.getMemoryUsage()})`);
     const startTime = Date.now();
 
     try {
@@ -79,7 +92,7 @@ export class ResponseCacheSchedulerService {
       }
 
       const duration = (Date.now() - startTime) / 1000;
-      this.logger.log(`Finished nightly caching of all responses in ${duration.toFixed(2)} seconds`);
+      this.logger.log(`Finished nightly caching of all responses in ${duration.toFixed(2)} seconds (${this.getMemoryUsage()})`);
     } catch (error) {
       this.logger.error(`Error in cacheAllResponses: ${getErrorMessage(error)}`, getErrorStack(error));
     }
@@ -93,77 +106,103 @@ export class ResponseCacheSchedulerService {
       this.logger.log(`Processing workspace ${workspaceId}`);
       const workspaceStartTime = Date.now();
 
-      // Get all test persons and their units in a single query
-      const personsWithUnits = await this.getPersonsWithUnits(workspaceId);
-      this.logger.log(`Found ${personsWithUnits.length} persons in workspace ${workspaceId}`);
+      let afterPersonId: number | undefined;
+      let personCount = 0;
+      let missingKeyCount = 0;
 
-      // Prepare all cache items to check
-      const cacheCheckItemsByKey =
-        new Map<string, ResponseCacheWarmupItem>();
+      while (true) {
+        const persons = await this.personsRepository.find({
+          select: { id: true },
+          where: {
+            workspace_id: workspaceId,
+            consider: true,
+            ...(afterPersonId === undefined ? {} : { id: MoreThan(afterPersonId) })
+          },
+          order: { id: 'ASC' },
+          take: PERSON_PAGE_SIZE
+        });
 
-      for (const person of personsWithUnits) {
-        for (const unit of person.units) {
-          const connectors = this.createConnectors(person, unit.booklet.bookletinfo.name);
-          const unitIds = this.getReplayUnitIdentifiers(unit);
+        if (persons.length === 0) break;
 
-          for (const connector of connectors) {
-            for (const unitId of unitIds) {
-              const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
-
-              cacheCheckItemsByKey.set(cacheKey, {
-                workspaceId,
-                connector,
-                unitId,
-                cacheKey
-              });
-            }
-          }
-        }
-      }
-      const cacheCheckItems = Array.from(cacheCheckItemsByKey.values());
-
-      // Check which items are already in cache (in batches)
-      const batchSize = 100;
-      const itemsToCache: typeof cacheCheckItems = [];
-
-      for (let i = 0; i < cacheCheckItems.length; i += batchSize) {
-        const batch = cacheCheckItems.slice(i, i + batchSize);
-        const cacheKeys = batch.map(item => item.cacheKey);
-
-        // Check multiple cache keys at once if Redis supports it
-        const existsResults = await Promise.all(cacheKeys.map(key => this.cacheService.exists(key)));
-
-        for (let j = 0; j < batch.length; j++) {
-          if (!existsResults[j]) {
-            itemsToCache.push(batch[j]);
-          }
-        }
-      }
-
-      this.logger.log(`Found ${itemsToCache.length} items that need caching in workspace ${workspaceId}`);
-
-      // Process items that need caching in smaller parallel batches
-      const cacheBatchSize =
-        this.runtimeConfig?.responseCacheItemConcurrency ??
-        DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY;
-      const cacheBatches = this.chunkArray(itemsToCache, cacheBatchSize);
-
-      for (const batch of cacheBatches) {
-        await Promise.all(
-          batch.map(item => this.cacheResponseWithRetry(
-            item.workspaceId,
-            item.connector,
-            item.unitId,
-            true
-          ))
+        personCount += persons.length;
+        missingKeyCount += await this.cacheUnitsForPersons(
+          workspaceId,
+          persons.map(person => person.id)
         );
+        if (persons.length < PERSON_PAGE_SIZE) break;
+        afterPersonId = persons[persons.length - 1].id;
       }
 
       const duration = (Date.now() - workspaceStartTime) / 1000;
-      this.logger.log(`Finished processing workspace ${workspaceId} in ${duration.toFixed(2)} seconds`);
+      this.logger.log(
+        `Finished processing workspace ${workspaceId} in ${duration.toFixed(2)} seconds ` +
+        `(${personCount} persons, ${missingKeyCount} cache misses, ${this.getMemoryUsage()})`
+      );
     } catch (error) {
       this.logger.error(`Error processing workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
     }
+  }
+
+  private async cacheUnitsForPersons(workspaceId: number, personIds: number[]): Promise<number> {
+    let afterUnitId: number | undefined;
+    let missingKeyCount = 0;
+
+    while (true) {
+      const query = this.unitRepository
+        .createQueryBuilder('unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.person', 'person')
+        .innerJoin('booklet.bookletinfo', 'bookletInfo')
+        .select('unit.id', 'id')
+        .addSelect('unit.name', 'name')
+        .addSelect('unit.alias', 'alias')
+        .addSelect('person.login', 'login')
+        .addSelect('person.code', 'code')
+        .addSelect('person.group', 'group')
+        .addSelect('bookletInfo.name', 'bookletName')
+        .where('booklet.personid IN (:...personIds)', { personIds })
+        .andWhere('person.workspace_id = :workspaceId AND person.consider = true', { workspaceId })
+        .orderBy('unit.id', 'ASC')
+        .limit(UNIT_PAGE_SIZE);
+
+      if (afterUnitId !== undefined) {
+        query.andWhere('unit.id > :afterUnitId', { afterUnitId });
+      }
+
+      const units = await query.getRawMany<ResponseCacheUnitRow>();
+      missingKeyCount += await this.cacheUnitPage(workspaceId, units);
+      if (units.length < UNIT_PAGE_SIZE) return missingKeyCount;
+      afterUnitId = units[units.length - 1].id;
+    }
+  }
+
+  private async cacheUnitPage(workspaceId: number, units: ResponseCacheUnitRow[]): Promise<number> {
+    const itemsByKey = new Map<string, ResponseCacheWarmupItem>();
+    for (const unit of units) {
+      const unitIds = [...new Set([unit.name, unit.alias].filter((id): id is string => !!id))];
+      for (const connector of this.createConnectors(unit)) {
+        for (const unitId of unitIds) {
+          const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
+          itemsByKey.set(cacheKey, { connector, unitId, cacheKey });
+        }
+      }
+    }
+
+    const cacheBatchSize = this.runtimeConfig?.responseCacheItemConcurrency ??
+      DEFAULT_RESPONSE_CACHE_ITEM_CONCURRENCY;
+    let missingKeyCount = 0;
+
+    for (const batch of this.chunkArray([...itemsByKey.values()], CACHE_CHECK_BATCH_SIZE)) {
+      const exists = await Promise.all(batch.map(item => this.cacheService.exists(item.cacheKey)));
+      const missing = batch.filter((_, index) => !exists[index]);
+      missingKeyCount += missing.length;
+
+      for (const writeBatch of this.chunkArray(missing, cacheBatchSize)) {
+        await Promise.all(writeBatch.map(item => this.cacheResponseWithRetry(workspaceId, item)));
+      }
+    }
+
+    return missingKeyCount;
   }
 
   /**
@@ -180,51 +219,11 @@ export class ResponseCacheSchedulerService {
   /**
    * Create a connector string for a person and booklet
    */
-  private createConnectors(person: Persons, bookletId: string): string[] {
-    const connectors = [
-      person.group ? `${person.login}@${person.code}@${person.group}@${bookletId}` : null,
-      `${person.login}@${person.code}@${bookletId}`
-    ].filter((connector): connector is string => !!connector);
-
-    return [...new Set(connectors)];
-  }
-
-  private getReplayUnitIdentifiers(unit: Unit): string[] {
-    return [...new Set([unit.name, unit.alias].filter((unitId): unitId is string => !!unitId))];
-  }
-
-  /**
-   * Cache a response for a specific workspace, test person, and unit
-   */
-  private async cacheResponse(
-    workspaceId: number,
-    connector: string,
-    unitId: string,
-    skipExistingCheck = false
-  ): Promise<void> {
-    const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
-      workspaceId,
-      connector,
-      unitId
-    )}${this.responseCacheVersionSuffix}`;
-
-    if (!skipExistingCheck) {
-      const exists = await this.cacheService.exists(cacheKey);
-      if (exists) {
-        this.logger.debug(`Response already in cache: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
-        return;
-      }
-    }
-
-    // Fetch and cache the response
-    try {
-      const response = await this.workspaceTestResultsService.findUnitResponse(workspaceId, connector, unitId);
-      await this.cacheService.set(cacheKey, response);
-      this.logger.debug(`Cached response: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
-    } catch (error) {
-      this.logger.error(`Error fetching response for caching: ${getErrorMessage(error)}`, getErrorStack(error));
-      throw error;
-    }
+  private createConnectors({
+    login, code, group, bookletName
+  }: ResponseCacheUnitRow): string[] {
+    const legacyConnector = `${login}@${code}@${bookletName}`;
+    return group ? [`${login}@${code}@${group}@${bookletName}`, legacyConnector] : [legacyConnector];
   }
 
   /**
@@ -232,18 +231,20 @@ export class ResponseCacheSchedulerService {
    */
   private async cacheResponseWithRetry(
     workspaceId: number,
-    connector: string,
-    unitId: string,
-    skipExistingCheck = false,
+    item: ResponseCacheWarmupItem,
     retries = 2
   ): Promise<void> {
+    const { connector, unitId, cacheKey } = item;
     try {
-      await this.cacheResponse(workspaceId, connector, unitId, skipExistingCheck);
+      const response = await this.workspaceTestResultsService.findUnitResponse(workspaceId, connector, unitId);
+      await this.cacheService.set(cacheKey, response);
+      this.logger.debug(`Cached response: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
     } catch (error) {
+      this.logger.error(`Error fetching response for caching: ${getErrorMessage(error)}`, getErrorStack(error));
       if (retries > 0) {
         this.logger.warn(`Retrying cache operation for workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}. Retries left: ${retries}`);
         await new Promise(resolve => { setTimeout(resolve, 1000); }); // Wait 1 second before retry
-        await this.cacheResponseWithRetry(workspaceId, connector, unitId, skipExistingCheck, retries - 1);
+        await this.cacheResponseWithRetry(workspaceId, item, retries - 1);
       } else {
         this.logger.error(`Failed to cache response after retries: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
         // Don't rethrow to avoid failing the entire batch
@@ -251,40 +252,10 @@ export class ResponseCacheSchedulerService {
     }
   }
 
-  /**
-   * Get all persons with their units for a workspace in a single optimized query
-   */
-  private async getPersonsWithUnits(workspaceId: number): Promise<(Persons & { units: Unit[] })[]> {
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      return [];
-    }
-
-    const personIds = persons.map(person => person.id);
-
-    const units = await this.unitRepository
-      .createQueryBuilder('unit')
-      .leftJoinAndSelect('unit.booklet', 'booklet')
-      .leftJoinAndSelect('booklet.bookletinfo', 'bookletInfo')
-      .where('booklet.personid IN (:...personIds)', { personIds })
-      .getMany();
-
-    const unitsByPersonId = new Map<number, Unit[]>();
-    for (const unit of units) {
-      const personId = unit.booklet.personid;
-      const personUnits = unitsByPersonId.get(personId) ?? [];
-      personUnits.push(unit);
-      unitsByPersonId.set(personId, personUnits);
-    }
-
-    // Attach units to each person
-    return persons.map(person => ({
-      ...person,
-      units: unitsByPersonId.get(person.id) || []
-    }));
+  private getMemoryUsage(): string {
+    const { heapUsed, rss } = process.memoryUsage();
+    const mebibyte = 1024 * 1024;
+    return `heap used ${(heapUsed / mebibyte).toFixed(1)} MiB, RSS ${(rss / mebibyte).toFixed(1)} MiB`;
   }
 
   /**

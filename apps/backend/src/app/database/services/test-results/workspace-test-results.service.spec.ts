@@ -2690,6 +2690,16 @@ describe('WorkspaceTestResultsService', () => {
         ),
         'REPLAY_UNIT_NOT_FOUND'
       );
+      expect(personsRepository.findOne).toHaveBeenCalledWith({
+        select: { id: true },
+        where: {
+          code: 'code-a', login: 'login-a', workspace_id: 1, consider: true, group: 'group-a'
+        }
+      });
+      expect(bookletRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
+        select: { id: true },
+        loadEagerRelations: false
+      }));
     });
   });
 
