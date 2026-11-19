@@ -128,9 +128,7 @@ export class TestResultsReplayService {
         personWhere.group = group;
       }
 
-      const person = await this.personsRepository.findOne({
-        where: personWhere
-      });
+      const person = await this.personsRepository.findOne({ where: personWhere, select: { id: true } });
 
       if (!person) {
         throw new ReplayResourceNotFoundError('REPLAY_PERSON_NOT_FOUND');
@@ -145,6 +143,8 @@ export class TestResultsReplayService {
       }
 
       const booklet = await this.bookletRepository.findOne({
+        select: { id: true },
+        loadEagerRelations: false,
         where: {
           personid: person.id,
           infoid: bookletInfo.id

@@ -7,6 +7,7 @@ import { CodingIncompleteCacheSchedulerService } from './coding-incomplete-cache
 import { CodingStatisticsCacheSchedulerService } from './coding-statistics-cache-scheduler.service';
 import { WorkspaceCacheWarmupRunner } from './workspace-cache-warmup.runner';
 import Persons from '../database/entities/persons.entity';
+import { Booklet } from '../database/entities/booklet.entity';
 import { Unit } from '../database/entities/unit.entity';
 
 import { WorkspaceModule } from '../workspace/workspace.module';
@@ -17,7 +18,7 @@ import { CodingModule } from '../coding/coding.module';
   imports: [
     CacheClientModule,
     ScheduleModule.forRoot(),
-    TypeOrmModule.forFeature([Persons, Unit]),
+    TypeOrmModule.forFeature([Persons, Booklet, Unit]),
     WorkspaceModule,
     CodingModule
   ],
