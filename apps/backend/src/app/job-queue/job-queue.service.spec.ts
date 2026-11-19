@@ -176,7 +176,6 @@ describe('JobQueueService', () => {
       autoCoderRun: 1
     })).rejects.toBeInstanceOf(ConflictException);
     await expect(service.addCodingStatisticsJob(1, 'v2')).rejects.toBeInstanceOf(ConflictException);
-    await expect(service.addFlatResponseFilterOptionsJob(1, 250)).resolves.toBeNull();
     await expect(service.addCodebookGenerationJob({
       workspaceId: 1,
       missingsProfile: 1,
@@ -225,6 +224,13 @@ describe('JobQueueService', () => {
     expect(queues[1].add).not.toHaveBeenCalled();
   });
 
+  it('queues an independently retryable repair even while another warmup is active', async () => {
+    await service.addFlatResponseFilterOptionsJob(1, 100, null);
+    expect(queues[3].add).toHaveBeenCalledWith('flat-response-filter-options', {
+      workspaceId: 1, processingDurationThresholdMs: 100, generation: null
+    }, expect.objectContaining({ jobId: expect.any(String), attempts: 5, backoff: { type: 'exponential', delay: 1000 } }));
+  });
+
   it('allows jobs when no duplicate active job exists', async () => {
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
 
@@ -234,7 +240,7 @@ describe('JobQueueService', () => {
       autoCoderRun: 1
     })).resolves.toHaveProperty('data.workspaceId', 1);
     await expect(service.addCodingStatisticsJob(1, 'v1')).resolves.toHaveProperty('data.version', 'v1');
-    await expect(service.addFlatResponseFilterOptionsJob(1, 100)).resolves.toHaveProperty('data.processingDurationThresholdMs', 100);
+    await expect(service.addFlatResponseFilterOptionsJob(1, 100, 'g2-current')).resolves.toHaveProperty('data.processingDurationThresholdMs', 100);
     await expect(service.addCodebookGenerationJob({
       workspaceId: 1,
       missingsProfile: 1,

@@ -46,7 +46,9 @@ export function compareSnapshots(before, after) {
       preservedFields.some(key => before.preserved?.[key] === undefined || after.preserved?.[key] === undefined)) {
     throw new Error('Both inputs must be complete migration snapshots of formatVersion 1.');
   }
-  return preservedFields.filter(key => JSON.stringify(before.preserved[key]) !== JSON.stringify(after.preserved[key]));
+  // Earlier snapshots predate the journal trigger and omit both optional fields.
+  const fields = [...preservedFields, 'purgeFunction', 'purgeTrigger'];
+  return fields.filter(key => JSON.stringify(before.preserved[key]) !== JSON.stringify(after.preserved[key]));
 }
 
 /** Read-only, consistent snapshot. No answer values are written to the report. */
@@ -92,6 +94,13 @@ export async function snapshotDatabase(client, timeoutMs = 900000) {
       JOIN pg_class t ON t.oid=c.conrelid JOIN pg_namespace n ON n.oid=t.relnamespace
       WHERE n.nspname='public' ORDER BY t.relname COLLATE "C", c.conname COLLATE "C"`);
     for (const constraint of constraints) constraint.definition = normalizeConstraintDefinition(constraint.definition);
+    const [purgeFunction] = await rows(`SELECT pg_get_functiondef(p.oid) AS definition,
+      pg_get_userbyid(proowner) AS owner,
+      ARRAY(SELECT acl::text FROM unnest(proacl) acl ORDER BY acl::text COLLATE "C") AS acl
+      FROM pg_proc p WHERE p.oid=to_regprocedure('public.record_flat_response_filter_purge()')`);
+    const [purgeTrigger] = await rows(`SELECT pg_get_triggerdef(oid) AS definition, tgenabled AS enabled
+      FROM pg_trigger WHERE tgrelid=to_regclass('public.journal_entries') AND tgname='queue_flat_response_filter_purge'`);
+    if (purgeTrigger) purgeTrigger.definition = normalizeConstraintDefinition(purgeTrigger.definition);
     const indexes = await rows(`SELECT tablename, indexname, indexdef FROM pg_indexes
       WHERE schemaname='public' ORDER BY tablename COLLATE "C", indexname COLLATE "C"`);
     const relations = await rows(`SELECT c.relname AS name FROM pg_class c JOIN pg_namespace n ON n.oid=c.relnamespace
@@ -121,7 +130,7 @@ export async function snapshotDatabase(client, timeoutMs = 900000) {
     const extensions = await rows('SELECT extname, extversion FROM pg_extension ORDER BY extname COLLATE "C"');
     await client.query('COMMIT');
     return { formatVersion: 1, measuredAt: new Date().toISOString(), server: server.version, extensions,
-      preserved: { database, access, enums, columns, constraints, indexes, sequences, tables } };
+      preserved: { database, access, enums, columns, constraints, indexes, sequences, tables, purgeFunction, purgeTrigger } };
   } catch (error) {
     await client.query('ROLLBACK');
     throw error;

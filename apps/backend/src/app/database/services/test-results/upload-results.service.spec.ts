@@ -33,6 +33,7 @@ describe('UploadResultsService', () => {
   let service: UploadResultsService;
   let fixtureDirectory: string;
   let personService: PersonService;
+  let jobQueueService: JobQueueService;
   let workspaceTestResultsService: WorkspaceTestResultsService;
   let codingFreshnessService: CodingFreshnessService;
   let codingAnalysisService: CodingAnalysisService;
@@ -65,12 +66,14 @@ describe('UploadResultsService', () => {
         },
         {
           provide: JobQueueService,
-          useValue: createMock<JobQueueService>()
+          useValue: createMock<JobQueueService>({
+            addFlatResponseFilterOptionsJob: jest.fn().mockResolvedValue({ id: 'filter-options-repair' })
+          })
         },
         {
           provide: WorkspaceTestResultsService,
           useValue: createMock<WorkspaceTestResultsService>({
-            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined),
+            invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true),
             invalidateCodingStatisticsCache: jest.fn().mockResolvedValue(undefined),
             invalidateCodingAvailabilityCache: jest.fn().mockResolvedValue(undefined)
           })
@@ -105,6 +108,7 @@ describe('UploadResultsService', () => {
 
     service = module.get<UploadResultsService>(UploadResultsService);
     personService = module.get<PersonService>(PersonService);
+    jobQueueService = module.get<JobQueueService>(JobQueueService);
     workspaceTestResultsService = module.get<WorkspaceTestResultsService>(
       WorkspaceTestResultsService
     );
@@ -119,11 +123,10 @@ describe('UploadResultsService', () => {
   });
 
   it('passes the trusted initiating user to the queued import without storing file buffers', async () => {
-    const queue = (service as unknown as { jobQueueService: JobQueueService }).jobQueueService;
-    jest.mocked(queue.addUploadJob).mockResolvedValue({ id: '123' } as never);
+    jest.mocked(jobQueueService.addUploadJob).mockResolvedValue({ id: '123' } as never);
     await service.uploadTestResults(3, [{ buffer: Buffer.from('raw answers'), originalname: 'results.csv' } as FileIo], 'responses', false, 'strict', 'skip', 'person', undefined, 7);
-    expect(queue.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }));
-    expect(jest.mocked(queue.addUploadJob).mock.calls[0][0].file).not.toHaveProperty('buffer');
+    expect(jobQueueService.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }));
+    expect(jest.mocked(jobQueueService.addUploadJob).mock.calls[0][0].file).not.toHaveProperty('buffer');
   });
 
   it('records failed import outcomes with trusted provenance and no file contents or names', async () => {
@@ -760,14 +763,26 @@ test-group;test-user;code;booklet1;unit1;"[{""content"":""[{\\""id\\"":\\""var1\
       expect(result.issues?.some(i => i.category === 'invalid_status')).toBe(true);
     });
 
-    it('should mark the overview as pending when upload stats cannot be read', async () => {
+    it.each([
+      'statistics', 'cache invalidation', 'repair enqueue'
+    ] as const)('completes CSV processing and leaves the overview pending after a %s failure', async failure => {
       const fileContent = `groupname;loginname;code;bookletname;unitname;responses;laststate
 test-group;test-user;code;booklet1;unit1;[];""`;
 
       const filePath = path.join(fixtureDirectory, 'test-stats-failure.csv');
       fs.writeFileSync(filePath, fileContent, { flag: 'wx', mode: 0o600 });
 
-      jest.spyOn(personService, 'getWorkspaceUploadStats').mockRejectedValue(new Error('DB Error'));
+      const persist = jest.mocked(personService.processPersonBooklets).mockResolvedValue({
+        addedUnitIds: [], changedUnitIds: [], addedResponseCount: 1, changedResponseCount: 0, savedResponseCount: 1
+      });
+      if (failure === 'statistics') {
+        jest.spyOn(personService, 'getWorkspaceUploadStats').mockRejectedValue(new Error('DB Error'));
+      } else {
+        jest.spyOn(workspaceTestResultsService, 'invalidateWorkspaceStatsCache').mockResolvedValue(false);
+      }
+      if (failure === 'repair enqueue') {
+        jest.mocked(jobQueueService.addFlatResponseFilterOptionsJob).mockRejectedValue(new Error('Queue unavailable'));
+      }
 
       const file: FileIo = {
         buffer: Buffer.from(fileContent),
@@ -791,6 +806,19 @@ test-group;test-user;code;booklet1;unit1;[];""`;
       expect(result.overviewPending).toBe(true);
       expect(result.overviewMessage).toContain('aggregierten Datenbankzahlen');
       expect(result.issues?.some(issue => issue.category === 'other')).toBe(true);
+      expect(result.issues?.some(issue => issue.level === 'error')).toBe(false);
+      expect(result.importSummary?.savedResponses).toBe(1);
+      // A failed optional statistics read must not leave pre-import filter options cached.
+      expect(workspaceTestResultsService.invalidateWorkspaceStatsCache).toHaveBeenCalledWith(1);
+      if (failure === 'statistics') {
+        expect(jobQueueService.addFlatResponseFilterOptionsJob).not.toHaveBeenCalled();
+      } else {
+        expect(jobQueueService.addFlatResponseFilterOptionsJob).toHaveBeenCalledTimes(1);
+        expect(jobQueueService.addFlatResponseFilterOptionsJob).toHaveBeenCalledWith(1, 60000, null);
+        expect(persist.mock.invocationCallOrder[0]).toBeLessThan(
+          jest.mocked(jobQueueService.addFlatResponseFilterOptionsJob).mock.invocationCallOrder[0]
+        );
+      }
     });
 
     it('should merge a new person into an existing test group and report the follow-up state', async () => {

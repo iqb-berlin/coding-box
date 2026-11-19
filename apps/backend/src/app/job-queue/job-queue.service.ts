@@ -23,6 +23,12 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+import {
+  FLAT_RESPONSE_FILTER_OPTIONS_PURGE_JOB,
+  FLAT_RESPONSE_FILTER_OPTIONS_REPAIR_OPTIONS,
+  FlatResponseFilterOptionsJobData,
+  flatResponseFilterOptionsWarmupOptions
+} from './flat-response-filter-options-job';
 
 /** Retain only cleanup pointers, never uploaded buffers or analysis result payloads. */
 export interface WorkspaceDeletionJob {
@@ -69,11 +75,6 @@ export interface TestPersonCodingJobData {
   freshnessVersion?: 'v1' | 'v3';
   freshnessStates?: ('PENDING' | 'STALE')[];
   freshnessSourceRevision?: number;
-}
-
-export interface FlatResponseFilterOptionsJobData {
-  workspaceId: number;
-  processingDurationThresholdMs: number;
 }
 
 export interface CodebookGenerationJobData {
@@ -733,26 +734,18 @@ export class JobQueueService {
   async addFlatResponseFilterOptionsJob(
     workspaceId: number,
     processingDurationThresholdMs: number,
-    options?: JobsOptions
-  ): Promise<Job<FlatResponseFilterOptionsJobData> | null> {
-    const existing = await this.findActiveJob<FlatResponseFilterOptionsJobData>(
-      this.flatResponseFilterOptionsQueue,
-      d => d.workspaceId === workspaceId
-    );
-    if (existing) {
-      this.logger.debug(
-        `Skipping flat-response-filter-options job for workspace ${workspaceId} — already queued (job ${existing.id})`
-      );
-      return null;
-    }
-    this.logger.log(
-      `Adding flat response filter-options cache job for workspace ${workspaceId}`
-    );
+    generation: string | null
+  ): Promise<Job<FlatResponseFilterOptionsJobData>> {
+    this.logger.log(`Adding filter-options job for workspace ${workspaceId}`);
+    const jobOptions = flatResponseFilterOptionsWarmupOptions(workspaceId, processingDurationThresholdMs, generation);
     return this.flatResponseFilterOptionsQueue.add(
-      'flat-response-filter-options', {
-        workspaceId,
-        processingDurationThresholdMs
-      }, withQueueJobId(options)
+      'flat-response-filter-options', { workspaceId, processingDurationThresholdMs, generation }, jobOptions
+    );
+  }
+
+  addFlatResponseFilterOptionsPurgeJob(workspaceId: number): Promise<Job<FlatResponseFilterOptionsJobData>> {
+    return this.flatResponseFilterOptionsQueue.add(
+      FLAT_RESPONSE_FILTER_OPTIONS_PURGE_JOB, { workspaceId }, withQueueJobId(FLAT_RESPONSE_FILTER_OPTIONS_REPAIR_OPTIONS)
     );
   }
 

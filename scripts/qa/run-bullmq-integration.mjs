@@ -46,7 +46,7 @@ try {
   const test = spawn(process.execPath, [
     nxBinary, 'test', 'backend',
     '--skipNxCache',
-    ...(process.argv.includes('--all') ? ['--maxWorkers=2'] : ['--runInBand', '--testPathPatterns=bullmq.integration'])
+    ...(process.argv.includes('--all') ? ['--maxWorkers=2'] : ['--runInBand', '--testPathPatterns=bullmq.integration|redis.integration'])
   ], {
     cwd: root, stdio: 'inherit',
     env: {

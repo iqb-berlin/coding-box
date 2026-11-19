@@ -25,6 +25,10 @@ export class TestResultsCacheService {
     return this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId);
   }
 
+  invalidateWorkspaceStatsAfterDeletion(workspaceId: number): Promise<boolean> {
+    return this.workspaceStatsCacheService.invalidateWorkspaceStatsCache(workspaceId, { purgeFilterOptions: true });
+  }
+
   async invalidateCodingStatisticsCache(workspaceId: number): Promise<void> {
     await this.codingStatisticsService?.invalidateCache(workspaceId);
   }
@@ -36,7 +40,7 @@ export class TestResultsCacheService {
   async invalidateCachesAfterTestResultDeletion(workspaceId: number): Promise<void> {
     await Promise.all([
       this.invalidateCodingAvailabilityCache(workspaceId),
-      this.invalidateWorkspaceStatsCache(workspaceId),
+      this.invalidateWorkspaceStatsAfterDeletion(workspaceId),
       this.invalidateCodingStatisticsCache(workspaceId)
     ]);
   }

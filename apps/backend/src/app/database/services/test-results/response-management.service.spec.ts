@@ -683,7 +683,7 @@ describe('ResponseManagementService', () => {
     expect(codingFreshnessService.markUnitsStaleAfterResultChange)
       .toHaveBeenCalledWith(1, [7], 'RESULT_DELETED');
     expect(workspaceStatsCacheService.invalidateWorkspaceStatsCache)
-      .toHaveBeenCalledWith(1);
+      .toHaveBeenCalledWith(1, { purgeFilterOptions: true });
     expect(codingStatisticsService.invalidateCache)
       .toHaveBeenCalledWith(1);
     expect(journalService.recordEvent).toHaveBeenCalledWith(
@@ -754,6 +754,8 @@ describe('ResponseManagementService', () => {
     const result = await service.resolveDuplicateResponses(1, { [key]: 50 }, 'user-1');
 
     expect(result).toEqual({ resolvedCount: 1, success: true });
+    expect(workspaceStatsCacheService.invalidateWorkspaceStatsCache)
+      .toHaveBeenCalledWith(1, { purgeFilterOptions: true });
     expect(journalService.recordEvent).toHaveBeenCalledWith(
       expect.objectContaining({
         workspaceId: 1,

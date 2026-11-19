@@ -9,15 +9,23 @@ import { ConflictException, Logger } from '@nestjs/common';
 import { DataSource } from 'typeorm';
 import Redis from 'ioredis';
 import AdmZip = require('adm-zip');
+import { FlatResponseFilterCleanupService } from '../../../cache/flat-response-filter-cleanup.service';
+import { FlatResponseFilterPurgeStore } from '../../../cache/flat-response-filter-purge.store';
 import { CacheService } from '../../../cache/cache.service';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import FileUpload from '../../entities/file_upload.entity';
 import Workspace from '../../entities/workspace.entity';
+import Persons from '../../entities/persons.entity';
+import { Unit } from '../../entities/unit.entity';
+import { Booklet } from '../../entities/booklet.entity';
+import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity';
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingFreshnessQueryService } from '../coding/coding-freshness-query.service';
 import { CodingJobFreshnessService } from '../coding/coding-job-freshness.service';
+import { WorkspaceResponseValidationService } from '../validation/workspace-response-validation.service';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
 import { getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
@@ -52,6 +60,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   let db: DataSource;
   let redis: Redis;
   let cache: CacheService;
+  const queuePurge = jest.fn();
   let files: WorkspaceFilesService;
   let xsdServer: Server;
   let xsdUrl: string;
@@ -94,7 +103,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
       retryStrategy: () => null
     });
     await redis.ping();
-    cache = new CacheService(redis);
+    cache = new CacheService(redis, new FlatResponseFilterPurgeStore(db));
     const repository = db.getRepository(FileUpload);
     const exclusions = new WorkspaceExclusionService(db.getRepository(Workspace), repository, cache);
     const metadata = new WorkspaceFileMetadataService(repository, cache, exclusions);
@@ -102,14 +111,36 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
       db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, exclusions), new CodingJobFreshnessService(db)
     );
     const statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
-    const resultsCache = new TestResultsCacheService({} as never, new WorkspaceStatsCacheService(cache), statistics);
+    const statsCache = new WorkspaceStatsCacheService(cache, { addFlatResponseFilterOptionsPurgeJob: queuePurge });
+    const responses = db.getRepository(ResponseEntity);
+    const units = db.getRepository(Unit);
+    const persons = db.getRepository(Persons);
+    const responseValidation = new WorkspaceResponseValidationService(
+      responses, units, persons, db.getRepository(Booklet), repository, db.getRepository(Workspace)
+    );
+    const codingValidation = new CodingValidationService(
+      responses, db.getRepository(CodingJobUnit), cache, metadata, exclusions, {} as never, {} as never
+    );
+    const resultsCache = new TestResultsCacheService(codingValidation, statsCache, statistics);
     const results = new WorkspaceTestResultsService(
       {} as never, resultsCache, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
     );
-    // Only unused response-validation/queue paths are omitted; persistence, freshness,
-    // XML validation, file metadata and every cache operation exercised here are real.
     files = createWorkspaceFilesService(
-      repository, db.getRepository(ResponseEntity), {} as never, {} as never, statistics, new WorkspaceXmlSchemaValidationService(repository), new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache, results, metadata, freshness, new CodingFileCacheService(repository)
+      repository,
+      responses,
+      units,
+      persons,
+      statistics,
+      new WorkspaceXmlSchemaValidationService(repository),
+      new WorkspaceFileStorageService(),
+      new WorkspaceFileParsingService(),
+      responseValidation,
+      {} as never,
+      cache,
+      results,
+      metadata,
+      freshness,
+      new CodingFileCacheService(repository)
     );
     certificateDirectory = mkdtempSync(path.join(tmpdir(), 'workspace-file-xsd-'));
     const key = path.join(certificateDirectory, 'key.pem');
@@ -182,12 +213,83 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const info = await insert('bookletinfo', { name: `BOOKLET-${workspace}` });
     const booklet = await insert('booklet', { personid: person, infoid: info });
     const unit = await insert('unit', { bookletid: booklet, name: 'UNIT' });
-    await insert('response', {
+    const responseId = await insert('response', {
       unitid: unit, variableid: 'VAR', status: 3, value: 'answer', status_v1: 4, code_v1: 1, score_v1: 1
     });
-    return { workspace, unit };
+    return { workspace, unit, responseId };
   }
   const countFiles = (workspace: number) => db.getRepository(FileUpload).countBy({ workspace_id: workspace });
+
+  it.each(['selected', 'all'])('purges stored filter options after deleting %s invalid responses', async mode => {
+    const { workspace, responseId } = await fixture();
+    const generation = (await cache.invalidateFlatResponseFilterOptions(workspace))!;
+    const key = cache.generateFlatResponseFilterOptionsCacheKey(workspace, generation, 60000);
+    await cache.getOrComputeFlatResponseFilterOptions(workspace, 60000, async () => ({ responses: ['VAR'] }));
+    expect(await redis.exists(key)).toBe(1);
+
+    const deleted = mode === 'selected' ?
+      await files.deleteInvalidResponses(workspace, [responseId]) :
+      await files.deleteAllInvalidResponses(workspace, 'variables');
+    expect(deleted).toBe(1);
+    expect(await db.getRepository(ResponseEntity).countBy({ id: responseId })).toBe(0);
+    expect(await redis.exists(key)).toBe(0);
+  });
+
+  it('bypasses stale filters after both Redis deletes and queue submission fail, then replays the committed purge', async () => {
+    const { workspace, responseId } = await fixture();
+    const generation = (await cache.invalidateFlatResponseFilterOptions(workspace))!;
+    const staleKey = cache.generateFlatResponseFilterOptionsCacheKey(workspace, generation, 60000);
+    await cache.getOrComputeFlatResponseFilterOptions(workspace, 60000, async () => ['VAR']);
+    const versionKey = cache.generateFlatResponseFilterOptionsVersionKey(workspace);
+    const del = redis.del.bind(redis);
+    const failure = new Error('Redis unavailable during deletion');
+    const deletes = jest.spyOn(redis, 'del').mockImplementation((...args) => (
+      String(args[0]) === versionKey ? Promise.reject(failure) : del(...args)
+    ));
+    queuePurge.mockRejectedValueOnce(failure);
+    try {
+      expect(await files.deleteInvalidResponses(workspace, [responseId])).toBe(1);
+      expect(deletes.mock.calls.filter(([key]) => String(key) === versionKey)).toHaveLength(2);
+      expect(queuePurge).toHaveBeenCalledWith(workspace);
+    } finally {
+      deletes.mockRestore();
+    }
+
+    const store = new FlatResponseFilterPurgeStore(db);
+    const restarted = new CacheService(redis, store);
+    expect(await store.pendingEvent(workspace)).toBeDefined();
+    expect(await redis.exists(staleKey)).toBe(1);
+    const freshOptions = jest.fn().mockResolvedValue([]);
+    expect(await restarted.getOrComputeFlatResponseFilterOptions(workspace, 60000, freshOptions)).toEqual([]);
+    expect(await restarted.get(staleKey)).toEqual(['VAR']);
+
+    await new FlatResponseFilterCleanupService(restarted, store).retryCleanup();
+    expect(await store.pendingEvent(workspace)).toBeUndefined();
+    expect(await redis.exists(staleKey)).toBe(0);
+    await restarted.getOrComputeFlatResponseFilterOptions(workspace, 60000, freshOptions);
+    expect(await restarted.getOrComputeFlatResponseFilterOptions(workspace, 60000, freshOptions)).toEqual([]);
+    expect(freshOptions).toHaveBeenCalledTimes(2);
+  });
+
+  it('keeps a newer committed deletion pending when an older purge finishes', async () => {
+    const { workspace } = await fixture();
+    const store = new FlatResponseFilterPurgeStore(db);
+    const event = {
+      workspace_id: workspace, user_id: 'test', action_type: 'delete', entity_type: 'response', event_type: 'RESPONSE_DELETED'
+    };
+    const first = await insert('journal_entries', event);
+    const next = await insert('journal_entries', event);
+    await store.complete(workspace, first);
+    expect(await store.pendingEvent(workspace)).toBe(next);
+    await expect(db.transaction(async manager => {
+      await manager.query('DELETE FROM public.flat_response_filter_purge WHERE workspace_id = $1', [workspace]);
+      await manager.query(`INSERT INTO public.journal_entries (workspace_id, user_id, action_type, entity_type, event_type)
+        VALUES ($1, 'test', 'delete', 'response', 'RESPONSE_DELETED')`, [workspace]);
+      throw new Error('rollback deletion');
+    })).rejects.toThrow('rollback deletion');
+    expect(await store.pendingEvent(workspace)).toBe(next);
+    await store.complete(workspace, next);
+  });
 
   it('validates XML through a local XSD and rebuilds cached metadata after an overwrite', async () => {
     const { workspace } = await fixture();

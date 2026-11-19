@@ -3,6 +3,7 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { InjectRedis, RedisModule } from '@nestjs-modules/ioredis';
 import { CacheService } from './cache.service';
+import { FlatResponseFilterPurgeStore } from './flat-response-filter-purge.store';
 
 @Module({
   imports: [
@@ -19,8 +20,8 @@ import { CacheService } from './cache.service';
       })
     })
   ],
-  providers: [CacheService],
-  exports: [CacheService]
+  providers: [CacheService, FlatResponseFilterPurgeStore],
+  exports: [CacheService, FlatResponseFilterPurgeStore]
 })
 export class CacheClientModule implements OnApplicationShutdown {
   constructor(@InjectRedis() private readonly redis: Redis) {}

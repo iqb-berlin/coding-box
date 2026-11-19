@@ -191,8 +191,7 @@
       "file": {},
       "functions": {
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponseFilterOptions#1": {
-          "complexity": 29,
-          "max-lines-per-function": 128
+          "complexity": 27
         },
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponses#1": {
           "max-lines-per-function": 109
@@ -949,13 +948,7 @@
       "file": {},
       "functions": {
         "class ResponseManagementService#1/method resolveDuplicateResponses#1": {
-          "max-lines-per-function": 129
-        },
-        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1": {
           "max-lines-per-function": 113
-        },
-        "class ResponseManagementService#1/method resolveDuplicateResponses#1/anonymous:4791692e755e1b17#1/anonymous:2653e2fc49fa5649#1": {
-          "complexity": 25
         },
         "class ResponseManagementService#1/method updateResponsesInDatabase#1": {
           "max-lines-per-function": 266
@@ -1012,8 +1005,8 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "complexity": 56,
-          "max-lines-per-function": 476
+          "complexity": 55,
+          "max-lines-per-function": 376
         }
       }
     },
@@ -1112,7 +1105,7 @@
         "class UploadResultsService#1/method processUpload#1": {
           "complexity": 21,
           "max-depth": 5,
-          "max-lines-per-function": 410
+          "max-lines-per-function": 408
         },
         "class UploadResultsService#1/method processUpload#1/anonymous:17c848eb0f2cddb2#1": {
           "max-lines-per-function": 130
@@ -1268,7 +1261,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1206
+        "max-lines": 1199
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {

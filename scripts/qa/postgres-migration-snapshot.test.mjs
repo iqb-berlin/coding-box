@@ -29,6 +29,18 @@ test('expected server/extension version changes do not hide data or schema chang
   assert.deepEqual(compareSnapshots(before, after), ['access']);
 });
 
+test('compares the application purge function and trigger across upgrades', () => {
+  const before = snapshot();
+  before.preserved.purgeFunction = { definition: 'function body', owner: 'app', acl: [] };
+  before.preserved.purgeTrigger = { definition: 'trigger condition', enabled: 'O' };
+  const after = structuredClone(before);
+  assert.deepEqual(compareSnapshots(before, after), []);
+  after.preserved.purgeTrigger.enabled = 'D';
+  assert.deepEqual(compareSnapshots(before, after), ['purgeTrigger']);
+  delete after.preserved.purgeFunction;
+  assert.deepEqual(compareSnapshots(before, after), ['purgeFunction', 'purgeTrigger']);
+});
+
 test('missing table rows, changed values and reset sequences all fail the comparison', () => {
   for (const mutate of [
     value => { value.preserved.tables[0].rows -= 1; },
