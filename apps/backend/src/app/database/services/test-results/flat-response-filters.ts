@@ -85,6 +85,17 @@ export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatRespons
   applyLongLoadingFilter(qb, filters);
 }
 
+export function applyFlatResponseTagFilter(qb: ResponseQuery, tags: string): void {
+  if (!tags) return;
+  qb.andWhere(
+    `EXISTS (
+      SELECT 1 FROM unit_tag count_unit_tag
+      WHERE count_unit_tag."unitId" = unit.id AND count_unit_tag.tag ILIKE :tags
+    )`,
+    { tags: `%${tags}%` }
+  );
+}
+
 function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
   const {
     responseStatus, responseStatusNum, responseValue, tags, geogebraOnly, audioLowOnly, audioLowThreshold, hasValueOnly
@@ -104,20 +115,10 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
       { responseValue: `%${responseValue}%` }
     );
   }
-  if (tags) {
-    if (purpose === 'rows') {
-      qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
-    } else {
-      qb.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM unit_tag count_unit_tag
-          WHERE count_unit_tag."unitId" = unit.id
-            AND count_unit_tag.tag ILIKE :tags
-        )`,
-        { tags: `%${tags}%` }
-      );
-    }
+  if (tags && purpose === 'rows') {
+    qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
+  } else {
+    applyFlatResponseTagFilter(qb, tags);
   }
 
   if (geogebraOnly) {

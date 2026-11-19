@@ -1012,8 +1012,8 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "complexity": 56,
-          "max-lines-per-function": 476
+          "complexity": 55,
+          "max-lines-per-function": 376
         }
       }
     },
