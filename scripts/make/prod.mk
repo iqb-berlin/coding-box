@@ -258,12 +258,13 @@ coding-box-dump-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-		exec -it db\
+		exec -T db\
 			pg_dump\
 					--verbose\
 					--data-only\
 					--exclude-table=public.databasechangelog\
 					--exclude-table=public.databasechangeloglock\
+					--exclude-table-data='public.flat_response_*'\
 					--username=$(POSTGRES_USER)\
 					--format=c\
 			$(POSTGRES_DB) > $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_data_dump
@@ -280,26 +281,18 @@ coding-box-restore-db-data-only: coding-box-down .EXPORT_ALL_VARIABLES
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-		up -d db liquibase
+		run --rm liquibase
 	docker compose\
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
 		cp $(CODING_BOX_BASE_DIR)/backup/temp/$(POSTGRES_DB)_data_dump db:/tmp/
-	sleep 10	## wait until file upload is completed
 	docker compose\
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.prod.yaml\
-		exec -it db\
-			pg_restore\
-					--verbose\
-					--data-only\
-					--single-transaction\
-					--disable-triggers\
-					--username=$(POSTGRES_USER)\
-					--dbname=$(POSTGRES_DB)\
-				/tmp/$(POSTGRES_DB)_data_dump
+		exec -T db\
+			bash -s -- "/tmp/$(POSTGRES_DB)_data_dump" < "$(CODING_BOX_BASE_DIR)/scripts/make/restore-db-data.sh"
 	docker compose\
 			--env-file $(CODING_BOX_BASE_DIR)/.env.coding-box\
 			--file $(CODING_BOX_BASE_DIR)/docker-compose.coding-box.yaml\

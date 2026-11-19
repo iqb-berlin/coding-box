@@ -462,6 +462,7 @@ update_files() {
   download_file "docker-compose.${APP_NAME}.yaml" docker-compose.yaml
   download_file "docker-compose.${APP_NAME}.prod.yaml" "docker-compose.${APP_NAME}.prod.yaml"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
+  download_file "scripts/make/restore-db-data.sh" scripts/make/restore-db-data.sh
 
   printf "File download done.\n\n"
 }

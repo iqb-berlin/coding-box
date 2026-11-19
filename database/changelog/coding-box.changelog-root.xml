@@ -55,4 +55,5 @@
   <include file="coding-box.changelog-coding-job-creation.sql"/>
   <include file="coding-box.changelog-response-list-search.sql"/>
   <include file="coding-box.changelog-first-page-responses.sql"/>
+  <include file="coding-box.changelog-response-projection-recovery.sql"/>
 </databaseChangeLog>

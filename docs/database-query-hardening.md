@@ -394,3 +394,10 @@ Entstehen Units und ihr Arbeitsbereich in derselben SQL-Anweisung, verwendet
 der neue Arbeitsbereich bis zum Neuaufbau die Quellabfrage.
 Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
 Dauer anhand einer Kopie des Zielbestands zu bestimmen ist.
+
+Beim Data-only-Backup lässt `coding-box-dump-db-data-only` die Hilfsdaten aus.
+`coding-box-restore-db-data-only` wartet auf die Migrationen und stellt die
+Quelldaten mit deaktivierten Triggern wieder her. Noch in derselben Transaktion
+rekonstruiert der globale Neuaufbau Unit-Zähler, kompakte Antwortzeilen,
+Listensummen und Suchzuordnungen. Das gilt auch für Archive aus der Zeit vor
+diesen Hilfstabellen. Schlägt der Neuaufbau fehl, wird der Restore zurückgerollt.

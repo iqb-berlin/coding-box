@@ -296,6 +296,7 @@ download_files() {
   download_file "config/keycloak/${APP_NAME}-realm.json" "config/keycloak/realm/${APP_NAME}-realm.json"
   download_file "config/keycloak/${APP_NAME}-realm.config.template" "config/keycloak/realm/${APP_NAME}-realm.config.template"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
+  download_file "scripts/make/restore-db-data.sh" scripts/make/restore-db-data.sh
   download_file "scripts/update_${APP_NAME}.sh" scripts/update.sh
   chmod +x "scripts/update_${APP_NAME}.sh"
 

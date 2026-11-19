@@ -37,8 +37,9 @@ export async function countUnfilteredFlatResponses(
 ): Promise<number> {
   const scope = units.clone().select('unit.id', 'id');
   if (queryRunner) {
+    // Catalog name resolution alone can see a table installed after the reader's snapshot.
     const [schema] = await connection.query<{ installed: boolean }[]>(
-      "SELECT to_regclass('flat_response_unit_count') IS NOT NULL AS installed",
+      "SELECT EXISTS (SELECT FROM pg_catalog.pg_class WHERE oid = to_regclass('flat_response_unit_count')) AS installed",
       [],
       queryRunner
     );

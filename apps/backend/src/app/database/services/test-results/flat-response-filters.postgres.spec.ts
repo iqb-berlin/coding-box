@@ -56,7 +56,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       CREATE UNLOGGED TABLE "${schema}".unit (id INT PRIMARY KEY, bookletid INT, name TEXT, alias TEXT);
       CREATE UNLOGGED TABLE "${schema}".response (
         id INT PRIMARY KEY, unitid INT REFERENCES "${schema}".unit(id) ON DELETE CASCADE, variableid TEXT, status SMALLINT, value TEXT,
-        is_autocoder_generated BOOLEAN DEFAULT false);
+        is_autocoder_generated BOOLEAN DEFAULT false, code_v2 BIGINT);
       CREATE UNLOGGED TABLE "${schema}".unit_tag (id INT PRIMARY KEY, "unitId" INT, tag TEXT);
       CREATE UNLOGGED TABLE "${schema}".bookletlog (id INT PRIMARY KEY, bookletid INT, key TEXT, parameter TEXT, ts BIGINT);
       CREATE UNLOGGED TABLE "${schema}".session (
@@ -123,17 +123,18 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  const readChanges = (name: string) => readFileSync(resolvePath(`database/changelog/coding-box.changelog-${name}.sql`), 'utf8')
+    .replace(/\bpublic\./g, `"${schema}".`)
+    .split(/^-- changeset .*$/m).slice(1);
+
+  const rollbackSql = (changeset: string) => [...changeset.matchAll(/^--rollback (.*)$/gm)]
+    .map(match => match[1]).join('\n');
+
   describe('migrated response projections', () => {
-    const changes = ['response-list-search', 'first-page-responses'].flatMap(name => (
-      readFileSync(resolvePath(`database/changelog/coding-box.changelog-${name}.sql`), 'utf8')
-        .replace(/\bpublic\./g, `"${schema}".`)
-        .split(/^-- changeset .*$/m).slice(1)
-    ));
+    const [payloadChangeset] = readChanges('first-page-responses');
+    const changes = [...readChanges('response-list-search'), payloadChangeset, ...readChanges('response-projection-recovery')];
     let original: Awaited<ReturnType<typeof service.findFlatResponses>>;
     const dictionary = 'SELECT value_prefix FROM flat_response_value_search_value WHERE value_prefix = $1';
-
-    const rollbackSql = (changeset: string) => [...changeset.matchAll(/^--rollback (.*)$/gm)]
-      .map(match => match[1]).join('\n');
 
     beforeEach(async () => {
       original = await service.findFlatResponses(42, { page: 1, limit: 50 });
@@ -163,8 +164,67 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
     });
 
+    it('skips counter maintenance for coding updates and updates counts for eligibility and unit moves', async () => {
+      const [plan] = await db.query('EXPLAIN (ANALYZE, FORMAT JSON) UPDATE response SET code_v2 = 42 WHERE id = 4');
+      expect(plan['QUERY PLAN'][0].Triggers).not.toEqual(expect.arrayContaining([
+        expect.objectContaining({ 'Trigger Name': 'flat_response_unit_count_update' })
+      ]));
+
+      await db.transaction(async manager => {
+        const counts = () => manager.query('SELECT total::int FROM flat_response_unit_count WHERE unitid IN (2, 3) ORDER BY unitid');
+        await manager.query("INSERT INTO response VALUES (999, 2, 'MOVED', 3, 'move', NULL)");
+        await manager.query('UPDATE response SET unitid = 3 WHERE id = 999');
+        await expect(counts()).resolves.toEqual([{ total: 1 }, { total: 2 }]);
+        await manager.query('UPDATE response SET is_autocoder_generated = true WHERE id = 999');
+        await expect(counts()).resolves.toEqual([{ total: 1 }, { total: 1 }]);
+        await manager.query('UPDATE response SET unitid = 2, is_autocoder_generated = false WHERE id = 999');
+        await manager.query('UPDATE response SET is_autocoder_generated = NULL WHERE id = 999');
+      });
+      await expect(db.query('SELECT unitid, total::int FROM flat_response_unit_count WHERE unitid IN (2, 3) ORDER BY unitid'))
+        .resolves.toEqual([{ unitid: 2, total: 2 }, { unitid: 3, total: 1 }]);
+      await expectResponses({}, [1, 2, 3, 4, 5, 999, 6, 7, 8]);
+    });
+
+    it('repairs only the requested workspace before publishing rebuilt totals and payloads', async () => {
+      await db.query(`
+        DELETE FROM flat_response_first_page_response WHERE id = 4;
+        UPDATE flat_response_first_page_response SET unitid = 1 WHERE id = 10;
+        UPDATE flat_response_first_page_response SET status = 0, value_prefix = 'stale' WHERE id = 2;
+        UPDATE flat_response_unit_count SET total = 99 WHERE unitid IN (1, 6);
+        SELECT rebuild_flat_response_workspace(42)
+      `);
+      await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+      await expect(db.query('SELECT total::int FROM flat_response_unit_count WHERE unitid = 6'))
+        .resolves.toEqual([{ total: 99 }]);
+      await expect(db.query('SELECT id FROM flat_response_first_page_response WHERE id = 10')).resolves.toEqual([]);
+    });
+
+    it('reads the complete first page when compact payloads are installed after the reader snapshot', async () => {
+      await db.query(rollbackSql(payloadChangeset));
+      const createRunner = db.createQueryRunner.bind(db);
+      let installed = false;
+      const runners = jest.spyOn(db, 'createQueryRunner').mockImplementation((...args) => {
+        const runner = createRunner(...args);
+        const query = runner.query.bind(runner);
+        jest.spyOn(runner, 'query').mockImplementation(async (sql, parameters, structured) => {
+          if (!installed && typeof sql === 'string' && sql.includes('pg_current_snapshot()')) {
+            await query('SELECT pg_current_snapshot()');
+            await db.transaction(installer => installer.query(payloadChangeset));
+            installed = true;
+          }
+          return query(sql, parameters, structured);
+        });
+        return runner;
+      });
+      try {
+        await expect(service.findFlatResponses(42, { page: 1, limit: 50 })).resolves.toEqual(original);
+        expect(installed).toBe(true);
+      } finally {
+        runners.mockRestore();
+      }
+    });
+
     it('retries a delete whose snapshot predates the compact payload installation', async () => {
-      const payloadChangeset = changes[changes.length - 1];
       await db.query(rollbackSql(payloadChangeset));
       await db.query("INSERT INTO response VALUES (999, 1, 'NEW', 3, 'before installation', false)");
       const remove = 'DELETE FROM response WHERE id = 999';
@@ -465,6 +525,22 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     } finally {
       releaseCount();
       runners.mockRestore();
+    }
+  });
+
+  it('reads the source count when a repeatable-read snapshot predates the counter backfill', async () => {
+    const [counterChangeset] = readChanges('response-list-search');
+    const options = { page: 2, limit: 3 };
+    const expected = await service.findFlatResponses(42, options);
+    try {
+      await db.transaction('REPEATABLE READ', async reader => {
+        await reader.query('SELECT pg_current_snapshot()');
+        await db.transaction(installer => installer.query(counterChangeset));
+        await expect(service.findFlatResponses(42, options, reader.queryRunner)).resolves.toEqual(expected);
+      });
+      await expect(service.findFlatResponses(42, options)).resolves.toEqual(expected);
+    } finally {
+      await db.query(rollbackSql(counterChangeset));
     }
   });
 
