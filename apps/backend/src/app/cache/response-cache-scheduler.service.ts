@@ -6,6 +6,7 @@ import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../database/services/workspace/wor
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { CacheService } from './cache.service';
 import Persons from '../database/entities/persons.entity';
+import { Booklet } from '../database/entities/booklet.entity';
 import { Unit } from '../database/entities/unit.entity';
 import { WorkspaceTestResultsService } from '../database/services/test-results';
 import {
@@ -15,17 +16,23 @@ import {
 } from '../config/runtime-config.service';
 
 const PERSON_PAGE_SIZE = 100;
+const BOOKLET_PAGE_SIZE = 100;
 const UNIT_PAGE_SIZE = 500;
 const CACHE_CHECK_BATCH_SIZE = 100;
 
-interface ResponseCacheUnitRow {
+interface ResponseCacheBookletRow {
   id: number;
-  name: string;
-  alias: string | null;
   login: string;
   code: string;
   group: string;
   bookletName: string;
+}
+
+interface ResponseCacheUnitRow {
+  id: number;
+  bookletId: number;
+  name: string;
+  alias: string | null;
 }
 
 interface ResponseCacheWarmupItem {
@@ -45,6 +52,8 @@ export class ResponseCacheSchedulerService {
     private readonly workspaceTestResultsService: WorkspaceTestResultsService,
     @InjectRepository(Persons)
     private readonly personsRepository: Repository<Persons>,
+    @InjectRepository(Booklet)
+    private readonly bookletRepository: Repository<Booklet>,
     @InjectRepository(Unit)
     private readonly unitRepository: Repository<Unit>,
     @Optional()
@@ -144,43 +153,79 @@ export class ResponseCacheSchedulerService {
   }
 
   private async cacheUnitsForPersons(workspaceId: number, personIds: number[]): Promise<number> {
-    let afterUnitId: number | undefined;
+    let afterBookletId: number | undefined;
     let missingKeyCount = 0;
 
     while (true) {
-      const query = this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
+      const query = this.bookletRepository
+        .createQueryBuilder('booklet')
         .innerJoin('booklet.person', 'person')
         .innerJoin('booklet.bookletinfo', 'bookletInfo')
-        .select('unit.id', 'id')
-        .addSelect('unit.name', 'name')
-        .addSelect('unit.alias', 'alias')
+        .select('booklet.id', 'id')
         .addSelect('person.login', 'login')
         .addSelect('person.code', 'code')
         .addSelect('person.group', 'group')
         .addSelect('bookletInfo.name', 'bookletName')
         .where('booklet.personid IN (:...personIds)', { personIds })
         .andWhere('person.workspace_id = :workspaceId AND person.consider = true', { workspaceId })
-        .orderBy('unit.id', 'ASC')
-        .limit(UNIT_PAGE_SIZE);
+        .orderBy('booklet.id', 'ASC')
+        .limit(BOOKLET_PAGE_SIZE);
 
-      if (afterUnitId !== undefined) {
-        query.andWhere('unit.id > :afterUnitId', { afterUnitId });
+      if (afterBookletId !== undefined) {
+        query.andWhere('booklet.id > :afterBookletId', { afterBookletId });
       }
 
-      const units = await query.getRawMany<ResponseCacheUnitRow>();
-      missingKeyCount += await this.cacheUnitPage(workspaceId, units);
-      if (units.length < UNIT_PAGE_SIZE) return missingKeyCount;
-      afterUnitId = units[units.length - 1].id;
+      const booklets = await query.getRawMany<ResponseCacheBookletRow>();
+      if (booklets.length === 0) return missingKeyCount;
+
+      missingKeyCount += await this.cacheUnitsForBooklets(workspaceId, booklets);
+      if (booklets.length < BOOKLET_PAGE_SIZE) return missingKeyCount;
+      afterBookletId = booklets[booklets.length - 1].id;
     }
   }
 
-  private async cacheUnitPage(workspaceId: number, units: ResponseCacheUnitRow[]): Promise<number> {
+  private async cacheUnitsForBooklets(workspaceId: number, booklets: ResponseCacheBookletRow[]): Promise<number> {
+    const bookletIds = booklets.map(booklet => booklet.id);
+    const connectorsByBooklet = new Map(booklets.map(booklet => [booklet.id, this.createConnectors(booklet)]));
+    let afterUnit: ResponseCacheUnitRow | undefined;
+    let missingKeyCount = 0;
+
+    while (true) {
+      // Leading with bookletid uses the existing booklet index and avoids sorting the entire person page per request.
+      const query = this.unitRepository
+        .createQueryBuilder('unit')
+        .select('unit.id', 'id')
+        .addSelect('CAST(unit.bookletid AS integer)', 'bookletId')
+        .addSelect('unit.name', 'name')
+        .addSelect('unit.alias', 'alias')
+        .where('unit.bookletid IN (:...bookletIds)', { bookletIds })
+        .orderBy('unit.bookletid', 'ASC')
+        .addOrderBy('unit.id', 'ASC')
+        .limit(UNIT_PAGE_SIZE);
+
+      if (afterUnit) {
+        query.andWhere('(unit.bookletid, unit.id) > (:afterBookletId, :afterUnitId)', {
+          afterBookletId: afterUnit.bookletId,
+          afterUnitId: afterUnit.id
+        });
+      }
+
+      const units = await query.getRawMany<ResponseCacheUnitRow>();
+      missingKeyCount += await this.cacheUnitPage(workspaceId, units, connectorsByBooklet);
+      if (units.length < UNIT_PAGE_SIZE) return missingKeyCount;
+      afterUnit = units[units.length - 1];
+    }
+  }
+
+  private async cacheUnitPage(
+    workspaceId: number,
+    units: ResponseCacheUnitRow[],
+    connectorsByBooklet: ReadonlyMap<number, string[]>
+  ): Promise<number> {
     const itemsByKey = new Map<string, ResponseCacheWarmupItem>();
     for (const unit of units) {
       const unitIds = [...new Set([unit.name, unit.alias].filter((id): id is string => !!id))];
-      for (const connector of this.createConnectors(unit)) {
+      for (const connector of connectorsByBooklet.get(unit.bookletId) ?? []) {
         for (const unitId of unitIds) {
           const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(workspaceId, connector, unitId)}${this.responseCacheVersionSuffix}`;
           itemsByKey.set(cacheKey, { connector, unitId, cacheKey });
@@ -221,7 +266,7 @@ export class ResponseCacheSchedulerService {
    */
   private createConnectors({
     login, code, group, bookletName
-  }: ResponseCacheUnitRow): string[] {
+  }: ResponseCacheBookletRow): string[] {
     const legacyConnector = `${login}@${code}@${bookletName}`;
     return group ? [`${login}@${code}@${group}@${bookletName}`, legacyConnector] : [legacyConnector];
   }
