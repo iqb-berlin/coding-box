@@ -364,12 +364,16 @@ Datenbanksnapshot wie die Antworten. Die erste Seite zieht die Antwortzahlen
 ausgeschlossener Personen von der Summe ab. Auch während eines Ausschlusses
 importierte Antworten sind nach dem Wiedereinschließen sofort sichtbar. Beim
 Löschen oder Ersetzen der letzten Zuordnung zu einem Wert entfernt die Datenbank
-dessen Suchpräfix.
+dessen Suchpräfix. Sperrt ein Ersetzungsimport einen Wörterbucheintrag zur
+Bereinigung, kann ein paralleler Import einen eigenen Eintrag für denselben Text
+anlegen. Die Teilstringsuche berücksichtigt alle passenden Einträge. Für
+selektive Suchbegriffe steht ein Trigrammindex auf den Suchpräfixen bereit.
 
 Bei Änderungen an Sortiermerkmalen, Verschiebungen oder Löschungen in der
 Testheftstruktur wechselt der betroffene Arbeitsbereich zur Quellabfrage.
 `SELECT public.rebuild_flat_response_workspace(42);` baut die Hilfsdaten für
-Arbeitsbereich 42 neu auf. Die ID muss dem gewünschten Arbeitsbereich entsprechen.
+Arbeitsbereich 42 neu auf. Für die Wertsuche werden nur die Antwort-IDs der
+zugehörigen Units vorgemerkt und in Blöcken von bis zu 25.000 gelesen.
 Auch dieser Neuaufbau sperrt die Quelltabellen arbeitsbereichsübergreifend für
 Schreibzugriffe. Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
 Dauer anhand einer Kopie des Zielbestands zu bestimmen ist.

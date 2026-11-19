@@ -48,6 +48,13 @@ BEGIN
     WHEN 'TRUNCATE' THEN
       TRUNCATE public.flat_response_unit_count;
   END CASE;
+  -- The upsert locks each changed counter until commit, including a zero reached
+  -- by a cascade or by moving the last eligible response out of a unit.
+  IF FOUND AND TG_OP IN ('UPDATE', 'DELETE') THEN
+    DELETE FROM public.flat_response_unit_count c
+    USING (SELECT DISTINCT unitid FROM old_responses) old_units
+    WHERE c.unitid = old_units.unitid AND c.total = 0;
+  END IF;
   RETURN NULL;
 END
 $$;
@@ -201,19 +208,38 @@ BEGIN
     value_prefix text NOT NULL
   ) ON COMMIT DROP;
 
-  LOOP
-    -- Bound the work for both deduplication and linking by the number of source rows.
-    SELECT max(id) INTO upper_id
-    FROM (SELECT id FROM public.response WHERE id > lower_id ORDER BY id LIMIT 25000) batch;
-    EXIT WHEN upper_id IS NULL;
+  -- A scoped rebuild enumerates eligible IDs once using the workspace's units.
+  -- Keyset pagination over the response PK is sufficient for a full rebuild.
+  IF target_workspace IS NOT NULL THEN
+    CREATE TEMP TABLE flat_response_rebuild_ids (id integer PRIMARY KEY) ON COMMIT DROP;
+    INSERT INTO pg_temp.flat_response_rebuild_ids
+    SELECT r.id FROM public.flat_response_unit_data u
+    JOIN public.response r ON r.unitid = u.unit_id
+    WHERE u.workspace_id = target_workspace AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE;
+  END IF;
 
-    -- The length must match RESPONSE_VALUE_SEARCH_PREFIX_LENGTH used by the source query.
-    INSERT INTO pg_temp.flat_response_value_backfill
-    SELECT r.id, u.workspace_id, r.unitid, r.variableid, left(r.value, 2000)
-    FROM public.response r JOIN public.flat_response_unit_data u ON u.unit_id = r.unitid
-    WHERE r.id > lower_id AND r.id <= upper_id
-      AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE
-      AND (target_workspace IS NULL OR u.workspace_id = target_workspace);
+  LOOP
+    IF target_workspace IS NULL THEN
+      SELECT max(id) INTO upper_id
+      FROM (SELECT id FROM public.response WHERE id > lower_id ORDER BY id LIMIT 25000) batch;
+      EXIT WHEN upper_id IS NULL;
+
+      INSERT INTO pg_temp.flat_response_value_backfill
+      SELECT r.id, u.workspace_id, r.unitid, r.variableid, left(r.value, 2000)
+      FROM public.response r JOIN public.flat_response_unit_data u ON u.unit_id = r.unitid
+      WHERE r.id > lower_id AND r.id <= upper_id
+        AND r.value IS NOT NULL AND r.is_autocoder_generated IS NOT TRUE;
+    ELSE
+      -- Fetch only these workspace IDs, even when they are sparse in the response PK.
+      INSERT INTO pg_temp.flat_response_value_backfill
+      SELECT batch.id, target_workspace, r.unitid, r.variableid, left(r.value, 2000)
+      FROM (SELECT id FROM pg_temp.flat_response_rebuild_ids WHERE id > lower_id ORDER BY id LIMIT 25000) batch
+      CROSS JOIN LATERAL (
+        SELECT unitid, variableid, value FROM public.response WHERE id = batch.id LIMIT 1
+      ) r;
+      SELECT max(id) INTO upper_id FROM pg_temp.flat_response_value_backfill;
+      EXIT WHEN upper_id IS NULL;
+    END IF;
 
     INSERT INTO public.flat_response_value_search_value (workspace_id, value_prefix)
     SELECT workspace_id, value_prefix
@@ -240,6 +266,9 @@ BEGIN
     lower_id := upper_id;
   END LOOP;
   DROP TABLE pg_temp.flat_response_value_backfill;
+  IF target_workspace IS NOT NULL THEN
+    DROP TABLE pg_temp.flat_response_rebuild_ids;
+  END IF;
 
   UPDATE public.flat_response_first_page_workspace SET ready = true
   WHERE target_workspace IS NULL OR workspace_id = target_workspace;
@@ -247,6 +276,9 @@ END
 $$;
 
 SELECT public.rebuild_flat_response_workspace();
+
+CREATE INDEX flat_response_value_search_prefix_trgm
+  ON public.flat_response_value_search_value USING gin (value_prefix gin_trgm_ops);
 
 ANALYZE public.flat_response_unit_data;
 ANALYZE public.flat_response_all_totals;
@@ -360,8 +392,9 @@ BEGIN
   prefix := left(NEW.value, 2000);
   SELECT id INTO matched_id FROM public.flat_response_value_search_value v
   WHERE v.workspace_id = target_workspace AND md5(v.value_prefix) = md5(prefix) AND v.value_prefix = prefix
-  ORDER BY id LIMIT 1 FOR KEY SHARE;
-  -- Concurrent inserts can retain separate dictionary IDs for the same text. Both still match ILIKE.
+  ORDER BY id LIMIT 1 FOR KEY SHARE SKIP LOCKED;
+  -- A concurrent replacement may already be pruning this prefix while holding
+  -- locks needed by our own replacement. Both dictionary IDs match the search.
   IF matched_id IS NULL THEN
     INSERT INTO public.flat_response_value_search_value (workspace_id, value_prefix) VALUES (target_workspace, prefix)
     RETURNING id INTO matched_id;
@@ -473,11 +506,13 @@ BEGIN
       TRUNCATE public.flat_response_all_totals;
       RETURN NULL;
   END CASE;
+  -- The source hierarchy is visible even when a writable CTE inserted the
+  -- response before the unit's AFTER STATEMENT trigger populated unit_data.
   EXECUTE format('
     INSERT INTO public.flat_response_all_totals AS stored
     SELECT u.workspace_id, u.booklet_name, u.unit_name, (u.unit_id %% 8)::smallint, sum(c.delta)
     FROM (%s) c
-    JOIN public.flat_response_unit_data u ON u.unit_id = c.unitid
+    JOIN public.flat_response_first_page_source_unit u ON u.unit_id = c.unitid
     JOIN public.flat_response_first_page_workspace w ON w.workspace_id = u.workspace_id AND w.ready
     GROUP BY 1, 2, 3, 4
     HAVING sum(c.delta) <> 0

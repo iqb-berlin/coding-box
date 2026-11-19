@@ -55,7 +55,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       CREATE UNLOGGED TABLE "${schema}".booklet (id INT PRIMARY KEY, personid INT, infoid INT);
       CREATE UNLOGGED TABLE "${schema}".unit (id INT PRIMARY KEY, bookletid INT, name TEXT, alias TEXT);
       CREATE UNLOGGED TABLE "${schema}".response (
-        id INT PRIMARY KEY, unitid INT, variableid TEXT, status SMALLINT, value TEXT,
+        id INT PRIMARY KEY, unitid INT REFERENCES "${schema}".unit(id) ON DELETE CASCADE, variableid TEXT, status SMALLINT, value TEXT,
         is_autocoder_generated BOOLEAN DEFAULT false);
       CREATE UNLOGGED TABLE "${schema}".unit_tag (id INT PRIMARY KEY, "unitId" INT, tag TEXT);
       CREATE UNLOGGED TABLE "${schema}".bookletlog (id INT PRIMARY KEY, bookletid INT, key TEXT, parameter TEXT, ts BIGINT);
@@ -135,6 +135,9 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     beforeEach(async () => {
       original = await service.findFlatResponses(42, { page: 1, limit: 50 });
       await db.transaction(async manager => {
+        // Use the base changelog's operator class, or install it in the disposable fixture.
+        await manager.query(`SET LOCAL search_path = "${schema}", pg_catalog, public`);
+        await manager.query('CREATE EXTENSION IF NOT EXISTS pg_trgm');
         await manager.query('CREATE TABLE workspace (id int PRIMARY KEY)');
         await manager.query('INSERT INTO workspace VALUES (42), (43)');
         for (const sql of changes) await manager.query(sql);
@@ -210,6 +213,55 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         await expect(manager.query('SELECT id FROM flat_response_first_page_response')).resolves.toEqual([]);
         await manager.query('ROLLBACK TO SAVEPOINT before_truncate');
       });
+    });
+
+    it('counts a response inserted by a CTE before the outer unit insert', async () => {
+      await db.query(`
+        WITH answer AS (
+          INSERT INTO response VALUES (999, 44, 'NEW', 3, 'response first', false) RETURNING unitid
+        )
+        INSERT INTO unit SELECT unitid, 1, 'NEW_UNIT', 'NEW_UNIT' FROM answer
+      `);
+      const [rows, total] = await service.findFlatResponses(42, { page: 1, limit: 50 });
+      expect(rows.map(row => row.responseId)).toContain(999);
+      expect(total).toBe(original[1] + 1);
+      expect(total).toBe(rows.length);
+      await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42'))
+        .resolves.toEqual([{ ready: true }]);
+    });
+
+    it('removes the count when deleting a unit cascades to its last response', async () => {
+      await db.query(`
+        INSERT INTO unit VALUES (44, 1, 'NEW_UNIT', 'NEW_UNIT');
+        INSERT INTO response VALUES (999, 44, 'NEW', 3, 'new answer', false);
+        DELETE FROM unit WHERE id = 44
+      `);
+      await expect(db.query('SELECT total FROM flat_response_unit_count WHERE unitid = 44')).resolves.toEqual([]);
+    });
+
+    it('commits parallel replacements that swap the last links to two prefixes', async () => {
+      await db.query(`
+        INSERT INTO response VALUES (999, 1, 'A2', 3, 'left prefix', false),
+          (1001, 2, 'B2', 3, 'right prefix', false)
+      `);
+      const replace = 'INSERT INTO response VALUES ($1, $2, $3, 3, $4, false)';
+      // Hold both deletions open before either importer looks up the other prefix.
+      await db.transaction(async left => {
+        await left.query("SET LOCAL lock_timeout = '4s'");
+        await left.query('DELETE FROM response WHERE id = 999');
+        await db.transaction(async right => {
+          await right.query("SET LOCAL lock_timeout = '4s'");
+          await right.query('DELETE FROM response WHERE id = 1001');
+          await Promise.all([
+            left.query(replace, [999, 1, 'A2', 'right prefix']),
+            right.query(replace, [1001, 2, 'B2', 'left prefix'])
+          ]);
+        });
+      });
+      await expectResponses({ responseValue: 'left prefix' }, [1001]);
+      await expectResponses({ responseValue: 'right prefix' }, [999]);
+      await expect(db.query(dictionary, ['left prefix'])).resolves.toHaveLength(1);
+      await expect(db.query(dictionary, ['right prefix'])).resolves.toHaveLength(1);
     });
 
     it('keeps the projected page, count and value search current across a concurrent import and visibility change', async () => {
