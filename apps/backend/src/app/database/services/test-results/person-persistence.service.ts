@@ -26,6 +26,7 @@ import { UnitLog } from '../../entities/unitLog.entity';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
+import { completeImportWrites, isRetryableImportError, runResponseImportTransaction } from './response-import-transaction';
 
 export type TestResultsImportAuditContext = Pick<RecordAuditJournalEventInput,
 'workspaceId' | 'actorUserId' | 'actorType' | 'jobId' | 'correlationId'> & { source: 'upload' | 'testcenter' };
@@ -110,14 +111,6 @@ export class PersonPersistenceService {
     );
     service.importTransaction = true;
     return service;
-  }
-
-  private async completeWrites(writes: Promise<unknown>[]): Promise<void> {
-    // Batch and unit transactions must wait for every write before rolling back.
-    const results = await Promise.allSettled(writes);
-    for (const result of results) {
-      if (result.status === 'rejected') throw result.reason;
-    }
   }
 
   private recordImportBatch(manager: EntityManager, audit: TestResultsImportAuditContext,
@@ -212,10 +205,9 @@ export class PersonPersistenceService {
   ): Promise<TestResultsMutationSummary> {
     if (audit) {
       if (audit.workspaceId !== workspace_id) throw new Error('Import audit workspace does not match');
-      const issueOffset = issues.length;
-      return this.personsRepository.manager.transaction(async manager => {
-        const result = await this.forImportTransaction(manager).processPersonBooklets(personList, workspace_id, overwriteMode, scope, issues);
-        await this.recordImportBatch(manager, audit, !issues.slice(issueOffset).some(issue => issue.level === 'error'), {
+      return runResponseImportTransaction(this.personsRepository.manager, async (manager, attemptIssues) => {
+        const result = await this.forImportTransaction(manager).processPersonBooklets(personList, workspace_id, overwriteMode, scope, attemptIssues);
+        await this.recordImportBatch(manager, audit, !attemptIssues.some(issue => issue.level === 'error'), {
           phase: 'responses',
           personCount: personList.length,
           overwriteMode,
@@ -225,7 +217,7 @@ export class PersonPersistenceService {
           changedUnitCount: result.changedUnitIds.length
         });
         return result;
-      });
+      }, issues);
     }
     const mutationSummary = this.createMutationSummary();
     try {
@@ -242,7 +234,8 @@ export class PersonPersistenceService {
 
       const UPSERT_BATCH_SIZE = 25;
       for (let i = 0; i < personList.length; i += UPSERT_BATCH_SIZE) {
-        const batch = personList.slice(i, i + UPSERT_BATCH_SIZE);
+        // TypeORM writes generated columns back to the upsert input, even if the transaction later rolls back.
+        const batch = personList.slice(i, i + UPSERT_BATCH_SIZE).map(person => ({ ...person }));
         await this.personsRepository.upsert(batch, ['group', 'code', 'login', 'workspace_id']);
       }
 
@@ -402,7 +395,7 @@ export class PersonPersistenceService {
       const batchSize = 10;
       for (let i = 0; i < booklet.units.length; i += batchSize) {
         const unitBatch = booklet.units.slice(i, i + batchSize);
-        await this.completeWrites(
+        await completeImportWrites(
           unitBatch.map(async unit => {
             if (!unit || !unit.id) {
               return;
@@ -434,7 +427,7 @@ export class PersonPersistenceService {
                 );
 
                 if (targetUnit) {
-                  await this.completeWrites([
+                  await completeImportWrites([
                     this.saveUnitLastState(unit, targetUnit, manager),
                     this.processChunks(unit, targetUnit, booklet, manager)
                   ]);
@@ -464,7 +457,7 @@ export class PersonPersistenceService {
               // savepoints on its shared query runner cannot isolate units.
               const unitSummary = this.importTransaction ?
                 await persistUnit(this.unitRepository.manager) :
-                await this.unitRepository.manager.transaction(persistUnit);
+                await runResponseImportTransaction(this.unitRepository.manager, persistUnit);
               this.mergeMutationSummary(mutationSummary, unitSummary);
             } catch (unitError) {
               if (this.importTransaction) throw unitError;
@@ -538,7 +531,7 @@ export class PersonPersistenceService {
         success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
     } catch (error) {
-      if (this.importTransaction) throw error;
+      if (this.importTransaction || (manager && isRetryableImportError(error))) throw error;
       this.logger.error(`Failed to process subform responses for unit: ${unit.id}: ${getErrorMessage(error)}`);
       return {
         success: false, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
@@ -713,7 +706,7 @@ export class PersonPersistenceService {
         addedResponseIds: Array.from(new Set(addedResponseIds))
       };
     } catch (error) {
-      if (this.importTransaction) throw error;
+      if (this.importTransaction || (manager && isRetryableImportError(error))) throw error;
       this.logger.error(`Failed to save responses for unit: ${savedUnit.id}: ${getErrorMessage(error)}`);
       return {
         success: false,

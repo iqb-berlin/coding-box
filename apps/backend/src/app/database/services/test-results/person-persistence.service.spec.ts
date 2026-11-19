@@ -65,6 +65,16 @@ describe('PersonPersistenceService', () => {
     jest.spyOn(unitRepository, 'create').mockImplementation(entity => entity as Unit);
   });
 
+  it.each([['40P01', 3], ['40001', 3], ['23505', 1]] as const)(
+    'propagates PostgreSQL %s after %i import transaction attempts', async (code, attempts) => {
+      const error = Object.assign(new Error('transaction failed'), { code });
+      const transaction = jest.spyOn(personsRepository.manager, 'transaction').mockRejectedValue(error);
+      await expect(service.processPersonBooklets([], 1, 'replace', 'person', [], { workspaceId: 1, source: 'upload' }))
+        .rejects.toBe(error);
+      expect(transaction).toHaveBeenCalledTimes(attempts);
+    }
+  );
+
   it('should process logs from input persons even if they are not in DB booklets array', async () => {
     const inputPersons: Person[] = [
       {

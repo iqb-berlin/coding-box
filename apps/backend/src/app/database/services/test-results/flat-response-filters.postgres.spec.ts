@@ -239,6 +239,66 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       await expect(db.query('SELECT total FROM flat_response_unit_count WHERE unitid = 44')).resolves.toEqual([]);
     });
 
+    it.each(['rebuilt answer', null])('rejects a stale write of %p after rebuild and indexes its retry', async value => {
+      await db.query("UPDATE persons SET login = login || 'x' WHERE id = 1");
+      const insert = "INSERT INTO response VALUES (999, 2, 'NEW', 3, $1, false)";
+      try {
+        await expect(db.transaction('REPEATABLE READ', async writer => {
+          const state = await writer.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42');
+          expect(state).toEqual([{ ready: false }]);
+          await db.query('SELECT rebuild_flat_response_workspace(42)');
+          await writer.query(insert, [value]);
+        })).rejects.toMatchObject({ code: '40001' });
+
+        await db.transaction('REPEATABLE READ', writer => writer.query(insert, [value]));
+        await expectResponses({}, [1, 2, 3, 4, 5, 999, 6, 7, 8]);
+        await expectResponses({ responseValue: 'rebuilt answer' }, value ? [999] : []);
+      } finally {
+        await db.query('DELETE FROM response WHERE id = 999');
+        await db.query("UPDATE persons SET login = 'person' WHERE id = 1");
+      }
+    });
+
+    it('keeps the source query active when the rebuild itself has a pre-import snapshot', async () => {
+      await db.query("UPDATE persons SET login = 'before rebuild' WHERE id = 1");
+      try {
+        await expect(db.transaction('REPEATABLE READ', async maintenance => {
+          const state = await maintenance.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42');
+          expect(state).toEqual([{ ready: false }]);
+          await db.query("INSERT INTO response VALUES (999, 2, 'NEW', 3, 'before rebuild', false)");
+          await maintenance.query('SELECT rebuild_flat_response_workspace(42)');
+        })).rejects.toMatchObject({ code: '25000' });
+        await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 42'))
+          .resolves.toEqual([{ ready: false }]);
+        await db.query('SELECT rebuild_flat_response_workspace(42)');
+        await expectResponses({ responseValue: 'before rebuild' }, [999]);
+        await expectResponses({}, [1, 2, 3, 4, 5, 999, 6, 7, 8]);
+      } finally {
+        await db.query("UPDATE persons SET login = 'person' WHERE id = 1");
+      }
+    });
+
+    it('finds an answer inserted before workspace registration in the same statement', async () => {
+      await db.query(`
+        WITH answer AS (INSERT INTO response VALUES (999, 44, 'NEW', 3, 'early answer', false) RETURNING unitid),
+          units AS (INSERT INTO unit SELECT unitid, 44, 'NEW', 'NEW' FROM answer RETURNING bookletid),
+          booklets AS (INSERT INTO booklet SELECT bookletid, 44, 1 FROM units RETURNING personid),
+          people AS (INSERT INTO persons SELECT personid, 44, true, 'CTE', 'cte', 'group' FROM booklets RETURNING workspace_id)
+        INSERT INTO workspace SELECT workspace_id FROM people
+      `);
+      const options = { page: 1, limit: 50 };
+      const list = await service.findFlatResponses(44, options);
+      expect(list[0].map(row => row.responseId)).toEqual([999]);
+      expect(list[1]).toBe(1);
+      await expect(service.findFlatResponses(44, { ...options, responseValue: 'early answer' })).resolves.toEqual(list);
+      await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 44'))
+        .resolves.toEqual([{ ready: false }]);
+      await db.query('SELECT rebuild_flat_response_workspace(44)');
+      await expect(db.query('SELECT ready FROM flat_response_first_page_workspace WHERE workspace_id = 44'))
+        .resolves.toEqual([{ ready: true }]);
+      await expect(service.findFlatResponses(44, { ...options, responseValue: 'early answer' })).resolves.toEqual(list);
+    });
+
     it('commits parallel replacements that swap the last links to two prefixes', async () => {
       await db.query(`
         INSERT INTO response VALUES (999, 1, 'A2', 3, 'left prefix', false),

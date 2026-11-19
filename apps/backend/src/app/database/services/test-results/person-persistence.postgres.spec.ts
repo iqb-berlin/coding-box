@@ -1,4 +1,4 @@
-import { DataSource, Repository } from 'typeorm';
+import { DataSource, EntitySubscriberInterface, Repository } from 'typeorm';
 import { PersonPersistenceService } from './person-persistence.service';
 import Persons from '../../entities/persons.entity';
 import Workspace from '../../entities/workspace.entity';
@@ -138,6 +138,85 @@ describePostgres('PersonPersistenceService Postgres integration', () => {
   afterAll(async () => {
     if (dataSource?.isInitialized) await dataSource.destroy();
   });
+
+  it.each([false, true])('commits both cross-prefix replacements across subforms (audited=%s)', async audited => {
+    const workspaceId = (await dataSource.getRepository(Workspace).save({ name: 'parallel replace' })).id;
+    cleanupWorkspaceIds.push(workspaceId);
+    const info = await bookletInfoRepository.save({ name: `replace-${workspaceId}`, size: 0 });
+    cleanupBookletInfoIds.push(info.id);
+    const person = (code: string, values: string[]): Person => ({
+      workspace_id: workspaceId,
+      group: 'replace',
+      login: code,
+      code,
+      booklets: [{
+        id: info.name,
+        logs: [],
+        sessions: [],
+        units: [{
+          id: code,
+          alias: code,
+          laststate: [],
+          chunks: [],
+          logs: [],
+          subforms: values.map((value, index) => ({
+            id: String(index), responses: [{ id: 'V', value, status: 'VALUE_CHANGED' }]
+          }))
+        }]
+      }]
+    });
+    await service.processPersonBooklets([person('left', ['P', 'Q']), person('right', ['Q', 'P'])], workspaceId);
+    // Both transactions must hold the dictionary lock for their first subform
+    // before either removes the other prefix in its second subform.
+    let resume!: () => void;
+    const bothInserted = new Promise<void>(resolve => { resume = resolve; });
+    let firstSubformWrites = 0;
+    const barrier: EntitySubscriberInterface<ResponseEntity> = {
+      listenTo: () => ResponseEntity,
+      afterInsert: async event => {
+        if (event.entity.subform !== '0') return;
+        firstSubformWrites += 1;
+        if (firstSubformWrites === 2) resume();
+        await bothInserted;
+      }
+    };
+    dataSource.subscribers.push(barrier);
+    const timeout = setTimeout(resume, 5000);
+    try {
+      const issues: TestResultsUploadIssueDto[] = [];
+      const replace = (code: string) => service.processPersonBooklets(
+        [person(code, [`${code}-1`, `${code}-2`])], workspaceId, 'replace', 'person', issues, audited ? { workspaceId, source: 'upload', correlationId: code } : undefined
+      );
+      const results = await Promise.allSettled([replace('left'), replace('right')]);
+      expect(results).toEqual(Array(2).fill({
+        status: 'fulfilled', value: expect.objectContaining({ savedResponseCount: 2, deletedResponseCount: 2 })
+      }));
+      expect(issues).toEqual([]);
+      expect(firstSubformWrites).toBe(3);
+      const values = await dataSource.query(`
+        SELECT value_prefix FROM flat_response_value_search_value WHERE workspace_id = $1 ORDER BY value_prefix
+      `, [workspaceId]);
+      expect(values.map((row: { value_prefix: string }) => row.value_prefix)).toEqual(['left-1', 'left-2', 'right-1', 'right-2']);
+      const links = await dataSource.query(`
+        SELECT u.unit_name AS unit, r.subform, r.value, v.value_prefix AS prefix
+        FROM flat_response_value_search_link l JOIN response r ON r.id = l.id
+        JOIN flat_response_value_search_value v ON v.id = l.value_id
+        JOIN flat_response_unit_data u ON u.unit_id = r.unitid
+        WHERE l.workspace_id = $1 ORDER BY u.unit_name, r.subform
+      `, [workspaceId]);
+      expect(links).toEqual(['left', 'right'].flatMap(unit => ['0', '1'].map((subform, index) => ({
+        unit, subform, value: `${unit}-${index + 1}`, prefix: `${unit}-${index + 1}`
+      }))));
+      const journal = await dataSource.query(`
+        SELECT correlation_id FROM journal_entries WHERE workspace_id = $1 AND event_type = 'TEST_RESULTS_IMPORTED'
+        ORDER BY correlation_id
+      `, [workspaceId]);
+      expect(journal).toEqual(audited ? [{ correlation_id: 'left' }, { correlation_id: 'right' }] : []);
+    } finally {
+      clearTimeout(timeout);
+      dataSource.subscribers.splice(dataSource.subscribers.indexOf(barrier), 1);
+    }
+  }, 30000);
 
   it('persists a merge upload with a new unit against the real Postgres schema', async () => {
     const suffix = `${Date.now()}-${Math.random().toString(16).slice(2)}`;

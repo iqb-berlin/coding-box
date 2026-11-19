@@ -920,7 +920,7 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1064
+        "max-lines": 1058
       },
       "functions": {
         "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
@@ -929,7 +929,7 @@
         "class PersonPersistenceService#1/method processPersonBooklets#1": {
           "complexity": 30,
           "max-depth": 9,
-          "max-lines-per-function": 128
+          "max-lines-per-function": 127
         },
         "class PersonPersistenceService#1/method processPersonLogs#1": {
           "complexity": 21,

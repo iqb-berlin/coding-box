@@ -163,6 +163,42 @@ CREATE INDEX flat_response_value_search_by_workspace
 CREATE VIEW public.flat_response_value_search_workspace AS
 SELECT workspace_id FROM public.flat_response_first_page_workspace WHERE ready;
 
+-- Rebuilds lock all six source tables. A writer with an older transaction snapshot
+-- can acquire its table lock after the rebuild commits and still see the old projections.
+CREATE TABLE public.flat_response_rebuild_generation (generation bigint NOT NULL);
+INSERT INTO public.flat_response_rebuild_generation VALUES (0);
+
+CREATE FUNCTION public.check_flat_response_rebuild_snapshot()
+RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+  -- Locking a row changed since our snapshot raises serialization_failure.
+  PERFORM generation FROM public.flat_response_rebuild_generation FOR SHARE;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Response projections were installed after the transaction snapshot' USING ERRCODE = '40001';
+  END IF;
+  RETURN NULL;
+END
+$$;
+
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.workspace
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.persons
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.bookletinfo
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.booklet
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.unit
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+CREATE TRIGGER flat_response_rebuild_snapshot BEFORE INSERT OR UPDATE OR DELETE OR TRUNCATE ON public.response
+  FOR EACH STATEMENT WHEN (current_setting('transaction_isolation') IN ('repeatable read', 'serializable'))
+  EXECUTE FUNCTION public.check_flat_response_rebuild_snapshot();
+
 -- The explicit rebuild is also used to recover a workspace after hierarchy changes.
 -- Serialize it with source writes, so every reader sees either the complete projection or the source query.
 CREATE FUNCTION public.rebuild_flat_response_workspace(target_workspace integer DEFAULT NULL)
@@ -171,8 +207,13 @@ DECLARE
   lower_id bigint := -2147483649;
   upper_id integer;
 BEGIN
+  -- The backfill must see imports that committed before the table locks were acquired.
+  IF current_setting('transaction_isolation') IN ('repeatable read', 'serializable') THEN
+    RAISE EXCEPTION 'Run the response projection rebuild at READ COMMITTED' USING ERRCODE = '25000';
+  END IF;
   LOCK TABLE public.workspace, public.persons, public.bookletinfo, public.booklet, public.unit, public.response
     IN SHARE ROW EXCLUSIVE MODE;
+  UPDATE public.flat_response_rebuild_generation SET generation = generation + 1;
 
   INSERT INTO public.flat_response_first_page_workspace (workspace_id)
   SELECT id FROM public.workspace WHERE target_workspace IS NULL OR id = target_workspace
@@ -288,7 +329,13 @@ ANALYZE public.flat_response_value_search_link;
 CREATE FUNCTION public.flat_response_projection_insert_workspace()
 RETURNS trigger LANGUAGE plpgsql AS $$
 BEGIN
-  INSERT INTO public.flat_response_first_page_workspace (workspace_id, ready) VALUES (NEW.id, true);
+  -- A writable CTE may already have inserted units and responses before this
+  -- row trigger runs. Their earlier triggers could not use this workspace yet.
+  INSERT INTO public.flat_response_first_page_workspace (workspace_id, ready)
+  SELECT NEW.id, NOT EXISTS (
+    SELECT FROM public.persons p JOIN public.booklet b ON b.personid = p.id
+    JOIN public.unit u ON u.bookletid = b.id WHERE p.workspace_id = NEW.id
+  );
   RETURN NULL;
 END
 $$;
@@ -561,6 +608,14 @@ CREATE TRIGGER flat_response_first_page_total_truncate AFTER TRUNCATE ON public.
 --rollback DROP FUNCTION public.flat_response_first_page_insert_unit();
 --rollback DROP FUNCTION public.flat_response_projection_insert_workspace();
 --rollback DROP FUNCTION public.rebuild_flat_response_workspace(integer);
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.workspace;
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.persons;
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.bookletinfo;
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.booklet;
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.unit;
+--rollback DROP TRIGGER flat_response_rebuild_snapshot ON public.response;
+--rollback DROP FUNCTION public.check_flat_response_rebuild_snapshot();
+--rollback DROP TABLE public.flat_response_rebuild_generation;
 --rollback DROP VIEW public.flat_response_value_search_workspace;
 --rollback DROP TRIGGER flat_response_value_cleanup_update ON public.flat_response_value_search_link;
 --rollback DROP TRIGGER flat_response_value_cleanup_delete ON public.flat_response_value_search_link;

@@ -369,11 +369,23 @@ Bereinigung, kann ein paralleler Import einen eigenen Eintrag für denselben Tex
 anlegen. Die Teilstringsuche berücksichtigt alle passenden Einträge. Für
 selektive Suchbegriffe steht ein Trigrammindex auf den Suchpräfixen bereit.
 
+Bei einem Deadlock oder Serialisierungsfehler wiederholt der Antwortimport die
+zurückgerollte Transaktion bis zu zweimal. Bei protokollierten Importen umfasst
+das den gesamten Stapel samt Journaleintrag, sonst die betroffene Unit.
+
 Bei Änderungen an Sortiermerkmalen, Verschiebungen oder Löschungen in der
 Testheftstruktur wechselt der betroffene Arbeitsbereich zur Quellabfrage.
 `SELECT public.rebuild_flat_response_workspace(42);` baut die Hilfsdaten für
-Arbeitsbereich 42 neu auf. Für die Wertsuche werden nur die Antwort-IDs der
+Arbeitsbereich 42 neu auf. Der Aufruf benötigt `READ COMMITTED`, damit der Aufbau
+alle bis zum Erwerb der Tabellensperren abgeschlossenen Importe sieht.
+Für die Wertsuche werden nur die Antwort-IDs der
 zugehörigen Units vorgemerkt und in Blöcken von bis zu 25.000 gelesen.
 Auch dieser Neuaufbau sperrt die Quelltabellen arbeitsbereichsübergreifend für
-Schreibzugriffe. Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
+Schreibzugriffe. Schreibt eine Transaktion mit `REPEATABLE READ` oder
+`SERIALIZABLE` nach dem Neuaufbau mit einem älteren Snapshot in diese Tabellen,
+meldet PostgreSQL `40001`. Die Transaktion kann mit frischem Snapshot wiederholt
+werden. Das gilt auch bei einem Neuaufbau für einen einzelnen Arbeitsbereich.
+Entstehen Units und ihr Arbeitsbereich in derselben SQL-Anweisung, verwendet
+der neue Arbeitsbereich bis zum Neuaufbau die Quellabfrage.
+Migration und Neuaufbau gehören in ein Wartungsfenster, dessen
 Dauer anhand einer Kopie des Zielbestands zu bestimmen ist.
