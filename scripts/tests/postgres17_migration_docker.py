@@ -66,6 +66,8 @@ class DockerMigrationTests(unittest.TestCase):
                      '-p', self.project, '-f', str(self.root / 'docker-compose.coding-box.yaml'), '-f', str(self.root / 'docker-compose.coding-box.prod.yaml')]
         self.execute(self.base + ['up', '-d', '--no-deps', 'db'])
         self.wait_sql()
+        self.source_version = self.sql('SHOW server_version')
+        self.assertRegex(self.source_version, r'^14\.')
         self.execute(['docker', 'run', '--rm', '--network', self.network, '-e', 'LIQUIBASE_COMMAND_USERNAME=integration_test',
                       '-e', 'LIQUIBASE_COMMAND_PASSWORD=integration$test', os.environ['PG17_TEST_LIQUIBASE_IMAGE'],
                       '--classpath=changelog', '--changelog-file=coding-box.changelog-root.xml',
@@ -153,14 +155,14 @@ class DockerMigrationTests(unittest.TestCase):
         self.assertEqual(len(before['tables']), 43)
         self.make('coding-box-postgres17-rollback')
         self.assertEqual(self.journal()[1]['phase'], 'rolled_back')
-        self.assertEqual(self.sql('SHOW server_version'), '14.24')
+        self.assertEqual(self.sql('SHOW server_version'), self.source_version)
         self.assertEqual((self.root / '.env.coding-box').read_bytes(), self.original_env)
         self.assertEqual(self.sql('SELECT count(*) FROM response'), '3')
         self.assertEqual(self.inspect('backend')['State']['Health']['Status'], 'healthy')
         self.make('coding-box-postgres17-rollback')
         self.execute(self.base + ['up', '-d', '--no-deps', '--force-recreate', 'db'])
         self.wait_sql()
-        self.assertEqual(self.sql('SHOW server_version'), '14.24')
+        self.assertEqual(self.sql('SHOW server_version'), self.source_version)
         self.assertEqual(self.sql('SELECT count(*) FROM response'), '3')
 
     def test_completed_upgrade_keeps_new_writes_and_refuses_old_volume_rollback(self):
@@ -204,7 +206,7 @@ class DockerMigrationTests(unittest.TestCase):
             self.assertEqual(pg17.main(['migrate', '--directory', str(self.root), '--wait-seconds', '35']), 1)
         directory, state = self.journal()
         self.assertEqual(state['phase'], 'rolled_back')
-        self.assertEqual(self.sql('SHOW server_version'), '14.24')
+        self.assertEqual(self.sql('SHOW server_version'), self.source_version)
         self.assertEqual(self.sql("SELECT score_v1 FROM response WHERE variableid='V1'"), '2')
         self.assertEqual((self.root / '.env.coding-box').read_bytes(), self.original_env)
         self.assertEqual(self.inspect('backend')['State']['Health']['Status'], 'healthy')
@@ -272,7 +274,7 @@ class DockerMigrationTests(unittest.TestCase):
         with patch.object(pg17, 'Migration', FailDuringSnapshot):
             self.assertEqual(pg17.main(['migrate', '--directory', str(self.root), '--wait-seconds', '35']), 1)
         self.assertEqual(self.journal()[1]['phase'], 'rolled_back')
-        self.assertEqual(self.sql('SHOW server_version'), '14.24')
+        self.assertEqual(self.sql('SHOW server_version'), self.source_version)
         self.assertEqual(self.sql('SELECT count(*) FROM response'), '3')
         self.assertEqual((self.root / '.env.coding-box').read_bytes(), self.original_env)
         self.assertEqual(self.inspect('backend')['State']['Health']['Status'], 'healthy')

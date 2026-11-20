@@ -121,7 +121,7 @@ echten Daten sowie ein ausreichend großes Wartungsfenster bleiben erforderlich.
 Der Nx-Target `backend:test-postgres17-migration` benötigt vier ausdrücklich
 gesetzte Testimages: `PG17_TEST_BACKEND_IMAGE`, `PG17_TEST_POSTGRES14_IMAGE`,
 `PG17_TEST_POSTGRES17_IMAGE` und `PG17_TEST_LIQUIBASE_IMAGE`. Die DB-Images müssen
-14.24 bzw. 17.12 enthalten, Liquibase den aktuellen Changelog. Es werden ausschließlich
+14.x bzw. 17.12 enthalten, Liquibase den aktuellen Changelog. Es werden ausschließlich
 eigene Compose-Projekte mit synthetischen Daten angelegt. API/Worker werden für die
 Orchestrierungsprüfung durch kleine DB-Clients im Backendimage simuliert; die
 Anwendungstests laufen separat über `backend:test-integration`.
