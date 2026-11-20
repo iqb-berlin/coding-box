@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -70,24 +71,43 @@ const githubDevelopPr = {
 };
 
 test('Cypress jobs publish JUnit on failure and join live evidence before publication', () => {
-  for (const [name, suites] of [
-    ['test-browser', 'component,browser'], ['test-replay-live', 'replay-live'],
+  const liveSuites = [
+    ['test-replay-live', 'replay-live'],
     ['test-auth-live', 'auth-live'], ['test-workflows-live', 'workflows-live']
-  ]) {
+  ];
+  for (const [name, suites] of [['test-browser', 'component,browser'], ...liveSuites]) {
     const job = resolve(name);
     assert.equal(job.artifacts.when, 'always');
     assert.equal(job.artifacts.reports.junit, 'coverage/cypress/*/junit.xml');
     assert.ok(job.artifacts.paths.includes('coverage/cypress/'));
-    assert.ok(job.after_script.includes(`npx nx run frontend:e2e-report --suites=${suites}`));
+    assert.ok(job.after_script.join('\n').includes(`npx nx run frontend:e2e-report --suites=${suites}`));
   }
+  const harness = 'npx nx run frontend:test-e2e-harness';
+  const liveCommands = liveSuites.flatMap(([name]) => resolve(name).script);
+  assert.equal(liveCommands.filter(command => command === harness).length, 1);
+
   const aggregate = resolve('test-e2e-report');
-  assert.ok(resolve('test-browser').script.includes('npx nx run frontend:e2e-report --suites=component,browser'));
   assert.equal(aggregate.when, 'always');
   assert.equal(aggregate.allow_failure, false);
-  for (const live of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+  for (const [live] of liveSuites) {
     assert.ok(aggregate.needs.some(dependency => dependency.job === live && dependency.artifacts !== false));
   }
   assert.ok(aggregate.script.includes('npx nx run frontend:e2e-report --suites=auth-live,replay-live,workflows-live'));
+});
+
+test('the browser report is required on success and runs as a fallback on failure', () => {
+  const browser = resolve('test-browser');
+  const report = 'npx nx run frontend:e2e-report --suites=component,browser';
+  assert.equal(browser.script.filter(command => command === report).length, 1);
+  const afterScript = [`npx() { printf 'npx %s\\n' "$*"; }`, ...browser.after_script].join('\n');
+  for (const [status, expected] of [['success', ''], ['failed', report], ['canceled', report]]) {
+    const result = spawnSync('sh', ['-eu', '-c', afterScript], {
+      env: { ...process.env, CI_JOB_STATUS: status },
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), expected, status);
+  }
 });
 
 test('a same-repository GitHub develop PR selects exactly one complete pipeline', () => {
@@ -108,8 +128,9 @@ test('a same-repository GitHub develop PR selects exactly one complete pipeline'
   }
 });
 
-test('feature builds do not require an image published by an earlier pipeline', () => {
+test('build-app needs only installed dependencies and uses the Node base image', () => {
   const job = resolve('build-app');
+  assert.deepEqual(job.needs, ['install-dependencies']);
   assert.equal(job.image, '${DOCKER_HUB_PROXY}${BASE_IMAGE}');
   assert.ok(job.before_script.some(command => command.includes('apt-get install') && command.includes(' git')));
 });
@@ -181,6 +202,24 @@ test('all live browser jobs install a Docker client and bound daemon readiness',
     assert.match(setup, /docker --version/);
     assert.match(setup, /timeout 120 sh -c 'until docker info;/);
     assert.doesNotMatch(setup, /until docker info > \/dev\/null/);
+  }
+});
+
+test('all live browser jobs use the same pipeline builds and retain independent test gates', () => {
+  const producer = resolve('build-app');
+  for (const project of ['frontend', 'backend']) {
+    assert.ok(producer.script.some(command => command.startsWith(`npx nx build ${project}`)));
+    assert.ok(producer.artifacts.paths.includes(`dist/apps/${project}/`));
+  }
+  for (const [label, env] of scenarios) {
+    for (const name of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+      assert.ok(selected('build-app', { ...config.variables, ...env }), label);
+      const job = resolve(name);
+      assert.equal(job.allow_failure, false);
+      assert.equal(job.variables.REPLAY_E2E_PREBUILT, 'true');
+      assert.ok(job.needs.includes('build-app'));
+      assert.ok(job.needs.includes('install-dependencies'));
+    }
   }
 });
 

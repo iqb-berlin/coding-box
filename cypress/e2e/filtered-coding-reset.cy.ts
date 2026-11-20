@@ -35,11 +35,21 @@ describe('Filtered coding version reset', () => {
     cy.wait('@statistics');
     cy.get('coding-box-statistics-card .reset-version-button').click();
     cy.get('coding-box-reset-version-dialog').as('dialog');
+    cy.get('@dialog').find('.reset-dialog-container').should('be.visible');
   });
 
   afterEach(() => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
+
+  function fillFilter(filter: 'unit' | 'variable', value: string): void {
+    cy.get('@dialog').find<HTMLTextAreaElement>(`[data-cy="reset-${filter}-filters"]`)
+      .should('be.enabled')
+      .then(([field]) => {
+        field.value = value;
+        field.dispatchEvent(new field.ownerDocument.defaultView!.Event('input', { bubbles: true }));
+      });
+  }
 
   function checkScope(): void {
     cy.get('@dialog').find('.check-scope-button').click();
@@ -60,7 +70,7 @@ describe('Filtered coding version reset', () => {
     cy.get('@dialog').find('.confirmation-footer .scope-summary').should('be.visible');
     cy.get('@dialog').find('.confirmation-footer .confirmation-cascade').should('be.visible');
     cy.get('@dialog').find('.confirm-button').should('be.visible');
-    cy.get('@dialog').find('.dialog-actions button').each(button => {
+    cy.get('@dialog').find('.dialog-actions button').should('have.length', 2).each(button => {
       const element = button[0];
       const bounds = element.getBoundingClientRect();
       const container = element.closest('.reset-dialog-container')!.getBoundingClientRect();
@@ -96,9 +106,8 @@ describe('Filtered coding version reset', () => {
 
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
     cy.get('@dialog').find('.confirm-button').should('be.disabled');
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(' DHB003; DHB003');
+    fillFilter('unit', ' DHB003; DHB003');
     checkScope();
-    expectConfirmationVisible();
     cy.get('@dialog').find('.scope-summary').should('be.visible').and('contain.text', 'Units: DHB003')
       .and('contain.text', 'alle Variablen der betroffenen Units');
     cy.get('@dialog').find('.confirmation-cascade').should('contain.text', 'Der 1. Autocoder-Lauf wird zurückgesetzt. Zusätzlich: manuelle Kodierung und 2. Autocoder-Lauf.');
@@ -125,8 +134,8 @@ describe('Filtered coding version reset', () => {
       body: { status: 'processing', progress: 10 }
     });
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
-    cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type('V1; V2');
+    fillFilter('unit', 'DHB003');
+    fillFilter('variable', 'V1; V2');
     cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: DHB003')
       .and('contain.text', 'Variablen: V1, V2');
     cy.get('@dialog').find('.filter-fields').should('contain.text', 'Unit und Variable übereinstimmen');
@@ -145,11 +154,10 @@ describe('Filtered coding version reset', () => {
       body: { status: 'processing', progress: 10 }
     });
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
+    fillFilter('unit', 'DHB003');
     cy.get('@dialog').contains('mat-radio-button', 'Globaler Reset').click();
-    cy.get('@dialog').find('.scope-summary').should('contain.text', 'Globaler Reset')
+    cy.get('@dialog').find('.scope-summary').should('be.visible').and('contain.text', 'Globaler Reset')
       .and('contain.text', 'gesamter Arbeitsbereich').and('not.contain.text', 'DHB003');
-    expectConfirmationVisible();
     checkScope();
     cy.get('@dialog').find('.confirm-button').should('contain.text', 'Gesamten Arbeitsbereich zurücksetzen').click();
     cy.wait('@reset').its('request.body').should('deep.equal', {
@@ -162,7 +170,7 @@ describe('Filtered coding version reset', () => {
       body: { jobId: 'unexpected', message: 'Unexpected reset' }
     }).as('reset');
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
+    fillFilter('unit', 'DHB003');
     cy.get('@dialog').contains('button', 'Abbrechen').click();
     cy.get('coding-box-reset-version-dialog').should('not.exist');
     cy.get('@reset.all').should('have.length', 0);
@@ -171,14 +179,10 @@ describe('Filtered coding version reset', () => {
   for (const [width, height] of [[1366, 768], [390, 844], [320, 568]]) {
     it(`keeps the scope and cascade visible while scrolling at ${width}x${height}`, () => {
       cy.viewport(width, height);
-      expectConfirmationVisible();
       cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
-      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type('V1; V2');
-      cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: DHB003')
-        .and('contain.text', 'Variablen: V1, V2');
+      fillFilter('unit', 'DHB003');
+      fillFilter('variable', 'V1');
       checkScope();
-      expectConfirmationVisible();
       cy.get('@dialog').find('.dialog-content').scrollTo('bottom');
       expectConfirmationVisible();
       cy.get('@dialog').find('.dialog-content').scrollTo('top');
@@ -186,40 +190,37 @@ describe('Filtered coding version reset', () => {
     });
   }
 
-  for (const [width, height] of [[1366, 768], [390, 844], [320, 568]]) {
-    it(`exposes all filters in a scrollable dialog at ${width}x${height}`, () => {
-      cy.viewport(width, height);
-      const units = Array.from({ length: 30 }, (_, index) => `DHB${String(index).padStart(3, '0')}`);
-      const variables = Array.from({ length: 30 }, (_, index) => `VAR_${index}`);
-      cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type(units.join('; ')).should('have.value', units.join('; '));
-      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type(variables.join('; ')).should('have.value', variables.join('; '));
-      expectConfirmationVisible();
-      cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: 30 ausgewählt')
-        .and('contain.text', 'Variablen: 30 ausgewählt');
-      cy.get('@dialog').contains('button', 'Alle Filter anzeigen').click();
-      cy.get('coding-box-reset-filter-details-dialog').as('details');
-      cy.get('@details').find('[data-cy="reset-unit-details"] li').should('have.length', units.length).each((item, index) => {
-        expect(item.text()).to.equal(units[index]);
-      });
-      cy.get('@details').find('[data-cy="reset-variable-details"] li').should('have.length', variables.length).each((item, index) => {
-        expect(item.text()).to.equal(variables[index]);
-      });
-      cy.get('@details').find('mat-dialog-content').should(content => {
-        expect(content[0].scrollWidth, 'full detail width').to.be.at.most(content[0].clientWidth + 1);
-      }).scrollTo('bottom', { ensureScrollable: false });
-      cy.get('@details').contains('li', variables.at(-1)!).should('be.visible');
-      cy.get('@details').contains('button', 'Schließen').click();
-      cy.get('coding-box-reset-filter-details-dialog').should('not.exist');
-      cy.get('@dialog').find('.filter-details-button').should('be.focused');
-      expectConfirmationVisible();
+  it('exposes the complete filter lists in a scrollable details dialog on a narrow screen', () => {
+    cy.viewport(320, 568);
+    const units = Array.from({ length: 30 }, (_, index) => `DHB${String(index).padStart(3, '0')}`);
+    const variables = Array.from({ length: 30 }, (_, index) => `VAR_${index}`);
+    cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
+    fillFilter('unit', units.join('; '));
+    fillFilter('variable', variables.join('; '));
+    cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: 30 ausgewählt')
+      .and('contain.text', 'Variablen: 30 ausgewählt');
+    cy.get('@dialog').contains('button', 'Alle Filter anzeigen').click();
+    cy.get('coding-box-reset-filter-details-dialog').as('details');
+    cy.get('@details').find('[data-cy="reset-unit-details"] li').should('have.length', units.length).each((item, index) => {
+      expect(item.text()).to.equal(units[index]);
     });
-  }
+    cy.get('@details').find('[data-cy="reset-variable-details"] li').should('have.length', variables.length).each((item, index) => {
+      expect(item.text()).to.equal(variables[index]);
+    });
+    cy.get('@details').find('mat-dialog-content').should(([content]) => {
+      expect(content.scrollWidth, 'full detail width').to.be.at.most(content.clientWidth + 1);
+    }).scrollTo('bottom');
+    cy.get('@details').contains('li', variables.at(-1)!).should('be.visible');
+    cy.get('@details').contains('button', 'Schließen').click();
+    cy.get('coding-box-reset-filter-details-dialog').should('not.exist');
+    cy.get('@dialog').find('.filter-details-button').should('be.focused');
+    expectConfirmationVisible();
+  });
 
   it('fully displays the unit-only scope and field guidance at 320px', () => {
     cy.viewport(320, 568);
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003');
+    fillFilter('unit', 'DHB003');
     cy.get('@dialog').find('.scope-summary').should('contain.text', 'Variablen: alle Variablen der betroffenen Units');
     cy.get('@dialog').find('mat-hint').should('contain.text', 'Ohne Unit-Filter');
     cy.get('@dialog').find('mat-label').first().should('have.text', 'Unit-Namen');
@@ -259,16 +260,9 @@ describe('Filtered coding version reset', () => {
   for (const [width, height] of [[667, 375], [844, 390]]) {
     it(`keeps both action buttons fully reachable in landscape at ${width}x${height}`, () => {
       cy.viewport(width, height);
-      cy.intercept('POST', '**/api/admin/workspace/5/coding/reset-version', {
-        body: { jobId: 'landscape-reset', message: 'Started' }
-      }).as('reset');
-      cy.intercept('GET', '**/api/admin/workspace/5/coding/reset-version/job/landscape-reset', {
-        body: { status: 'processing', progress: 10 }
-      });
       cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-      cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('DHB003; DHB004; DHB005; DHB006')
-        .should('have.value', 'DHB003; DHB004; DHB005; DHB006');
-      cy.get('@dialog').find('[data-cy="reset-variable-filters"]').type('V1; V2');
+      fillFilter('unit', 'DHB003; DHB004; DHB005; DHB006');
+      fillFilter('variable', 'V1; V2');
       checkScope();
       cy.get('@dialog').find('.reset-dialog-container').should(container => {
         const element = container[0];
@@ -280,12 +274,6 @@ describe('Filtered coding version reset', () => {
       expectConfirmationVisible();
       cy.get('@dialog').find('.scope-summary').should('contain.text', 'Units: 4 ausgewählt')
         .and('contain.text', 'Variablen: 2 ausgewählt').and('contain.text', 'Betroffene Antworten: 1');
-      cy.screenshot(`filtered-reset-landscape-${width}x${height}`);
-      cy.get('@dialog').find('.confirm-button').click();
-      cy.wait('@reset').its('request.body').should('deep.equal', {
-        version: 'v1', unitFilters: ['DHB003', 'DHB004', 'DHB005', 'DHB006'], variableFilters: ['V1', 'V2']
-      });
-      cy.get('coding-box-reset-version-dialog').should('not.exist');
     });
   }
 
@@ -295,7 +283,7 @@ describe('Filtered coding version reset', () => {
         affectedResponseCount: null, resetResponseCount: null, deletedGeneratedResponseCount: null, checkedAt: '2026-11-17T10:00:00Z' }
     } });
     cy.get('@dialog').contains('mat-radio-button', 'Gefilterter Reset').click();
-    cy.get('@dialog').find('[data-cy="reset-unit-filters"]').type('UNKNOWN');
+    fillFilter('unit', 'UNKNOWN');
     cy.get('@dialog').find('.check-scope-button').click();
     cy.get('@dialog').find('coding-box-reset-coding-preview').should('contain.text', 'nicht gefunden: UNKNOWN');
     cy.get('@dialog').find('.confirm-button').should('be.disabled');

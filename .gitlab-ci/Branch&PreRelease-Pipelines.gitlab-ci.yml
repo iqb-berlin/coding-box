@@ -362,8 +362,10 @@ build-app:
   stage: build
   interruptible: true
   extends: .distributed
+  needs:
+    - install-dependencies
   rules:
-    - !reference [ .default_rules, rules ]
+    - !reference [ .quality_gate_rules, rules ]
   # A documentation-only follow-up can cancel the pipeline which first builds
   # a new CICD_BASE_IMAGE tag. Do not depend on that tag already being published.
   image: ${DOCKER_HUB_PROXY}${BASE_IMAGE}
@@ -371,10 +373,11 @@ build-app:
     - apt-get update -qq && apt-get install -y --no-install-recommends git
   script:
     - npx nx build frontend --configuration=production
-    - npx nx affected --base=HEAD~1 --target=build --exclude=frontend --parallel=3
+    - npx nx build backend
   artifacts:
     paths:
-      - dist
+      - dist/apps/frontend/
+      - dist/apps/backend/
 
 test-backend-container:
   stage: test
@@ -643,7 +646,10 @@ test-browser:
     - npx nx run frontend:e2e --configuration=ci --browser=electron
     - npx nx run frontend:e2e-report --suites=component,browser
   after_script:
-    - npx nx run frontend:e2e-report --suites=component,browser
+    - |
+      if [ "$CI_JOB_STATUS" != "success" ]; then
+        npx nx run frontend:e2e-report --suites=component,browser
+      fi
   artifacts:
     when: always
     expire_in: 7 days
@@ -663,6 +669,8 @@ test-replay-live:
   allow_failure: false
   image: ${CYPRESS_IMAGE}
   variables:
+    REPLAY_E2E_PREBUILT: "true"
+    REPLAY_E2E_IMAGE_PREFIX: ${DOCKER_HUB_PROXY}
     REPLAY_E2E_CONNECT_HOST: docker
     REPLAY_E2E_PUBLISH_HOST: 0.0.0.0
   services:
@@ -673,6 +681,7 @@ test-replay-live:
       alias: docker
   needs:
     - install-dependencies
+    - build-app
   rules:
     - !reference [ .quality_gate_rules, rules ]
   before_script:
@@ -683,6 +692,7 @@ test-replay-live:
     - docker compose version
     - docker buildx version
     - timeout 120 sh -c 'until docker info; do sleep 2; done'
+    - if [ -n "${DOCKER_HUB_PROXY}" ]; then echo "${CI_DEPENDENCY_PROXY_PASSWORD}" | docker login -u "${CI_DEPENDENCY_PROXY_USER}" --password-stdin "${CI_DEPENDENCY_PROXY_SERVER}"; fi
     - npx cypress install
     - npx cypress verify
   script:
@@ -713,7 +723,6 @@ test-workflows-live:
   after_script:
     - npx nx run frontend:e2e-report --suites=workflows-live
   script:
-    - npx nx run frontend:test-e2e-harness
     - npx nx run frontend:e2e-workflows --configuration=production
 
 # Join the three disposable live jobs before publishing. Missing artifacts and
