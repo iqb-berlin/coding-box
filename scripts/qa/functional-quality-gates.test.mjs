@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -70,24 +71,43 @@ const githubDevelopPr = {
 };
 
 test('Cypress jobs publish JUnit on failure and join live evidence before publication', () => {
-  for (const [name, suites] of [
-    ['test-browser', 'component,browser'], ['test-replay-live', 'replay-live'],
+  const liveSuites = [
+    ['test-replay-live', 'replay-live'],
     ['test-auth-live', 'auth-live'], ['test-workflows-live', 'workflows-live']
-  ]) {
+  ];
+  for (const [name, suites] of [['test-browser', 'component,browser'], ...liveSuites]) {
     const job = resolve(name);
     assert.equal(job.artifacts.when, 'always');
     assert.equal(job.artifacts.reports.junit, 'coverage/cypress/*/junit.xml');
     assert.ok(job.artifacts.paths.includes('coverage/cypress/'));
-    assert.ok(job.after_script.includes(`npx nx run frontend:e2e-report --suites=${suites}`));
+    assert.ok(job.after_script.join('\n').includes(`npx nx run frontend:e2e-report --suites=${suites}`));
   }
+  const harness = 'npx nx run frontend:test-e2e-harness';
+  const liveCommands = liveSuites.flatMap(([name]) => resolve(name).script);
+  assert.equal(liveCommands.filter(command => command === harness).length, 1);
+
   const aggregate = resolve('test-e2e-report');
-  assert.ok(resolve('test-browser').script.includes('npx nx run frontend:e2e-report --suites=component,browser'));
   assert.equal(aggregate.when, 'always');
   assert.equal(aggregate.allow_failure, false);
-  for (const live of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
+  for (const [live] of liveSuites) {
     assert.ok(aggregate.needs.some(dependency => dependency.job === live && dependency.artifacts !== false));
   }
   assert.ok(aggregate.script.includes('npx nx run frontend:e2e-report --suites=auth-live,replay-live,workflows-live'));
+});
+
+test('the browser report is required on success and runs as a fallback on failure', () => {
+  const browser = resolve('test-browser');
+  const report = 'npx nx run frontend:e2e-report --suites=component,browser';
+  assert.equal(browser.script.filter(command => command === report).length, 1);
+  const afterScript = [`npx() { printf 'npx %s\\n' "$*"; }`, ...browser.after_script].join('\n');
+  for (const [status, expected] of [['success', ''], ['failed', report], ['canceled', report]]) {
+    const result = spawnSync('sh', ['-eu', '-c', afterScript], {
+      env: { ...process.env, CI_JOB_STATUS: status },
+      encoding: 'utf8'
+    });
+    assert.equal(result.status, 0, result.stderr);
+    assert.equal(result.stdout.trim(), expected, status);
+  }
 });
 
 test('a same-repository GitHub develop PR selects exactly one complete pipeline', () => {
