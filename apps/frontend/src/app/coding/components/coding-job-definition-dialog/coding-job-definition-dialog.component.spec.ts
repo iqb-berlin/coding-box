@@ -1365,7 +1365,7 @@ describe('CodingJobDefinitionDialogComponent', () => {
         expect(mockDialogRef.close).not.toHaveBeenCalled();
       });
 
-      it.each(['maxCodingCases', 'showScore', 'coder', 'variable'] as const)(
+      it.each(['maxCodingCases', 'showScore', 'coder', 'variable', 'additional coder', 'additional variable'] as const)(
         'rejects changed %s after a committed creation loses its HTTP response, then recovers the original job',
         async field => {
           const write = prepareSave();
@@ -1389,10 +1389,14 @@ describe('CodingJobDefinitionDialogComponent', () => {
             component.selectedVariables().clear();
             component.selectedVariables().select(mockVariables[1]);
           }
+          if (field === 'additional coder') component.selectedCoders.select(mockCoders[1]);
+          if (field === 'additional variable') component.selectedVariables().select(mockVariables[2]);
           write.mockReturnValue(of(committedJob));
           await component.onSubmit();
 
           expect(write).toHaveBeenCalledTimes(1);
+          expect(mockMatDialog.open).not.toHaveBeenCalled();
+          expect(mockDistributedCodingService.createDistributedCodingJobs).not.toHaveBeenCalled();
           expect(component.isSaving()).toBe(false);
           expect(mockDialogRef.close).not.toHaveBeenCalled();
           expect(mockSnackBar.open).toHaveBeenLastCalledWith(

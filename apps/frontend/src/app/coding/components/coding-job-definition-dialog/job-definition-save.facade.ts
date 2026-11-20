@@ -91,12 +91,16 @@ export class JobDefinitionSaveFacade {
     const payload = JSON.stringify({
       ...job, assignedCoders: coderIds, created_at: undefined, updated_at: undefined
     });
-    if (this.creationAttempt && this.creationAttempt.payload !== payload) {
-      this.notify('job-creation-inputs-changed', undefined, 10000);
-      return undefined;
-    }
+    if (!this.canSubmitCreation(payload)) return undefined;
     this.creationAttempt ??= { id: uuid(), payload, uncertain: false };
     return this.persistence.createJob(workspaceId, job, coderIds, this.creationAttempt.id);
+  }
+
+  // A bulk submission can never replay an earlier single-job request.
+  private canSubmitCreation(singleJobPayload?: string): boolean {
+    if (!this.creationAttempt || this.creationAttempt.payload === singleJobPayload) return true;
+    this.notify('job-creation-inputs-changed', undefined, 10000);
+    return false;
   }
 
   private recordCreationFailure(error: { status?: number; error?: { code?: string } }): void {
@@ -145,6 +149,7 @@ export class JobDefinitionSaveFacade {
     const workspaceId = this.beginSave();
     if (!workspaceId) return;
     try {
+      if (!this.canSubmitCreation()) return;
       const confirmation = this.dialogs.open(CodingJobBulkCreationDialogComponent, { width: '1200px', data });
       const options = await this.dialogResult<BulkCreationResult | false>(confirmation, workspaceId);
       if (!options || !options.confirmed) return;

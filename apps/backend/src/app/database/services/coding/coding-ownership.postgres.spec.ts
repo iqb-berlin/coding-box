@@ -6,6 +6,9 @@ import Workspace from '../../entities/workspace.entity';
 import WorkspaceUser from '../../entities/workspace_user.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
+import { MissingsProfile } from '../../entities/missings-profile.entity';
+import { JobDefinition } from '../../entities/job-definition.entity';
+import { MissingsProfilesService } from './missings-profiles.service';
 import {
   assertCodingResourceMutation, codingResourceEntities
 } from '../shared/coding-ownership.policy';
@@ -31,6 +34,7 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
   let study: User;
   let admin: User;
   let jobs: CodingJobService;
+  let profiles: MissingsProfilesService;
   const resources = new Map<string, number[]>();
 
   beforeAll(async () => {
@@ -83,8 +87,15 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       logger: { log: () => undefined, error: () => undefined }
     };
     const access = Object.assign(Object.create(CodingJobAccessService.prototype), dependencies) as CodingJobAccessService;
+    profiles = new MissingsProfilesService(
+      db.getRepository(MissingsProfile),
+      db.getRepository(CodingJob),
+      db.getRepository(JobDefinition),
+      dependencies.cacheService as never
+    );
     const mutation = Object.assign(Object.create(CodingJobMutationService.prototype), dependencies, {
       access,
+      missingsProfilesService: profiles,
       aggregation: {
         getCurrentAggregationSettingsSnapshot: async () => ({
           aggregationEnabled: false, aggregationThreshold: null
@@ -154,6 +165,45 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     expect(events).toEqual(ids.sort((a, b) => a - b).map(id => ({ entity_id: String(id) })));
     expect(await db.getRepository(CodingJob).countBy({ workspace_id: workspaceId, creatorUserId: owner.id })).toBe(1);
   });
+
+  it('commits a job when another transaction creates its default missings profile first', async () => {
+    const workspace = await db.manager.save(Workspace, { name: 'Concurrent profile initialization' });
+    const holder = db.createQueryRunner();
+    await holder.connect();
+    let observed: Promise<unknown> | undefined;
+    try {
+      await holder.startTransaction();
+      const profile = await profiles.ensureDefaultMissingsProfile(workspace.id, holder.manager);
+      const [{ pid }] = await holder.query('SELECT pg_backend_pid() AS pid');
+      const creation = jobs.createCodingJob(workspace.id, { name: 'First job' }, admin.id);
+      // Observe failures even if the creation fails before reaching the insert.
+      observed = creation.catch(() => undefined);
+
+      const deadline = Date.now() + 5000;
+      let blocked = false;
+      while (!blocked && Date.now() < deadline) {
+        const [row] = await db.query(`
+          SELECT EXISTS (SELECT 1 FROM pg_stat_activity
+            WHERE $1 = ANY(pg_blocking_pids(pid))) AS blocked
+        `, [pid]);
+        blocked = row.blocked;
+        if (!blocked) await new Promise(resolve => { setTimeout(resolve, 20); });
+      }
+      expect(blocked).toBe(true);
+      await holder.commitTransaction();
+
+      const job = await creation;
+      expect(await db.manager.findOneByOrFail(CodingJob, { id: job.id })).toMatchObject({
+        workspace_id: workspace.id, missings_profile_id: profile.id
+      });
+      expect(await db.manager.countBy(MissingsProfile, { workspace_id: workspace.id })).toBe(1);
+    } finally {
+      if (holder.isTransactionActive) await holder.rollbackTransaction();
+      await holder.release();
+      await observed;
+      await db.manager.delete(Workspace, workspace.id);
+    }
+  }, 15000);
 
   it('rejects a busy create without writing, then recovers a committed retry under the same lock', async () => {
     const request = { name: 'Retry-safe creation', creationRequestId: randomUUID() };
