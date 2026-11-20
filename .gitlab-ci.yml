@@ -56,6 +56,7 @@ variables:
   REGISTRY_PROJECT: "/${CI_PROJECT_PATH}/"
   DOCKER_HUB_PROXY: "${CI_DEPENDENCY_PROXY_GROUP_IMAGE_PREFIX}/"
   # Match package.json/.nvmrc and retain Python/compiler tools for native modules.
+  POSTGRES17_BASE_IMAGE: postgres:17.12-alpine3.24@sha256:a77aa70e641402a21411b92b721c58d10f23b50ae5fdd2333efd22d166e1e5f7
   BASE_IMAGE: node:24.22.1-bookworm
   CICD_BASE_IMAGE: "${BASE_IMAGE}-git"
   CYPRESS_IMAGE: cypress/browsers:node-24.22.1-chrome-156.0.8078.73-1-ff-159.0-edge-156.0.4314.50-1

@@ -182,6 +182,16 @@ make dev-volumes-clean
 
 
 ## Installation (Produktivumgebung)
+
+Neue Installationen und bestehende PostgreSQL-14-Installationen verwenden bei
+regulären Starts und Anwendungsupdates PostgreSQL 14. Der Wechsel auf PostgreSQL
+17.12 ist optional. Für den Wechsel sichert `make coding-box-postgres17-migrate`
+den laufenden Bestand, stellt ihn in einem neuen Volume wieder her und vergleicht
+Quelle und Ziel vor der Freigabe. Nach dem Wechsel verwenden auch spätere
+Anwendungsupdates das PostgreSQL-17-Image des jeweiligen Releases und das
+restaurierte Volume. Voraussetzungen, Wartungsfenster und Rückfall sind im
+[Migrationsplan](docs/postgresql-17-migration.md) beschrieben.
+
 Um das Kodiersystem zu verwenden, muss es auf einem Server installiert sein.
 Die technische Basis hierfür ist [Docker](https://www.docker.com/).
 Die Installation, Aktualisierung und Bedienung des Servers kann durch die Ansteuerung sogenannter Make-Targets erfolgen,

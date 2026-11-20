@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { spawnSync } from 'node:child_process';
 import { test } from 'node:test';
-import { assertIntegrationResults, integrationConfiguration } from './run-backend-integration.mjs';
+import { assertIntegrationResults, assertPostgresVersion, integrationConfiguration } from './run-backend-integration.mjs';
 
 const database = 'postgresql://integration:integration@127.0.0.1:5432/postgres';
 const redis = { BULLMQ_TEST_REDIS_HOST: '127.0.0.1', BULLMQ_TEST_REDIS_PORT: '6379' };
@@ -22,6 +22,18 @@ test('valid configuration preserves the dedicated test server and Redis port', (
   const result = integrationConfiguration({ BACKEND_INTEGRATION_TEST_DATABASE_URL: database, ...redis });
   assert.equal(result.server.toString(), database);
   assert.equal(result.redisPort, 6379);
+});
+
+test('the PostgreSQL 17 gate cannot silently validate PostgreSQL 14 or a different patch release', () => {
+  const config = integrationConfiguration({ BACKEND_INTEGRATION_TEST_DATABASE_URL: database, ...redis,
+    BACKEND_INTEGRATION_POSTGRES_VERSION: '17.12' });
+  assert.equal(config.expectedPostgresVersion, '17.12');
+  assert.doesNotThrow(() => assertPostgresVersion('17.12 (Alpine)', config.expectedPostgresVersion));
+  assert.throws(() => assertPostgresVersion('14.24', config.expectedPostgresVersion), /wrong server/);
+  assert.throws(() => assertPostgresVersion('17.11', config.expectedPostgresVersion), /wrong server/);
+  assert.doesNotThrow(() => assertPostgresVersion('14.24', undefined));
+  assert.throws(() => integrationConfiguration({ BACKEND_INTEGRATION_TEST_DATABASE_URL: database, ...redis,
+    BACKEND_INTEGRATION_POSTGRES_VERSION: '17' }), /major.minor/);
 });
 
 test('the mandatory command fails instead of silently skipping absent infrastructure', () => {

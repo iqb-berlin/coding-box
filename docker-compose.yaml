@@ -154,6 +154,9 @@ services:
 
 volumes:
   db_vol:
+    # Keep the historical volume by default; a 14 cluster must be migrated explicitly.
+    name: ${POSTGRES_DATA_VOLUME:-${COMPOSE_PROJECT_NAME}_db_vol}
+    external: ${POSTGRES_DATA_VOLUME_EXTERNAL:-false}
   backend_vol:
   export_temp_vol:
   redis_data:
