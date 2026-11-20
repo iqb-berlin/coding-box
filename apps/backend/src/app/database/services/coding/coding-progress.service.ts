@@ -3,9 +3,11 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Brackets, In, Repository,
+  Brackets, Repository,
   SelectQueryBuilder
 } from 'typeorm';
+import { CoverageResponse, CoverageResponseRow, mapCoverageRow } from './coding-coverage-row.util';
+import { getDefinitionVariables, loadDefinitionBundles } from './coding-definition-variables.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -48,21 +50,13 @@ type ResponseMatchingFlag =
   | 'IGNORE_CASE'
   | 'IGNORE_WHITESPACE';
 
-interface CoverageResponse {
-  responseId: number;
-  unitName: string;
-  variableId: string;
-  value: string | null;
-  codeV2: number | null;
-  statusV2: number | null;
-  statusV1: number | null;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  bookletName: string;
+interface CoverageAggregation {
+  threshold: number | null;
+  matchingFlags: ResponseMatchingFlag[];
 }
 
 interface CoverageResponseScope {
+  aggregation: CoverageAggregation;
   allResponses: CoverageResponse[];
   manualResponses: CoverageResponse[];
   responseAnalysisRawCases: number;
@@ -258,7 +252,8 @@ export class CodingProgressService {
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
       completedResponseIds,
-      responseScope.manualResponses
+      responseScope.manualResponses,
+      responseScope.aggregation
     );
     const completionPercentage =
       effectiveProgress.effectiveTotalCasesToCode > 0 ?
@@ -363,7 +358,8 @@ export class CodingProgressService {
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
       appliedResponseIds,
-      responses
+      responses,
+      responseScope.aggregation
     );
     const completionPercentage =
       effectiveProgress.effectiveTotalCasesToCode > 0 ?
@@ -374,7 +370,8 @@ export class CodingProgressService {
     const deriveErrorProgress = await this.getDeriveErrorManualProgress(
       workspaceId,
       responses,
-      appliedResponseIds
+      appliedResponseIds,
+      responseScope.aggregation
     );
 
     return {
@@ -440,7 +437,8 @@ export class CodingProgressService {
       totalCasesToCode > 0 ? (uniqueCasesInJobs / totalCasesToCode) * 100 : 0;
     const effectiveCoverage = await this.getEffectiveCaseCoverage(
       workspaceId,
-      responseScope.manualResponses
+      responseScope.manualResponses,
+      responseScope.aggregation
     );
     const coveragePercentage =
       effectiveCoverage.effectiveTotalCasesToCode > 0 ?
@@ -472,14 +470,15 @@ export class CodingProgressService {
 
   private async getEffectiveCaseCoverage(
     workspaceId: number,
-    providedResponses?: CoverageResponse[]
+    responses: CoverageResponse[],
+    aggregation: CoverageAggregation
   ): Promise<EffectiveCaseCoverage> {
-    const responses = providedResponses || (await this.getCoverageResponseScope(workspaceId)).manualResponses;
     const assignedResponseIds = await this.getAssignedCoverageResponseIds(workspaceId);
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
       assignedResponseIds,
-      responses
+      responses,
+      aggregation
     );
 
     return {
@@ -494,9 +493,14 @@ export class CodingProgressService {
   }
 
   private async getCoverageResponseScope(workspaceId: number): Promise<CoverageResponseScope> {
+    const [threshold, matchingFlags] = await Promise.all([
+      this.getAggregationThreshold(workspaceId), this.getResponseMatchingMode(workspaceId)
+    ]);
+    const aggregation = { threshold, matchingFlags };
+    const needsValues = threshold !== null && !matchingFlags.includes('NO_AGGREGATION');
     const [allResponses, manualPoolResponses] = await Promise.all([
-      this.getCoverageResponses(workspaceId),
-      this.getCoverageResponses(workspaceId, true)
+      this.getCoverageResponses(workspaceId, false, needsValues),
+      this.getCoverageResponses(workspaceId, true, needsValues)
     ]);
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
@@ -545,6 +549,7 @@ export class CodingProgressService {
     );
 
     return {
+      aggregation,
       allResponses,
       manualResponses,
       responseAnalysisRawCases: allResponses.filter(response => (
@@ -558,7 +563,8 @@ export class CodingProgressService {
   private async getDeriveErrorManualProgress(
     workspaceId: number,
     responses: CoverageResponse[],
-    appliedResponseIds: Set<number>
+    appliedResponseIds: Set<number>,
+    aggregation: CoverageAggregation
   ): Promise<DeriveErrorManualProgress> {
     const deriveErrorStatus = statusStringToNumber('DERIVE_ERROR');
     const deriveErrorResponses = responses.filter(response => response.statusV1 === deriveErrorStatus);
@@ -570,7 +576,8 @@ export class CodingProgressService {
     const effectiveProgress = await this.getEffectiveCaseProgress(
       workspaceId,
       deriveErrorAppliedResponseIds,
-      deriveErrorResponses
+      deriveErrorResponses,
+      aggregation
     );
 
     return {
@@ -612,11 +619,10 @@ export class CodingProgressService {
   private async getEffectiveCaseProgress(
     workspaceId: number,
     completedResponseIds: Set<number>,
-    providedResponses?: CoverageResponse[]
+    responses: CoverageResponse[],
+    aggregation: CoverageAggregation
   ): Promise<EffectiveCaseProgress> {
-    const responses = providedResponses || await this.getCoverageResponses(workspaceId);
-    const aggregationThreshold = await this.getAggregationThreshold(workspaceId);
-    const matchingFlags = await this.getResponseMatchingMode(workspaceId);
+    const { threshold: aggregationThreshold, matchingFlags } = aggregation;
     const aggregationActive =
       aggregationThreshold !== null && !matchingFlags.includes('NO_AGGREGATION');
 
@@ -676,13 +682,14 @@ export class CodingProgressService {
 
   private async getCoverageResponses(
     workspaceId: number,
-    manualPoolOnly = false
+    manualPoolOnly = false,
+    needsValues = true
   ): Promise<CoverageResponse[]> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const query = this.responseRepository
       .createQueryBuilder('response')
       .select('response.id', 'responseId')
-      .addSelect('response.value', 'value')
+      .addSelect(needsValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.status_v1', 'statusV1')
@@ -733,21 +740,8 @@ export class CodingProgressService {
           'coverageResponses'
       }
     );
-    const raw = await query.getRawMany();
-
-    return raw.map(row => ({
-      responseId: Number(row.responseId),
-      value: row.value ?? null,
-      codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
-      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
-      statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
-      variableId: row.variableId,
-      unitName: row.unitName,
-      bookletName: row.bookletName ?? '',
-      personLogin: row.personLogin ?? '',
-      personCode: row.personCode ?? '',
-      personGroup: row.personGroup ?? ''
-    }));
+    const raw = await query.getRawMany<CoverageResponseRow>();
+    return raw.map(mapCoverageRow);
   }
 
   private async getAssignedCoverageResponseRows(workspaceId: number): Promise<number[]> {
@@ -1134,6 +1128,8 @@ export class CodingProgressService {
         where: { workspace_id: workspaceId }
       });
 
+      const bundlesById = await loadDefinitionBundles(this.variableBundleRepository, jobDefinitions, workspaceId);
+
       const coveredVariables = new Set<string>();
       const coverageByStatus = {
         draft: new Set<string>(),
@@ -1149,40 +1145,10 @@ export class CodingProgressService {
       for (const definition of jobDefinitions) {
         const definitionVariables = new Set<string>();
 
-        if (definition.assigned_variables) {
-          definition.assigned_variables.forEach(variable => {
-            const variableKey = getCoverageVariableKey(
-              variable.unitName,
-              variable.variableId
-            );
-            if (variablesNeedingCoding.has(variableKey)) {
-              definitionVariables.add(variableKey);
-            }
-          });
-        }
-
-        if (definition.assigned_variable_bundles) {
-          const bundleIds = definition.assigned_variable_bundles.map(
-            bundle => bundle.id
-          );
-          const variableBundles = await this.variableBundleRepository.find({
-            where: { id: In(bundleIds) }
-          });
-
-          variableBundles.forEach(bundle => {
-            if (bundle.variables) {
-              bundle.variables.forEach(variable => {
-                const variableKey = getCoverageVariableKey(
-                  variable.unitName,
-                  variable.variableId
-                );
-                if (variablesNeedingCoding.has(variableKey)) {
-                  definitionVariables.add(variableKey);
-                }
-              });
-            }
-          });
-        }
+        getDefinitionVariables(definition, bundlesById).forEach(variable => {
+          const variableKey = getCoverageVariableKey(variable.unitName, variable.variableId);
+          if (variablesNeedingCoding.has(variableKey)) definitionVariables.add(variableKey);
+        });
 
         definitionVariables.forEach(variableKey => {
           coveredVariables.add(variableKey);
@@ -1537,21 +1503,8 @@ export class CodingProgressService {
     applyResolvedExclusionsToQuery(query, exclusions, {
       parameterPrefix: 'variableCoverageResponses'
     });
-    const raw = await query.getRawMany();
-
-    return raw.map(row => ({
-      responseId: Number(row.responseId),
-      value: row.value ?? null,
-      codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
-      statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
-      statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),
-      variableId: row.variableId,
-      unitName: row.unitName,
-      bookletName: row.bookletName ?? '',
-      personLogin: row.personLogin ?? '',
-      personCode: row.personCode ?? '',
-      personGroup: row.personGroup ?? ''
-    }));
+    const raw = await query.getRawMany<CoverageResponseRow>();
+    return raw.map(mapCoverageRow);
   }
 
   private async getCompletedCoveragePeersForResponses(

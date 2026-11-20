@@ -236,26 +236,26 @@ describe('CoderTrainingService', () => {
       }));
 
       // Verify CoderTrainingVariable save
-      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         variable_id: 'v1',
         unit_name: 'u1',
         sample_count: 5,
         include_derive_error: true
-      }));
+      })]), { chunk: 500 });
 
       // Verify CoderTrainingBundle save
-      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         variable_bundle_id: 2,
         sample_count: 20
-      }));
+      })]), { chunk: 500 });
 
       // Verify CoderTrainingCoder save
-      expect(coderTrainingCoderRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingCoderRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         user_id: 10
-      }));
+      })]), { chunk: 500 });
     });
 
     it('should persist display options on the training and created jobs', async () => {
@@ -376,21 +376,21 @@ describe('CoderTrainingService', () => {
 
       expect(result.success).toBe(true);
       expect(result.jobsCreated).toBe(1);
-      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         variable_id: 'VAR',
         unit_name: 'UNIT',
         sample_count: 8
-      }));
+      })]), { chunk: 500 });
       expect(coderTrainingRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         creatorUserId: 7, workspace_id: 1, label: 'Mixed Training'
       }));
       expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         creatorUserId: 7, workspace_id: 1, name: 'Mixed Training-Coder 1'
       }));
-      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         variable_bundle_id: 5,
         sample_count: 4
-      }));
+      })]), { chunk: 500 });
       expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         coding_job_id: 200,
         variable_bundle_id: 5
@@ -454,12 +454,12 @@ describe('CoderTrainingService', () => {
         assignedVariableBundles
       );
 
-      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         variable_id: 'VAR2',
         unit_name: 'UNIT2',
         sample_count: 4,
         include_derive_error: true
-      }));
+      })]), { chunk: 500 });
       expect(generatePackagesSpy).toHaveBeenCalledWith(
         1,
         [{ id: 10, name: 'Coder 1' }],
@@ -568,11 +568,11 @@ describe('CoderTrainingService', () => {
       expect(coderTrainingCoderRepository.delete).toHaveBeenCalledWith({ coder_training_id: trainingId });
 
       // Verify saving of new bundle with sample count
-      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: trainingId,
         variable_bundle_id: 3,
         sample_count: 15
-      }));
+      })]), { chunk: 500 });
     });
 
     it('should update display options on an existing training without recreating jobs', async () => {
@@ -1052,18 +1052,18 @@ describe('CoderTrainingService', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingVariableRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         variable_id: 'manual',
         unit_name: 'Manual Unit',
         sample_count: 3
-      }));
-      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      })]), { chunk: 500 });
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         variable_bundle_id: 5,
         sample_count: 4,
         case_ordering_mode: null
-      }));
+      })]), { chunk: 500 });
       expect(codingJobRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         workspace_id: 1,
         training_id: 1,
@@ -1188,12 +1188,12 @@ describe('CoderTrainingService', () => {
       );
 
       expect(result.success).toBe(true);
-      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.objectContaining({
+      expect(coderTrainingBundleRepository.save).toHaveBeenCalledWith(expect.arrayContaining([expect.objectContaining({
         coder_training_id: 1,
         variable_bundle_id: 5,
         sample_count: 4,
         case_ordering_mode: 'alternating'
-      }));
+      })]), { chunk: 500 });
       expect(mockRepository.delete).toHaveBeenCalledWith({ coding_job_id: 100 });
       expect(mockRepository.delete).toHaveBeenCalledWith(100);
       expect(mockRepository.save).toHaveBeenCalledWith(expect.objectContaining({

@@ -1711,13 +1711,37 @@ describe('CodingValidationService', () => {
       ]);
     });
 
-    it.skip('should fetch from database on cache miss', async () => {
+    function mockIncompleteVariableQueries(
+      rows: { unitName: string; variableId: string; responseCount: string }[],
+      scopedUnitName?: string
+    ) {
+      const counts = createQueryBuilderMock(rows);
+      const aliases = createQueryBuilderMock(scopedUnitName ? [{ unitName: scopedUnitName }] : []);
+      const responseQueries = jest.fn();
+      if (scopedUnitName) responseQueries.mockReturnValueOnce(aliases);
+      responseQueries.mockReturnValueOnce(counts)
+        .mockReturnValueOnce(createQueryBuilderMock([]))
+        .mockReturnValueOnce(createQueryBuilderMock([]));
+      mockResponseRepository.createQueryBuilder = responseQueries;
+      (mockCodingJobUnitRepository.createQueryBuilder as jest.Mock).mockReturnValue(createQueryBuilderMock([]));
+      mockWorkspaceFilesService.getDerivedVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getCoderTrainingRequiredVariableMap.mockResolvedValue(new Map());
+      mockWorkspaceFilesService.getDerivedVariablesBySourceMap.mockResolvedValue(new Map());
+      mockCodingJobService.getAggregationThreshold.mockResolvedValue(null);
+      mockCodingJobService.getSlimResponsesForVariables.mockResolvedValue(
+        rows.flatMap(row => createSlimResponses(row.unitName, row.variableId, Number(row.responseCount))) as never
+      );
+      mockCacheService.get.mockResolvedValue(null);
+      mockCacheService.set.mockResolvedValue(true);
+      return { counts, aliases };
+    }
+
+    it('should fetch from database on cache miss', async () => {
       const rawResults = [
         { unitName: 'unit1', variableId: 'var1', responseCount: '5' }
       ];
 
-      mockCacheService.get.mockResolvedValue(null);
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawResults);
+      const { counts } = mockIncompleteVariableQueries(rawResults);
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
         new Map([['UNIT1', new Set(['var1'])]])
       );
@@ -1729,14 +1753,16 @@ describe('CodingValidationService', () => {
       expect(result[0].unitName).toBe('unit1');
       expect(result[0].variableId).toBe('var1');
       expect(result[0].responseCount).toBe(5);
+      expect(counts.andWhere).toHaveBeenCalledWith('person.workspace_id = :workspace_id', { workspace_id: 1 });
+      expect(mockCacheService.set).toHaveBeenCalled();
     });
 
-    it.skip('should filter variables by unit name when specified', async () => {
+    it('should filter variables by unit name when specified', async () => {
       const rawResults = [
         { unitName: 'specific-unit', variableId: 'var1', responseCount: '5' }
       ];
 
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawResults);
+      const { counts, aliases } = mockIncompleteVariableQueries(rawResults, 'specific-unit');
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
         new Map([['SPECIFIC-UNIT', new Set(['var1'])]])
       );
@@ -1746,21 +1772,24 @@ describe('CodingValidationService', () => {
         'specific-unit'
       );
 
-      expect(mockQueryBuilder.andWhere).toHaveBeenCalledWith(
-        'unit.name = :unitName',
+      expect(aliases.andWhere).toHaveBeenCalledWith(
+        'UPPER(unit.name) = UPPER(:unitName)',
         { unitName: 'specific-unit' }
+      );
+      expect(counts.andWhere).toHaveBeenCalledWith(
+        'unit.name IN (:...scopedUnitNames)',
+        { scopedUnitNames: ['specific-unit'] }
       );
       expect(result[0].unitName).toBe('specific-unit');
     });
 
-    it.skip('should filter out invalid variables not in unit variable map', async () => {
+    it('should filter out invalid variables not in unit variable map', async () => {
       const rawResults = [
         { unitName: 'unit1', variableId: 'valid-var', responseCount: '5' },
         { unitName: 'unit1', variableId: 'invalid-var', responseCount: '3' }
       ];
 
-      mockCacheService.get.mockResolvedValue(null);
-      mockQueryBuilder.getRawMany.mockResolvedValue(rawResults);
+      mockIncompleteVariableQueries(rawResults);
       mockWorkspaceFilesService.getUnitVariableMap.mockResolvedValue(
         new Map([['UNIT1', new Set(['valid-var'])]])
       );
