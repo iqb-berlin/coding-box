@@ -23,7 +23,17 @@ export function integrationConfiguration(environment) {
       Number(environment.BULLMQ_TEST_REDIS_PORT) < 1 || Number(environment.BULLMQ_TEST_REDIS_PORT) > 65535) {
     throw new Error('BULLMQ_TEST_REDIS_HOST and BULLMQ_TEST_REDIS_PORT must explicitly identify test Redis.');
   }
-  return { server, redisHost: environment.BULLMQ_TEST_REDIS_HOST, redisPort: Number(environment.BULLMQ_TEST_REDIS_PORT) };
+  const expectedPostgresVersion = environment.BACKEND_INTEGRATION_POSTGRES_VERSION || undefined;
+  if (expectedPostgresVersion && !/^\d+\.\d+$/.test(expectedPostgresVersion)) {
+    throw new Error('BACKEND_INTEGRATION_POSTGRES_VERSION must specify an exact major.minor release, for example 17.12.');
+  }
+  return { server, redisHost: environment.BULLMQ_TEST_REDIS_HOST, redisPort: Number(environment.BULLMQ_TEST_REDIS_PORT), expectedPostgresVersion };
+}
+
+export function assertPostgresVersion(actual, expected) {
+  if (expected && actual.split(' ', 1)[0] !== expected) {
+    throw new Error(`Expected PostgreSQL ${expected}, received ${actual}. Refusing to validate the wrong server.`);
+  }
 }
 
 export function assertIntegrationResults(results, kappaBenchmarkEnabled = false, resetPreviewBenchmarkEnabled = false) {
@@ -76,6 +86,9 @@ export async function runIntegration(environment = process.env) {
     await redis.connect();
     await redis.ping();
     await admin.connect();
+    const { rows: [server] } = await admin.query('SHOW server_version');
+    assertPostgresVersion(server.server_version, config.expectedPostgresVersion);
+    console.log(`Backend integration PostgreSQL: ${server.server_version}`);
     await admin.query(`CREATE DATABASE "${databaseName}"`);
     created = true;
     const changelogRoot = path.join(root, 'database/changelog');
