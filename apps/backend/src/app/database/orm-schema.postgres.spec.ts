@@ -95,12 +95,39 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     });
   });
 
-  function readRollback(changesetId: string): string {
+  function readChangeset(changesetId: string): string {
     const changelog = readFileSync('database/changelog/coding-box.changelog-orm-query-hardening.sql', 'utf8');
     const changeset = changelog.split(/^-- changeset /m).find(chunk => chunk.startsWith(`iqb:${changesetId} `));
     if (!changeset) throw new Error(`Missing changeset: ${changesetId}`);
-    return [...changeset.matchAll(/^-- rollback (.+)$/gm)].map(match => match[1]).join('\n');
+    return changeset;
   }
+
+  function readRollback(changesetId: string): string {
+    return [...readChangeset(changesetId).matchAll(/^-- rollback (.+)$/gm)].map(match => match[1]).join('\n');
+  }
+
+  it.each(['orm-remove-duplicate-indexes', 'orm-remove-obsolete-status-indexes'])(
+    'checks every index definition before %s proceeds', async changesetId => {
+      const changeset = readChangeset(changesetId);
+      const preconditions = changeset.slice(0, changeset.indexOf('DROP INDEX CONCURRENTLY'));
+      expect(preconditions).toContain('-- preconditions onFail:HALT onError:HALT');
+      const checks = [...preconditions.matchAll(/^-- precondition-sql-check expectedResult:ok (SELECT .+)$/gm)].map(match => match[1]);
+      const indexes = [...changeset.matchAll(/^DROP INDEX CONCURRENTLY IF EXISTS public\.(\w+);$/gm)].map(match => match[1]);
+      expect(checks).toHaveLength(indexes.length);
+      await fixture.db.transaction(async manager => {
+        await manager.query(readRollback(changesetId));
+        for (const [i, name] of indexes.entries()) {
+          const sql = checks[i];
+          expect(await manager.query(sql)).toEqual([{ result: 'ok' }]);
+          await manager.query(`DROP INDEX public.${name}`);
+          expect(await manager.query(sql)).toEqual([{ result: 'ok' }]);
+          await manager.query(`CREATE INDEX ${name} ON public.response(unitid, status_v1) WHERE status = 3`);
+          expect(await manager.query(sql)).toEqual([{ result: name }]);
+          await manager.query(`DROP INDEX public.${name}`);
+        }
+      });
+    }
+  );
 
   it.each([
     {

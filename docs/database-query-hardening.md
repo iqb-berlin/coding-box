@@ -123,6 +123,13 @@ gezielt bereinigen; keine pauschalen Indexlöschungen oder Zeilenlöschungen.
 Siehe [PostgreSQL-Sequenzen](https://www.postgresql.org/docs/14/functions-sequence.html)
 und [Concurrent-Indexaufbau](https://www.postgresql.org/docs/14/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY).
 
+Vor dem Entfernen alter Indizes prüft Liquibase alle betroffenen Namen je
+Changeset. Fehlt ein Index bereits, kann der Lauf fortfahren. Hat ein vorhandener
+Index eine abweichende Definition, stoppt Liquibase vor der ersten Löschung
+dieses Changesets und meldet den Namen. Vor dem Wiederanlauf die lokale
+Anpassung prüfen und entscheiden, ob der Index unter eigenem Namen erhalten
+werden soll.
+
 Beim Rollback werden die entfernten Indizes je Changeset in einer Transaktion
 wiederhergestellt. Der Aufbau kann Schreibzugriffe auf die betroffenen Tabellen
 blockieren. Dafür ist ein Wartungsfenster einzuplanen. Ein abgebrochener Rollback
