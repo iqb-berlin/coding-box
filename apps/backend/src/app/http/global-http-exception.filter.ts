@@ -11,6 +11,7 @@ import {
 import { Response } from 'express';
 import { MulterError } from 'multer';
 import { AuthFailureException } from '../auth/auth-failure.exception';
+import { isPostgresConnectionTimeout } from '../database/postgres-connection-timeout';
 import { TestcenterConnectionException, TestcenterConnectionErrorCode } from '../testcenter/testcenter-connection-error';
 import { AuthErrorCode } from '../../../../../api-dto/auth-error-dto';
 import {
@@ -81,6 +82,10 @@ export class GlobalHttpExceptionFilter implements ExceptionFilter {
   private getStatus(exception: unknown): number {
     if (exception instanceof HttpException) {
       return exception.getStatus();
+    }
+
+    if (isPostgresConnectionTimeout(exception)) {
+      return HttpStatus.SERVICE_UNAVAILABLE;
     }
 
     return HttpStatus.INTERNAL_SERVER_ERROR;

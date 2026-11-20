@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { In, Repository, FindOptionsWhere } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
+import { isPostgresConnectionTimeout } from '../../postgres-connection-timeout';
 import FileUpload from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import Persons from '../../entities/persons.entity';
@@ -177,6 +178,7 @@ export class WorkspacePlayerService {
       this.logger.warn(`No files found for player '${playerName}' in workspace ${workspaceId}`);
       return [];
     } catch (error) {
+      if (isPostgresConnectionTimeout(error)) throw error;
       this.logger.error(
         `Failed to retrieve files for player '${playerName}' in workspace ${workspaceId}`,
         getErrorStack(error)
@@ -203,6 +205,7 @@ export class WorkspacePlayerService {
       }
       return files;
     } catch (error) {
+      if (isPostgresConnectionTimeout(error)) throw error;
       this.logger.error(
         `Error retrieving unit definition for unit: ${unitId} in workspace: ${workspaceId}`,
         getErrorStack(error)

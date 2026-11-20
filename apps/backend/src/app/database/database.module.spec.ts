@@ -1,10 +1,30 @@
 import {
   buildPostgresConnectionOptions,
+  buildPostgresQueryLoggingOptions,
+  parsePostgresPoolAcquireTimeout,
   parsePostgresIdleInTransactionTimeout,
   parsePostgresPoolMax
 } from './database.module';
 
 describe('DatabaseModule configuration', () => {
+  it('only bounds pool acquisition and new connections when explicitly enabled', () => {
+    expect(parsePostgresPoolAcquireTimeout('2500')).toBe(2500);
+    expect(parsePostgresPoolAcquireTimeout(30000)).toBe(30000);
+    expect(parsePostgresPoolAcquireTimeout(' 2500 ')).toBe(2500);
+    for (const value of [undefined, '', ' ', '0', 0, '-1', '1.5', 'bad', 'Infinity', '2147483648']) {
+      expect(parsePostgresPoolAcquireTimeout(value)).toBe(0);
+    }
+  });
+
+  it('keeps the default logger and disables slow-query diagnostics unless explicitly enabled', () => {
+    for (const value of [undefined, '', '0', 0, '-1', 'bad']) {
+      expect(buildPostgresQueryLoggingOptions(value)).toEqual({});
+    }
+    expect(buildPostgresQueryLoggingOptions('1000')).toEqual({
+      logger: expect.objectContaining({ logQuerySlow: expect.any(Function) }),
+      maxQueryExecutionTime: 1000
+    });
+  });
   it('uses a positive configured PostgreSQL pool size', () => {
     expect(parsePostgresPoolMax('4')).toBe(4);
   });

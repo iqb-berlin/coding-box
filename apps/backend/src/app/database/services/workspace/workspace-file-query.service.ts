@@ -6,6 +6,7 @@ import {
 import * as path from 'path';
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
+import { isPostgresConnectionTimeout } from '../../postgres-connection-timeout';
 import FileUpload from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
@@ -255,6 +256,7 @@ export class WorkspaceFileQueryService {
         }
       ];
     } catch (error) {
+      if (isPostgresConnectionTimeout(error)) throw error;
       this.logger.error(`Error retrieving VOCS file: ${getErrorMessage(error)}`);
       return [];
     }
