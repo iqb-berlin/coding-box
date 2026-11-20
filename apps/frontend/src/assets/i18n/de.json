@@ -3944,6 +3944,11 @@
       "ignore-whitespace": "Leerzeichen ignoriert",
       "not-aggregated": "nicht aggregiert"
     },
+    "scheme-editor-dialog": {
+      "downgrade": "Speichern ist gesperrt. Die Datei hat die VOCS-Datenversion {{original}}, der Schemer hat Version {{returned}} zurückgegeben. Aktualisieren Sie den Schemer und öffnen Sie die Datei erneut.",
+      "unknown-version": "Speichern ist gesperrt. Der Schemer hat keine gültige VOCS-Datenversion zurückgegeben. Aktualisieren Sie den Schemer und öffnen Sie die Datei erneut.",
+      "check-reference": "Prüfen Sie auch die in der Unit hinterlegte Schemer-Referenz ({{schemer}})."
+    },
     "coding-jobs": {
       "filter-training": "Nach Training filtern",
       "all-trainings": "Alle Trainings",

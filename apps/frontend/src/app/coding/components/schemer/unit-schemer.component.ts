@@ -88,7 +88,8 @@ export class StandaloneUnitSchemerComponent implements AfterViewInit, OnDestroy 
               variables: this.currentUnitScheme().variables
             };
             this.currentUnitScheme.set(updatedScheme);
-            this.schemeChanged.emit(updatedScheme);
+            this.schemeChanged.emit(event.message.codingSchemeType ?
+              { ...updatedScheme, reportedSchemeType: event.message.codingSchemeType } : updatedScheme);
           }
         }
       });

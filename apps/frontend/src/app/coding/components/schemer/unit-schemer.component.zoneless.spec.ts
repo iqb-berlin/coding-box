@@ -93,6 +93,17 @@ describe('Embedded Schemer feedback without Zone.js', () => {
     expect(changed).toHaveBeenCalledWith({ scheme: 'edited', schemeType: 'type', variables });
     expect(sender).toHaveBeenLastCalledWith(expect.objectContaining({ codingScheme: 'edited', variables }), expect.anything());
 
+    changes$.next({
+      source,
+      origin: '',
+      message: {
+        type: 'vosSchemeChangedNotification', sessionId: 'schemer-session', codingScheme: 'legacy edit', codingSchemeType: 'iqb@1.2'
+      }
+    });
+    expect(changed).toHaveBeenLastCalledWith({
+      scheme: 'legacy edit', schemeType: 'iqb@1.2', reportedSchemeType: 'iqb@1.2', variables
+    });
+
     fixture.componentRef.setInput('unitScheme', { scheme: 'replacement', schemeType: 'new-type' });
     await fixture.whenStable();
     fixture.componentInstance.sendUnitScheme();

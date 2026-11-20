@@ -152,7 +152,7 @@ describe('SchemeEditorDialogComponent', () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     try {
       component.hasChanges.set(true);
-      component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
+      component.unitScheme.set({ scheme: '{"version":"3.4","variableCodings":[]}', schemeType: 'iqb@3.4' });
 
       // Mock getFilesList for Resource to find existing file
       (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }] }));
@@ -190,7 +190,7 @@ describe('SchemeEditorDialogComponent', () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     try {
       component.hasChanges.set(true);
-      component.unitScheme.set({ scheme: '{"updated": true}', schemeType: 'type1' });
+      component.unitScheme.set({ scheme: '{"version":"3.4","variableCodings":[]}', schemeType: 'iqb@3.4' });
 
       (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({
         data: [{ id: 'r1', filename: 'test-scheme.json', file_type: 'Resource' }]
@@ -230,6 +230,7 @@ describe('SchemeEditorDialogComponent', () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     try {
       component.hasChanges.set(true);
+      component.unitScheme.set({ scheme: '{"version":"3.4","variableCodings":[]}', schemeType: 'iqb@3.4' });
       (mockFileService.uploadTestFiles as jest.Mock).mockReturnValue(of({ failed: 1, conflicts: [] }));
 
       // Mock getFilesList for Resource to NOT find existing file
@@ -248,7 +249,7 @@ describe('SchemeEditorDialogComponent', () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     try {
       component.hasChanges.set(true);
-      component.unitScheme.set({ scheme: '{"new": true}', schemeType: 'type1' });
+      component.unitScheme.set({ scheme: '{"version":"3.4","variableCodings":[]}', schemeType: 'iqb@3.4' });
 
       // Mock getFilesList for Resource to NOT find existing file
       (mockFileService.getFilesList as jest.Mock).mockReturnValueOnce(of({ data: [] }));
