@@ -18,6 +18,10 @@ export interface ResolvedMissingValue {
   score: number | null;
 }
 
+export type SnapshotMissingResolver = (
+  profileId: number | null, selector: { id: string } | { code: number }
+) => ResolvedMissingValue;
+
 export interface ResolvedMissingsProfile {
   id: number;
   label: string;
@@ -359,6 +363,38 @@ export class MissingsProfilesService {
       label: missing.label,
       code,
       score
+    };
+  }
+
+  /** Resolve lazily from one read-only snapshot, without enriching stored defaults. */
+  async getMissingResolverForSnapshot(
+    workspaceId: number, manager: EntityManager
+  ): Promise<SnapshotMissingResolver> {
+    const entities = await manager.getRepository(MissingsProfile).find({ where: { workspace_id: workspaceId } });
+    const profiles = new Map(entities.map(entity => [entity.id, this.toDto(entity)]));
+    const defaultProfile = entities.find(entity => entity.label === this.defaultProfileLabel);
+    const missingsByProfile = new Map<number | null, MissingDto[]>();
+    return (profileId, selector) => {
+      const id = profileId === null || profileId === 0 ? defaultProfile?.id ?? null : profileId;
+      if (id !== null && (!Number.isInteger(id) || id < 1)) {
+        throw new BadRequestException(`Invalid missings profile id: ${id}`);
+      }
+      let missings = missingsByProfile.get(id);
+      if (!missings) {
+        const profile = id === null ? this.createDefaultMissingsProfile() : profiles.get(id);
+        if (!profile) throw new BadRequestException(`Missing profile ${id} not found`);
+        missings = (profile.label === this.defaultProfileLabel ?
+          this.synchronizeIqbStandardProfile(profile).profile : profile).parseMissings();
+        missingsByProfile.set(id, missings);
+      }
+      const missing = 'id' in selector ?
+        missings.find(entry => entry.id === selector.id) :
+        missings.find(entry => Number(entry.code) === selector.code);
+      if (!missing) {
+        const description = 'id' in selector ? `'${selector.id}'` : `code ${selector.code}`;
+        throw new BadRequestException(`Missing ${description} not found in profile ${id}`);
+      }
+      return this.assertMissingHasScore(missing);
     };
   }
 

@@ -8,6 +8,7 @@ import {
   Param,
   Res,
   Req,
+  ServiceUnavailableException,
   UseGuards
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -15,6 +16,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiParam,
+  ApiServiceUnavailableResponse,
   ApiTags
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
@@ -38,6 +40,7 @@ import {
 import FileUpload from '../../database/entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { ReplayErrorDto } from '../../../../../../api-dto/coding/replay-error.dto';
+import { isPostgresConnectionTimeout } from '../../database/postgres-connection-timeout';
 
 interface ReplayUnitResponsePayload {
   responses: {
@@ -138,6 +141,7 @@ export class WorkspaceCodingReplayController {
     description: 'A required replay resource was not found.',
     type: ReplayErrorDto
   })
+  @ApiServiceUnavailableResponse({ description: 'The optional PostgreSQL connection deadline was exceeded.' })
   async getReplayPayload(
     @WorkspaceId() workspaceId: number,
     @Param('testPerson') testPerson: string,
@@ -198,6 +202,7 @@ export class WorkspaceCodingReplayController {
     description: 'A required replay asset was not found.',
     type: ReplayErrorDto
   })
+  @ApiServiceUnavailableResponse({ description: 'The optional PostgreSQL connection deadline was exceeded.' })
   async getReplayAssets(
     @WorkspaceId() workspaceId: number,
     @Param('unitId') unitId: string,
@@ -250,6 +255,7 @@ export class WorkspaceCodingReplayController {
     description: 'A required replay response resource was not found.',
     type: ReplayErrorDto
   })
+  @ApiServiceUnavailableResponse({ description: 'The optional PostgreSQL connection deadline was exceeded.' })
   async getReplayResponse(
     @WorkspaceId() workspaceId: number,
     @Param('testPerson') testPerson: string,
@@ -431,6 +437,10 @@ export class WorkspaceCodingReplayController {
 
     if (error instanceof HttpException) {
       throw error;
+    }
+
+    if (isPostgresConnectionTimeout(error)) {
+      throw new ServiceUnavailableException('Database temporarily unavailable', { cause: error });
     }
 
     const errorMessage = error instanceof Error ? error.message : String(error);

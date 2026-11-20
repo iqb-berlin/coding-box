@@ -7,6 +7,7 @@ import { parseStringPromise } from 'xml2js';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
+import { isPostgresConnectionTimeout } from '../../postgres-connection-timeout';
 import { UnitVariableDetailsDto, VariableDetailDto, VariableValueInfo } from '../../../models/unit-variable-details.dto';
 import { CacheService } from '../../../cache/cache.service';
 import { isExcludedByResolvedExclusions, normalizeExclusionUnitId, WorkspaceExclusionService } from './workspace-exclusion.service';
@@ -339,10 +340,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
       `Refreshing unit variable cache for workspace ${workspaceId}`
     );
 
-    const derivedMetadataCompleteKey = this.getCacheKey(
-      workspaceId,
-      'derived_variable_metadata_complete'
-    );
+    const derivedMetadataCompleteKey = this.getCacheKey(workspaceId, 'derived_variable_metadata_complete');
     let derivedMetadataComplete = true;
 
     try {
@@ -795,19 +793,21 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
             .join(' | ')}`
       );
     } catch (error) {
-      this.logger.error(
-        `Error refreshing unit variable cache for workspace ${workspaceId}: ${getErrorMessage(error)}`,
-        getErrorStack(error)
-      );
-      try {
-        await this.cacheService.set(derivedMetadataCompleteKey, false);
-      } catch (cacheError) {
-        this.logger.error(
-          `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${getErrorMessage(cacheError)}`,
-          getErrorStack(cacheError)
-        );
-      }
+      await this.handleMetadataRefreshFailure(workspaceId, derivedMetadataCompleteKey, error);
     }
+  }
+
+  private async handleMetadataRefreshFailure(workspaceId: number, completenessKey: string, error: unknown): Promise<void> {
+    this.logger.error(`Error refreshing unit variable cache for workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
+    try {
+      await this.cacheService.set(completenessKey, false);
+    } catch (cacheError) {
+      this.logger.error(
+        `Could not mark derived-variable metadata as unavailable for workspace ${workspaceId}: ${getErrorMessage(cacheError)}`,
+        getErrorStack(cacheError)
+      );
+    }
+    if (isPostgresConnectionTimeout(error)) throw error;
   }
 
   async getUnitVariableMap(

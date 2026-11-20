@@ -2,10 +2,8 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import User from './entities/user.entity';
-import Logs from './entities/logs.entity';
 import Persons from './entities/persons.entity';
 import Workspace from './entities/workspace.entity';
-import WorkspaceAdmin from './entities/workspace-admin.entity';
 import FileUpload from './entities/file_upload.entity';
 import WorkspaceUser from './entities/workspace_user.entity';
 import ResourcePackage from './entities/resource-package.entity';
@@ -45,6 +43,7 @@ import { SystemNotification } from './entities/system-notification.entity';
 import { DoubleCodingReviewDecision } from './entities/double-coding-review-decision.entity';
 import { TestcenterImportRun } from './entities/testcenter-import-run.entity';
 import { RuntimeConfigModule } from '../config/runtime-config.module';
+import { QueryPerformanceLogger } from './query-performance.logger';
 import {
   RuntimeConfigService,
   parsePositiveInteger
@@ -52,6 +51,28 @@ import {
 
 export function parsePostgresPoolMax(value: string | number | undefined, fallback = 10): number {
   return parsePositiveInteger(value, fallback);
+}
+
+function parseOptionalPostgresMilliseconds(value: string | number | undefined): number {
+  const normalizedValue = String(value ?? '').trim();
+  if (!/^\d+$/.test(normalizedValue)) return 0;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= 0 && parsed <= 2_147_483_647 ? parsed : 0;
+}
+
+export function parsePostgresPoolAcquireTimeout(value: string | number | undefined): number {
+  // pg uses Node timers for pool acquisition as well as establishing a connection.
+  // Zero preserves pg's unlimited wait; only an explicit positive value opts in.
+  return parseOptionalPostgresMilliseconds(value);
+}
+
+export function buildPostgresQueryLoggingOptions(value: string | number | undefined): {
+  logger?: QueryPerformanceLogger;
+  maxQueryExecutionTime?: number;
+} {
+  const maxQueryExecutionTime = parseOptionalPostgresMilliseconds(value);
+  // Preserve TypeORM's default logger unless slow-query diagnostics are enabled.
+  return maxQueryExecutionTime > 0 ? { logger: new QueryPerformanceLogger(), maxQueryExecutionTime } : {};
 }
 
 export function parsePostgresIdleInTransactionTimeout(
@@ -104,11 +125,9 @@ export function buildPostgresConnectionOptions(
           ResponseEntity,
           User,
           Workspace,
-          WorkspaceAdmin,
           FileUpload,
           WorkspaceUser,
           ResourcePackage,
-          Logs,
           Persons,
           ChunkEntity,
           UnitTag,
@@ -139,8 +158,12 @@ export function buildPostgresConnectionOptions(
           TestcenterImportRun
         ],
         synchronize: false,
+        ...buildPostgresQueryLoggingOptions(configService.get('POSTGRES_SLOW_QUERY_MS')),
         extra: {
           max: runtimeConfig.postgresPoolMax,
+          connectionTimeoutMillis: parsePostgresPoolAcquireTimeout(
+            configService.get('POSTGRES_POOL_ACQUIRE_TIMEOUT_MS')
+          ),
           options: buildPostgresConnectionOptions(
             configService.get<string>('PGOPTIONS'),
             configService.get<string>('POSTGRES_IDLE_IN_TRANSACTION_TIMEOUT_MS')

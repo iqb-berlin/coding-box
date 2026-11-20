@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { EntityManager, In, Repository } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -11,12 +11,13 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { DoubleCodingReviewDecision } from '../../entities/double-coding-review-decision.entity';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { getCodingReviewCapabilities } from '../shared/coding-ownership.policy';
+import { readPostgresQueryBatches } from '../shared/postgres-query-batches.util';
 import {
   applyResolvedExclusionsToQuery,
   isExcludedByResolvedExclusions,
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
-import { MissingsProfilesService, ResolvedMissingValue } from './missings-profiles.service';
+import { MissingsProfilesService, ResolvedMissingValue, SnapshotMissingResolver } from './missings-profiles.service';
 import {
   applyNonCodingIssueReviewJobFilter,
   isCodingIssueReviewJobType
@@ -190,14 +191,14 @@ export class DoubleCodingReviewQueryService {
     return pending;
   }
 
-  private async resolveKappaCodeAndScore(
-    workspaceId: number,
+  private resolveKappaCodeAndScore(
     code: number | null,
     score: number | null,
     codingIssueOption: number | null,
     missingsProfileId: number | null,
-    cache: Map<string, ResolvedMissingValue>
-  ): Promise<{ code: number | null; score: number | null }> {
+    cache: Map<string, ResolvedMissingValue>,
+    resolveMissing: SnapshotMissingResolver
+  ): { code: number | null; score: number | null } {
     if (code === -1 || code === -2) {
       return { code: null, score: null };
     }
@@ -208,11 +209,7 @@ export class DoubleCodingReviewQueryService {
       const cacheKey = `${missingsProfileId ?? 'default'}:id:${missingId}`;
       let missing = cache.get(cacheKey);
       if (!missing) {
-        missing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
-          workspaceId,
-          missingsProfileId,
-          missingId
-        );
+        missing = resolveMissing(missingsProfileId, { id: missingId });
         cache.set(cacheKey, missing);
       }
       return {
@@ -225,11 +222,7 @@ export class DoubleCodingReviewQueryService {
       const cacheKey = `${missingsProfileId ?? 'default'}:code:${code}`;
       let missing = cache.get(cacheKey);
       if (!missing) {
-        missing = await this.missingsProfilesService.getMissingByCodeForProfileOrDefault(
-          workspaceId,
-          missingsProfileId,
-          code
-        );
+        missing = resolveMissing(missingsProfileId, { code });
         cache.set(cacheKey, missing);
       }
       return {
@@ -1037,25 +1030,21 @@ export class DoubleCodingReviewQueryService {
     }>();
     const coderResultIndexByItemKey = new Map<string, Map<number, number>>();
     const missingValueCache = new Map<string, ResolvedMissingValue>();
-    let offset = 0;
-    let hasMoreRows = true;
-
-    while (hasMoreRows) {
-      const rows = await query
-        .offset(offset)
-        .limit(batchSize)
-        .getRawMany<KappaCodedVariableRow>();
-
+    let resolveMissing: SnapshotMissingResolver | undefined;
+    const prepareSnapshot = async (manager: EntityManager) => {
+      resolveMissing = await this.missingsProfilesService.getMissingResolverForSnapshot(workspaceId, manager);
+    };
+    for await (const rows of readPostgresQueryBatches<KappaCodedVariableRow>(query, batchSize, prepareSnapshot)) {
       for (const row of rows) {
         const responseId = Number(row.responseId);
         const coderId = Number(row.coderId);
-        const codeAndScore = await this.resolveKappaCodeAndScore(
-          workspaceId,
+        const codeAndScore = this.resolveKappaCodeAndScore(
           this.toNullableNumber(row.code),
           this.toNullableNumber(row.score),
           this.toNullableNumber(row.codingIssueOption),
           this.toNullableNumber(row.missingsProfileId),
-          missingValueCache
+          missingValueCache,
+          resolveMissing!
         );
         const hasCalculationLevelValue = calculationLevel === 'score' ?
           codeAndScore.score !== null :
@@ -1111,9 +1100,6 @@ export class DoubleCodingReviewQueryService {
           group.coderResults[existingResultIndex] = coderResult;
         }
       }
-
-      offset += batchSize;
-      hasMoreRows = rows.length === batchSize;
     }
 
     return Array.from(groups.values()).map(group => ({

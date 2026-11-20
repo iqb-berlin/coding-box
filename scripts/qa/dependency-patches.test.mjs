@@ -3,12 +3,66 @@ import { createRequire } from 'node:module';
 import { readFileSync, realpathSync } from 'node:fs';
 import { test } from 'node:test';
 import { spawnSync } from 'node:child_process';
+import { fileURLToPath } from 'node:url';
 import './http-dependency-patches.test.mjs';
 
 const require = createRequire(new URL('../../package.json', import.meta.url));
 const braces = require('braces');
 const micromatch = require('micromatch');
+const picomatch = require('picomatch');
 const lock = require('./package-lock.json');
+
+test('picomatch consumers resolve the local security patch', () => {
+  const expected = realpathSync(require.resolve('picomatch'));
+  assert.equal(require('picomatch/package.json').name, '@coding-box/picomatch-patched');
+  assert.equal(expected, fileURLToPath(new URL('../../vendor/picomatch/index.js', import.meta.url)));
+  const consumers = Object.entries(lock.packages).filter(([location, entry]) =>
+    location && (entry.dependencies?.picomatch || entry.peerDependencies?.picomatch));
+  assert.ok(consumers.length > 0);
+  for (const [location] of consumers) {
+    const consumer = createRequire(new URL(`../../${location}/package.json`, import.meta.url));
+    assert.equal(realpathSync(consumer.resolve('picomatch')), expected, location);
+  }
+});
+
+test('picomatch unescapes the base and preserves escapes inside bracket expressions', () => {
+  const { base, glob } = picomatch.scan(String.raw`dir/a\*/[x\-y]/*.ts`, { unescape: true });
+  assert.equal(base, 'dir/a*');
+  assert.equal(glob, String.raw`[x\-y]/*.ts`);
+
+  const { removeBackslashes } = require('picomatch/lib/utils');
+  assert.equal(removeBackslashes(String.raw`[a\]b]\*`), String.raw`[a\]b]*`);
+  assert.equal(removeBackslashes(String.raw`[]\*`), '[]*');
+  assert.equal(removeBackslashes('path\\'), 'path\\');
+  for (const newline of ['\r', '\n', '\u2028', '\u2029']) {
+    assert.equal(removeBackslashes(`[a\\b${newline}]\\c`), `[a\\b${newline}]c`);
+    assert.equal(removeBackslashes(`[a\\b\\${newline}x]\\c`), `[ab\\${newline}x]c`);
+  }
+});
+
+test('picomatch falls back to literal matching for wildcards inside repeated extglobs', () => {
+  for (const operator of ['+', '*']) {
+    const pattern = `src/${operator}(part-*).ts`;
+    const matches = picomatch(pattern);
+    assert.equal(matches(pattern), true);
+    assert.equal(matches('src/part-example.ts'), false);
+  }
+});
+
+test('picomatch preserves ordinary globs and repeated literal extglobs', () => {
+  for (const [pattern, matching, nonmatching] of [
+    ['src/**/[a-z]*.{ts,tsx}', 'src/app/page.tsx', 'src/app/page.js'],
+    ['src/+(unit|integration).spec.ts', 'src/unitintegration.spec.ts', 'src/unit.integration.spec.ts'],
+    ['src/+(*(a)|*(b)).ts', 'src/abba.ts', 'src/abc.ts'],
+    ['src/+([*]).ts', 'src/**.ts', 'src/xx.ts'],
+    [String.raw`src/+(\*).ts`, 'src/**.ts', 'src/xx.ts'],
+    ['src/+("*").ts', 'src/**.ts', 'src/xx.ts']
+  ]) {
+    const matches = picomatch(pattern);
+    assert.equal(matches(matching), true, pattern);
+    assert.equal(matches(nonmatching), false, pattern);
+  }
+});
 
 test('all installed brace consumers resolve the security patch', () => {
   const expected = realpathSync(require.resolve('braces'));
