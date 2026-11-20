@@ -21,17 +21,19 @@ import {
   ApiBearerAuth,
   ApiConsumes,
   ApiConflictResponse,
+  ApiExtraModels,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
   ApiTags,
-  ApiBadRequestResponse
+  ApiBadRequestResponse,
+  getSchemaPath
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
-import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
@@ -58,6 +60,7 @@ export class WorkspaceFilesController {
   ) { }
 
   @Get(':workspace_id/files')
+  @ApiExtraModels(FilesInListDto)
   @ApiTags('admin workspace')
   @ApiBearerAuth()
   @ApiOperation({
@@ -78,7 +81,7 @@ export class WorkspaceFilesController {
       properties: {
         data: {
           type: 'array',
-          items: { $ref: '#/components/schemas/FilesDto' }
+          items: { $ref: getSchemaPath(FilesInListDto) }
         },
         total: { type: 'number' },
         page: { type: 'number' },
@@ -104,7 +107,7 @@ export class WorkspaceFilesController {
     @Query('searchText') searchText?: string,
     @Query('regexSearch', new ParseBoolPipe({ optional: true })) regexSearch?: boolean
   ): Promise<{
-    data: FilesDto[];
+    data: FilesInListDto[];
     total: number;
     page: number;
     limit: number;

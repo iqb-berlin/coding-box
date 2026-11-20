@@ -138,10 +138,29 @@ describe('Schemer preview without Zone.js', () => {
     filesResponse$.complete();
   }
 
+  async function loadPreview(content = '{"variableCodings":[],"version":"3.4"}'): Promise<void> {
+    await createPreview({ ...mockData, content });
+    list();
+    downloadResponse$.next({ base64Data: btoa('<html lang="en"></html>') });
+    downloadResponse$.complete();
+    await fixture.whenStable();
+  }
+
+  function reportVersion(version: string): void {
+    component.onSchemeChanged({
+      scheme: JSON.stringify({ variableCodings: [], version, label: 'updated' }),
+      schemeType: 'iqb@3.4'
+    });
+  }
+
+  function saveButton(): HTMLButtonElement {
+    return fixture.nativeElement.querySelector('mat-dialog-actions button:last-child');
+  }
+
   it('keeps the coding status action usable after a successful save closes the editor', async () => {
     await createPreview();
     list([]);
-    component.onSchemeChanged({ scheme: '{"updated":true}', schemeType: 'iqb@3.0' });
+    reportVersion('3.0');
     jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
     component.save();
     expect(mockDialogRef.close).toHaveBeenCalledWith(true);
@@ -158,7 +177,7 @@ describe('Schemer preview without Zone.js', () => {
   it('releases a dismissed coding status action without retaining its editor', async () => {
     await createPreview();
     list([]);
-    component.onSchemeChanged({ scheme: '{"updated":true}', schemeType: 'iqb@3.0' });
+    reportVersion('3.0');
     jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
     component.save();
     fixture.destroy();
@@ -181,6 +200,105 @@ describe('Schemer preview without Zone.js', () => {
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('pre.raw-json')).toBeNull();
     expect(fixture.nativeElement.querySelector('coding-box-unit-schemer')).not.toBeNull();
+  });
+
+  it('uses the VOCS version for the scheme type while retaining the explicit Schemer selection', async () => {
+    await loadPreview();
+    expect(mockFileService.downloadFile).toHaveBeenCalledWith(1, 25);
+    expect(component.unitScheme().schemeType).toBe('iqb@3.4');
+  });
+
+  it('prevents a downgrade even if the Schemer reports the original scheme type', async () => {
+    await loadPreview();
+    reportVersion('3.3');
+    reportVersion('3.2');
+    await fixture.whenStable();
+
+    expect(saveButton().disabled).toBe(true);
+    expect(fixture.nativeElement.querySelector('.save-warning[role="alert"]')).not.toBeNull();
+    component.save();
+    expect(mockFileService.getFilesList).not.toHaveBeenCalledWith(1, 1, 10000, 'Resource');
+    expect(mockFileService.uploadTestFiles).not.toHaveBeenCalled();
+  });
+
+  it.each(['3.4', '3.10', '4.0'])('allows saving VOCS version %s after a blocked response', async version => {
+    await loadPreview();
+    reportVersion('3.3');
+    reportVersion(version);
+    await fixture.whenStable();
+    expect(saveButton().disabled).toBe(false);
+    expect(fixture.nativeElement.querySelector('.save-warning')).toBeNull();
+
+    jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
+    saveButton().click();
+    expect(mockFileService.uploadTestFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['{"variableCodings":[]}', '{"version":"invalid"}', '{"version":"3.4.0","variableCodings":[]}', 'invalid JSON'])(
+    'blocks a response without a usable format version (%s)',
+    async scheme => {
+      await loadPreview();
+      component.onSchemeChanged({ scheme, schemeType: 'iqb@3.4' });
+      await fixture.whenStable();
+      expect(saveButton().disabled).toBe(true);
+
+      component.save();
+      expect(mockFileService.uploadTestFiles).not.toHaveBeenCalled();
+    }
+  );
+
+  it('allows an unversioned legacy file to be edited when the Schemer explicitly reports the legacy format', async () => {
+    await loadPreview('{"variableCodings":[]}');
+    component.onSchemeChanged({
+      scheme: '{"variableCodings":[{"id":"VAR_01","sourceType":"BASE","codes":[]}]}',
+      schemeType: 'iqb@1.2',
+      reportedSchemeType: 'iqb@1.2'
+    });
+    await fixture.whenStable();
+    expect(saveButton().disabled).toBe(false);
+
+    jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(of({ data: [] }) as never);
+    saveButton().click();
+    expect(mockFileService.uploadTestFiles).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([
+    ['{"variableCodings":[]}', '{"variableCodings":[{"id":"VAR_01","sourceType":"BASE","codes":[]}]}', undefined],
+    ['{"variableCodings":[]}', '{"variableCodings":[null]}', 'iqb@1.2'],
+    ['{"version":"3.4","variableCodings":[]}', '{"variableCodings":[]}', 'iqb@1.2']
+  ])(
+    'rejects a legacy reply without matching format evidence (original %s, reply %s, reported type %s)',
+    async (original, scheme, reportedSchemeType) => {
+      await loadPreview(original);
+      component.onSchemeChanged({ scheme, schemeType: 'iqb@1.2', reportedSchemeType });
+      await fixture.whenStable();
+      expect(saveButton().disabled).toBe(true);
+
+      component.save();
+      expect(mockFileService.uploadTestFiles).not.toHaveBeenCalled();
+    }
+  );
+
+  it('rechecks the version when the file list returns before uploading', async () => {
+    await loadPreview();
+    reportVersion('3.4');
+    const resources$ = new Subject<{ data: [] }>();
+    jest.mocked(mockFileService.getFilesList!).mockReturnValueOnce(resources$ as never);
+    component.save();
+    reportVersion('3.3');
+    resources$.next({ data: [] });
+    resources$.complete();
+    expect(mockFileService.uploadTestFiles).not.toHaveBeenCalled();
+  });
+
+  it('closes without saving after the Schemer echoes the original file', async () => {
+    await loadPreview();
+    component.onSchemeChanged({ ...component.unitScheme() });
+    await fixture.whenStable();
+    expect(saveButton().disabled).toBe(true);
+    component.close();
+    expect(mockDialogRef.close).toHaveBeenCalledWith(false);
+    expect(mockFileService.uploadTestFiles).not.toHaveBeenCalled();
   });
 
   it('explains a missing reference and renders the raw JSON after an empty result', async () => {

@@ -4,6 +4,7 @@ import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import type { DerivedVariableMetadataSnapshot } from './workspace-file-metadata-reader.token';
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
+import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
@@ -54,7 +55,7 @@ export class WorkspaceFilesService {
       searchText?: string;
       regexSearch?: boolean;
     }
-  ): Promise<[FilesDto[], number, string[]]> {
+  ): Promise<[FilesInListDto[], number, string[]]> {
     return this.query.findFiles(workspaceId, options);
   }
 

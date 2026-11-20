@@ -962,6 +962,7 @@ describe('WorkspaceFilesService.findFiles', () => {
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
+    addSelect: jest.fn().mockReturnThis(),
     orderBy: jest.fn().mockReturnThis(),
     skip: jest.fn().mockReturnThis(),
     take: jest.fn().mockReturnThis(),
@@ -1025,6 +1026,25 @@ describe('WorkspaceFilesService.findFiles', () => {
       'LOWER(file.filename) LIKE :extension',
       { extension: '%.vocs' }
     );
+    expect(mockQueryBuilder.addSelect).not.toHaveBeenCalled();
+  });
+
+  it('returns the full Schemer version without exposing other stored metadata', async () => {
+    const beta = {
+      id: 1, filename: 'renamed.html', file_id: 'IQB-SCHEMER-2.9.0', file_type: 'Schemer'
+    };
+    const legacy = {
+      id: 2, filename: 'legacy.html', file_id: 'IQB-SCHEMER-1.5.0', file_type: 'Schemer'
+    };
+    mockQueryBuilder.getManyAndCount.mockResolvedValueOnce([[
+      { ...beta, structured_data: { metadata: { version: '2.9.0-beta.3', name: 'Schemer' } } },
+      { ...legacy, structured_data: null }
+    ], 2]);
+
+    const result = await mockService().findFiles(1, { page: 1, limit: 20, fileType: 'Schemer' });
+
+    expect(mockQueryBuilder.addSelect).toHaveBeenCalledWith('file.structured_data');
+    expect(result).toEqual([[{ ...beta, schemerVersion: '2.9.0-beta.3' }, legacy], 2, []]);
   });
 
   it('should use a case-sensitive regex search when enabled', async () => {

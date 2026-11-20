@@ -40,7 +40,42 @@ describe('coding scheme references', () => {
     expect(selectSchemerFile(prerelease, 'iqb-schemer@2.5.3-beta')?.id).toBe(1);
   });
 
-  it('retains the newest-upload fallback for files without a Schemer reference', () => {
-    expect(selectSchemerFile(files)?.id).toBe(99);
+  it('selects the highest stable IQB Schemer without a reference, regardless of upload time', () => {
+    const candidates = [
+      { id: 1, filename: 'iqb-schemer@2.9.12.html', created_at: '2026-11-16' },
+      {
+        id: 2, filename: 'renamed.html', file_id: 'IQB-SCHEMER-2.10.1+build.2', created_at: '2026-10-16'
+      },
+      { id: 3, filename: 'iqb-schemer@2.10.0.html', created_at: '2026-11-17' },
+      {
+        id: 4, filename: 'iqb-schemer@3.0.0-beta.1.html', file_id: 'IQB-SCHEMER-3.0.0', created_at: '2026-11-18'
+      },
+      { id: 5, filename: 'other-schemer@9.0.0.html', created_at: '2026-11-19' }
+    ];
+    expect(selectSchemerFile(candidates)?.id).toBe(2);
+  });
+
+  it('keeps older installations with unversioned Schemer filenames usable', () => {
+    expect(selectSchemerFile([
+      { id: 1, filename: 'old-schemer.html', created_at: '2026-10-16' },
+      { id: 2, filename: 'schemer.html', created_at: '2026-11-16' }
+    ])?.id).toBe(2);
+  });
+
+  it('keeps a renamed prerelease out of stable selection and matches its full reference', () => {
+    const stable = { id: 1, filename: 'iqb-schemer@2.8.5.html', file_id: 'IQB-SCHEMER-2.8.5' };
+    const beta = {
+      id: 2, filename: 'schemer-next.html', file_id: 'IQB-SCHEMER-2.9.0', schemerVersion: '2.9.0-beta.3'
+    };
+    expect(selectSchemerFile([stable, beta])?.id).toBe(1);
+    expect(selectSchemerFile([stable, beta], 'iqb-schemer@2.9.0-beta.3')?.id).toBe(2);
+    expect(selectSchemerFile([stable, beta], 'iqb-schemer@2.9.0')).toBeUndefined();
+  });
+
+  it('matches the normalized patch for older Schemer metadata with only a major and minor', () => {
+    const old = {
+      id: 1, filename: 'iqb-schemer@2.2.html', file_id: 'IQB-SCHEMER-2.2.0', schemerVersion: '2.2'
+    };
+    expect(selectSchemerFile([old], 'iqb-schemer@2.2.0')?.id).toBe(1);
   });
 });

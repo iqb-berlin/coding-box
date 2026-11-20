@@ -16,7 +16,7 @@ import { MatDivider } from '@angular/material/divider';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { Router } from '@angular/router';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
-import { selectSchemerFile } from '../../utils/coding-scheme-reference';
+import { compareVersions, readVocsFormat, selectSchemerFile } from '../../utils/coding-scheme-reference';
 import { UnitCodingSchemeRefDto } from '../../../../../../../api-dto/unit-info/unit-coding-scheme-ref.dto';
 import { StandaloneUnitSchemerComponent } from '../schemer/unit-schemer.component';
 import { UnitScheme } from '../schemer/unit-scheme.interface';
@@ -70,10 +70,24 @@ export interface SchemeEditorDialogData {
       }
     </mat-dialog-content>
     <mat-divider></mat-divider>
+    @if (saveBlock(); as block) {
+      <div class="save-warning" role="alert">
+        @if (block.reason === 'downgrade') {
+          {{ 'ui-text.scheme-editor-dialog.downgrade' | translate:block.versions }}
+        } @else {
+          {{ 'ui-text.scheme-editor-dialog.unknown-version' | translate }}
+        }
+        @if (referencedSchemer(); as reference) {
+          <div>{{ 'ui-text.scheme-editor-dialog.check-reference' | translate:{ schemer: reference } }}</div>
+        }
+      </div>
+    }
     <mat-dialog-actions align="end">
       <button mat-button (click)="close()">{{ 'close' | translate }}</button>
       @if (!data.readOnly) {
-        <button mat-button color="primary" [disabled]="!hasChanges()" (click)="save()">{{ 'save' | translate }}</button>
+        <button mat-button color="primary" [disabled]="!hasChanges() || !!saveBlock()" (click)="save()">
+          {{ 'save' | translate }}
+        </button>
       }
     </mat-dialog-actions>
   `,
@@ -122,6 +136,10 @@ export interface SchemeEditorDialogData {
       margin: 0 !important;
       padding: 0 !important;
     }
+
+    .save-warning {
+      padding: 8px 16px 0;
+    }
   `]
 })
 export class SchemeEditorDialogComponent implements OnInit {
@@ -136,14 +154,33 @@ export class SchemeEditorDialogComponent implements OnInit {
   private router = inject(Router);
 
   private readonly destroyRef = inject(DestroyRef);
+  private readonly originalFormat = readVocsFormat(this.data.content);
   protected readonly loadError = signal('');
+  protected readonly referencedSchemer = signal<string | undefined>(undefined);
   readonly schemerHtml = signal('');
   readonly isLoading = signal(true);
   readonly hasChanges = signal(false);
 
   readonly unitScheme = signal<UnitScheme>({
     scheme: '',
-    schemeType: 'iqb-standard@3.2'
+    schemeType: ''
+  });
+
+  protected readonly saveBlock = computed(() => {
+    if (!this.hasChanges()) return null;
+    const { scheme, reportedSchemeType } = this.unitScheme();
+    const returnedFormat = readVocsFormat(scheme);
+    if (this.originalFormat.kind === 'legacy' && returnedFormat.kind === 'legacy' && reportedSchemeType === 'iqb@1.2') {
+      return null;
+    }
+    if (returnedFormat.kind !== 'versioned') return { reason: 'unknown-version' } as const;
+    if (this.originalFormat.kind === 'versioned' && compareVersions(returnedFormat, this.originalFormat) < 0) {
+      return {
+        reason: 'downgrade',
+        versions: { original: this.originalFormat.value, returned: returnedFormat.value }
+      } as const;
+    }
+    return null;
   });
 
   readonly prettyScheme = computed<string>(() => {
@@ -160,7 +197,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   ngOnInit(): void {
     this.unitScheme.set({
       scheme: this.data.content,
-      schemeType: this.data.codingSchemeRef?.schemeType || this.inferSchemeType()
+      schemeType: this.resolveSchemeType(this.data.codingSchemeRef)
     });
     this.loadSchemerHtml();
     this.fileService.getVariableInfoForScheme(this.data.workspaceId, this.data.fileName)
@@ -184,14 +221,9 @@ export class SchemeEditorDialogComponent implements OnInit {
       });
   }
 
-  private inferSchemeType(): string {
-    try {
-      const { version } = JSON.parse(this.data.content);
-      if (typeof version === 'string' && /^\d+\.\d+$/.test(version)) return `iqb@${version}`;
-    } catch {
-      // Keep a readable preview for invalid or older schemes.
-    }
-    return 'iqb-standard@3.2';
+  private resolveSchemeType(reference?: UnitCodingSchemeRefDto): string {
+    if (this.originalFormat.kind === 'versioned') return `iqb@${this.originalFormat.value}`;
+    return reference?.schemeType || 'iqb-standard@3.2';
   }
 
   loadSchemerHtml(): void {
@@ -208,7 +240,8 @@ export class SchemeEditorDialogComponent implements OnInit {
 
     reference$.pipe(
       switchMap(reference => {
-        if (reference?.schemeType) this.unitScheme.set({ ...this.unitScheme(), schemeType: reference.schemeType });
+        this.referencedSchemer.set(reference?.schemer);
+        this.unitScheme.update(scheme => ({ ...scheme, schemeType: this.resolveSchemeType(reference) }));
         return this.fileService.getFilesList(this.data.workspaceId, 1, 10000, 'Schemer').pipe(
           switchMap(response => {
             const file = selectSchemerFile(response.data || [], reference?.schemer);
@@ -250,7 +283,7 @@ export class SchemeEditorDialogComponent implements OnInit {
       scheme.variables = this.unitScheme().variables;
     }
     this.unitScheme.set(scheme);
-    this.hasChanges.set(true);
+    this.hasChanges.set(scheme.scheme !== this.data.content);
   }
 
   onError(error: string): void {
@@ -284,6 +317,7 @@ export class SchemeEditorDialogComponent implements OnInit {
   }
 
   save(): void {
+    if (this.data.readOnly || this.saveBlock()) return;
     if (!this.hasChanges()) {
       this.dialogRef.close(false);
       return;
@@ -311,6 +345,7 @@ export class SchemeEditorDialogComponent implements OnInit {
     overwriteExisting: boolean = false,
     overwriteFileIds?: string[]
   ): void {
+    if (!this.hasChanges() || this.saveBlock()) return;
     const blob = new Blob([this.unitScheme().scheme], { type: 'application/octet-stream' });
     const file = new File([blob], filename, { type: 'application/octet-stream' });
 

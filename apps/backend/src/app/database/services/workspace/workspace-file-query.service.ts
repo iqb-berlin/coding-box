@@ -8,6 +8,7 @@ import { WorkspaceFileMetadataService } from './workspace-file-metadata.service'
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
+import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { assertValidRegexSearchPattern, withRegexSearchStatementTimeout } from '../../../utils/regex-search.util';
@@ -95,7 +96,7 @@ export class WorkspaceFileQueryService {
       searchText?: string;
       regexSearch?: boolean;
     }
-  ): Promise<[FilesDto[], number, string[]]> {
+  ): Promise<[FilesInListDto[], number, string[]]> {
     this.logger.log(`Fetching test files for workspace: ${workspaceId}`);
     const {
       page = 1,
@@ -111,7 +112,7 @@ export class WorkspaceFileQueryService {
 
     const runFindFiles = async (
       queryRunner?: QueryRunner
-    ): Promise<[FilesDto[], number, string[]]> => {
+    ): Promise<[FilesInListDto[], number, string[]]> => {
       let qb = this.fileUploadRepository
         .createQueryBuilder('file', queryRunner)
         .where('file.workspace_id = :workspaceId', { workspaceId });
@@ -164,6 +165,7 @@ export class WorkspaceFileQueryService {
         .skip((validPage - 1) * validLimit)
         .take(validLimit);
 
+      if (fileType === 'Schemer') qb.addSelect('file.structured_data');
       const [files, total] = await qb.getManyAndCount();
       this.logger.log(
         `Found ${files.length} files (page ${validPage}, limit ${validLimit}, total ${total}).`
@@ -171,7 +173,11 @@ export class WorkspaceFileQueryService {
 
       const fileTypes = await this.findAllFileTypes(workspaceId);
 
-      return [files, total, fileTypes];
+      const listedFiles = fileType === 'Schemer' ? files.map(({ structured_data: structuredData, ...file }) => {
+        const version = structuredData?.metadata?.version;
+        return typeof version === 'string' && version ? { ...file, schemerVersion: version } : file;
+      }) : files;
+      return [listedFiles, total, fileTypes];
     };
 
     if (regexSearch) {
