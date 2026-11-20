@@ -20,6 +20,9 @@ CREATE UNIQUE INDEX CONCURRENTLY orm_session_id_unique ON public.session(id);
 -- rollback DROP INDEX CONCURRENTLY IF EXISTS public.orm_session_id_unique;
 
 -- changeset iqb:orm-log-primary-keys
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT (count(*) = 3)::integer AS committed FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_index i ON i.indexrelid = c.conindid JOIN pg_catalog.pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'id' WHERE (c.conrelid, c.conname) IN (('public.bookletlog'::regclass, 'bookletlog_pkey'), ('public.unitlog'::regclass, 'unitlog_pkey'), ('public.session'::regclass, 'session_pkey')) AND c.contype = 'p' AND c.conkey = ARRAY[a.attnum] AND NOT c.condeferrable AND i.indnatts = 1 AND i.indisvalid AND i.indisready AND i.indislive;
+-- comment: Attaching the indexes renames them. If all three keys were committed before Liquibase recorded the changeset, only the history entry is missing.
 SET LOCAL lock_timeout = '5s';
 ALTER TABLE public.bookletlog ADD CONSTRAINT bookletlog_pkey PRIMARY KEY USING INDEX orm_bookletlog_id_unique;
 ALTER TABLE public.unitlog ADD CONSTRAINT unitlog_pkey PRIMARY KEY USING INDEX orm_unitlog_id_unique;

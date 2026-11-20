@@ -81,9 +81,28 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
     }
   });
 
+  it('adopts the committed primary keys only when every named key matches its table and column', async () => {
+    const changeset = readChangeset('orm-log-primary-keys');
+    expect(changeset).toContain('-- preconditions onFail:MARK_RAN onError:HALT');
+    const check = changeset.match(/^-- precondition-sql-check expectedResult:0 (SELECT .+)$/m)![1];
+    await fixture.db.transaction(async manager => {
+      const recoveryResult = async () => (await manager.query(check))[0].committed;
+      expect(await recoveryResult()).toBe(1);
+      await manager.query('SAVEPOINT complete_keys');
+      await manager.query('ALTER TABLE public.session DROP CONSTRAINT session_pkey');
+      expect(await recoveryResult()).toBe(0);
+      await manager.query('ALTER TABLE public.session ADD PRIMARY KEY (bookletid)');
+      expect(await recoveryResult()).toBe(0);
+      await manager.query('ROLLBACK TO SAVEPOINT complete_keys');
+      await manager.query('ALTER TABLE public.session RENAME CONSTRAINT session_pkey TO other_session_key');
+      expect(await recoveryResult()).toBe(0);
+      await manager.query('ROLLBACK TO SAVEPOINT complete_keys');
+      expect(await recoveryResult()).toBe(1);
+    });
+  });
+
   it('restores prerequisite indexes on partial primary-key rollback and can reapply it', async () => {
-    const changelog = readFileSync('database/changelog/coding-box.changelog-orm-query-hardening.sql', 'utf8');
-    const changeset = changelog.split(/^-- changeset /m).find(chunk => chunk.startsWith('iqb:orm-log-primary-keys\n'))!;
+    const changeset = readChangeset('orm-log-primary-keys');
     const forward = changeset.slice(changeset.indexOf('\n') + 1);
     const rollback = [...changeset.matchAll(/^-- rollback (.+)$/gm)].map(match => match[1]).join('\n');
     const names = ['orm_bookletlog_id_unique', 'orm_unitlog_id_unique', 'orm_session_id_unique'];
@@ -97,7 +116,7 @@ describePostgres('ORM contract against the complete migrated PostgreSQL schema',
 
   function readChangeset(changesetId: string): string {
     const changelog = readFileSync('database/changelog/coding-box.changelog-orm-query-hardening.sql', 'utf8');
-    const changeset = changelog.split(/^-- changeset /m).find(chunk => chunk.startsWith(`iqb:${changesetId} `));
+    const changeset = changelog.split(/^-- changeset /m).find(chunk => chunk.split(/\s/, 1)[0] === `iqb:${changesetId}`);
     if (!changeset) throw new Error(`Missing changeset: ${changesetId}`);
     return changeset;
   }

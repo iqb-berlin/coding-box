@@ -98,6 +98,12 @@ das anschließende Anhängen der Primärschlüssel benötigt eine Sperre und bri
 bei mehr als fünf Sekunden Sperrwartezeit ab. Eine fehlgeschlagene Migration
 verhindert wegen der Compose-Abhängigkeit einen regulären Backend-Neustart.
 
+Unterbricht das Update nach dem Anhängen der drei Primärschlüssel, kann der
+Eintrag in `DATABASECHANGELOG` noch fehlen. Das Update dann erneut starten.
+Liquibase prüft die Primärschlüssel von `bookletlog`, `unitlog` und `session`.
+Entsprechen alle drei dem erwarteten Zustand, trägt es das Changeset als
+`MARK_RAN` ein und fährt mit der Migration fort.
+
 Wurde ein Index vor der Unterbrechung vollständig aufgebaut, übernimmt Liquibase
 ihn beim nächsten Lauf, sofern Name, Definition und Gültigkeit übereinstimmen.
 Ein ungültiger Index oder ein gleichnamiges Objekt mit anderer Definition
