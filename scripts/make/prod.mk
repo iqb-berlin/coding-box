@@ -392,6 +392,3 @@ coding-box-redis-cli:
 # Start application update procedure
 coding-box-update:
 	bash $(CODING_BOX_BASE_DIR)/scripts/update.sh -s $(TAG)
-
-# Keep the original default goal; migration always requires an explicit target.
-include $(CODING_BOX_BASE_DIR)/scripts/make/postgres17.mk

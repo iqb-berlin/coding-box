@@ -462,13 +462,6 @@ update_files() {
   download_file "docker-compose.${APP_NAME}.yaml" docker-compose.yaml
   download_file "docker-compose.${APP_NAME}.prod.yaml" "docker-compose.${APP_NAME}.prod.yaml"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
-  if grep -Fq 'scripts/make/postgres17.mk' "${APP_DIR}/scripts/make/${APP_NAME}.mk"; then
-    mkdir -p "${APP_DIR}/scripts/qa" "${APP_DIR}/docs"
-    download_file scripts/make/postgres17.mk scripts/make/postgres17.mk
-    download_file scripts/postgres17_migration.py scripts/postgres17_migration.py
-    download_file scripts/qa/postgres-migration-snapshot.mjs scripts/qa/postgres-migration-snapshot.mjs
-    download_file docs/postgresql-17-migration.md docs/postgresql-17-migration.md
-  fi
 
   printf "File download done.\n\n"
 }

@@ -8,9 +8,6 @@
 .nx/cache
 .nx/workspace-data
 /.sass-cache
-/.postgres17-migration.lock
-/backup/postgres17/
-__pycache__/
 
 # secret files
 *.pem

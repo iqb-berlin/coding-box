@@ -171,27 +171,6 @@
       "cache": false,
       "options": { "command": "node scripts/qa/inspect-postgres.mjs" }
     },
-    "database-migration-snapshot": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": { "command": "node scripts/qa/postgres-migration-snapshot.mjs" }
-    },
-    "test-migration-tools": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": {
-        "commands": [
-          "node --test scripts/qa/run-backend-integration.test.mjs scripts/qa/postgres-migration-snapshot.test.mjs",
-          "python3 -m unittest discover -s scripts/tests -p test_postgres17_migration.py"
-        ],
-        "parallel": false
-      }
-    },
-    "test-postgres17-migration": {
-      "executor": "nx:run-commands",
-      "cache": false,
-      "options": { "command": "python3 scripts/tests/postgres17_migration_docker.py" }
-    },
     "typecheck": {
       "executor": "nx:run-commands",
       "cache": false,

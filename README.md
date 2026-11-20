@@ -183,16 +183,10 @@ make dev-volumes-clean
 
 ## Installation (Produktivumgebung)
 
-Neue Installationen starten mit PostgreSQL 17.12 und einem leeren Projektvolume.
-Der Installer übernimmt dafür `POSTGRES_IMAGE_SUFFIX=-pg17` aus der Release-Vorlage.
-Bestehende Installationen mit PostgreSQL 14 können regulär aktualisiert werden.
-In ihrer aktiven `.env.coding-box` bleibt `POSTGRES_IMAGE_SUFFIX` bis zur Migration
-leer oder fehlt. Für den freiwilligen Wechsel sichert `make coding-box-postgres17-migrate`
-den laufenden Bestand, stellt ihn in einem neuen Volume wieder her und vergleicht
-Quelle und Ziel vor der Freigabe. Nach dem Wechsel verwenden auch spätere
-Anwendungsupdates das PostgreSQL-17-Image des jeweiligen Releases und das
-restaurierte Volume. Voraussetzungen, Wartungsfenster und Rückfall sind im
-[Migrationsplan](docs/postgresql-17-migration.md) beschrieben.
+Neue Installationen starten mit PostgreSQL 17. Beim Update einer bestehenden
+14er-Installation bleiben das bisherige Image der 14er-Reihe und das Datenvolume
+ausgewählt. Betreiber planen für den Wechsel auf 17 ein eigenes Wartungsfenster.
+[Hinweise zum Release](docs/release-notes.md) · [Anleitung für Betreiber](docs/postgresql-17-migration.md)
 
 Um das Kodiersystem zu verwenden, muss es auf einem Server installiert sein.
 Die technische Basis hierfür ist [Docker](https://www.docker.com/).

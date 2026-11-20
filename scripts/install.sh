@@ -296,13 +296,6 @@ download_files() {
   download_file "config/keycloak/${APP_NAME}-realm.json" "config/keycloak/realm/${APP_NAME}-realm.json"
   download_file "config/keycloak/${APP_NAME}-realm.config.template" "config/keycloak/realm/${APP_NAME}-realm.config.template"
   download_file "scripts/make/${APP_NAME}.mk" scripts/make/prod.mk
-  if grep -Fq 'scripts/make/postgres17.mk' "${APP_DIR}/scripts/make/${APP_NAME}.mk"; then
-    mkdir -p "${APP_DIR}/scripts/qa" "${APP_DIR}/docs"
-    download_file scripts/make/postgres17.mk scripts/make/postgres17.mk
-    download_file scripts/postgres17_migration.py scripts/postgres17_migration.py
-    download_file scripts/qa/postgres-migration-snapshot.mjs scripts/qa/postgres-migration-snapshot.mjs
-    download_file docs/postgresql-17-migration.md docs/postgresql-17-migration.md
-  fi
   download_file "scripts/update_${APP_NAME}.sh" scripts/update.sh
   chmod +x "scripts/update_${APP_NAME}.sh"
 
