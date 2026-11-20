@@ -183,9 +183,11 @@ make dev-volumes-clean
 
 ## Installation (Produktivumgebung)
 
-Neue Installationen und bestehende PostgreSQL-14-Installationen verwenden bei
-regulären Starts und Anwendungsupdates PostgreSQL 14. Der Wechsel auf PostgreSQL
-17.12 ist optional. Für den Wechsel sichert `make coding-box-postgres17-migrate`
+Neue Installationen starten mit PostgreSQL 17.12 und einem leeren Projektvolume.
+Der Installer übernimmt dafür `POSTGRES_IMAGE_SUFFIX=-pg17` aus der Release-Vorlage.
+Bestehende Installationen mit PostgreSQL 14 können regulär aktualisiert werden.
+In ihrer aktiven `.env.coding-box` bleibt `POSTGRES_IMAGE_SUFFIX` bis zur Migration
+leer oder fehlt. Für den freiwilligen Wechsel sichert `make coding-box-postgres17-migrate`
 den laufenden Bestand, stellt ihn in einem neuen Volume wieder her und vergleicht
 Quelle und Ziel vor der Freigabe. Nach dem Wechsel verwenden auch spätere
 Anwendungsupdates das PostgreSQL-17-Image des jeweiligen Releases und das

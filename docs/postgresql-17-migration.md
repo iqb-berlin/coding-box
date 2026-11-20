@@ -1,9 +1,13 @@
 # PostgreSQL 14 → 17.12: Migration und Rückfall
 
-PostgreSQL 14 bleibt der Standard für Installation, Start und Update. Für den
-optionalen Wechsel auf 17.12 verwendet die Kodierbox ein zweites Release-Image
-mit dem Tag `<Release>-pg17` und ein neues Datenvolume. Der bestehende
-PostgreSQL-14-Bestand bleibt bis zum ausdrücklich gestarteten Transfer aktiv.
+Neue Produktivinstallationen starten mit PostgreSQL 17.12. Der Installer übernimmt
+`POSTGRES_IMAGE_SUFFIX=-pg17` aus der Release-Vorlage und Compose legt das
+Projektvolume beim ersten Start an. Bei einem leeren Volume entfällt der Transfer.
+
+Bei einem Update verwendet die Kodierbox weiterhin die aktive `.env.coding-box`.
+Für einen bestehenden 14er Bestand den Suffix leer lassen oder weglassen.
+Erst nach der Datenübernahme das restaurierte Volume und das Image mit dem Tag
+`<Release>-pg17` gemeinsam auswählen. Der folgende Ablauf betrifft diese Bestandsmigration.
 Die separate Keycloak-Datenbank ist vom Transfer ausgenommen.
 
 ## Automatisierter Umstieg mit Make (empfohlener Weg)

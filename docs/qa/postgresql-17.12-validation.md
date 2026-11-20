@@ -5,7 +5,20 @@ Der optionale Migrationspfad und die heutigen Defaults werden separat geprüft. 
 Daten. Keine Produktionsdatenbank und kein vorhandenes Anwendungsvolume wurden
 umgestellt. [Betriebsablauf und Rückfallplan](../postgresql-17-migration.md).
 
-## Nachprüfung der optionalen Migration am 20.11.2026
+## Prüfung des Installationsstandards auf develop vom 20.11.2026
+
+- Mit den Produktions-Compose-Dateien, der aktuellen Installationsvorlage und lokal
+  getaggten Release-Images startete ein neues Projekt auf PostgreSQL 17.12. Liquibase
+  spielte 184 Changesets in das leere Projektvolume ein.
+- Eine Konfiguration ohne `POSTGRES_IMAGE_SUFFIX` startete mit denselben Compose-Dateien
+  auf PostgreSQL 14.25. In beiden Projekten blieb ein geschriebener Testwert beim
+  Neuerstellen des DB-Containers im Projektvolume erhalten.
+- Der Backend-Integrationstest gegen eine separate PostgreSQL-17.12-Instanz und
+  Redis bestand mit 29 Suites und 224 Tests. Zwei optionale Benchmarks waren deaktiviert.
+- Alle sieben Docker-Migrationsszenarien bestanden für 14.25 → 17.12, einschließlich
+  Rückfall und Release-Wechsel. Die 34 Tests der Migrationswerkzeuge bestanden ebenfalls.
+
+## Frühere Prüfung der optionalen Migration am 20.11.2026
 
 - Das Projektimage ohne Versionsargument meldete 14.24. Die Produktions-Compose-Dateien
   wählten bei zwei Release-Tags jeweils das normale Image und das bestehende Projektvolume.

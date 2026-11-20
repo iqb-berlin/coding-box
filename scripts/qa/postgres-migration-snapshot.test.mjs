@@ -64,7 +64,7 @@ test('only the equivalent varchar literal array rendering is normalized across P
   }
 });
 
-test('the default release stays on PostgreSQL 14 and CI tests the optional 17 image', () => {
+test('unsuffixed release images remain on PostgreSQL 14 and CI tests both major versions', () => {
   const schema = yaml.DEFAULT_SCHEMA.extend([new yaml.Type('!reference', { kind: 'sequence', construct: value => value })]);
   const config = file => yaml.load(readFileSync(file, 'utf8'), { schema });
   const ci = config('.gitlab-ci/Branch&PreRelease-Pipelines.gitlab-ci.yml');
@@ -86,7 +86,7 @@ test('the default release stays on PostgreSQL 14 and CI tests the optional 17 im
   assert(optional.services.some(service => service.name === '${DOCKER_HUB_PROXY}${POSTGRES17_BASE_IMAGE}'));
 });
 
-test('normal Compose retains the historical volume unless the restored target is selected explicitly', () => {
+test('new installs select PostgreSQL 17 on the project volume and can select a restored target', () => {
   for (const file of ['docker-compose.yaml', 'docker-compose.coding-box.yaml']) {
     const config = yaml.load(readFileSync(file, 'utf8'));
     assert.deepEqual(config.services.db.volumes, ['db_vol:/var/lib/postgresql/data']);
@@ -96,7 +96,7 @@ test('normal Compose retains the historical volume unless the restored target is
     assert.equal(config.services.backend.environment.POSTGRES_SLOW_QUERY_MS, '${POSTGRES_SLOW_QUERY_MS:-0}');
   }
   const template = readFileSync('.env.coding-box.template', 'utf8');
-  assert.match(template, /^POSTGRES_IMAGE_SUFFIX=$/m);
+  assert.match(template, /^POSTGRES_IMAGE_SUFFIX=-pg17$/m);
   assert.match(template, /^POSTGRES_DATA_VOLUME=$/m);
   assert.match(template, /^POSTGRES_DATA_VOLUME_EXTERNAL=false$/m);
 });
