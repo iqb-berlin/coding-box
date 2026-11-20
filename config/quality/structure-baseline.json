@@ -1219,7 +1219,7 @@
     },
     "apps/backend/src/app/database/services/workspace/workspace-file-metadata.service.ts": {
       "file": {
-        "max-lines": 1369
+        "max-lines": 1368
       },
       "functions": {
         "class WorkspaceFileMetadataService#1/method getUnitVariableDetails#1": {
@@ -1232,9 +1232,9 @@
           "max-depth": 6
         },
         "class WorkspaceFileMetadataService#1/method refreshUnitVariableCacheInternal#1": {
-          "complexity": 95,
+          "complexity": 94,
           "max-depth": 9,
-          "max-lines-per-function": 421
+          "max-lines-per-function": 407
         }
       }
     },
