@@ -1066,6 +1066,11 @@ scan-main-commit-db-image:
     reports:
       container_scanning: gl-container-scanning-report.json
 
+scan-main-commit-db-image-postgres17:
+  extends: scan-main-commit-db-image
+  variables:
+    FULL_IMAGE_NAME: "${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}-pg17"
+
 scan-main-commit-liquibase-image:
   stage: scan-images
   allow_failure: true
@@ -1321,6 +1326,8 @@ build-release:
     - job: test-e2e-report
       artifacts: false
     - job: scan-main-commit-db-image
+      artifacts: false
+    - job: scan-main-commit-db-image-postgres17
       artifacts: false
     - job: scan-main-commit-liquibase-image
       artifacts: false

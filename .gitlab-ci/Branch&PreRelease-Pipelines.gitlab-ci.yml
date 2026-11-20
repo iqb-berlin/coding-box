@@ -1314,6 +1314,14 @@ scan-develop-commit-traefik-image:
       container_scanning: gl-container-scanning-report.json
 
 
+scan-db-image-postgres17:
+  extends: scan-main-commit-db-image-postgres17
+  allow_failure: false
+  rules:
+    - !reference [ .default_db_rules, rules ]
+  needs:
+    - build-db-image
+
 build-pre-release:
   stage: publish-images
   rules:
@@ -1338,6 +1346,8 @@ build-pre-release:
     - job: test-e2e-report
       artifacts: false
     - job: scan-main-commit-db-image
+      artifacts: false
+    - job: scan-main-commit-db-image-postgres17
       artifacts: false
     - job: scan-main-commit-liquibase-image
       artifacts: false
