@@ -23,6 +23,7 @@ describe('WsgCodingJobController', () => {
     getBulkCodingProgress: jest.Mock;
     createCodingJob: jest.Mock;
     updateCodingJob: jest.Mock;
+    startCodingJob: jest.Mock;
     pauseCodingJob: jest.Mock;
     resumeCodingJob: jest.Mock;
     submitCodingJob: jest.Mock;
@@ -73,6 +74,7 @@ describe('WsgCodingJobController', () => {
       getBulkCodingProgress: jest.fn().mockResolvedValue({}),
       createCodingJob: jest.fn().mockResolvedValue({ id: 124 }),
       updateCodingJob: jest.fn().mockResolvedValue({ id: 123 }),
+      startCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
       pauseCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'paused' }),
       resumeCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'active' }),
       submitCodingJob: jest.fn().mockResolvedValue({ id: 123, status: 'completed' }),
@@ -271,9 +273,7 @@ describe('WsgCodingJobController', () => {
     expect(
       codingJobService.assertUserCanAccessCodingJob
     ).not.toHaveBeenCalled();
-    expect(codingJobService.updateCodingJob).toHaveBeenCalledWith(123, 47, {
-      status: 'active'
-    }, 5, true);
+    expect(codingJobService.startCodingJob).toHaveBeenCalledWith(123, 47, 5);
   });
 
   it.each(['review', 'results_applied'])(
@@ -285,7 +285,7 @@ describe('WsgCodingJobController', () => {
 
       await controller.startCodingJob(47, 123, req);
 
-      expect(codingJobService.updateCodingJob).not.toHaveBeenCalled();
+      expect(codingJobService.startCodingJob).not.toHaveBeenCalled();
     }
   );
 

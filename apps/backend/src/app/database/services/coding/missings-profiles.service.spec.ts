@@ -6,6 +6,7 @@ import { getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete
 const createRepo = () => ({
   find: jest.fn(),
   findOne: jest.fn(),
+  query: jest.fn(),
   count: jest.fn().mockResolvedValue(0),
   save: jest.fn(value => Promise.resolve(value)),
   delete: jest.fn()
@@ -211,19 +212,21 @@ describe('MissingsProfilesService', () => {
     repo.findOne
       .mockResolvedValueOnce({ id: 1, label: 'IQB-Standard', missings: defaultMissings })
       .mockResolvedValueOnce(null);
-    repo.save.mockResolvedValueOnce({ id: 2, label: 'IQB-Standard', missings: defaultMissings });
+    repo.query.mockResolvedValueOnce([{ id: 2 }]);
 
     await expect(service.getMissingsProfiles(1)).resolves.toEqual([{ id: 1, label: 'IQB-Standard' }]);
     await expect(service.getMissingsProfiles(1)).resolves.toEqual([{ id: 2, label: 'IQB-Standard' }]);
-    expect(repo.save).toHaveBeenCalledTimes(2);
+    expect(repo.save).toHaveBeenCalledTimes(1);
+    expect(repo.query).toHaveBeenCalledTimes(1);
   });
 
   it('creates canonical IQB standard defaults with explicit NA scores', async () => {
     repo.findOne.mockResolvedValueOnce(null);
-    repo.save.mockImplementationOnce(async value => ({ ...value, id: 2 }));
+    repo.query.mockResolvedValueOnce([{ id: 2 }]);
 
     const profile = await service.ensureDefaultMissingsProfile(1);
 
+    expect(profile.id).toBe(2);
     expect(profile.parseMissings()).toEqual([
       expect.objectContaining({ id: 'mir', code: -98, score: 0 }),
       expect.objectContaining({ id: 'mbi_mbo', code: -99, score: 0 }),
@@ -231,31 +234,6 @@ describe('MissingsProfilesService', () => {
       expect.objectContaining({ id: 'mci', code: -97, score: null }),
       expect.objectContaining({ id: 'mbd', code: -94, score: null })
     ]);
-  });
-
-  it('returns the same default profile when concurrent creation loses the unique constraint race', async () => {
-    let persistedProfile: Record<string, unknown> | null = null;
-    repo.findOne.mockImplementation(async () => persistedProfile);
-    repo.save.mockImplementation(async value => {
-      if (persistedProfile) {
-        throw Object.assign(new Error('duplicate key value violates unique constraint'), {
-          code: '23505'
-        });
-      }
-
-      persistedProfile = { ...value, id: 2 };
-      return persistedProfile;
-    });
-
-    const [firstProfile, secondProfile] = await Promise.all([
-      service.ensureDefaultMissingsProfile(1),
-      service.ensureDefaultMissingsProfile(1)
-    ]);
-
-    expect(firstProfile.id).toBe(2);
-    expect(secondProfile.id).toBe(2);
-    expect(repo.save).toHaveBeenCalledTimes(2);
-    expect(repo.findOne).toHaveBeenCalledTimes(3);
   });
 
   it('synchronizes legacy IQB standard profiles to the canonical missings', async () => {

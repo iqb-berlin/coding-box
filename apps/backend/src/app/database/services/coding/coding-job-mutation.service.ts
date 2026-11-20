@@ -20,7 +20,10 @@ import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { CacheService } from '../../../cache/cache.service';
 import { applyResolvedExclusionsToQuery, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { getAggregationVariableKey } from './aggregation-metrics.util';
-import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
+import {
+  lockWorkspaceTestResultsMutationInTransaction, tryWithWorkspaceTestResultsMutationTransaction, withWorkspaceTestResultsMutationTransaction
+} from '../shared/workspace-test-results-lock.util';
+import { CodingJobWorkspaceBusyException } from './coding-job-workspace-busy.exception';
 import { getCodingIncompleteVariablesCacheKeys, getCodingIncompleteVariablesCacheVersionKey } from './coding-incomplete-variables-cache-key.util';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { CodingJobAccessService } from './coding-job-access.service';
@@ -205,36 +208,32 @@ export class CodingJobMutationService {
     createCodingJobDto: CreateCodingJobDto,
     actorUserId?: number
   ): Promise<CodingJob> {
-    const missingsProfileId = await this.resolveMissingsProfileId(
-      workspaceId,
-      createCodingJobDto.missings_profile_id
-    );
-    const normalizedCreateCodingJobDto = {
-      ...createCodingJobDto,
-      missings_profile_id: missingsProfileId
-    };
-
-    const createdCodingJob = await withWorkspaceTestResultsMutationTransaction(this.connection,
-      async manager => {
-        await lockWorkspaceTestResultsMutationInTransaction(
-          manager,
-          workspaceId
-        );
+    const { creationRequestId } = createCodingJobDto;
+    const attempt = await tryWithWorkspaceTestResultsMutationTransaction(
+      this.connection, workspaceId, async manager => {
         const creatorUserId = await assertCodingResourceCreation(manager, workspaceId, actorUserId);
         const codingJobRepo = manager.getRepository(CodingJob);
+        if (creationRequestId) {
+          const existing = await codingJobRepo.findOneBy({
+            workspace_id: workspaceId, creatorUserId, creationRequestId
+          });
+          if (existing) return { job: existing, created: false };
+        }
+        const missingsProfileId = await this.resolveMissingsProfileId(workspaceId, createCodingJobDto.missings_profile_id, manager);
         const aggregationSettings =
           await this.aggregation.getCurrentAggregationSettingsSnapshot(workspaceId, manager);
         const codingJob = codingJobRepo.create({
           workspace_id: workspaceId,
           creatorUserId,
-          name: normalizedCreateCodingJobDto.name,
-          description: normalizedCreateCodingJobDto.description,
-          status: this.getInitialCodingJobStatus(normalizedCreateCodingJobDto.status),
-          showScore: normalizedCreateCodingJobDto.showScore ?? false,
-          allowComments: normalizedCreateCodingJobDto.allowComments ?? true,
+          ...(creationRequestId ? { creationRequestId } : {}),
+          name: createCodingJobDto.name,
+          description: createCodingJobDto.description,
+          status: this.getInitialCodingJobStatus(createCodingJobDto.status),
+          showScore: createCodingJobDto.showScore ?? false,
+          allowComments: createCodingJobDto.allowComments ?? true,
           suppressGeneralInstructions:
-            normalizedCreateCodingJobDto.suppressGeneralInstructions ?? false,
-          missings_profile_id: normalizedCreateCodingJobDto.missings_profile_id,
+            createCodingJobDto.suppressGeneralInstructions ?? false,
+          missings_profile_id: missingsProfileId,
           aggregation_enabled: aggregationSettings.aggregationEnabled,
           aggregation_threshold: aggregationSettings.aggregationThreshold,
           response_matching_flags: aggregationSettings.responseMatchingFlags,
@@ -244,76 +243,46 @@ export class CodingJobMutationService {
 
         const savedCodingJob = await codingJobRepo.save(codingJob);
 
-        if (
-          normalizedCreateCodingJobDto.assignedCoders &&
-          normalizedCreateCodingJobDto.assignedCoders.length > 0
-        ) {
+        if (createCodingJobDto.assignedCoders?.length) {
           await this.assignCodersInManager(
             savedCodingJob.id,
-            normalizedCreateCodingJobDto.assignedCoders,
+            createCodingJobDto.assignedCoders,
             manager,
             workspaceId
           );
         }
 
-        if (
-          normalizedCreateCodingJobDto.variables &&
-          normalizedCreateCodingJobDto.variables.length > 0
-        ) {
-          await this.assignVariables(
-            savedCodingJob.id,
-            normalizedCreateCodingJobDto.variables,
-            manager
-          );
-        }
-
-        if (
-          normalizedCreateCodingJobDto.variableBundleIds &&
-          normalizedCreateCodingJobDto.variableBundleIds.length > 0
-        ) {
-          await this.assignVariableBundles(
-            savedCodingJob.id,
-            normalizedCreateCodingJobDto.variableBundleIds,
-            manager
-          );
-        } else if (
-          normalizedCreateCodingJobDto.variableBundles &&
-          normalizedCreateCodingJobDto.variableBundles.length > 0
-        ) {
-          if (normalizedCreateCodingJobDto.variableBundles[0].id) {
-            const bundleIds = normalizedCreateCodingJobDto.variableBundles
-              .map(bundle => bundle.id)
-              .filter((candidateId): candidateId is number => Boolean(candidateId));
-
-            if (bundleIds.length > 0) {
-              await this.assignVariableBundles(
-                savedCodingJob.id,
-                bundleIds,
-                manager
-              );
-            }
+        const { variables, variableBundleIds, variableBundles } = createCodingJobDto;
+        if (variables?.length) await this.assignVariables(savedCodingJob.id, variables, manager);
+        if (variableBundleIds?.length) {
+          await this.assignVariableBundles(savedCodingJob.id, variableBundleIds, manager);
+        } else if (variableBundles?.length) {
+          if (variableBundles[0].id) {
+            const ids = variableBundles.map(bundle => bundle.id).filter((id): id is number => Boolean(id));
+            if (ids.length) await this.assignVariableBundles(savedCodingJob.id, ids, manager);
           } else {
-            const variables =
-              normalizedCreateCodingJobDto.variableBundles.flatMap(
-                bundle => bundle.variables || []
-              );
-            if (variables.length > 0) {
-              await this.assignVariables(savedCodingJob.id, variables, manager);
-            }
+            const bundleVariables = variableBundles.flatMap(bundle => bundle.variables || []);
+            if (bundleVariables.length) await this.assignVariables(savedCodingJob.id, bundleVariables, manager);
           }
         }
-        await this.saveCodingJobUnits(
-          savedCodingJob.id,
-          normalizedCreateCodingJobDto.maxCodingCases,
-          manager
-        );
+        await this.saveCodingJobUnits(savedCodingJob.id, createCodingJobDto.maxCodingCases, manager);
         await this.recordJobEvent(manager, workspaceId, savedCodingJob.id, 'CODING_JOB_CREATED', actorUserId);
-        return savedCodingJob;
+        return { job: savedCodingJob, created: true };
       }
     );
-
-    await this.invalidateIncompleteVariablesCache(workspaceId);
-    return createdCodingJob;
+    if (!attempt.acquired) {
+      // An earlier attempt may already have committed while another mutation holds the lock.
+      if (creationRequestId) {
+        const creatorUserId = await assertCodingResourceCreation(this.codingJobRepository.manager, workspaceId, actorUserId);
+        const existing = await this.codingJobRepository.findOneBy({
+          workspace_id: workspaceId, creatorUserId, creationRequestId
+        });
+        if (existing) return existing;
+      }
+      throw new CodingJobWorkspaceBusyException();
+    }
+    if (attempt.value.created) await this.invalidateIncompleteVariablesCache(workspaceId);
+    return attempt.value.job;
   }
 
   async updateCodingJob(
@@ -844,10 +813,10 @@ export class CodingJobMutationService {
     const repo = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
-    const BATCH_SIZE = 500;
-    for (let i = 0; i < responses.length; i += BATCH_SIZE) {
-      const chunk = responses.slice(i, i + BATCH_SIZE);
-      const units = chunk.map(r => repo.create({
+    // Twelve bound values per case keep a batch well within PostgreSQL's parameter limit.
+    const batchSize = 2000;
+    for (let i = 0; i < responses.length; i += batchSize) {
+      const units = responses.slice(i, i + batchSize).map(r => ({
         coding_job_id: codingJobId,
         workspace_id: workspaceId,
         response_id: r.id,
@@ -860,9 +829,8 @@ export class CodingJobMutationService {
         person_code: r.personCode,
         person_group: r.personGroup,
         variable_bundle_id: r.variableBundleId || null
-      })
-      );
-      await repo.save(units);
+      }));
+      await repo.insert(units);
     }
   }
 

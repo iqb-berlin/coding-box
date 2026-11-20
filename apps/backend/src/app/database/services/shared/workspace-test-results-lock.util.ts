@@ -114,6 +114,37 @@ export async function withWorkspaceTestResultsMutationTransaction<T>(
     () => factory.transaction(callback));
 }
 
+/** Check the workspace without waiting on its advisory lock. */
+export async function tryWithWorkspaceTestResultsMutationTransaction<T>(
+  factory: TransactionFactory,
+  workspaceId: number,
+  callback: (manager: EntityManager) => Promise<T>
+): Promise<WorkspaceTestResultsMutationLockAttempt<T>> {
+  const key = [WORKSPACE_TEST_RESULTS_LOCK_NAMESPACE, normalizeWorkspaceId(workspaceId)];
+  const tryLock = async (manager: EntityManager): Promise<boolean> => {
+    const [row] = await manager.query('SELECT pg_try_advisory_xact_lock($1::int, $2::int) AS locked', key);
+    return row?.locked === true;
+  };
+
+  const pool = factory.connection ?? factory;
+  let releaseSlot = await acquireBlockingMutationPoolSlot(pool, false);
+  if (!releaseSlot) {
+    // Other workspaces can fill the admission queue. Release the probe connection
+    // before queuing, so existing writers can still use the reserved connection.
+    if (!await factory.transaction(tryLock)) return { acquired: false };
+    releaseSlot = await acquireBlockingMutationPoolSlot(pool);
+  }
+
+  try {
+    return await factory.transaction(async manager => {
+      if (!await tryLock(manager)) return { acquired: false };
+      return { acquired: true, value: await callback(manager) };
+    });
+  } finally {
+    releaseSlot();
+  }
+}
+
 export async function lockWorkspaceTestResultsMutationInTransaction(
   manager: EntityManager,
   workspaceId: number

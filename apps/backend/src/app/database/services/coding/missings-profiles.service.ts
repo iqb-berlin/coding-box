@@ -522,18 +522,6 @@ export class MissingsProfilesService {
       .filter(code => Number.isInteger(code) && code < 0));
   }
 
-  private isUniqueConstraintViolation(error: unknown): boolean {
-    if (typeof error !== 'object' || error === null) {
-      return false;
-    }
-
-    const databaseError = error as {
-      code?: unknown;
-      driverError?: { code?: unknown };
-    };
-    return databaseError.code === '23505' || databaseError.driverError?.code === '23505';
-  }
-
   async ensureDefaultMissingsProfile(
     workspaceId: number,
     manager?: EntityManager
@@ -541,46 +529,24 @@ export class MissingsProfilesService {
     try {
       const repository = manager?.getRepository(MissingsProfile) ||
         this.missingsProfileRepository;
-      const existingProfile = await repository.findOne({
-        where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
-      });
+      const scope = { workspace_id: workspaceId, label: this.defaultProfileLabel };
+      const existing = await repository.findOne({ where: scope });
+      if (existing) return await this.enrichIqbStandardEntityIfNeeded(existing, manager);
 
-      if (existingProfile) {
-        const enriched = this.synchronizeIqbStandardProfile(this.toDto(existingProfile));
-        if (enriched.changed) {
-          existingProfile.missings = enriched.profile.missings as string;
-          const savedProfile = await repository.save(existingProfile);
-          return this.toDto(savedProfile);
-        }
-        return enriched.profile;
+      const profile = this.prepareProfileForStorage(this.createDefaultMissingsProfile());
+      const [inserted] = await repository.query<{ id: number }[]>(`
+        INSERT INTO public.missings_profile (workspace_id, label, missings)
+        VALUES ($1, $2, $3)
+        ON CONFLICT (workspace_id, label) DO NOTHING
+        RETURNING id
+      `, [workspaceId, profile.label, profile.missings]);
+      if (inserted) {
+        profile.id = inserted.id;
+        return profile;
       }
 
-      const defaultProfile = this.prepareProfileForStorage(this.createDefaultMissingsProfile());
-      const profileEntity = new MissingsProfile();
-      profileEntity.workspace_id = workspaceId;
-      profileEntity.label = defaultProfile.label;
-      profileEntity.missings = defaultProfile.missings as string;
-
-      try {
-        const savedProfile = await repository.save(profileEntity);
-        return this.toDto(savedProfile);
-      } catch (error) {
-        if (!this.isUniqueConstraintViolation(error)) {
-          throw error;
-        }
-
-        const concurrentlyCreatedProfile = await repository.findOne({
-          where: { workspace_id: workspaceId, label: this.defaultProfileLabel }
-        });
-        if (!concurrentlyCreatedProfile) {
-          throw error;
-        }
-
-        return await this.enrichIqbStandardEntityIfNeeded(
-          concurrentlyCreatedProfile,
-          manager
-        );
-      }
+      const concurrentProfile = await repository.findOneByOrFail(scope);
+      return await this.enrichIqbStandardEntityIfNeeded(concurrentProfile, manager);
     } catch (error) {
       this.logger.error(`Error ensuring default missings profile for workspace ${workspaceId}: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;

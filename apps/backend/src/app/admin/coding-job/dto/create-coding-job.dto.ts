@@ -9,6 +9,7 @@ import {
   IsBoolean,
   IsNumber,
   IsInt,
+  IsUUID,
   Min,
   Max,
   ValidateNested
@@ -22,6 +23,15 @@ import { CODING_JOB_INITIAL_STATUSES } from '../../../database/services/coding/c
  * DTO for creating a coding job
  */
 export class CreateCodingJobDto {
+  @ApiProperty({
+    description: 'Optional identifier of a creation attempt. Reuse it to recover the same job after a lost response.',
+    format: 'uuid',
+    required: false
+  })
+  @IsOptional()
+  @IsUUID('4')
+  creationRequestId?: string;
+
   @ApiProperty({
     description: 'Name of the coding job',
     example: 'Coding Job 1'
