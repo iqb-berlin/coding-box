@@ -20,6 +20,9 @@ CREATE UNIQUE INDEX CONCURRENTLY orm_session_id_unique ON public.session(id);
 -- rollback DROP INDEX CONCURRENTLY IF EXISTS public.orm_session_id_unique;
 
 -- changeset iqb:orm-log-primary-keys
+-- preconditions onFail:MARK_RAN onError:HALT
+-- precondition-sql-check expectedResult:0 SELECT (count(*) = 3)::integer AS committed FROM pg_catalog.pg_constraint c JOIN pg_catalog.pg_index i ON i.indexrelid = c.conindid JOIN pg_catalog.pg_attribute a ON a.attrelid = c.conrelid AND a.attname = 'id' WHERE (c.conrelid, c.conname) IN (('public.bookletlog'::regclass, 'bookletlog_pkey'), ('public.unitlog'::regclass, 'unitlog_pkey'), ('public.session'::regclass, 'session_pkey')) AND c.contype = 'p' AND c.conkey = ARRAY[a.attnum] AND NOT c.condeferrable AND i.indnatts = 1 AND i.indisvalid AND i.indisready AND i.indislive;
+-- comment: Attaching the indexes renames them. If all three keys were committed before Liquibase recorded the changeset, only the history entry is missing.
 SET LOCAL lock_timeout = '5s';
 ALTER TABLE public.bookletlog ADD CONSTRAINT bookletlog_pkey PRIMARY KEY USING INDEX orm_bookletlog_id_unique;
 ALTER TABLE public.unitlog ADD CONSTRAINT unitlog_pkey PRIMARY KEY USING INDEX orm_unitlog_id_unique;
@@ -63,6 +66,11 @@ CREATE INDEX CONCURRENTLY idx_booklet_info ON public.booklet(infoid);
 -- rollback DROP INDEX CONCURRENTLY IF EXISTS public.idx_booklet_info;
 
 -- changeset iqb:orm-remove-duplicate-indexes runInTransaction:false rollbackSplitStatements:false splitStatements:true
+-- preconditions onFail:HALT onError:HALT
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.person_unique_idx') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE UNIQUE INDEX person_unique_idx ON public.persons USING btree (code, "group", login, workspace_id)$def$;
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.idx_responses_codedstatus') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE INDEX idx_responses_codedstatus ON public.response USING btree (status_v1)$def$;
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.idx_responses_unitid') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE INDEX idx_responses_unitid ON public.response USING btree (unitid)$def$;
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.response_id_idx') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE INDEX response_id_idx ON public.response USING btree (id)$def$;
 -- comment: Keep the UNIQUE constraints/primary keys and one copy of each lookup index.
 DROP INDEX CONCURRENTLY IF EXISTS public.person_unique_idx;
 DROP INDEX CONCURRENTLY IF EXISTS public.idx_responses_codedstatus;
@@ -100,6 +108,9 @@ DROP INDEX CONCURRENTLY IF EXISTS public.response_id_idx;
 -- rollback $restore_indexes$;
 
 -- changeset iqb:orm-remove-obsolete-status-indexes runInTransaction:false rollbackSplitStatements:false splitStatements:true
+-- preconditions onFail:HALT onError:HALT
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.idx_response_statistics_covering') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE INDEX idx_response_statistics_covering ON public.response USING btree (status, unitid, status_v1, id) WHERE ((status)::text = 'VALUE_CHANGED'::text)$def$;
+-- precondition-sql-check expectedResult:ok SELECT COALESCE(max(c.relname::text), 'ok') AS result FROM pg_catalog.pg_class c WHERE c.oid = to_regclass('public.idx_response_status_codedstatus_unitid') AND pg_get_indexdef(c.oid) IS DISTINCT FROM $def$CREATE INDEX idx_response_status_codedstatus_unitid ON public.response USING btree (status, status_v1, unitid) WHERE ((status)::text = 'VALUE_CHANGED'::text)$def$;
 -- comment: These indexes still compare numeric status::text with the old literal VALUE_CHANGED and are empty.
 DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_statistics_covering;
 DROP INDEX CONCURRENTLY IF EXISTS public.idx_response_status_codedstatus_unitid;

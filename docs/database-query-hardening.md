@@ -98,6 +98,12 @@ das anschließende Anhängen der Primärschlüssel benötigt eine Sperre und bri
 bei mehr als fünf Sekunden Sperrwartezeit ab. Eine fehlgeschlagene Migration
 verhindert wegen der Compose-Abhängigkeit einen regulären Backend-Neustart.
 
+Unterbricht das Update nach dem Anhängen der drei Primärschlüssel, kann der
+Eintrag in `DATABASECHANGELOG` noch fehlen. Das Update dann erneut starten.
+Liquibase prüft die Primärschlüssel von `bookletlog`, `unitlog` und `session`.
+Entsprechen alle drei dem erwarteten Zustand, trägt es das Changeset als
+`MARK_RAN` ein und fährt mit der Migration fort.
+
 Wurde ein Index vor der Unterbrechung vollständig aufgebaut, übernimmt Liquibase
 ihn beim nächsten Lauf, sofern Name, Definition und Gültigkeit übereinstimmen.
 Ein ungültiger Index oder ein gleichnamiges Objekt mit anderer Definition
@@ -122,6 +128,13 @@ Nur einen nachweislich durch den fehlgeschlagenen Aufbau entstandenen Index
 gezielt bereinigen; keine pauschalen Indexlöschungen oder Zeilenlöschungen.
 Siehe [PostgreSQL-Sequenzen](https://www.postgresql.org/docs/14/functions-sequence.html)
 und [Concurrent-Indexaufbau](https://www.postgresql.org/docs/14/sql-createindex.html#SQL-CREATEINDEX-CONCURRENTLY).
+
+Vor dem Entfernen alter Indizes prüft Liquibase alle betroffenen Namen je
+Changeset. Fehlt ein Index bereits, kann der Lauf fortfahren. Hat ein vorhandener
+Index eine abweichende Definition, stoppt Liquibase vor der ersten Löschung
+dieses Changesets und meldet den Namen. Vor dem Wiederanlauf die lokale
+Anpassung prüfen und entscheiden, ob der Index unter eigenem Namen erhalten
+werden soll.
 
 Beim Rollback werden die entfernten Indizes je Changeset in einer Transaktion
 wiederhergestellt. Der Aufbau kann Schreibzugriffe auf die betroffenen Tabellen

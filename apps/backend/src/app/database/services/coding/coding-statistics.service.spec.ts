@@ -4,6 +4,9 @@ import { getRepositoryToken } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Job } from 'bullmq';
 import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
+import { WorkspaceFileMetadataService } from '../workspace/workspace-file-metadata.service';
+import FileUpload from '../../entities/file_upload.entity';
+import { getCodingStatisticsCacheKey } from './coding-statistics-cache-key.util';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
@@ -100,6 +103,37 @@ describe('CodingStatisticsService', () => {
 
   afterEach(() => {
     jest.clearAllMocks();
+  });
+
+  it.each([
+    'timeout exceeded when trying to connect',
+    'Connection terminated due to connection timeout'
+  ])('retries a cold metadata refresh after %s without caching empty statistics', async message => {
+    const entries = new Map<string, unknown>();
+    mockCacheService.get.mockImplementation(async <T>(key: string) => (entries.get(key) as T | undefined) ?? null);
+    mockCacheService.set.mockImplementation(async (key, value) => {
+      entries.set(key, value);
+      return true;
+    });
+    const timeout = new Error(message);
+    mockFileUploadRepository.find.mockRejectedValueOnce(timeout).mockResolvedValueOnce([{
+      data: '<Unit><Metadata><Id>Unit1</Id></Metadata><BaseVariables><Variable alias="var1"/></BaseVariables></Unit>'
+    }]).mockResolvedValueOnce([]);
+    const metadata = new WorkspaceFileMetadataService(
+      mockFileUploadRepository as unknown as Repository<FileUpload>, mockCacheService, mockWorkspaceExclusionService
+    );
+    const statistics = new CodingStatisticsService(
+      mockResponseRepository, mockCacheService, mockJobQueueService, mockWorkspaceExclusionService, metadata
+    );
+    const key = getCodingStatisticsCacheKey(1, 'v1');
+    await expect(statistics.getCodingStatistics(1)).rejects.toBe(timeout);
+    expect(entries.has(key)).toBe(false);
+    expect(mockResponseRepository.query).not.toHaveBeenCalled();
+
+    mockResponseRepository.query.mockResolvedValue([{ statusValue: 5, isDerived: false, count: '7' }]);
+    const result = await statistics.getCodingStatistics(1);
+    expect(result.totalResponses).toBe(7);
+    expect(entries.get(key)).toEqual(result);
   });
 
   describe('Unit scope for the statistics query', () => {
