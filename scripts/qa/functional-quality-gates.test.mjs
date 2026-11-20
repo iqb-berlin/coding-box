@@ -108,8 +108,9 @@ test('a same-repository GitHub develop PR selects exactly one complete pipeline'
   }
 });
 
-test('feature builds do not require an image published by an earlier pipeline', () => {
+test('build-app needs only installed dependencies and uses the Node base image', () => {
   const job = resolve('build-app');
+  assert.deepEqual(job.needs, ['install-dependencies']);
   assert.equal(job.image, '${DOCKER_HUB_PROXY}${BASE_IMAGE}');
   assert.ok(job.before_script.some(command => command.includes('apt-get install') && command.includes(' git')));
 });

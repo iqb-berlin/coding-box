@@ -362,6 +362,8 @@ build-app:
   stage: build
   interruptible: true
   extends: .distributed
+  needs:
+    - install-dependencies
   rules:
     - !reference [ .quality_gate_rules, rules ]
   # A documentation-only follow-up can cancel the pipeline which first builds
