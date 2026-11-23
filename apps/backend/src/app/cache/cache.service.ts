@@ -188,6 +188,15 @@ export class CacheService {
     return (await this.redis.eval(command, 2, markerKey, key, JSON.stringify(marker), JSON.stringify(value), ttl)) === 1;
   }
 
+  async deleteIfMarkerMatches(key: string, marker: string): Promise<void> {
+    await this.redis.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("DEL", KEYS[1]) end',
+      1,
+      key,
+      JSON.stringify(marker)
+    );
+  }
+
   /**
    * Delete a value from the cache
    * @param key The cache key

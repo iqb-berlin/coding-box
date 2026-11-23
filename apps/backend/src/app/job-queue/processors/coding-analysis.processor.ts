@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto';
-import { Processor } from '@nestjs/bullmq';
+import { OnWorkerEvent, Processor } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -55,6 +55,26 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
 
   async processWorkspaceJob(job: Job<CodingAnalysisJobData>) {
     return this.handleResponseAnalysis(job);
+  }
+
+  @OnWorkerEvent('completed')
+  async releaseCompletedRunMarker(job: Job<CodingAnalysisJobData>): Promise<void> {
+    await this.releaseRunMarker(job);
+  }
+
+  @OnWorkerEvent('failed')
+  async releaseFailedRunMarker(job: Job<CodingAnalysisJobData> | undefined): Promise<void> {
+    await this.releaseRunMarker(job, true);
+  }
+
+  private async releaseRunMarker(job: Job<CodingAnalysisJobData> | undefined, verifyFailure = false): Promise<void> {
+    if (!job?.data.runId) return;
+    try {
+      if (verifyFailure && await job.getState() !== 'failed') return;
+      await this.cacheService.deleteIfMarkerMatches(getCodingAnalysisRunMarkerKey(job.data.cacheKey), job.data.runId);
+    } catch (error) {
+      this.logger.warn(`Could not release response analysis marker for job ${job.id}: ${getErrorMessage(error)}`);
+    }
   }
 
   private async getDefaultMirCode(workspaceId: number): Promise<number> {
@@ -183,7 +203,7 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         .leftJoinAndSelect('booklet.person', 'person')
         .select([
           'response.id', 'response.unitid', 'response.variableid', 'response.value',
-          'response.status_v2', 'response.code_v2',
+          'response.status_v1', 'response.status_v2', 'response.code_v2',
           'unit.id', 'unit.name', 'unit.alias', 'booklet.id', 'bookletinfo.id', 'bookletinfo.name',
           'person.id', 'person.login', 'person.code', 'person.group'
         ])

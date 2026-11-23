@@ -211,7 +211,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     ], queryRunner.manager);
   });
 
-  it('clears the selected analysis cache before a forced restart', async () => {
+  it('clears the selected result and registers a marker without a deadline before enqueueing', async () => {
     const {
       service,
       cacheService,
@@ -223,18 +223,17 @@ describe('CodingAnalysisService aggregation settings', () => {
     });
 
     expect(cacheService.delete).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4');
-    expect(cacheService.set).toHaveBeenCalledWith(
-      'response-analysis:7_IGNORE_CASE_t4:run',
-      expect.any(String),
-      3600
-    );
+    const [markerKey, runId, ttl] = cacheService.set.mock.calls[0];
+    expect([markerKey, runId, ttl]).toEqual(['response-analysis:7_IGNORE_CASE_t4:run', expect.any(String), 0]);
     expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith({
       workspaceId: 7,
       matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
       threshold: 4,
       cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
-      runId: expect.any(String)
+      runId
     });
+    expect(cacheService.set.mock.invocationCallOrder[0])
+      .toBeLessThan(jobQueueService.addCodingAnalysisJob.mock.invocationCallOrder[0]);
   });
 
   it('reuses an active analysis with the same settings even on an explicit refresh', async () => {

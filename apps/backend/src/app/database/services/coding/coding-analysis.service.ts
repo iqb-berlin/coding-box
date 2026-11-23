@@ -195,7 +195,8 @@ export class CodingAnalysisService {
       if (options.forceRefresh) {
         await this.cacheService.delete(cacheKey);
       }
-      if (!(await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 3600))) {
+      // The marker belongs to the queued run. The worker removes it when the job reaches a terminal state.
+      if (!(await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 0))) {
         throw new Error('Could not register response analysis');
       }
       await this.jobQueueService.addCodingAnalysisJob({

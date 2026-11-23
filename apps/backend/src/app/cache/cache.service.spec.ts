@@ -128,6 +128,17 @@ describe('CacheService', () => {
     ).resolves.toBeNull();
   });
 
+  it('compares and deletes the serialized run marker in one Redis operation', async () => {
+    await service.deleteIfMarkerMatches('analysis:run', 'finished-run');
+
+    expect(redis.eval).toHaveBeenCalledWith(
+      expect.stringContaining('if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("DEL", KEYS[1]) end'),
+      1,
+      'analysis:run',
+      JSON.stringify('finished-run')
+    );
+  });
+
   it('stores and pages validation results', async () => {
     const results = [{ unitName: 'U1' }, { unitName: 'U2' }, { unitName: 'U3' }] as never;
     const metadata = { total: 3, missing: 1, timestamp: 100 };
