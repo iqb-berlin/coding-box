@@ -268,6 +268,50 @@ describe('ReplayComponent', () => {
     expect(player.unitPlayer()).toBe('new player');
   });
 
+  it('updates watermark truncation when the rendered replay text changes', async () => {
+    component.isBookletReplayMode.set(true);
+    component.testPerson.set('valid@test@person');
+    component.unitId.set('UNIT-LONG');
+    await fixture.whenStable();
+    const watermark: HTMLElement = fixture.nativeElement.querySelector('.watermark');
+
+    Object.defineProperties(watermark, {
+      clientWidth: { value: 100 },
+      scrollWidth: { value: 200, configurable: true }
+    });
+    window.dispatchEvent(new Event('resize'));
+    await fixture.whenStable();
+    expect(watermark.classList.contains('truncated')).toBe(true);
+
+    Object.defineProperty(watermark, 'scrollWidth', { value: 100 });
+    component.unitId.set('U');
+    await fixture.whenStable();
+    expect(watermark.textContent).toContain('valid@test@person - U');
+    expect(watermark.classList.contains('truncated')).toBe(false);
+  });
+
+  it('resizes the rendered coding panel from the handle and ends dragging on mouseup', async () => {
+    component.isCodingMode.set(true);
+    component.codingService.codingScheme = { variableCodings: [] } as unknown as CodingScheme;
+    component.codingService.currentVariableId = 'VAR1';
+    await fixture.whenStable();
+    const replay: HTMLElement = fixture.nativeElement.querySelector('.replay-container');
+    const handle: HTMLElement = replay.querySelector('.resize-handle')!;
+    const panel: HTMLElement = replay.querySelector('.code-selector-container')!;
+
+    handle.dispatchEvent(new MouseEvent('mousedown', { clientX: 300 }));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 350 }));
+    await fixture.whenStable();
+    expect(replay.classList.contains('resizing')).toBe(true);
+    expect(panel.style.width).toBe('300px');
+
+    document.dispatchEvent(new MouseEvent('mouseup'));
+    document.dispatchEvent(new MouseEvent('mousemove', { clientX: 400 }));
+    await fixture.whenStable();
+    expect(replay.classList.contains('resizing')).toBe(false);
+    expect(panel.style.width).toBe('300px');
+  });
+
   it('cancels the first workspace A request even when returning to A', async () => {
     const app = TestBed.inject(AppService) as unknown as AppServiceMock;
     app.selectedWorkspaceId = 47;

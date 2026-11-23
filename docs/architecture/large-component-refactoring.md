@@ -1,5 +1,171 @@
 # Große Angular-Komponenten: Bestand und nächste Schnitte
 
+## Verbesserungsplan vom 23.11.2026
+
+Im Ausgangsstand `422e81f0e` haben **15 Angular-Komponentendateien mehr als
+1.000 physische TypeScript-Zeilen**. Die manuelle Kodierverwaltung umfasst
+1.691 Zeilen, Replay 1.591. Der Kodierhandbuch-Export ist mit 837 Zeilen
+kleiner und eignet sich mit seinem klar begrenzten Dialogablauf als Pilot
+für konsistente Anzeigezustände. Die Zeilenzahl hilft bei der Auswahl.
+Fortschritt zeigt sich an klaren Zuständigkeiten und abgesicherten Abläufen.
+
+| Reihenfolge | Arbeitspaket | Überprüfbares Ergebnis |
+| --- | --- | --- |
+| 1 | Kodierhandbuch-Export | Ladeanzeige, Fortschritt, Download und Fehler aktualisieren sich nach asynchronen Antworten zuverlässig. |
+| 2 | Manuelle Kodierung | Planungsstatus und Tab-Laden haben jeweils einen klaren Besitzer. Cache, Rechte und Aktualisierungsverhalten bleiben anhand konkreter Szenarien nachvollziehbar. |
+| 3 | Replay | Player-Darstellung und Navigation haben explizite Zuständigkeiten. Wechsel von Seite, Antwort und Aufgabe behalten ihre jeweiligen Lade- und Speicherregeln. |
+| Danach | Weitere Komponenten bei fachlichen Änderungen | Je PR einen zusammenhängenden Ablauf verbessern und dessen Verträge gezielt absichern. |
+
+### 1. Kodierhandbuch-Export
+
+1. **Anzeige bereinigen.** Die an das Template gebundenen Lade- und
+   Statuswerte im Dialog auf ihre Signalquellen zurückführen. Aus Aufgaben,
+   Fehlwertprofilen, Jobdefinitionen und aktueller Auswahl abgeleitete Ansichten
+   mit `computed()` bilden. Die Startwerte des geteilten Exportformulars als
+   einmaligen Snapshot behandeln, damit nachgeladene Optionen laufende Eingaben
+   erhalten. Die vorhandenen `markForCheck()`-Aufrufe je Callback prüfen und
+   dort entfernen, wo Signaländerungen die Anzeige nachweislich aktualisieren.
+   Das aktuelle Template bindet die Aufgabenauswahl über
+   `ngx-codebook-export`. Vor einer Bereinigung des älteren Material-Tabellenpfads
+   dessen Aufrufer prüfen.
+2. **Exportauftrag bündeln.** Eine dialoglokale Fassade steuert Start, Statusabfrage
+   und Download-Request über den vorhandenen `CodingExportService`. Sie hält
+   Workspace, Aufgabenauswahl, Filter und Format beim Start fest und stellt einen
+   lesbaren Auftragszustand bereit. Der Dialog bindet das bestehende Formular und
+   löst den Browserdownload aus. Pro Auftrag läuft höchstens eine Statusabfrage
+   gleichzeitig. Die Exportsperre endet nach Download oder Fehler. Prüfen, wie
+   sich ein Workspace-Wechsel bei offenem Dialog heute verhält. Falls Aufträge
+   und UI-Kontext auseinanderlaufen, die Verhaltenskorrektur separat prüfen.
+3. **Regression absichern.** Die bestehende Zoneless-Spec und
+   `cypress/zoneless/statistics-codebook.cy.ts` für verzögertes Laden,
+   Fortschritt, Download und Fehler verwenden. Die Unit-Tests decken die
+   Schnittmenge von Jobdefinition und Variablenbündel auf Variablenebene,
+   die Exportparameter und das Ende laufender Abfragen beim Schließen ab.
+   Ergänzen, was der Schnitt konkret gefährdet, etwa einen schnellen Doppelklick
+   oder eine späte Antwort aus einem beendeten Dialog.
+
+Quellen [Exportdialog](../../apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.ts),
+[Template](../../apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.html),
+[Zoneless-Tests](../../apps/frontend/src/app/coding/components/export-coding-book/export-coding-book.component.zoneless.spec.ts)
+
+### 2. Manuelle Kodierung
+
+1. **Planungsanzeige vereinfachen.** Die vorhandene `ManualCodingPlanning`-Logik
+   weiterverwenden und Status, Warnungen und nächste Aktion als zusammenhängende
+   lesbare Sicht ableiten. Die Planungsansicht erhält diese Werte und meldet
+   Nutzeraktionen über ihre vorhandene Schnittstelle. Die Planungsfassade
+   besitzt weiter Laden und Wiederherstellung des Snapshots.
+2. **Tab-Laden als eigenen Schnitt behandeln.** In `loadManualTabData` die
+   Entscheidung über fachliche Ladeaktionen von deren Ausführung lösen.
+   Die Seite besitzt aktive Auswahl, Rechte und Lazy Rendering. Die bestehende
+   Refresh-Fassade koordiniert Fokus, manuelles Nachladen und vorgemerkte
+   Aktualisierungen. Die Joblisten-Fassade führt gezielte Reloads aus.
+3. **Regression absichern.** Einen gespeicherten Planungsstand ohne neue
+   Abfrage wiederherstellen. Bei deaktivierter Automatik und leerem Cache
+   Planungsdaten erst auf manuelles Nachladen abfragen. Einen erzwungenen
+   Refresh nach laufendem Laden ausführen.
+   Nach einer Änderung nur die betroffene Jobliste aktualisieren, bei
+   versteckter Liste erst beim Öffnen. Rechte für den Abschluss-Tab, die
+   30-Sekunden-Drosselung bei Fokus und das Verwerfen alter Antworten beim
+   Workspace-Wechsel einschließlich A → B → A in Komponententests und
+   `cypress/zoneless/manual-preparation.cy.ts` prüfen.
+
+Quellen [Manuelle Kodierverwaltung](../../apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.ts),
+[Planungslogik](../../apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-planning.ts),
+[Planungsfassade](../../apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-planning.facade.ts),
+[Refresh-Fassade](../../apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-refresh-workflow.facade.ts)
+
+### 3. Replay
+
+1. **Bei der Player-Darstellung beginnen.** Anker-Markierung inklusive
+   Wiederholungen und Bundle-Markern aus der Seitenkomponente lösen. Die
+   Player-Ansicht besitzt den DOM-Zugriff und räumt beim Aufgabenwechsel und
+   Verlassen der Ansicht auf. Wasserzeichen und Größenänderung als jeweils
+   lokal begrenzte UI-Aufgaben behandeln. Die vorhandenen Tests für
+   Anker-Markierung und abgebrochene Wiederholungen an der neuen Grenze erhalten.
+2. **Navigation anschließend schärfen.** Den Wechsel über
+   `applyUnitChanged` entlang der vorhandenen Navigationsstrategie ordnen.
+   Direkten Seitenwechsel, Austausch der Antworten und vollständiges Laden
+   einer Aufgabe einzeln prüfen. Vorhandene Fassaden für Payload, Sitzung,
+   Authentifizierung und Recovery weiterverwenden. Die Codeauswahl prüft vor
+   einem Fallwechsel den Speicherstatus und erforderliche Kommentare.
+3. **Regression absichern.** In `cypress/zoneless/replay-lifecycle.cy.ts`
+   verspätete Antworten, Token-Erneuerung und Wiederherstellung ungespeicherter
+   Notizen prüfen. Änderungen an Navigation, Verona-Nachrichten oder
+   Wiederanmeldung zusätzlich über die passenden
+   [Live-Tests](../qa/e2e-coverage.md#lokal-prüfen) mit echtem Player bzw.
+   Keycloak prüfen. Ein Speicherfehler sperrt den Fallwechsel, bis der
+   bestehende Speicherablauf ihn wieder freigibt.
+
+Quellen [Replay-Komponente](../../apps/frontend/src/app/replay/components/replay/replay.component.ts),
+[Replay-Tests](../../apps/frontend/src/app/replay/components/replay/replay.component.spec.ts),
+[Navigationsstrategie](../../apps/frontend/src/app/replay/utils/replay-navigation-strategy.ts)
+
+### Weitere Kandidaten
+
+| Auslöser | Nächster fachlicher Schnitt |
+| --- | --- |
+| Änderung an Kodierverwaltung, Jobliste oder Jobdefinitionsliste | Versionsaktionen der Kodierverwaltung und tabellenbezogene Filter und Auswahl der Listen jeweils bei ihrem Besitzer bündeln. Vorhandene Fassaden für Status, Polling und Jobaktionen nutzen. |
+| Änderung an Jobdefinitionsdialog, Schulung oder Testcenter-Import | Die bereits ausgelagerten Ansichten nutzen. Als Nächstes den konkret betroffenen Speicher-, Wiederherstellungs- oder Importablauf verkleinern. |
+| Änderung an Ergebnisvergleich, Doppelcodierungs-Review oder Codeauswahl | Die betroffenen Tabellen- bzw. Zeileneditorzustände bündeln. Fokus, Auswahl über Seitenwechsel und verzögerte Speicherantworten im jeweiligen Ablauf testen. |
+| Änderung an Dateivalidierung, Testdateien, Testergebnissen oder Variablenanalyse | Bei Tabellenarbeit mit der Anzeigeprojektion beginnen, bei Änderungen an Aufträgen mit Fortschritt und Abbruch. Aktive Auswahl und Workspace-Kontext in den betroffenen Requests absichern. |
+
+### Prüfrahmen pro PR
+
+- Vor dem Schnitt die einschlägigen Tests auf dem Ausgangsstand ausführen.
+  Die Regression jeweils am sichtbaren Verhalten oder an konkreten Requests
+  messen. Bei asynchroner Anzeige nach der Initialisierung
+  `fixture.whenStable()` verwenden, damit die Notifikation durch den
+  Produktivcode geprüft wird.
+- Eine schreibende Quelle pro UI-Zustand. Ableitungen als `computed()`,
+  requestbezogene Abläufe mit RxJS und abonnierte UI-Zustände an ihre Dialog-,
+  Ansichts- oder Workspace-Lebensdauer binden. Bei Formularen die vorhandenen
+  typisierten Controls weitergeben. Zuständigkeiten sind im
+  [Frontend-State-Leitfaden](frontend-state.md) beschrieben.
+- Mit der Node-Version aus `.nvmrc` der Reihe nach
+  `npx nx lint frontend`, `npx nx test frontend` sowie bei den hier
+  betroffenen UI-Abläufen `npx nx build frontend --configuration=production`
+  und `npx nx e2e frontend --configuration=ci --browser=electron` ausführen.
+  Mit `--spec` lässt sich der jeweilige Browserfall für den lokalen Nachlauf
+  eingrenzen. Die Befehle und CI-Nachweise stehen in den
+  [Frontend Quality Gates](../qa/frontend-quality-gates.md).
+- Vorhandene Struktur-Ausnahmen nach der Extraktion mit
+  `npx nx run frontend:prune-structure-baseline` absenken, wenn ihre
+  Messwerte sinken. Im PR benennen, welcher Ablauf einen klaren Besitzer
+  erhalten hat und welche Regressionen geprüft wurden. Die physische
+  Zeilenzahl als Verlauf dokumentieren; für Lint gilt die vorhandene
+  Messung ohne Leer- und Kommentarzeilen.
+
+### Umsetzung im Arbeitsstand
+
+| Bereich | Umsetzung | TypeScript-Zeilen der Komponente |
+| --- | --- | ---: |
+| Kodierhandbuch-Export | Der Dialog leitet die sichtbaren Optionen aus Signals ab. `CodebookExportJobFacade` steuert Auftragsstart, Status und Download. Beim ersten Workspace-Wechsel schließt der Dialog und beendet laufende Dialoganfragen. | 837 → 629 |
+| Manuelle Kodierung | Status, Warnungsvorschau und nächste Aktion stammen aus einer gemeinsamen Anzeigeableitung. Die Tab-Laderegeln liefern die Aktionen, die Seite führt sie über die vorhandenen Fassaden aus. | 1.691 → 1.631 |
+| Replay | Der Ankerdienst verwaltet Markierungen und Wiederholungen. Direktiven besitzen Größenänderung und Wasserzeichenmessung. Die Navigation verwendet ihre bestehende Strategie und aktualisiert den Listenindex für den aktuellen Ladeversuch. | 1.591 → 1.401 |
+
+Die Frontend-Strukturgrenzen wurden für zwei Bestandsdateien abgesenkt.
+Die Komplexitätsausnahmen für Tab-Laden, Planungsstatus und
+`applyUnitChanged` sind entfallen.
+
+Der Exportdialog nutzt die Aufgabentabelle des gemeinsamen Exportformulars.
+Die frühere lokale Material-Tabelle und die vom Template ungenutzten
+Validierungsabonnements wurden entfernt.
+
+| Lokale Prüfung auf Basis von `422e81f0e` unter Node 24.22.1 | Ergebnis |
+| --- | --- |
+| Frontend-Lint und Produktionsbuild | Bestanden. |
+| Vollständige Frontend-Jest-Suite mit Coverage | 354 Suiten mit 3.896 Tests bestanden. Zeilenabdeckung 83,99 %, Branch-Abdeckung 82,61 %. |
+| Frontend Quality Gates | 90 Prüfungen bestanden. |
+| Cypress gegen den Produktionsbuild | 33 von 33 Fällen bestanden, verteilt auf `statistics-codebook.cy.ts`, `manual-preparation.cy.ts` und `replay-lifecycle.cy.ts`. |
+| Live-Replay und Keycloak | Offen. Der lokale Docker-Daemon antwortete auf die Erreichbarkeitsprüfung nicht. Die Cypress-Fälle nutzten kontrollierte API-Antworten. |
+
+Auf der PR-Basis `develop` bei `2274767a2` wurde die Strukturbaseline
+erneut aus dem integrierten Quellstand erzeugt. Frontend-Lint,
+Produktionsbuild, 400 gezielte Jest-Tests in 22 Suiten sowie alle 34
+gezielten Cypress-Fälle gegen diesen Build bestanden. Die Neuinstallation
+verwendete Node 24.22.1 und die in CI gepinnte npm-Version 11.19.1.
+
 ## Konflikt- und Review-Nachlauf zu PR #1149 (02.11.2026)
 
 Geprüft wurde der PR-Stand `eebf7d1055f5050856c0fc6d685e644ee29ffda0`

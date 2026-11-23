@@ -1393,12 +1393,12 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(10, 4);
     setAppliedResults(10, 0, 10);
 
-    expect(component.getPlanningStatusClass()).toBe('status-ready');
-    expect(component.getPlanningStatusIcon()).toBe('play_circle');
-    expect(component.getPlanningStatusTitle()).toBe(
+    expect(component.planningView().status.className).toBe('status-ready');
+    expect(component.planningView().status.icon).toBe('play_circle');
+    expect(component.planningView().status.title).toBe(
       'Bereit für die Durchführung'
     );
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.description).toBe(
       'Die Planung ist vollständig. Bearbeiten Sie nun die offenen Kodierfälle im Abschnitt Durchführung.'
     );
   });
@@ -1409,13 +1409,13 @@ describe('CodingManagementManualComponent', () => {
     analysisFacade().beginAnalysis();
     analysisFacade().restoreAnalysis(null);
 
-    expect(component.getPlanningStatusClass()).toBe('status-ready');
-    expect(component.getPlanningStatusIcon()).toBe('help_outline');
-    expect(component.getPlanningStatusTitle()).toBe('Kodierstand nicht geprüft');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.className).toBe('status-ready');
+    expect(component.planningView().status.icon).toBe('help_outline');
+    expect(component.planningView().status.title).toBe('Kodierstand nicht geprüft');
+    expect(component.planningView().status.description).toBe(
       'Öffnen oder aktualisieren Sie die Planung, um den aktuellen Kodierstand zu prüfen.'
     );
-    expect(component.getPlanningNextStepActionLabel()).toBe('Zur Planung');
+    expect(component.planningView().nextStep.actionLabel).toBe('Zur Planung');
   });
 
   it('should describe loading planning data as an updating status', () => {
@@ -1423,10 +1423,10 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(10, 4);
     setStatisticLoading('isLoadingCodingProgress', true);
 
-    expect(component.getPlanningStatusClass()).toBe('status-ready');
-    expect(component.getPlanningStatusIcon()).toBe('sync');
-    expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.className).toBe('status-ready');
+    expect(component.planningView().status.icon).toBe('sync');
+    expect(component.planningView().status.title).toBe('Status wird aktualisiert');
+    expect(component.planningView().status.description).toBe(
       'Die Planungs- und Kodierfortschritte werden geladen.'
     );
   });
@@ -1462,8 +1462,8 @@ describe('CodingManagementManualComponent', () => {
     });
     analysisFacade().beginAnalysis();
 
-    expect(component.getPlanningStatusTitle()).toBe('Planung noch unvollständig');
-    expect(component.getPlanningStatusIcon()).toBe('assignment_late');
+    expect(component.planningView().status.title).toBe('Planung noch unvollständig');
+    expect(component.planningView().status.icon).toBe('assignment_late');
   });
 
   it('should show an updating status while the initial response analysis is loading', () => {
@@ -1471,7 +1471,7 @@ describe('CodingManagementManualComponent', () => {
     analysisFacade().restoreAnalysis(null);
     analysisFacade().beginAnalysis();
 
-    expect(component.getPlanningStatusTitle()).toBe('Status wird aktualisiert');
+    expect(component.planningView().status.title).toBe('Status wird aktualisiert');
   });
 
   it('should ask for an explicit planning data refresh before loading planning snapshots', () => {
@@ -1485,10 +1485,10 @@ describe('CodingManagementManualComponent', () => {
       .spyOn(componentInternals, 'refreshManualCodingPlanning')
       .mockImplementation();
 
-    expect(component.getPlanningStatusClass()).toBe('status-ready');
-    expect(component.getPlanningStatusIcon()).toBe('refresh');
-    expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
-    expect(component.getPlanningNextStepActionLabel()).toBe('Aktualisieren');
+    expect(component.planningView().status.className).toBe('status-ready');
+    expect(component.planningView().status.icon).toBe('refresh');
+    expect(component.planningView().status.title).toBe('Planungsdaten aktualisieren');
+    expect(component.planningView().nextStep.actionLabel).toBe('Aktualisieren');
 
     component.performPlanningNextStep();
 
@@ -1499,12 +1499,12 @@ describe('CodingManagementManualComponent', () => {
     setCompletePlanningState();
     setAppliedResults(10, 0, 10);
 
-    expect(component.getPlanningStatusClass()).toBe('status-attention');
-    expect(component.getPlanningStatusIcon()).toBe('sync_problem');
-    expect(component.getPlanningStatusTitle()).toBe(
+    expect(component.planningView().status.className).toBe('status-attention');
+    expect(component.planningView().status.icon).toBe('sync_problem');
+    expect(component.planningView().status.title).toBe(
       'Kodierfortschritt nicht verfügbar'
     );
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.description).toBe(
       'Die Planung ist vollständig, der aktuelle Kodierfortschritt konnte aber nicht ermittelt werden. Aktualisieren Sie die Ansicht oder prüfen Sie die Kodierjobs.'
     );
   });
@@ -1515,14 +1515,14 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(582, 582);
     setAppliedResults(581, 0, 581);
 
-    expect(component.getPlanningStatusClass()).toBe('status-attention');
-    expect(component.getPlanningStatusIcon()).toBe('published_with_changes');
-    expect(component.getPlanningStatusTitle()).toBe('Bereit für den Abschluss');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.className).toBe('status-attention');
+    expect(component.planningView().status.icon).toBe('published_with_changes');
+    expect(component.planningView().status.title).toBe('Bereit für den Abschluss');
+    expect(component.planningView().status.description).toBe(
       'Alle Kodierfälle sind abgeschlossen. Übernehmen Sie nun die Kodierergebnisse in den Datenbestand.'
     );
-    expect(component.getPlanningNextStepTitle()).toBe('Ergebnisse übernehmen');
-    expect(component.getPlanningNextStepDescription()).toBe(
+    expect(component.planningView().nextStep.title).toBe('Ergebnisse übernehmen');
+    expect(component.planningView().nextStep.description).toBe(
       'Alle Kodierfälle sind bearbeitet. Übernehmen Sie jetzt die abgeschlossenen Ergebnisse in den Datenbestand.'
     );
   });
@@ -1533,14 +1533,14 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(582, 582);
     setAppliedResults(581, 0, 581);
 
-    expect(component.getPlanningStatusClass()).toBe('status-attention');
-    expect(component.getPlanningStatusIcon()).toBe('published_with_changes');
-    expect(component.getPlanningStatusTitle()).toBe('Kodierfälle abgeschlossen');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.className).toBe('status-attention');
+    expect(component.planningView().status.icon).toBe('published_with_changes');
+    expect(component.planningView().status.title).toBe('Kodierfälle abgeschlossen');
+    expect(component.planningView().status.description).toBe(
       'Alle Kodierfälle sind abgeschlossen. Die Übernahme der Ergebnisse in den Datenbestand bleibt Studienmanager:innen vorbehalten.'
     );
-    expect(component.getPlanningNextStepTitle()).toBe('Kodierjobs prüfen');
-    expect(component.getPlanningNextStepDescription()).toBe(
+    expect(component.planningView().nextStep.title).toBe('Kodierjobs prüfen');
+    expect(component.planningView().nextStep.description).toBe(
       'Alle Kodierfälle sind bearbeitet. Sie können die abgeschlossenen Kodierjobs in der Durchführung einsehen.'
     );
   });
@@ -1548,16 +1548,16 @@ describe('CodingManagementManualComponent', () => {
   it('should not describe empty progress snapshots as ready for completion', () => {
     setEmptyPlanningSnapshots();
 
-    expect(component.getPlanningStatusClass()).toBe('status-ready');
-    expect(component.getPlanningStatusIcon()).toBe('route');
-    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Planung');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.className).toBe('status-ready');
+    expect(component.planningView().status.icon).toBe('route');
+    expect(component.planningView().status.title).toBe('Bereit für die Planung');
+    expect(component.planningView().status.description).toBe(
       'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.'
     );
-    expect(component.getPlanningNextStepTitle()).toBe(
+    expect(component.planningView().nextStep.title).toBe(
       'Jobdefinition erstellen'
     );
-    expect(component.getPlanningNextStepTargetTab()).toBe('planning');
+    expect(component.planningView().nextStep.target.tab).toBe('planning');
 
     statisticsFacade().restorePlanningSnapshot({
       appliedResultsOverview: {
@@ -1567,8 +1567,8 @@ describe('CodingManagementManualComponent', () => {
       } satisfies ManualAppliedResultsOverview
     });
 
-    expect(component.getPlanningStatusTitle()).toBe('Bereit für die Planung');
-    expect(component.getPlanningStatusDescription()).toBe(
+    expect(component.planningView().status.title).toBe('Bereit für die Planung');
+    expect(component.planningView().status.description).toBe(
       'Prüfen Sie die Antwortanalyse und erstellen Sie danach passende Kodierjob-Definitionen.'
     );
   });
@@ -1578,9 +1578,9 @@ describe('CodingManagementManualComponent', () => {
     setCodingProgress(582, 582);
     setAppliedResults(581, 581, 0);
 
-    expect(component.getPlanningStatusClass()).toBe('status-complete');
-    expect(component.getPlanningStatusIcon()).toBe('check_circle');
-    expect(component.getPlanningStatusTitle()).toBe(
+    expect(component.planningView().status.className).toBe('status-complete');
+    expect(component.planningView().status.icon).toBe('check_circle');
+    expect(component.planningView().status.title).toBe(
       'Manuelle Kodierung abgeschlossen'
     );
   });
@@ -1595,18 +1595,18 @@ describe('CodingManagementManualComponent', () => {
       ]
     });
 
-    expect(component.hasManualCodeAvailabilityWarnings()).toBe(true);
+    expect(component.planningView().warnings.visible).toHaveLength(1);
     expect(component.hasPlanningWarnings()).toBe(true);
-    expect(component.getPlanningStatusClass()).toBe('status-attention');
-    expect(component.getPlanningStatusIcon()).toBe('warning');
-    expect(component.getPlanningStatusTitle()).toBe(
+    expect(component.planningView().status.className).toBe('status-attention');
+    expect(component.planningView().status.icon).toBe('warning');
+    expect(component.planningView().status.title).toBe(
       'Reguläre Codes für manuelle Kodierung prüfen'
     );
-    expect(component.getPlanningNextStepTitle()).toBe('Reguläre Codes ergänzen');
-    expect(component.getPlanningNextStepActionLabel()).toBe(
+    expect(component.planningView().nextStep.title).toBe('Reguläre Codes ergänzen');
+    expect(component.planningView().nextStep.actionLabel).toBe(
       'Betroffene Variablen ansehen'
     );
-    expect(component.getPlanningNextStepTargetSection()).toBe(
+    expect(component.planningView().nextStep.target.sectionId).toBe(
       'manual-variable-coverage'
     );
 
@@ -1674,7 +1674,7 @@ describe('CodingManagementManualComponent', () => {
 
     fixture.detectChanges();
 
-    expect(component.getPlanningNextStepTargetSection()).toBe(
+    expect(component.planningView().nextStep.target.sectionId).toBe(
       'manual-variable-coverage'
     );
     expect(
@@ -1732,18 +1732,18 @@ describe('CodingManagementManualComponent', () => {
       ]
     });
 
-    expect(component.getPlanningStatusClass()).toBe('status-warning');
-    expect(component.getPlanningStatusTitle()).toBe('Konflikte prüfen');
-    expect(component.getPlanningStatusDescription()).toContain(
+    expect(component.planningView().status.className).toBe('status-warning');
+    expect(component.planningView().status.title).toBe('Konflikte prüfen');
+    expect(component.planningView().status.description).toContain(
       '1 Variablenkonflikte'
     );
-    expect(component.getPlanningNextStepTitle()).toBe(
+    expect(component.planningView().nextStep.title).toBe(
       'Konflikte zuerst klären'
     );
-    expect(component.getPlanningNextStepActionLabel()).toBe(
+    expect(component.planningView().nextStep.actionLabel).toBe(
       'Zu den Jobdefinitionen'
     );
-    expect(component.getPlanningNextStepTargetSection()).toBe(
+    expect(component.planningView().nextStep.target.sectionId).toBe(
       'manual-planning'
     );
   });
@@ -2169,14 +2169,14 @@ describe('CodingManagementManualComponent', () => {
     expect(component.responseAnalysis()).toBe(responseAnalysis);
     requestSpies.forEach(spy => expect(spy).not.toHaveBeenCalled());
     expect(component.shouldRenderManualTabData('planning')).toBe(true);
-    expect(component.getPlanningStatusTitle()).not.toBe(
+    expect(component.planningView().status.title).not.toBe(
       'Planungsdaten aktualisieren'
     );
 
     restoredComponentInternals.invalidateCodingStatusCache();
 
     expect(restoredComponentInternals.hasLoadedPlanningDataBundle).toBe(false);
-    expect(component.getPlanningStatusTitle()).toBe(
+    expect(component.planningView().status.title).toBe(
       'Planungsdaten aktualisieren'
     );
   });
@@ -2378,7 +2378,7 @@ describe('CodingManagementManualComponent', () => {
     expect(loadJobDefinitionsForExportSpy).not.toHaveBeenCalled();
     expect(refreshJobDefinitionsSpy).not.toHaveBeenCalled();
     expect(component.shouldShowPlanningOverview()).toBe(false);
-    expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
+    expect(component.planningView().status.title).toBe('Planungsdaten aktualisieren');
   });
 
   it('should wait for the auto-refresh setting before loading initial coding freshness', () => {
@@ -3222,7 +3222,7 @@ describe('CodingManagementManualComponent', () => {
 
       component.performPlanningNextStep();
 
-      expect(component.getPlanningNextStepTargetTab()).toBe('execution');
+      expect(component.planningView().nextStep.target.tab).toBe('execution');
       expect(component.selectedManualTabIndex()).toBe(3);
       expect(loadManualTabDataSpy).toHaveBeenCalledWith('execution');
       expect(scrollToSectionSpy).not.toHaveBeenCalled();
@@ -3256,7 +3256,7 @@ describe('CodingManagementManualComponent', () => {
 
       component.performPlanningNextStep();
 
-      expect(component.getPlanningNextStepTargetTab()).toBe('completion');
+      expect(component.planningView().nextStep.target.tab).toBe('completion');
       expect(component.selectedManualTabIndex()).toBe(4);
       expect(loadManualTabDataSpy).toHaveBeenCalledWith('completion');
 
@@ -3333,7 +3333,7 @@ describe('CodingManagementManualComponent', () => {
       expect(loadManualTabDataSpy).toHaveBeenCalledWith('planning');
       expect(scrollToSectionSpy).not.toHaveBeenCalled();
       expect(componentInternals.pendingManualFreshnessFocus).toBe(true);
-      expect(component.getPlanningStatusTitle()).toBe('Planungsdaten aktualisieren');
+      expect(component.planningView().status.title).toBe('Planungsdaten aktualisieren');
 
       setCompletePlanningState();
       setCodingProgress(10, 4);
@@ -3575,8 +3575,8 @@ describe('CodingManagementManualComponent', () => {
       analysisTimestamp: new Date().toISOString()
     });
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('preparation');
-    expect(component.getPlanningNextStepTargetSection()).toBe('manual-preparation');
+    expect(component.planningView().nextStep.target.tab).toBe('preparation');
+    expect(component.planningView().nextStep.target.sectionId).toBe('manual-preparation');
 
     analysisFacade().restoreAnalysis(null);
     statisticsFacade().restorePlanningSnapshot({
@@ -3586,8 +3586,8 @@ describe('CodingManagementManualComponent', () => {
       }
     });
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('planning');
-    expect(component.getPlanningNextStepTargetSection()).toBe('manual-planning');
+    expect(component.planningView().nextStep.target.tab).toBe('planning');
+    expect(component.planningView().nextStep.target.sectionId).toBe('manual-planning');
 
     statisticsFacade().restorePlanningSnapshot({
       caseCoverageOverview: {
@@ -3596,8 +3596,8 @@ describe('CodingManagementManualComponent', () => {
       }
     });
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('training');
-    expect(component.getPlanningNextStepTargetSection()).toBe('manual-support');
+    expect(component.planningView().nextStep.target.tab).toBe('training');
+    expect(component.planningView().nextStep.target.sectionId).toBe('manual-support');
 
     setManualFreshnessJobSummary({
       activeTrainingJobs: 0,
@@ -3606,8 +3606,8 @@ describe('CodingManagementManualComponent', () => {
       staleSourceJobs: 1
     }, 3);
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
-    expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Kodierjobs');
+    expect(component.planningView().nextStep.target.tab).toBe('execution');
+    expect(component.planningView().nextStep.actionLabel).toBe('Zu den Kodierjobs');
 
     setManualFreshnessJobSummary({
       activeTrainingJobs: 0,
@@ -3616,8 +3616,8 @@ describe('CodingManagementManualComponent', () => {
       staleSourceJobs: 1
     }, 3);
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
-    expect(component.getPlanningNextStepActionLabel()).toBe(
+    expect(component.planningView().nextStep.target.tab).toBe('execution');
+    expect(component.planningView().nextStep.actionLabel).toBe(
       'Doppelkodierungsreview öffnen'
     );
 
@@ -3628,8 +3628,8 @@ describe('CodingManagementManualComponent', () => {
       staleSourceJobs: 1
     }, 0);
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('execution');
-    expect(component.getPlanningNextStepActionLabel()).toBe(
+    expect(component.planningView().nextStep.target.tab).toBe('execution');
+    expect(component.planningView().nextStep.actionLabel).toBe(
       'Veraltete Jobs prüfen'
     );
 
@@ -3640,8 +3640,8 @@ describe('CodingManagementManualComponent', () => {
       staleSourceJobs: 0
     }, 0);
 
-    expect(component.getPlanningNextStepTargetTab()).toBe('completion');
-    expect(component.getPlanningNextStepTargetSection()).toBe('manual-completion');
+    expect(component.planningView().nextStep.target.tab).toBe('completion');
+    expect(component.planningView().nextStep.target.sectionId).toBe('manual-completion');
   });
 
   it('should open the double-coding review dialog for the freshness target', () => {
@@ -3879,8 +3879,8 @@ describe('CodingManagementManualComponent', () => {
         .mockImplementation();
 
       expect(component.visibleManualCodingTabs).not.toContain('completion');
-      expect(component.getPlanningNextStepTargetTab()).toBe('execution');
-      expect(component.getPlanningNextStepActionLabel()).toBe('Zu den Kodierjobs');
+      expect(component.planningView().nextStep.target.tab).toBe('execution');
+      expect(component.planningView().nextStep.actionLabel).toBe('Zu den Kodierjobs');
 
       component.performPlanningNextStep();
 
@@ -4066,22 +4066,22 @@ describe('CodingManagementManualComponent', () => {
       ]
     });
 
-    expect(component.getPlanningNextStepTitle()).toBe(
+    expect(component.planningView().nextStep.title).toBe(
       'Kodierfälle in Jobs verteilen'
     );
-    expect(component.getPlanningNextStepActionLabel()).toBe(
+    expect(component.planningView().nextStep.actionLabel).toBe(
       'Zu den Jobdefinitionen'
     );
-    expect(component.getPlanningNextStepTargetSection()).toBe(
+    expect(component.planningView().nextStep.target.sectionId).toBe(
       'manual-planning'
     );
-    expect(component.getPlanningNextStepDescription()).toContain(
+    expect(component.planningView().nextStep.description).toContain(
       '3 Fälle sind noch nicht in Kodierjobs'
     );
-    expect(component.getPlanningNextStepDescription()).toContain(
+    expect(component.planningView().nextStep.description).toContain(
       '8 Fälle verfügbar'
     );
-    expect(component.getPlanningNextStepDescription()).toContain(
+    expect(component.planningView().nextStep.description).toContain(
       '2 Fälle sind bereits in Jobs verteilt oder durch andere Definitionen reserviert'
     );
   });

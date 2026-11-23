@@ -6,7 +6,7 @@ import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-exp
 import { DatePipe } from '@angular/common';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import {
-  of, throwError, BehaviorSubject, Subject
+  of, throwError, Subject
 } from 'rxjs';
 import { TranslateService } from '@ngx-translate/core';
 import { ExportCodingBookComponent } from './export-coding-book.component';
@@ -15,8 +15,6 @@ import { CodingJobBackendService } from '../../services/coding-job-backend.servi
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
-import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
-import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { CodebookJobDefinitionPickerDialogComponent } from './codebook-job-definition-picker-dialog.component';
 
 describe('ExportCodingBookComponent', () => {
@@ -27,8 +25,10 @@ describe('ExportCodingBookComponent', () => {
   let missingsProfileService: jest.Mocked<MissingsProfileService>;
   let fileService: jest.Mocked<FileService>;
   let appService: jest.Mocked<AppService>;
-  let validationStateService: jest.Mocked<ValidationStateService>;
   let matDialog: jest.Mocked<MatDialog>;
+  let workspaceChanges: Subject<number>;
+  let dialogClosing: Subject<void>;
+  let closeDialog: jest.Mock;
 
   const mockUnits = [
     {
@@ -105,14 +105,6 @@ describe('ExportCodingBookComponent', () => {
     }
   ];
 
-  const mockValidationProgress$ = new BehaviorSubject<ValidationProgress>({
-    status: 'idle',
-    progress: 0,
-    message: ''
-  });
-
-  const mockValidationResults$ = new BehaviorSubject<ValidateCodingCompletenessResponseDto | null>(null);
-
   beforeEach(async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask', 'requestAnimationFrame'] });
     const exportServiceMock = {
@@ -135,16 +127,14 @@ describe('ExportCodingBookComponent', () => {
       getUnitsWithFileIds: jest.fn()
     };
 
+    workspaceChanges = new Subject<number>();
+    dialogClosing = new Subject<void>();
+    closeDialog = jest.fn(() => dialogClosing.next());
+
     const appServiceMock = {
+      selectedWorkspaceId$: workspaceChanges,
       selectedWorkspaceId: 1 as number | null,
       dataLoading: false as boolean | number
-    };
-
-    const validationStateServiceMock = {
-      validationProgress$: mockValidationProgress$.asObservable(),
-      validationResults$: mockValidationResults$.asObservable(),
-      getValidationResults: jest.fn(),
-      getValidationProgress: jest.fn()
     };
 
     const matDialogMock = {
@@ -162,21 +152,20 @@ describe('ExportCodingBookComponent', () => {
       addLangs: jest.fn(),
       getLangs: jest.fn(() => []),
       currentLang: 'en',
-      onLangChange: of({}),
-      onTranslationChange: of({}),
-      onDefaultLangChange: of({})
+      onLangChange: new Subject(),
+      onTranslationChange: new Subject(),
+      onDefaultLangChange: new Subject()
     };
 
     await TestBed.configureTestingModule({
       imports: [ExportCodingBookComponent],
       providers: [
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: closeDialog, beforeClosed: () => dialogClosing } },
         { provide: CodingExportService, useValue: exportServiceMock },
         { provide: CodingJobBackendService, useValue: codingJobBackendServiceMock },
         { provide: MissingsProfileService, useValue: missingsProfileServiceMock },
         { provide: FileService, useValue: fileServiceMock },
         { provide: AppService, useValue: appServiceMock },
-        { provide: ValidationStateService, useValue: validationStateServiceMock },
         { provide: TranslateService, useValue: translateServiceMock },
         { provide: MatDialog, useValue: matDialogMock },
         DatePipe
@@ -188,7 +177,6 @@ describe('ExportCodingBookComponent', () => {
     missingsProfileService = TestBed.inject(MissingsProfileService) as jest.Mocked<MissingsProfileService>;
     fileService = TestBed.inject(FileService) as jest.Mocked<FileService>;
     appService = TestBed.inject(AppService) as jest.Mocked<AppService>;
-    validationStateService = TestBed.inject(ValidationStateService) as jest.Mocked<ValidationStateService>;
     matDialog = TestBed.inject(MatDialog) as jest.Mocked<MatDialog>;
 
     // Setup default mock returns
@@ -196,13 +184,6 @@ describe('ExportCodingBookComponent', () => {
     codingJobBackendService.getJobDefinitions.mockReturnValue(of(mockJobDefinitions));
     codingJobBackendService.getVariableBundles.mockReturnValue(of(mockVariableBundles));
     missingsProfileService.getMissingsProfiles.mockReturnValue(of(mockMissingsProfiles));
-    validationStateService.getValidationResults.mockReturnValue(null);
-    validationStateService.getValidationProgress.mockReturnValue({
-      status: 'idle',
-      progress: 0,
-      message: ''
-    });
-
     fixture = TestBed.createComponent(ExportCodingBookComponent);
     component = fixture.componentInstance;
     (component as unknown as { dialog: MatDialog }).dialog = matDialog;
@@ -218,8 +199,6 @@ describe('ExportCodingBookComponent', () => {
   });
 
   afterEach(() => {
-    mockValidationProgress$.next({ status: 'idle', progress: 0, message: '' });
-    mockValidationResults$.next(null);
     fixture.destroy();
     jest.restoreAllMocks();
     jest.useRealTimers();
@@ -242,87 +221,10 @@ describe('ExportCodingBookComponent', () => {
       expect(component.availableVariableBundles().map(bundle => bundle.id)).toEqual([5, 7, 8]);
       expect(component.missingsProfiles().length).toBe(3); // includes default empty profile
     });
-
-    it('should setup validation state subscriptions', () => {
-      fixture.detectChanges();
-
-      expect(component.validationProgress()).toEqual({
-        status: 'idle',
-        progress: 0,
-        message: ''
-      });
-      expect(component.isValidating()).toBe(false);
-    });
-
-    it('should update validation progress when state changes', () => {
-      fixture.detectChanges();
-
-      mockValidationProgress$.next({
-        status: 'loading',
-        progress: 50,
-        message: 'Validating...'
-      });
-
-      expect(component.validationProgress()?.status).toBe('loading');
-      expect(component.isValidating()).toBe(true);
-    });
-
-    it('should update validation results when available', () => {
-      fixture.detectChanges();
-
-      const mockResults: ValidateCodingCompletenessResponseDto = {
-        cacheKey: 'test-cache-key',
-        results: [],
-        total: 100,
-        missing: 0,
-        currentPage: 1,
-        pageSize: 50,
-        totalPages: 2,
-        hasNextPage: true,
-        hasPreviousPage: false
-      };
-
-      mockValidationResults$.next(mockResults);
-
-      expect(component.validationResults()).toEqual(mockResults);
-      expect(component.validationCacheKey()).toBe('test-cache-key');
-    });
-
-    it('should load existing validation results on init', () => {
-      const existingResults: ValidateCodingCompletenessResponseDto = {
-        cacheKey: 'existing-key',
-        results: [],
-        total: 50,
-        missing: 10,
-        currentPage: 1,
-        pageSize: 50,
-        totalPages: 1,
-        hasNextPage: false,
-        hasPreviousPage: false
-      };
-
-      validationStateService.getValidationResults.mockReturnValue(existingResults);
-
-      fixture.detectChanges();
-
-      expect(component.validationResults()).toEqual(existingResults);
-    });
-  });
-
-  describe('ngOnDestroy', () => {
-    it('should complete destroy subject', () => {
-      const nextSpy = jest.spyOn((component as unknown as { destroy$: Subject<void> }).destroy$, 'next');
-      const completeSpy = jest.spyOn((component as unknown as { destroy$: Subject<void> }).destroy$, 'complete');
-
-      component.ngOnDestroy();
-
-      expect(nextSpy).toHaveBeenCalled();
-      expect(completeSpy).toHaveBeenCalled();
-    });
   });
 
   describe('loadUnitsWithFileIds', () => {
-    it('should load units and setup data source', () => {
+    it('should load the units for the shared form', () => {
       fixture.detectChanges();
 
       expect(component.availableUnits()).toEqual([
@@ -348,7 +250,6 @@ describe('ExportCodingBookComponent', () => {
           unitData: mockUnits[2].data
         }
       ]);
-      expect(component.dataSource.data.length).toBe(3);
       expect(component.isLoading()).toBe(false);
     });
 
@@ -377,22 +278,6 @@ describe('ExportCodingBookComponent', () => {
       fixture.detectChanges();
 
       expect(fileService.getUnitsWithFileIds).not.toHaveBeenCalled();
-    });
-
-    it('should setup custom filter predicate', () => {
-      fixture.detectChanges();
-
-      const filterPredicate = component.dataSource.filterPredicate;
-      const testData = {
-        unitId: 1,
-        unitKey: 'test.vocs',
-        unitName: 'test.vocs',
-        unitAlias: null,
-        unitData: ''
-      };
-
-      expect(filterPredicate(testData, 'test')).toBe(true);
-      expect(filterPredicate(testData, 'other')).toBe(false);
     });
   });
 
@@ -560,56 +445,6 @@ describe('ExportCodingBookComponent', () => {
     });
   });
 
-  describe('applyFilter', () => {
-    it('should apply filter to data source', () => {
-      fixture.detectChanges();
-
-      const event = {
-        target: { value: '  Test1  ' }
-      } as unknown as Event;
-
-      component.applyFilter(event);
-
-      expect(component.dataSource.filter).toBe('test1');
-    });
-  });
-
-  describe('toggleUnitSelection', () => {
-    it('should add unit to selection list when selected', () => {
-      component.toggleUnitSelection(1, true);
-
-      expect(component.unitList()).toContain(1);
-    });
-
-    it('should not add duplicate units', () => {
-      component.unitList.set([1]);
-      component.toggleUnitSelection(1, true);
-
-      expect(component.unitList()).toEqual([1]);
-    });
-
-    it('should remove unit from selection list when deselected', () => {
-      component.unitList.set([1, 2, 3]);
-      component.toggleUnitSelection(2, false);
-
-      expect(component.unitList()).toEqual([1, 3]);
-    });
-  });
-
-  describe('isUnitSelected', () => {
-    it('should return true if unit is selected', () => {
-      component.unitList.set([1, 2, 3]);
-
-      expect(component.isUnitSelected(2)).toBe(true);
-    });
-
-    it('should return false if unit is not selected', () => {
-      component.unitList.set([1, 2, 3]);
-
-      expect(component.isUnitSelected(4)).toBe(false);
-    });
-  });
-
   describe('formatUnitName', () => {
     it('should remove .vocs extension', () => {
       expect(component.formatUnitName('test.vocs')).toBe('test');
@@ -623,25 +458,6 @@ describe('ExportCodingBookComponent', () => {
 
     it('should handle empty or null strings', () => {
       expect(component.formatUnitName('')).toBe('');
-    });
-  });
-
-  describe('toggleAllUnits', () => {
-    beforeEach(() => {
-      fixture.detectChanges();
-    });
-
-    it('should select all units when isSelected is true', () => {
-      component.toggleAllUnits(true);
-
-      expect(component.unitList()).toEqual([1, 2, 3]);
-    });
-
-    it('should deselect all units when isSelected is false', () => {
-      component.unitList.set([1, 2, 3]);
-      component.toggleAllUnits(false);
-
-      expect(component.unitList()).toEqual([]);
     });
   });
 
@@ -661,11 +477,12 @@ describe('ExportCodingBookComponent', () => {
       expect(exportService.startCodebookJob).toHaveBeenCalledWith(
         1,
         '1',
-        component.contentOptions(),
+        { ...component.contentOptions(), missingsProfile: '1' },
         [1, 2]
       );
-      expect(component.codebookJobId()).toBe('123');
-      expect(component.codebookJobStatus()).toBe('pending');
+      expect(component.jobState().status).toBe('pending');
+      jest.advanceTimersByTime(1500);
+      expect(exportService.getCodebookJobStatus).toHaveBeenCalledWith(1, '123');
     });
 
     it('should not export if no workspace selected', () => {
@@ -689,8 +506,8 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(component.codebookJobStatus()).toBe('failed');
-      expect(component.codebookJobError()).toBe('Failed to start codebook generation job');
+      expect(component.jobState().status).toBe('failed');
+      expect(component.jobState().error).toBe('Failed to start codebook generation job');
     });
 
     it('should set status to pending when starting', () => {
@@ -699,14 +516,14 @@ describe('ExportCodingBookComponent', () => {
 
       component.exportCodingBook();
 
-      expect(component.codebookJobProgress()).toBe(0);
+      expect(component.jobState().progress).toBe(0);
     });
   });
 
   it('keeps host scope filters when the shared form requests an export', () => {
     component.selectedJobDefinitionId.set(10);
     component.selectedVariableBundleIds.set([5]);
-    component.contentOptions.update(options => ({ ...options, trainingRequirement: 'required' }));
+    component.onTrainingRequirementChange('required');
     exportService.startCodebookJob.mockReturnValue(new Subject());
     component.onSharedExport({
       selectedUnits: [2],
@@ -751,7 +568,7 @@ describe('ExportCodingBookComponent', () => {
     jest.advanceTimersByTime(4500);
     expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
     expect(status.observed).toBe(true);
-    component.ngOnDestroy();
+    fixture.destroy();
     expect(status.observed).toBe(false);
     jest.advanceTimersByTime(4500);
     expect(exportService.getCodebookJobStatus).toHaveBeenCalledTimes(1);
@@ -764,46 +581,31 @@ describe('ExportCodingBookComponent', () => {
     exportService.downloadCodebookFile.mockReturnValue(download);
     component.unitList.set([1]); component.exportCodingBook(); jest.advanceTimersByTime(1500);
     component.exportCodingBook();
-    expect(component.isExportBusy).toBe(true);
+    expect(component.jobState().status).toBe('processing');
     expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
-    component.ngOnDestroy(); expect(download.observed).toBe(false);
+    fixture.destroy(); expect(download.observed).toBe(false);
   });
 
-  describe('resetCodebookJob', () => {
-    it('should reset all codebook job state', () => {
-      component.codebookJobId.set('123');
-      component.codebookJobStatus.set('failed');
-      component.codebookJobProgress.set(50);
-      component.codebookJobError.set('some error');
+  it('cancels the old export and closes the dialog at the first workspace change', () => {
+    const start = new Subject<{ jobId: string; message: string }>();
+    exportService.startCodebookJob.mockReturnValue(start);
+    fixture.detectChanges();
+    component.unitList.set([1]);
+    component.exportCodingBook();
+    expect(start.observed).toBe(true);
 
-      component.resetCodebookJob();
+    appService.selectedWorkspaceId = 2;
+    workspaceChanges.next(2);
+    appService.selectedWorkspaceId = 1;
+    workspaceChanges.next(1);
+    start.next({ jobId: 'old-job', message: 'ok' });
+    component.exportCodingBook();
+    jest.advanceTimersByTime(3000);
 
-      expect(component.codebookJobId()).toBeNull();
-      expect(component.codebookJobStatus()).toBe('idle');
-      expect(component.codebookJobProgress()).toBe(0);
-      expect(component.codebookJobError()).toBeNull();
-    });
-  });
-
-  describe('downloadCodebookResult', () => {
-    it('marks the codebook job as failed when the result download fails', () => {
-      exportService.downloadCodebookFile.mockReturnValue(
-        throwError(() => new Error('Download failed'))
-      );
-
-      (component as unknown as {
-        downloadCodebookResult: (workspaceId: number, jobId: string) => void;
-      }).downloadCodebookResult(1, 'job-1');
-
-      expect(component.codebookJobStatus()).toBe('failed');
-      expect(component.codebookJobError()).toBe('Failed to download codebook file');
-    });
-  });
-
-  describe('checkWorkspaceChanges', () => {
-    it('should return false', () => {
-      expect((component as unknown as { checkWorkspaceChanges: () => boolean }).checkWorkspaceChanges()).toBe(false);
-    });
+    expect(start.observed).toBe(false);
+    expect(closeDialog).toHaveBeenCalledTimes(1);
+    expect(exportService.startCodebookJob).toHaveBeenCalledTimes(1);
+    expect(exportService.getCodebookJobStatus).not.toHaveBeenCalled();
   });
 
   describe('contentOptions', () => {
