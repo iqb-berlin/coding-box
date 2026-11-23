@@ -11,9 +11,7 @@ import { ResponseEntity } from '../../entities/response.entity';
 import {
   ResponseAnalysisDto,
   EmptyResponseDto,
-  DuplicateValueGroupDto,
-  EmptyResponseAnalysisDto,
-  DuplicateValueAnalysisDto
+  DuplicateValueGroupDto
 } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import {
   CodingJobService,
@@ -27,7 +25,9 @@ import { createAggregationSummary } from './aggregation-metrics.util';
 import {
   CODING_ANALYSIS_CACHE_KEY_PREFIX,
   getCodingAnalysisCacheKey,
-  getCodingAnalysisRunMarkerKey
+  getCodingAnalysisListKeys,
+  getCodingAnalysisRunMarkerKey,
+  PagedCodingAnalysis
 } from './coding-analysis-cache-key.util';
 import { tryWithWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
@@ -74,7 +74,7 @@ export class CodingAnalysisService {
     emptyLimit = 50,
     duplicatePage = 1,
     duplicateLimit = 50
-  ): Promise<ResponseAnalysisDto & { isCalculating?: boolean; progress?: number }> {
+  ): Promise<ResponseAnalysisDto> {
     try {
       const requestedThreshold = this.normalizeThreshold(threshold);
       this.logger.log(
@@ -90,76 +90,69 @@ export class CodingAnalysisService {
         2 :
         requestedThreshold;
 
-      // Check cache for the FULL analysis for this threshold
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
-      const fullAnalysis = await this.cacheService.get<ResponseAnalysisDto>(cacheKey);
-
-      // Check if a job is currently running
-      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
+      const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis>(cacheKey);
+      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey);
+      const progress = activeJob ? numericJobProgress(activeJob) : 0;
       const isCalculating = !!activeJob;
-      let progress = 0;
-      if (activeJob) {
-        progress = numericJobProgress(activeJob);
-      }
-
-      if (fullAnalysis && !fullAnalysis.aggregationSummary) {
-        await this.invalidateCache(workspaceId);
-        if (!isCalculating) {
-          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
-        }
+      const isQueued = activeJob ? (await activeJob.getState()) !== 'active' : false;
+      if (!cached?.aggregationSummary) {
         return {
           ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
-          isCalculating: true,
+          isCalculating,
+          isQueued,
+          needsCalculation: !isCalculating,
           progress
         };
       }
 
-      if (!fullAnalysis) {
-        if (!isCalculating) {
-          // If no analysis and no job running, trigger one (or return empty with isCalculating=false and let frontend trigger)
-          // For better UX, let's trigger it automatically if missing
-          await this.startAnalysis(workspaceId, matchingFlags, effectiveThreshold);
+      const emptyStart = (emptyPage - 1) * emptyLimit;
+      const duplicateStart = (duplicatePage - 1) * duplicateLimit;
+      let emptyItems: EmptyResponseDto[];
+      let duplicateGroups: DuplicateValueGroupDto[];
+      if ('storage' in cached) {
+        const keys = getCodingAnalysisListKeys(cached.listPrefix);
+        const expectedEmpty = Math.max(0, Math.min(emptyLimit, cached.emptyResponses.total - emptyStart));
+        const expectedDuplicates = Math.max(0, Math.min(duplicateLimit, cached.duplicateValues.total - duplicateStart));
+        [emptyItems, duplicateGroups] = await Promise.all([
+          this.cacheService.getListItems<EmptyResponseDto>(keys.empty, emptyStart, expectedEmpty),
+          this.cacheService.getListItems<DuplicateValueGroupDto>(keys.duplicates, duplicateStart, expectedDuplicates)
+        ]);
+        if (emptyItems.length !== expectedEmpty || duplicateGroups.length !== expectedDuplicates) {
           return {
             ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
-            isCalculating: true,
+            isCalculating,
+            isQueued,
+            needsCalculation: !isCalculating,
             progress
           };
         }
-        return {
-          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
-          isCalculating: true,
-          progress
-        };
+      } else {
+        emptyItems = cached.emptyResponses.items.slice(emptyStart, emptyStart + emptyLimit);
+        duplicateGroups = cached.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit);
       }
 
-      // Slice the results for pagination
-      const emptyStart = (emptyPage - 1) * emptyLimit;
-      const emptyItems = fullAnalysis.emptyResponses.items.slice(
-        emptyStart,
-        emptyStart + emptyLimit
-      );
-
-      const duplicateStart = (duplicatePage - 1) * duplicateLimit;
-      const duplicateGroups = fullAnalysis.duplicateValues.groups.slice(
-        duplicateStart,
-        duplicateStart + duplicateLimit
-      );
-
       return {
-        ...fullAnalysis,
+        aggregationSummary: cached.aggregationSummary,
+        matchingFlags: cached.matchingFlags,
+        analysisTimestamp: cached.analysisTimestamp,
         emptyResponses: {
-          ...fullAnalysis.emptyResponses,
+          total: cached.emptyResponses.total,
+          totalUncoded: cached.emptyResponses.totalUncoded,
           items: emptyItems,
           page: emptyPage,
           pageSize: emptyLimit
-        } as EmptyResponseAnalysisDto,
+        },
         duplicateValues: {
-          ...fullAnalysis.duplicateValues,
+          total: cached.duplicateValues.total,
+          totalResponses: cached.duplicateValues.totalResponses,
+          isAggregationApplied: cached.duplicateValues.isAggregationApplied,
           groups: duplicateGroups,
           page: duplicatePage,
           pageSize: duplicateLimit
-        } as DuplicateValueAnalysisDto,
+        },
         isCalculating,
+        isQueued,
         progress
       };
     } catch (error) {
@@ -191,35 +184,31 @@ export class CodingAnalysisService {
 
     const cacheKey = this.getCacheKey(workspaceId, activeMatchingFlags, effectiveThreshold);
 
-    if (options.forceRefresh) {
-      await this.cacheService.delete(cacheKey);
-      this.logger.log(`Invalidated response analysis cache before restart for workspace ${workspaceId}`);
-    }
-
-    // Check if job already running
-    const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId);
-    if (activeJob && !options.forceRefresh) {
-      this.logger.log(`Analysis job already running for workspace ${workspaceId} (Job ID: ${activeJob.id})`);
-      return;
-    }
-
-    if (activeJob && options.forceRefresh) {
-      this.logger.log(
-        `Superseding active response analysis job for workspace ${workspaceId} (Job ID: ${activeJob.id})`
-      );
-    }
-
+    const startKey = `${cacheKey}:start`;
     const runId = randomUUID();
-    await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 0);
+    if (!(await this.cacheService.acquireShortLock(startKey, runId, 30))) return;
 
-    await this.jobQueueService.addCodingAnalysisJob({
-      workspaceId,
-      matchingFlags: activeMatchingFlags as unknown as string[],
-      threshold: effectiveThreshold,
-      cacheKey,
-      runId
-    });
-    this.logger.log(`Triggered background response analysis for workspace ${workspaceId}`);
+    try {
+      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey);
+      if (activeJob) return;
+
+      if (options.forceRefresh) {
+        await this.cacheService.delete(cacheKey);
+      }
+      if (!(await this.cacheService.set(getCodingAnalysisRunMarkerKey(cacheKey), runId, 3600))) {
+        throw new Error('Could not register response analysis');
+      }
+      await this.jobQueueService.addCodingAnalysisJob({
+        workspaceId,
+        matchingFlags: activeMatchingFlags as unknown as string[],
+        threshold: effectiveThreshold,
+        cacheKey,
+        runId
+      });
+      this.logger.log(`Triggered background response analysis for workspace ${workspaceId}`);
+    } finally {
+      await this.cacheService.getAndDeleteIfFieldMatches(startKey, 'owner', runId);
+    }
   }
 
   private analyzeBatch(

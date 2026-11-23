@@ -66,5 +66,7 @@ export interface ResponseAnalysisDto {
   matchingFlags: string[];
   analysisTimestamp: string;
   isCalculating?: boolean;
+  needsCalculation?: boolean;
+  isQueued?: boolean;
   progress?: number;
 }

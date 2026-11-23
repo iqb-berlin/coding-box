@@ -24,6 +24,7 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+import { readValidationTaskRecovery, validationTaskJobId } from './validation-task-queue-state';
 
 export type { ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 
@@ -641,10 +642,8 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = (await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed'])).filter(
-      Boolean
-    );
-    return jobs.find(job => job.data && matchFn(job.data));
+    const jobs = await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed']);
+    return jobs.find(job => job?.data && matchFn(job.data));
   }
 
   async addTestPersonCodingJob(
@@ -1091,7 +1090,13 @@ export class JobQueueService {
       );
     }
     this.logger.log(`Adding validation task job for task ${data.taskId}`);
-    return this.validationTaskQueue.add('validation-task', data, withQueueJobId(options));
+    return this.validationTaskQueue.add('validation-task', data, {
+      ...options, jobId: validationTaskJobId(data.taskId)
+    });
+  }
+
+  getValidationTaskRecovery(taskIds: number[]) {
+    return readValidationTaskRecovery(this.validationTaskQueue, taskIds);
   }
 
   async getValidationTaskJob(
@@ -1117,17 +1122,12 @@ export class JobQueueService {
   }
 
   async getActiveCodingAnalysisJob(
-    workspaceId: number
+    workspaceId: number,
+    cacheKey?: string
   ): Promise<Job<CodingAnalysisJobData> | null> {
-    const jobs = await this.responseAnalysisQueue.getJobs([
-      'active',
-      'waiting',
-      'prioritized',
-      'delayed'
-    ]);
-    return (
-      jobs.find(job => jobMatchesWorkspace(job, workspaceId)) || null
-    );
+    return await this.findActiveJob<CodingAnalysisJobData>(this.responseAnalysisQueue, data => (
+      Number(data.workspaceId) === workspaceId && (cacheKey === undefined || data.cacheKey === cacheKey)
+    )) ?? null;
   }
 
   async addVariableAnalysisJob(

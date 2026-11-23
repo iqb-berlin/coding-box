@@ -39,7 +39,6 @@ import {
 import {
   VariableAnalysisService,
   JobCancelResult,
-  VariableAnalysisResultDto,
   VariableAnalysisResultPageDto,
   VariableAnalysisSortBy,
   VariableAnalysisSortDirection,
@@ -53,27 +52,11 @@ import {
 } from '../../../shared/dialogs/confirm-dialog.component';
 import { getResponseStatusLabel } from '../../../shared/utils/response-status-metadata.util';
 
+import type { VariableAnalysisData } from './variable-analysis-dialog-data';
+
 export { VariableFrequency, VariableStatusCount, VariableCombo } from './variable-analysis-projection';
 
-export interface VariableAnalysisData {
-  unitId: number;
-  title: string;
-  workspaceId: number;
-  responses?: {
-    id: number;
-    unitid: number;
-    variableid: string;
-    status: string;
-    value: string;
-    subform: string;
-    code?: number;
-    score?: number;
-    codedstatus?: string;
-    expanded?: boolean;
-  }[];
-  analysisResults?: VariableAnalysisResultDto & Partial<VariableAnalysisResultPageDto>;
-  jobs?: VariableAnalysisJobDto[];
-}
+export type { VariableAnalysisData } from './variable-analysis-dialog-data';
 
 type VariableAnalysisExportFormat = 'csv' | 'xlsx';
 
@@ -654,8 +637,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
-  startNewAnalysis(): void {
+  startNewAnalysis(previous?: VariableAnalysisJobDto): void {
     if (this.isStartingJob() || this.activeJob()) return;
+    const mode = previous ? previous.analysisMode ?? 'values' : this.newAnalysisMode();
+    const codingVersion = previous ? previous.codingVersion ?? 'v1' : this.newCodingVersion();
+    this.expiredJob.set(null);
     this.isStartingJob.set(true);
     this.setResponseAnalysisGuardActive(true);
     this.isJobsLoading.set(true);
@@ -668,11 +654,11 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     this.variableAnalysisService
       .createAnalysisJob(
         this.data.workspaceId,
-        this.data.unitId,
-        undefined,
+        previous ? previous.unit_id : this.data.unitId,
+        previous?.variable_id,
         {
-          analysisMode: this.newAnalysisMode(),
-          codingVersion: this.newAnalysisMode() === 'codes' ? this.newCodingVersion() : undefined
+          analysisMode: mode,
+          codingVersion: mode === 'codes' ? codingVersion : undefined
         }
       ).pipe(takeUntilDestroyed(this.destroyRef))
       .subscribe({
@@ -867,7 +853,12 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
     });
   }
 
+  protected readonly selectedTab = signal(0);
+  protected readonly expiredJob = signal<VariableAnalysisJobDto | null>(null);
+
   viewJobResults(jobId: number | string): void {
+    this.selectedTab.set(0);
+    this.expiredJob.set(null);
     this.currentAnalysisJobId = jobId;
     this.currentPage.set(0);
     this.isUsingServerSideResults = true;
@@ -997,6 +988,14 @@ export class VariableAnalysisDialogComponent implements OnInit, OnDestroy {
 
           this.dismissResultsLoadingSnackBar(loadingSnackBar);
           this.isLoading.set(false);
+          if (error?.error?.code === 'VARIABLE_ANALYSIS_EXPIRED') {
+            const job = this.jobs().find(candidate => candidate.id === jobId);
+            this.clearCurrentAnalysisResults();
+            if (job) {
+              this.expiredJob.set(job);
+              return;
+            }
+          }
           const isOutdated = error?.error?.code === 'VARIABLE_ANALYSIS_OUTDATED';
           if (isOutdated) {
             this.clearCurrentAnalysisResults();

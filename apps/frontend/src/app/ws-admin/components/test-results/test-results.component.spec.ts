@@ -112,7 +112,7 @@ describe('TestResultsComponent', () => {
     const optionsClosed = new Subject<unknown>();
     const progressRef = { close: jest.fn() };
     jest.mocked(TestBed.inject(MatDialog).open)
-      .mockReturnValueOnce({ afterClosed: () => optionsClosed } as never)
+      .mockReturnValueOnce({ beforeClosed: () => optionsClosed } as never)
       .mockReturnValueOnce(progressRef as never);
     const registerBatch = jest.spyOn(TestBed.inject(TestResultsUploadStateService), 'registerBatch')
       .mockImplementation(() => undefined);
@@ -139,7 +139,7 @@ describe('TestResultsComponent', () => {
     const progressRef = { close: jest.fn() };
     const dialog = TestBed.inject(MatDialog);
     jest.mocked(dialog.open)
-      .mockReturnValueOnce({ afterClosed: () => of({ overwriteMode: 'skip', scope: 'person' }) } as never)
+      .mockReturnValueOnce({ beforeClosed: () => of({ overwriteMode: 'skip', scope: 'person' }) } as never)
       .mockReturnValueOnce(progressRef as never);
     const input = document.createElement('input');
     Object.defineProperty(input, 'files', { value: [new File(['data'], 'results.csv')] });

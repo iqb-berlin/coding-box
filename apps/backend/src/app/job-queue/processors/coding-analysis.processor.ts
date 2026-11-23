@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { Processor } from '@nestjs/bullmq';
 import { Logger, Optional } from '@nestjs/common';
 import { Job } from 'bullmq';
@@ -8,7 +9,6 @@ import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import {
-  ResponseAnalysisDto,
   EmptyResponseDto,
   DuplicateValueGroupDto
 } from '../../../../../../api-dto/coding/response-analysis.dto';
@@ -26,13 +26,16 @@ import {
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
-import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
+import {
+  getCodingAnalysisListKeys, getCodingAnalysisRunMarkerKey, PagedCodingAnalysis
+} from '../../database/services/coding/coding-analysis-cache-key.util';
 import {
   IQB_STANDARD_MISSING_CODES,
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
 
 const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
+const LIST_WRITE_TTL_SECONDS = 3600;
 
 @Processor('response-analysis', { concurrency: 1 })
 export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
@@ -73,29 +76,37 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     } = job.data;
     this.logger.log(`Processing response analysis for workspace ${workspaceId}...`);
 
+    const listPrefix = `${cacheKey}:results:${randomUUID()}`;
+    const lists = getCodingAnalysisListKeys(listPrefix);
+    let committed = false;
     try {
-      const analysis = await this.computeResponseAnalysis(workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, job);
-      if (job.data.runId) {
-        const currentRunId = await this.cacheService.get<string>(
-          getCodingAnalysisRunMarkerKey(cacheKey)
-        );
-        if (currentRunId !== job.data.runId) {
-          this.logger.log(
-            `Skipping stale response analysis cache write for workspace ${workspaceId} (job ${job.id})`
-          );
-          return analysis;
-        }
-      }
-
-      await this.cacheService.set(
-        cacheKey,
-        analysis,
-        CODING_ANALYSIS_CACHE_TTL_SECONDS
+      const analysis = await this.computeResponseAnalysis(
+        workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, listPrefix, job
       );
-
+      await Promise.all([
+        this.cacheService.expire(lists.empty, CODING_ANALYSIS_CACHE_TTL_SECONDS + 60),
+        this.cacheService.expire(lists.duplicates, CODING_ANALYSIS_CACHE_TTL_SECONDS + 60)
+      ]);
+      if (job.data.runId) {
+        const published = await this.cacheService.setIfMarkerMatches(
+          cacheKey, analysis, CODING_ANALYSIS_CACHE_TTL_SECONDS, getCodingAnalysisRunMarkerKey(cacheKey), job.data.runId
+        );
+        if (!published) {
+          this.logger.log(`Discarding stale response analysis for workspace ${workspaceId} (job ${job.id})`);
+          await Promise.all([this.cacheService.delete(lists.empty), this.cacheService.delete(lists.duplicates)]);
+          return analysis.aggregationSummary;
+        }
+      } else if (!(await this.cacheService.set(cacheKey, analysis, CODING_ANALYSIS_CACHE_TTL_SECONDS))) {
+        throw new Error('Could not publish response analysis result');
+      }
+      committed = true;
+      await job.updateProgress(100);
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
-      return analysis;
+      return analysis.aggregationSummary;
     } catch (error) {
+      if (!committed) {
+        await Promise.all([this.cacheService.delete(lists.empty), this.cacheService.delete(lists.duplicates)]);
+      }
       this.logger.error(`Response analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
@@ -105,19 +116,20 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     workspaceId: number,
     matchingFlags: ResponseMatchingFlag[],
     threshold: number,
-    job?: Job<CodingAnalysisJobData>
-  ): Promise<ResponseAnalysisDto> {
+    listPrefix: string,
+    job: Job<CodingAnalysisJobData>
+  ): Promise<PagedCodingAnalysis> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
     const emptyResponseContext =
       await this.emptyResponseSelectionService.createContext(workspaceId);
     const { derivedVariableMap } = emptyResponseContext;
 
-    // 1. Identify relevant Unit+Variable combinations
+    // A logical unit and variable must be processed together, including all test persons.
     this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
     const relevantVariablesQuery = this.responseRepository
       .createQueryBuilder('response')
-      .select('response.unitid', 'unitId')
+      .select('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .distinct(true)
       .innerJoin('response.unit', 'unit')
@@ -131,17 +143,18 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
       });
     applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
     const relevantVariables = await relevantVariablesQuery
-      .getRawMany();
+      .getRawMany<{ unitName: string; variableId: string }>();
+    relevantVariables.sort((a, b) => (
+      a.unitName.localeCompare(b.unitName) || a.variableId.localeCompare(b.variableId)
+    ));
 
-    if (relevantVariables.length === 0) {
-      this.logger.warn(`No relevant variables found for analysis in workspace ${workspaceId}`);
-      return this.createEmptyAnalysisResult(matchingFlags, threshold);
-    }
+    this.logger.log(`Found ${relevantVariables.length} variable groups to analyze.`);
 
-    this.logger.log(`Found ${relevantVariables.length} variable groups to analyze. Processing in chunks...`);
-
-    const emptyResponses: EmptyResponseDto[] = [];
-    const duplicateValueGroups: DuplicateValueGroupDto[] = [];
+    const lists = getCodingAnalysisListKeys(listPrefix);
+    let totalEmpty = 0;
+    let totalUncoded = 0;
+    let totalDuplicateGroups = 0;
+    let totalDuplicateResponses = 0;
     let totalProcessed = 0;
 
     // Check if aggregation is already applied (marked by code_v2 = -111)
@@ -159,7 +172,7 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
       .getCount() > 0;
 
     // 2. Process in chunks
-    const chunkSize = 50; // Number of variable groups per query
+    const chunkSize = 5;
     for (let i = 0; i < relevantVariables.length; i += chunkSize) {
       const chunk = relevantVariables.slice(i, i + chunkSize);
 
@@ -168,6 +181,12 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         .leftJoinAndSelect('unit.booklet', 'booklet')
         .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
         .leftJoinAndSelect('booklet.person', 'person')
+        .select([
+          'response.id', 'response.unitid', 'response.variableid', 'response.value',
+          'response.status_v2', 'response.code_v2',
+          'unit.id', 'unit.name', 'unit.alias', 'booklet.id', 'bookletinfo.id', 'bookletinfo.name',
+          'person.id', 'person.login', 'person.code', 'person.group'
+        ])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', {
@@ -182,11 +201,11 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
 
       qb.andWhere(new Brackets(qbInside => {
         chunk.forEach((item, index) => {
-          const params = { [`uid${index}`]: item.unitId, [`vid${index}`]: item.variableId };
+          const params = { [`unit${index}`]: item.unitName, [`vid${index}`]: item.variableId };
           if (index === 0) {
-            qbInside.where(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
+            qbInside.where(`unit.name = :unit${index} AND response.variableid = :vid${index}`, params);
           } else {
-            qbInside.orWhere(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
+            qbInside.orWhere(`unit.name = :unit${index} AND response.variableid = :vid${index}`, params);
           }
         });
       }));
@@ -199,6 +218,8 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
           emptyResponseContext
         );
 
+      const emptyResponses: EmptyResponseDto[] = [];
+      const duplicateValueGroups: DuplicateValueGroupDto[] = [];
       this.analyzeBatch(
         responsesBatch,
         matchingFlags,
@@ -208,73 +229,42 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         new Set(effectivelyEmptyResponses.map(response => response.id))
       );
 
-      // Explicitly free memory if possible (though GC handles function scope)
-      if ((i + chunkSize) % 500 === 0 || (i + chunkSize) >= relevantVariables.length) {
-        const processed = Math.min(i + chunkSize, relevantVariables.length);
-        const progress = Math.round((processed / relevantVariables.length) * 100);
-        if (job) {
-          await job.updateProgress(progress);
-        }
-        this.logger.log(`Processed ${processed}/${relevantVariables.length} variable groups...`);
-        if (global.gc) { global.gc(); }
+      const duplicateGroups = duplicateValueGroups.filter(group => group.occurrences.length >= threshold);
+      emptyResponses.sort((a, b) => (
+        a.unitName.localeCompare(b.unitName) ||
+        a.variableId.localeCompare(b.variableId) ||
+        a.personLogin.localeCompare(b.personLogin)
+      ));
+      duplicateGroups.sort((a, b) => (
+        a.unitName.localeCompare(b.unitName) || a.variableId.localeCompare(b.variableId)
+      ));
+
+      await this.cacheService.appendListItems(lists.empty, emptyResponses, LIST_WRITE_TTL_SECONDS);
+      await this.cacheService.appendListItems(lists.duplicates, duplicateGroups, LIST_WRITE_TTL_SECONDS);
+      totalEmpty += emptyResponses.length;
+      totalUncoded += emptyResponses.filter(response => !response.isCoded).length;
+      totalDuplicateGroups += duplicateGroups.length;
+      totalDuplicateResponses += duplicateGroups.reduce((count, group) => count + group.occurrences.length, 0);
+
+      const processed = Math.min(i + chunkSize, relevantVariables.length);
+      if (processed % 50 === 0 || processed === relevantVariables.length) {
+        await job.updateProgress(Math.min(99, Math.round((processed / relevantVariables.length) * 100)));
       }
     }
-
-    const mergedGroupsMap = new Map<string, DuplicateValueGroupDto>();
-    for (const group of duplicateValueGroups) {
-      const key = `${group.unitName}_${group.variableId}_${group.normalizedValue}`;
-      if (mergedGroupsMap.has(key)) {
-        // Merge occurrences into the existing group
-        mergedGroupsMap.get(key)!.occurrences.push(...group.occurrences);
-      } else {
-        mergedGroupsMap.set(key, { ...group, occurrences: [...group.occurrences] });
-      }
-    }
-
-    // Apply threshold filter on merged groups and build the final list
-    const mergedGroups = Array.from(mergedGroupsMap.values())
-      .filter(group => group.occurrences.length >= threshold);
-
-    // Sort results
-    emptyResponses.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
-      return a.personLogin.localeCompare(b.personLogin);
-    });
-
-    mergedGroups.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      return a.variableId.localeCompare(b.variableId);
-    });
-
-    const totalDuplicateResponses = mergedGroups.reduce(
-      (sum, group) => sum + group.occurrences.length,
-      0
-    );
-    const aggregationSummary = createAggregationSummary(
-      mergedGroups.length,
-      totalDuplicateResponses,
-      totalProcessed,
-      threshold,
-      matchingFlags
-    );
-
-    this.logger.log(`Analysis complete. Processed ${totalProcessed} responses. Found ${mergedGroups.length} duplicate groups.`);
 
     return {
-      emptyResponses: {
-        total: emptyResponses.length,
-        totalUncoded: emptyResponses.filter(r => !r.isCoded).length,
-        items: emptyResponses
-      },
+      storage: 'paged',
+      listPrefix,
+      emptyResponses: { total: totalEmpty, totalUncoded },
       duplicateValues: {
-        total: mergedGroups.length,
+        total: totalDuplicateGroups,
         totalResponses: totalDuplicateResponses,
-        groups: mergedGroups,
         isAggregationApplied
       },
-      aggregationSummary,
-      matchingFlags: matchingFlags as unknown as string[],
+      aggregationSummary: createAggregationSummary(
+        totalDuplicateGroups, totalDuplicateResponses, totalProcessed, threshold, matchingFlags
+      ),
+      matchingFlags,
       analysisTimestamp: new Date().toISOString()
     };
   }
@@ -326,7 +316,7 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         continue;
       }
 
-      const key = `${response.unit?.name || response.unitid}_${response.variableid}`;
+      const key = JSON.stringify([response.unit?.name || response.unitid, response.variableid]);
       if (!responsesByUnitVariable.has(key)) {
         responsesByUnitVariable.set(key, []);
       }
@@ -364,35 +354,5 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         });
       }
     }
-  }
-
-  private createEmptyAnalysisResult(
-    matchingFlags: ResponseMatchingFlag[],
-    threshold: number | null = null
-  ): ResponseAnalysisDto {
-    const result: ResponseAnalysisDto = {
-      emptyResponses: {
-        total: 0,
-        totalUncoded: 0,
-        items: []
-      },
-      duplicateValues: {
-        total: 0,
-        totalResponses: 0,
-        groups: [],
-        isAggregationApplied: false
-      },
-      aggregationSummary: createAggregationSummary(
-        0,
-        0,
-        0,
-        threshold,
-        matchingFlags
-      ),
-      matchingFlags: matchingFlags as unknown as string[],
-      analysisTimestamp: new Date().toISOString()
-    };
-
-    return result;
   }
 }

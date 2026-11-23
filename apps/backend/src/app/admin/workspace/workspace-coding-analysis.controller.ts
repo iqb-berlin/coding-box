@@ -623,9 +623,9 @@ export class WorkspaceCodingAnalysisController {
   ) {
     const validThreshold = this.normalizeIntegerParam(threshold, 2, 2, 100);
     const vEmptyPage = this.normalizeIntegerParam(emptyPage, 1, 1);
-    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1);
+    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1, 500);
     const vDuplicatePage = this.normalizeIntegerParam(duplicatePage, 1, 1);
-    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1);
+    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1, 500);
 
     return this.codingAnalysisService.getResponseAnalysis(
       workspace_id,

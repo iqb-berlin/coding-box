@@ -403,6 +403,16 @@ describe('PersonPersistenceService', () => {
     ]);
   });
 
+  it('skips response lookup on a new unit only until that subform has been written', async () => {
+    const find = jest.spyOn(responseRepository, 'find').mockResolvedValue([{ variableid: 'v', subform: 's' } as ResponseEntity]);
+    const save = jest.spyOn(responseRepository, 'save').mockResolvedValue([{ id: 7 }] as never);
+    const subform = { id: 's', responses: [{ id: 'v', status: 'VALUE_CHANGED' as const, value: 'answer' }] };
+    const result = await service.saveSubformResponsesForUnit({ id: 3 } as Unit, [subform, subform], 'skip', undefined, true);
+    expect(result).toMatchObject({ success: true, saved: 1, skipped: 1 });
+    expect(save).toHaveBeenCalledTimes(1);
+    expect(find).toHaveBeenCalledTimes(1);
+  });
+
   it('imports a new person in an existing test group by matching the full person key', async () => {
     const existingPersonInSameGroup = {
       id: 40,

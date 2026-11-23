@@ -3658,6 +3658,14 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "autocoder": {
+      "checking-start": "Voraussetzungen für Auto-Coding werden geprüft.",
+      "loading-job-status": "Auftrag angenommen. Der aktuelle Status wird geladen."
+    },
+    "my-coding-jobs": {
+      "replay-blocked": "Der Browser hat das Replay-Fenster blockiert.",
+      "open-replay-in-current-tab": "Replay hier öffnen"
+    },
     "reset-version-dialog": {
       "preview-help": "Prüfen Sie den gewählten Bereich vor dem Zurücksetzen. Die Prüfung startet nur auf Knopfdruck und verändert keine Daten.",
       "process-label": "Reset-Vorschau",
@@ -4121,6 +4129,8 @@
       "assigned-to": "Zugeordnet zu:"
     },
     "manual-coding-preparation-view": {
+      "calculate-analysis": "Antwortanalyse starten",
+      "calculation-queued": "Wartet auf Bearbeitung",
       "analysis-running": "Analyse läuft",
       "calculation-running": "Berechnung läuft...",
       "coded-value": "Kodiert (Code: {{assignedCode}})",
@@ -4172,6 +4182,8 @@
       "boolean-option": "Boolesche Option"
     },
     "variable-analysis-dialog": {
+      "results-expired": "Das gespeicherte Ergebnis ist abgelaufen.",
+      "recalculate": "Erneut berechnen",
       "results-tab": "Analyseergebnisse",
       "total-responses-column": "Antworten gesamt",
       "loading-distribution": "Lade Code-/Score-Verteilung...",

@@ -152,6 +152,42 @@ export class CacheService {
     }
   }
 
+  async appendListItems<T>(key: string, items: T[], ttl: number): Promise<void> {
+    const batchSize = 250;
+    for (let offset = 0; offset < items.length; offset += batchSize) {
+      const batch = items.slice(offset, offset + batchSize).map(item => JSON.stringify(item));
+      const results = await this.redis.multi().rpush(key, ...batch).expire(key, ttl).exec();
+      if (!results || results.some(([error]) => error !== null)) {
+        throw new Error('Could not store analysis result list');
+      }
+    }
+  }
+
+  async getListItems<T>(key: string, start: number, limit: number): Promise<T[]> {
+    if (limit <= 0) return [];
+    const values = await this.redis.lrange(key, start, start + limit - 1);
+    return values.map(value => JSON.parse(value) as T);
+  }
+
+  async expire(key: string, ttl: number): Promise<void> {
+    await this.redis.expire(key, ttl);
+  }
+
+  async acquireShortLock(key: string, owner: string, ttlSeconds: number): Promise<boolean> {
+    return (await this.redis.set(key, JSON.stringify({ owner }), 'EX', ttlSeconds, 'NX')) === 'OK';
+  }
+
+  async setIfMarkerMatches<T>(
+    key: string, value: T, ttl: number, markerKey: string, marker: string
+  ): Promise<boolean> {
+    const command = [
+      'if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end',
+      'redis.call("SET", KEYS[2], ARGV[2], "EX", ARGV[3])',
+      'return 1'
+    ].join(' ');
+    return (await this.redis.eval(command, 2, markerKey, key, JSON.stringify(marker), JSON.stringify(value), ttl)) === 1;
+  }
+
   /**
    * Delete a value from the cache
    * @param key The cache key

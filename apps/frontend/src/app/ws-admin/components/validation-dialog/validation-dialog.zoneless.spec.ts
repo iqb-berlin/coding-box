@@ -158,6 +158,20 @@ describe('Validation panels inside their real parent dialog', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector(':scope > .info-banner')).toBeNull();
   });
+  it('shows a missing TestTakers file as a failed check without a false zero count', async () => {
+    state.setValidationResult(5, 'testTakers', {
+      status: 'failed',
+      timestamp: 2,
+      details: {
+        testTakersFound: false, totalGroups: 0, totalLogins: 0, totalBookletCodes: 0, missingPersons: []
+      }
+    });
+    await fixture.whenStable();
+    const panel: HTMLElement = fixture.nativeElement.querySelector('coding-box-test-takers-validation-panel');
+    expect(panel.querySelector('.validation-error')).not.toBeNull();
+    expect(panel.textContent).not.toContain('0 Fehler');
+  });
+
   describe.each([
     ['variables', VariablesValidationPanelComponent],
     ['variableTypes', VariableTypesValidationPanelComponent],

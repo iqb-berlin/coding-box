@@ -70,6 +70,10 @@ describe('CodingAnalysisService aggregation settings', () => {
       invalidateCache: jest.fn().mockResolvedValue(undefined)
     };
     const cacheService = {
+      get: jest.fn().mockResolvedValue(null),
+      getListItems: jest.fn().mockResolvedValue([]),
+      acquireShortLock: jest.fn().mockResolvedValue(true),
+      getAndDeleteIfFieldMatches: jest.fn().mockResolvedValue(null),
       delete: jest.fn().mockResolvedValue(undefined),
       set: jest.fn().mockResolvedValue(true),
       deleteByPattern: jest.fn().mockResolvedValue(undefined)
@@ -222,7 +226,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(cacheService.set).toHaveBeenCalledWith(
       'response-analysis:7_IGNORE_CASE_t4:run',
       expect.any(String),
-      0
+      3600
     );
     expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith({
       workspaceId: 7,
@@ -233,30 +237,58 @@ describe('CodingAnalysisService aggregation settings', () => {
     });
   });
 
-  it('queues a superseding forced restart even when an older workspace analysis is active', async () => {
-    const {
-      service,
-      jobQueueService
-    } = createService();
-    jobQueueService.getActiveCodingAnalysisJob.mockResolvedValue({
-      id: 'old-job',
-      data: {
-        workspaceId: 7,
-        matchingFlags: [],
-        threshold: 2,
-        cacheKey: 'response-analysis:7__t2',
-        runId: 'old-run'
-      }
-    });
+  it('reuses an active analysis with the same settings even on an explicit refresh', async () => {
+    const { service, jobQueueService, cacheService } = createService();
+    jobQueueService.getActiveCodingAnalysisJob.mockResolvedValue({ id: 'active-job' });
 
-    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, {
-      forceRefresh: true
-    });
+    await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, { forceRefresh: true });
 
-    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({
-      workspaceId: 7,
-      cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
-      runId: expect.any(String)
-    }));
+    expect(jobQueueService.getActiveCodingAnalysisJob).toHaveBeenCalledWith(7, 'response-analysis:7_IGNORE_CASE_t4');
+    expect(cacheService.delete).not.toHaveBeenCalled();
+    expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
+  });
+
+  it('reports a missing analysis from a status read without starting a job', async () => {
+    const { service, jobQueueService } = createService();
+    await expect(service.getResponseAnalysis(7)).resolves.toMatchObject({
+      isCalculating: false,
+      needsCalculation: true
+    });
+    expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
+  });
+
+  it('still pages a legacy cached result created before lists were used', async () => {
+    const { service, cacheService } = createService();
+    cacheService.get.mockResolvedValue({
+      emptyResponses: { total: 2, totalUncoded: 2, items: [{ responseId: 1 }, { responseId: 2 }] },
+      duplicateValues: { total: 0, totalResponses: 0, groups: [] },
+      aggregationSummary: {},
+      matchingFlags: [],
+      analysisTimestamp: '2026-11-23T09:00:00Z'
+    });
+    await expect(service.getResponseAnalysis(7, 2, 2, 1)).resolves.toMatchObject({
+      emptyResponses: { total: 2, items: [{ responseId: 2 }] }
+    });
+    expect(cacheService.getListItems).not.toHaveBeenCalled();
+  });
+
+  it('reads only the requested slices of a stored analysis', async () => {
+    const { service, cacheService } = createService();
+    cacheService.get.mockResolvedValue({
+      storage: 'paged',
+      listPrefix: 'analysis-results',
+      emptyResponses: { total: 5, totalUncoded: 5 },
+      duplicateValues: { total: 8, totalResponses: 16, isAggregationApplied: false },
+      aggregationSummary: {},
+      matchingFlags: [],
+      analysisTimestamp: '2026-11-23T09:00:00Z'
+    });
+    cacheService.getListItems.mockResolvedValueOnce([{ responseId: 5 }]).mockResolvedValueOnce([{ id: 1 }, { id: 2 }]);
+    await expect(service.getResponseAnalysis(7, 2, 3, 2, 2, 2)).resolves.toMatchObject({
+      emptyResponses: { total: 5, items: [{ responseId: 5 }] },
+      duplicateValues: { total: 8 }
+    });
+    expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:empty', 4, 1);
+    expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:duplicates', 2, 2);
   });
 });

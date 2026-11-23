@@ -390,7 +390,7 @@ export class TestResultsImportFacade {
         });
 
         optionsRef
-          .afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
+          .beforeClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe(
             (options: TestResultsUploadOptionsDialogResult | undefined) => {
               if (!options) {

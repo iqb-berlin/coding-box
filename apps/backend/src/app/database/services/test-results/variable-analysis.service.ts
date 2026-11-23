@@ -205,7 +205,7 @@ export class VariableAnalysisService {
         return this.withSchemaCodeVisibility(cachedResult, includeSchemaCodes);
       }
 
-      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException({ code: 'VARIABLE_ANALYSIS_EXPIRED', message: `Job with ID ${jobId} has no cached results` });
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
@@ -238,7 +238,7 @@ export class VariableAnalysisService {
         return cachedPage;
       }
 
-      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException({ code: 'VARIABLE_ANALYSIS_EXPIRED', message: `Job with ID ${jobId} has no cached results` });
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {
@@ -562,7 +562,7 @@ export class VariableAnalysisService {
         return cachedResult;
       }
 
-      throw new BadRequestException(`Job with ID ${jobId} has no cached results`);
+      throw new BadRequestException({ code: 'VARIABLE_ANALYSIS_EXPIRED', message: `Job with ID ${jobId} has no cached results` });
     }
 
     if (!this.isVariableAnalysisResult(job.returnvalue)) {

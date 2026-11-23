@@ -187,7 +187,10 @@ export class TestTakersValidationPanelComponent implements OnInit, OnDestroy {
     return this.testTakersValidationService.getValidationStatus();
   }
 
-  protected readonly errorCount = computed(() => this.result()?.missingPersons.length || 0);
+  protected readonly errorCount = computed(() => {
+    const result = this.result();
+    return result?.testTakersFound ? result.missingPersons.length : undefined;
+  });
 
   onValidate(): void {
     if (this.isRunning() || this.disabled()) {

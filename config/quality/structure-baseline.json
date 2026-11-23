@@ -913,16 +913,16 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1064
+        "max-lines": 1059
       },
       "functions": {
         "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
-          "max-lines-per-function": 114
+          "max-lines-per-function": 106
         },
         "class PersonPersistenceService#1/method processPersonBooklets#1": {
-          "complexity": 30,
-          "max-depth": 9,
-          "max-lines-per-function": 128
+          "complexity": 27,
+          "max-depth": 5,
+          "max-lines-per-function": 114
         },
         "class PersonPersistenceService#1/method processPersonLogs#1": {
           "complexity": 21,
@@ -1257,7 +1257,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1206
+        "max-lines": 1205
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1272,7 +1272,7 @@
           "complexity": 40
         },
         "class CodingAnalysisProcessor#1/method computeResponseAnalysis#1": {
-          "max-lines-per-function": 151
+          "max-lines-per-function": 139
         }
       }
     },
@@ -1645,7 +1645,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.ts": {
       "file": {
-        "max-lines": 1091
+        "max-lines": 1088
       },
       "functions": {
         "class VariableAnalysisDialogComponent#1/method analyzeVariables#1": {

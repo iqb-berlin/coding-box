@@ -3,7 +3,7 @@
   <h2 class="dialog-title">{{ data.title }}</h2>
   <mat-divider></mat-divider>
 
-  <mat-tab-group>
+  <mat-tab-group [selectedIndex]="selectedTab()" (selectedIndexChange)="selectedTab.set($event)">
     <!-- Analysis Results Tab -->
     <mat-tab label="{{ 'ui-text.variable-analysis-dialog.results-tab' | translate }}">
       <div class="dialog-content">
@@ -55,6 +55,15 @@
             {{ (isInfoVisible() ? 'variable-analysis.hide-info' : 'variable-analysis.show-info') | translate }}
           </button>
         </div>
+
+        @if (expiredJob(); as previousJob) {
+        <div role="status">
+          {{ 'ui-text.variable-analysis-dialog.results-expired' | translate }}
+          <button mat-button type="button" (click)="startNewAnalysis(previousJob)" [disabled]="!!activeJobValue || isStartingJob()">
+            {{ 'ui-text.variable-analysis-dialog.recalculate' | translate }}
+          </button>
+        </div>
+        }
 
         @if (isInfoVisible()) {
         <div class="info-block">

@@ -6,7 +6,9 @@ import {
   BullModule, getQueueToken, Processor, WorkerHost
 } from '@nestjs/bullmq';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
-import { Job, Queue, QueueEvents } from 'bullmq';
+import {
+  Job, Queue, QueueEvents, Worker
+} from 'bullmq';
 import { JobQueueService, TestPersonCodingJobData } from './job-queue.service';
 import { AutocoderRunService } from './autocoder-run.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
@@ -128,6 +130,25 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
       expect(await client.runCommand('get', [oldResult])).toBe('legacy-result');
     } finally {
       await client.runCommand('del', [oldWait, oldResult]);
+    }
+  });
+
+  it('reports a validation waiting for recovery when its active lock is gone', async () => {
+    const validationQueue = app.get<Queue>(getQueueToken('validation-task'));
+    const worker = new Worker('validation-task', null, { ...options, autorun: false });
+    try {
+      const submitted = await service.addValidationTaskJob({ taskId: 71 });
+      await worker.getNextJob('test-worker', { block: false });
+      expect(await submitted.getState()).toBe('active');
+      expect(await service.getValidationTaskRecovery([71])).toEqual(new Map());
+
+      const redis = await validationQueue.getBackend().client;
+      await redis.runCommand('del', [validationQueue.toKey(`${submitted.id}:lock`)]);
+      expect(await submitted.getState()).toBe('active');
+      expect(await service.getValidationTaskRecovery([71])).toEqual(new Map([[71, { status: 'pending' }]]));
+    } finally {
+      await worker.close(true);
+      await validationQueue.obliterate({ force: true });
     }
   });
 

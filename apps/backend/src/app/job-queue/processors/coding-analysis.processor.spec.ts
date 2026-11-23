@@ -64,37 +64,40 @@ describe('CodingAnalysisProcessor', () => {
         threshold: 2,
         cacheKey: 'response-analysis:7__t2',
         runId
-      }
+      },
+      updateProgress: jest.fn().mockResolvedValue(undefined)
     } as unknown as Job<CodingAnalysisJobData>;
   }
 
-  it('does not cache stale analysis results superseded by a newer run', async () => {
+  it('does not publish analysis results superseded by a newer run', async () => {
     const cacheService = {
-      get: jest.fn().mockResolvedValue('newer-run'),
-      set: jest.fn().mockResolvedValue(true)
+      setIfMarkerMatches: jest.fn().mockResolvedValue(false),
+      expire: jest.fn().mockResolvedValue(undefined),
+      delete: jest.fn().mockResolvedValue(true)
     };
     const { processor, analysis } = createProcessor(cacheService);
 
-    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis);
+    await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis.aggregationSummary);
 
-    expect(cacheService.get).toHaveBeenCalledWith('response-analysis:7__t2:run');
-    expect(cacheService.set).not.toHaveBeenCalled();
+    expect(cacheService.setIfMarkerMatches).toHaveBeenCalledWith(
+      'response-analysis:7__t2', expect.anything(), 600, 'response-analysis:7__t2:run', 'old-run'
+    );
+    expect(cacheService.delete).toHaveBeenCalledTimes(2);
   });
 
-  it('caches analysis results for the latest marked run', async () => {
+  it('publishes the current result and records only the summary in the job', async () => {
     const cacheService = {
-      get: jest.fn().mockResolvedValue('current-run'),
-      set: jest.fn().mockResolvedValue(true)
+      setIfMarkerMatches: jest.fn().mockResolvedValue(true),
+      expire: jest.fn().mockResolvedValue(undefined)
     };
     const { processor, analysis } = createProcessor(cacheService);
+    const job = createJob('current-run');
 
-    await expect(processor.handleResponseAnalysis(createJob('current-run'))).resolves.toBe(analysis);
-
-    expect(cacheService.set).toHaveBeenCalledWith(
-      'response-analysis:7__t2',
-      analysis,
-      600
+    await expect(processor.handleResponseAnalysis(job)).resolves.toBe(analysis.aggregationSummary);
+    expect(cacheService.setIfMarkerMatches).toHaveBeenCalledWith(
+      'response-analysis:7__t2', analysis, 600, 'response-analysis:7__t2:run', 'current-run'
     );
+    expect(job.updateProgress).toHaveBeenCalledWith(100);
   });
 
   it('reports an effectively empty derived response with a technical target value', () => {
