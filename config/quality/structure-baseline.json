@@ -1145,29 +1145,21 @@
     },
     "apps/backend/src/app/database/services/validation/workspace-response-validation.service.ts": {
       "file": {
-        "max-lines": 1504
+        "max-lines": 1185
       },
       "functions": {
         "class WorkspaceResponseValidationService#1/method deleteAllInvalidResponsesUnlocked#1": {
           "max-depth": 5
         },
-        "class WorkspaceResponseValidationService#1/method validateDuplicateResponses#1": {
-          "complexity": 36,
-          "max-lines-per-function": 192
-        },
-        "class WorkspaceResponseValidationService#1/method validateResponseStatus#1": {
-          "complexity": 25,
+        "class WorkspaceResponseValidationService#1/method validateVariables#1": {
+          "complexity": 32,
+          "max-depth": 5,
           "max-lines-per-function": 169
         },
-        "class WorkspaceResponseValidationService#1/method validateVariables#1": {
-          "complexity": 44,
-          "max-depth": 5,
-          "max-lines-per-function": 281
-        },
         "class WorkspaceResponseValidationService#1/method validateVariableTypes#1": {
-          "complexity": 51,
+          "complexity": 39,
           "max-depth": 6,
-          "max-lines-per-function": 289
+          "max-lines-per-function": 180
         }
       }
     },

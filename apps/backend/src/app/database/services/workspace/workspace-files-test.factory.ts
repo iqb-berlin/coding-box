@@ -31,7 +31,7 @@ import { WorkspaceFilesService } from './workspace-files.service';
 export function createWorkspaceFilesService(
   files: Repository<FileUpload>,
   responses: Repository<ResponseEntity>,
-  units: Repository<Unit>,
+  _units: Repository<Unit>,
   persons: Repository<Persons>,
   statistics: CodingStatisticsService,
   schema: WorkspaceXmlSchemaValidationService,
@@ -53,7 +53,7 @@ export function createWorkspaceFilesService(
   const uploads = new WorkspaceFileUploadService(files, xml, resources, storage, caches, statistics);
   const mutations = new WorkspaceFileMutationService(files, caches, statistics);
   const testcenter = new WorkspaceTestcenterFileImportService(files, parsing, freshness, caches);
-  const testTakers = new WorkspaceTestTakersValidationService(files, persons, units, responses);
+  const testTakers = new WorkspaceTestTakersValidationService(files, persons, responses);
   return new WorkspaceFilesService(
     new WorkspaceFileQueryService(files, metadata, storage), mutations, uploads, testcenter, testTakers, responseValidation, testFilesValidation, metadata, caches
   );
