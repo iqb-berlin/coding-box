@@ -3658,6 +3658,9 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "coding-statistics": {
+      "status-load-failed": "Der Status der Kodierstatistik konnte nicht geladen werden."
+    },
     "autocoder": {
       "checking-start": "Voraussetzungen für Auto-Coding werden geprüft.",
       "loading-job-status": "Auftrag angenommen. Der aktuelle Status wird geladen."
@@ -4859,6 +4862,8 @@
       "no-category": "Ohne Kategorie"
     },
     "test-results": {
+      "flat-load-failed": "Testergebnisse konnten nicht geladen werden.",
+      "flat-load-retry": "Erneut laden",
       "import": "Import",
       "running": "Läuft...",
       "quick-search": "Schnellsuche",
@@ -4921,6 +4926,7 @@
       "loading-unit-info": "Lade Unit-Informationen..."
     },
     "test-results-search": {
+      "load-failed": "Mindestens ein Suchbereich konnte nicht geladen werden.",
       "search-placeholder": "Code, Login, Testheft, Aufgabe, Variable oder Antwortwert",
       "search-scopes": "Suchbereiche",
       "minimum-search-length": "Geben Sie mindestens {{MIN_SEARCH_LENGTH}} Zeichen ein.",
@@ -5347,6 +5353,7 @@
       "error-count": "fehler"
     },
     "test-results-export": {
+      "status-load-failed": "Der Exportstatus konnte nicht geladen werden. Öffnen Sie den Exportdialog erneut.",
       "start-failed": "Fehler beim Starten des Exports",
       "completed": "Export abgeschlossen",
       "cancel-failed": "Export konnte nicht abgebrochen werden",

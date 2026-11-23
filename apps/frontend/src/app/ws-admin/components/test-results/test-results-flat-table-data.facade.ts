@@ -62,6 +62,8 @@ export class TestResultsFlatTableDataFacade {
   readonly options = this.optionsState.asReadonly();
   readonly noteIds = this.noteIdsState.asReadonly();
   readonly loadingFrequencies = this.loadingFrequenciesState.asReadonly();
+  private readonly loadFailedState = signal(false);
+  readonly loadFailed = this.loadFailedState.asReadonly();
   readonly errors$ = this.errors.asObservable();
 
   constructor() {
@@ -86,6 +88,7 @@ export class TestResultsFlatTableDataFacade {
     this.cancelPage();
     const workspaceId = this.app.selectedWorkspaceId;
     if (!workspaceId) return;
+    this.loadFailedState.set(false);
     this.loadingState.set(true);
     this.pageRequest = this.backend.getFlatResponses(workspaceId, query, { suppressGlobalHttpError: true }).pipe(
       takeUntilWorkspaceChanged(this.app, workspaceId),
@@ -103,7 +106,10 @@ export class TestResultsFlatTableDataFacade {
         this.loadNotes(rows, workspaceId);
         this.loadFrequencies(rows, workspaceId);
       },
-      error: (error: HttpErrorResponse) => this.errors.next(error)
+      error: (error: HttpErrorResponse) => {
+        this.loadFailedState.set(true);
+        this.errors.next(error);
+      }
     });
   }
 
@@ -132,6 +138,7 @@ export class TestResultsFlatTableDataFacade {
   private reset(): void {
     this.cancelPage();
     this.optionsRequest?.unsubscribe();
+    this.loadFailedState.set(false);
     this.rowsState.set([]);
     this.totalState.set(0);
     this.optionsState.set(emptyFilterOptions());

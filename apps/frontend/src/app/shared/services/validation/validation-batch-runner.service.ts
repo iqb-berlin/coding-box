@@ -5,6 +5,7 @@ import {
 import {
   catchError,
   concatMap,
+  exhaustMap,
   finalize,
   map,
   switchMap,
@@ -14,6 +15,7 @@ import {
   startWith,
   toArray
 } from 'rxjs/operators';
+import { retryTransientStatus } from '../../utils/retry-transient-status';
 import { injectUiTranslator } from '../../utils/ui-translator';
 import { ValidationService } from './validation.service';
 import {
@@ -123,12 +125,10 @@ export class ValidationBatchRunnerService {
       return of(undefined);
     }
 
-    if (existingTaskId) {
-      // Already running (or at least known) -> do not start a second one.
-      return of(undefined);
-    }
-
-    return this.validationService.createValidationTask(workspaceId, type).pipe(
+    const taskToPoll = existingTaskId ?
+      of(existingTaskId) :
+      this.validationService.createValidationTask(workspaceId, type);
+    return taskToPoll.pipe(
       tap(createdTask => {
         this.validationTaskStateService.setTaskId(
           workspaceId,
@@ -139,10 +139,10 @@ export class ValidationBatchRunnerService {
       switchMap((createdTask: ValidationTaskDto) => interval(pollIntervalMs)
         .pipe(
           startWith(0),
-          switchMap(() => this.validationService.getValidationTask(
+          exhaustMap(() => this.validationService.getValidationTask(
             workspaceId,
             createdTask.id
-          )),
+          ).pipe(retryTransientStatus())),
           tap((task: ValidationTaskDto) => {
             this.validationTaskStateService.setTaskId(
               workspaceId,

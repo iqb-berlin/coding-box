@@ -76,6 +76,7 @@ describe('TestResultsSearchComponent', () => {
   });
 
   it('debounces input and displays only the completed search result', () => {
+    component.selectedKinds = new Set(['response']);
     const pendingResult = new Subject<QuickSearchResult>();
     resultService.quickSearch.mockReturnValue(pendingResult.asObservable());
     component.searchText = 'ans';
@@ -87,13 +88,32 @@ describe('TestResultsSearchComponent', () => {
     expect(resultService.quickSearch).not.toHaveBeenCalled();
     jest.advanceTimersByTime(1);
     expect(resultService.quickSearch).toHaveBeenCalledTimes(1);
-    expect(resultService.quickSearch).toHaveBeenCalledWith(5, 'answer', 8);
+    expect(resultService.quickSearch).toHaveBeenCalledWith(5, 'answer', 8, 'response');
     expect(component.isLoading).toBe(true);
     pendingResult.next(searchResult);
     pendingResult.complete();
     expect(component.isLoading).toBe(false);
     expect(component.getVisibleResults('response')).toEqual([responseItem]);
     expect(component.getVisibleCount()).toBe(1);
+  });
+
+  it('shows matching people while the independently selected answer search is pending', () => {
+    const response = new Subject<QuickSearchResult>();
+    const person: QuickSearchResultItem = { kind: 'person', id: 1, label: 'login-a' };
+    component.selectedKinds = new Set(['person']);
+    resultService.quickSearch.mockImplementation((_workspace, _query, _limit, kind) => (
+      kind === 'response' ? response.asObservable() : of({ ...searchResult, persons: [person] })
+    ));
+
+    component.searchText = 'login-a';
+    component.onSearchChange();
+    jest.advanceTimersByTime(component.SEARCH_DEBOUNCE_TIME);
+    expect(resultService.quickSearch).toHaveBeenCalledTimes(1);
+    expect(resultService.quickSearch).toHaveBeenCalledWith(5, 'login-a', 8, 'person');
+    component.toggleKind('response');
+    expect(component.isLoading).toBe(true);
+    expect(component.getVisibleResults('person')).toEqual([person]);
+    expect(resultService.quickSearch).toHaveBeenLastCalledWith(5, 'login-a', 8, 'response');
   });
 
   it('clears earlier results for input shorter than the search minimum', () => {

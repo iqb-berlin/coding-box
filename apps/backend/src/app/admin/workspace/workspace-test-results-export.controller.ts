@@ -478,10 +478,16 @@ export class WorkspaceTestResultsExportController {
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
       const state = await job.getState();
+      const exportType = job.data.exportType;
+      const status = this.mapDataExportJobState(state, job);
+      if (status === 'completed' && (exportType === 'test-results' || exportType === 'test-logs') &&
+        !(await this.cacheService.exists(`export-result:${requireJobId(job)}`))) {
+        continue;
+      }
       const progress = this.toPublicProgress(job.progress);
       result.push({
         jobId: requireJobId(job),
-        status: this.mapDataExportJobState(state, job),
+        status,
         progress: progress,
         exportType: job.data.exportType,
         createdAt: new Date(job.timestamp),
