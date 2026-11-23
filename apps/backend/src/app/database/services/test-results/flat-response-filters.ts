@@ -74,18 +74,16 @@ export function normalizeFlatResponseFilters(options: FlatResponseOptions) {
 
 export type FlatResponseFilters = ReturnType<typeof normalizeFlatResponseFilters>;
 type ResponseQuery = SelectQueryBuilder<ResponseEntity>;
-type QueryPurpose = 'rows' | 'count';
-
-export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
+export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters): void {
   applyFlatResponseTextFilters(qb, filters);
-  applyResponseFilters(qb, filters, purpose);
+  applyResponseFilters(qb, filters);
   applyProcessingFilters(qb, filters);
   applyUnitProgressFilter(qb, filters);
   applySessionFilters(qb, filters);
   applyLongLoadingFilter(qb, filters);
 }
 
-function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
+function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters): void {
   const {
     responseStatus, responseStatusNum, responseValue, tags, geogebraOnly, audioLowOnly, audioLowThreshold, hasValueOnly
   } = filters;
@@ -105,19 +103,15 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
     );
   }
   if (tags) {
-    if (purpose === 'rows') {
-      qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
-    } else {
-      qb.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM unit_tag count_unit_tag
-          WHERE count_unit_tag."unitId" = unit.id
-            AND count_unit_tag.tag ILIKE :tags
-        )`,
-        { tags: `%${tags}%` }
-      );
-    }
+    qb.andWhere(
+      `EXISTS (
+        SELECT 1
+        FROM unit_tag matching_tag
+        WHERE matching_tag."unitId" = unit.id
+          AND matching_tag.tag ILIKE :tags
+      )`,
+      { tags: `%${tags}%` }
+    );
   }
 
   if (geogebraOnly) {

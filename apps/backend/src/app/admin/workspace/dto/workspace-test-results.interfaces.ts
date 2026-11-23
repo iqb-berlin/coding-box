@@ -206,4 +206,5 @@ export interface QuickSearchResult {
   units: QuickSearchResultItem[];
   responses: QuickSearchResultItem[];
   totals: Record<QuickSearchResultKind, number>;
+  hasMoreResponses?: boolean;
 }

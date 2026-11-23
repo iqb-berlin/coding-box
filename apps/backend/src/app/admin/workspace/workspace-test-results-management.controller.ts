@@ -1,5 +1,5 @@
 import {
-  Controller, Delete, Get, Post, Param, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe
+  Controller, Delete, Get, Post, Param, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -152,6 +152,12 @@ export class WorkspaceTestResultsManagementController {
     enum: ['person', 'booklet', 'unit', 'response'],
     description: 'Restrict the search to one category'
   })
+  @ApiQuery({
+    name: 'responsePreview',
+    required: false,
+    type: Boolean,
+    description: 'Return a limited response preview without counting every match'
+  })
   @ApiOkResponse({
     description: 'Quick search results retrieved successfully.'
   })
@@ -162,13 +168,15 @@ export class WorkspaceTestResultsManagementController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Query('q') query: string,
     @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8,
-    @Query('kind') kind?: QuickSearchResultKind
+    @Query('kind') kind?: QuickSearchResultKind,
+    @Query('responsePreview', new DefaultValuePipe(false), ParseBoolPipe) responsePreview = false
   ): Promise<QuickSearchResult> {
     return this.workspaceTestResultsService.quickSearchTestResults(
       workspaceId,
       query,
       limit,
-      kind
+      kind,
+      responsePreview
     );
   }
 

@@ -277,14 +277,22 @@ export class ItemDatasetMetadataService {
     workspaceId: number,
     checkCancellation?: () => Promise<void>
   ): Promise<Map<string, ItemDatasetBookletDesign>> {
-    const [files, exclusions] = await Promise.all([
+    const [files, exclusions, aliases] = await Promise.all([
       this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' },
         select: ['file_id', 'data'],
         order: { file_id: 'ASC' }
       }),
-      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
+      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId),
+      this.getUnitAliases(workspaceId, checkCancellation)
     ]);
+    const canonicalByAlias = new Map<string, string | null>();
+    aliases.forEach((alias, unitId) => {
+      const aliasId = normalizeItemDatasetUnitId(alias);
+      if (aliasId && aliasId !== unitId) {
+        canonicalByAlias.set(aliasId, canonicalByAlias.has(aliasId) ? null : unitId);
+      }
+    });
     const result = new Map<string, ItemDatasetBookletDesign>();
 
     for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
@@ -322,6 +330,15 @@ export class ItemDatasetMetadataService {
             order,
             testletKey: `${testletIndex}:${testletId}`
           });
+        });
+        canonicalByAlias.forEach((unitId, alias) => {
+          const position = units.get(alias);
+          if (
+            unitId && position && !units.has(unitId) &&
+            !isExcludedByResolvedExclusions(exclusions, bookletId, unitId)
+          ) {
+            units.set(unitId, { ...position, unitId });
+          }
         });
         result.set(bookletId, { units });
       } catch (error) {

@@ -1,3 +1,4 @@
+import { once } from 'node:events';
 import {
   Inject, BadRequestException, Injectable, Logger, Optional
 } from '@nestjs/common';
@@ -349,6 +350,7 @@ export class CodingListStreamService {
   private async loadVariableAnchorMapsForVersionRows(
     rows: CodingItemVersionRow[],
     workspaceId: number,
+    knownAnchors: CodingVariableAnchorMaps,
     checkCancellation?: () => Promise<void>
   ): Promise<CodingVariableAnchorMaps> {
     if (!this.replayAnchorService) {
@@ -362,20 +364,22 @@ export class CodingListStreamService {
         .filter(unitName => unitName)
     ));
 
-    if (!unitNames.length) {
-      return new Map();
+    const unknownUnits = unitNames.filter(unitName => !knownAnchors.has(unitName));
+    if (!unknownUnits.length) {
+      return knownAnchors;
     }
 
     try {
-      const anchorMaps = await this.replayAnchorService.getVariableAnchorMaps(unitNames, workspaceId);
+      const anchorMaps = await this.replayAnchorService.getVariableAnchorMaps(unknownUnits, workspaceId);
       await checkCancellation?.();
-      return anchorMaps;
+      anchorMaps.forEach((anchors, unitName) => knownAnchors.set(unitName, anchors));
+      return knownAnchors;
     } catch (error) {
       this.logger.warn(
         `Failed to load replay anchor overrides for workspace ${workspaceId}: ${getErrorMessage(error)}`
       );
       return new Map(
-        unitNames.map(unitName => [unitName, new Map<string, string>()])
+        [...unknownUnits.map(unitName => [unitName, new Map<string, string>()] as const), ...knownAnchors]
       );
     }
   }
@@ -999,6 +1003,7 @@ export class CodingListStreamService {
       try {
         await checkCancellation?.();
         const batchSize = this.getVersionedExportBatchSize();
+        const knownAnchors: CodingVariableAnchorMaps = new Map();
         let lastId = 0;
         let totalWritten = 0;
         const versionExportOptions = this.getVersionedResponseFilterOptions(version);
@@ -1018,25 +1023,19 @@ export class CodingListStreamService {
           lastReportedAt: Date.now()
         };
 
-        let hasMoreRows = true;
-        while (hasMoreRows) {
+        while (true) {
           await checkCancellation?.();
           const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
-            workspace_id,
-            lastId,
-            batchSize,
-            versionExportOptions
+            workspace_id, lastId, batchSize, versionExportOptions, includeResponseValues
           );
           await checkCancellation?.();
 
-          if (!rows.length) {
-            hasMoreRows = false;
-            continue;
-          }
+          if (!rows.length) break;
 
           const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
             rows,
             workspace_id,
+            knownAnchors,
             checkCancellation
           );
 
@@ -1060,28 +1059,20 @@ export class CodingListStreamService {
               exportProfile
             );
 
-            if (item !== null) {
-              const ok = csvStream.write(item);
-              totalWritten += 1;
-              await this.reportRowBasedProgress(
-                progressCallback,
-                totalWritten,
-                totalRows,
-                progressState
-              );
+            if (item === null) continue;
+            const ok = csvStream.write(item);
+            totalWritten += 1;
+            await this.reportRowBasedProgress(
+              progressCallback,
+              totalWritten,
+              totalRows,
+              progressState
+            );
 
-              if (!ok) {
-                await new Promise(resolve => {
-                  csvStream.once('drain', resolve);
-                });
-                await checkCancellation?.();
-              }
+            if (!ok) {
+              await once(csvStream, 'drain');
+              await checkCancellation?.();
             }
-          }
-
-          // Force garbage collection hint after each batch
-          if (global.gc) {
-            global.gc();
           }
 
           lastId = rows[rows.length - 1].id;
@@ -1173,6 +1164,7 @@ export class CodingListStreamService {
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
     const batchSize = this.getVersionedExportBatchSize();
+    const knownAnchors: CodingVariableAnchorMaps = new Map();
     let lastId = 0;
     let totalWritten = 0;
 
@@ -1195,25 +1187,23 @@ export class CodingListStreamService {
         lastReportedAt: Date.now()
       };
 
-      let hasMoreRows = true;
-      while (hasMoreRows) {
+      while (true) {
         await checkCancellation?.();
         const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
           workspace_id,
           lastId,
           batchSize,
-          versionExportOptions
+          versionExportOptions,
+          includeResponseValues
         );
         await checkCancellation?.();
 
-        if (!rows.length) {
-          hasMoreRows = false;
-          continue;
-        }
+        if (!rows.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
           rows,
           workspace_id,
+          knownAnchors,
           checkCancellation
         );
 
@@ -1247,11 +1237,6 @@ export class CodingListStreamService {
               progressState
             );
           }
-        }
-
-        // Force garbage collection hint after each batch
-        if (global.gc) {
-          global.gc();
         }
 
         lastId = rows[rows.length - 1].id;
@@ -1352,6 +1337,7 @@ export class CodingListStreamService {
     worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
 
     const batchSize = this.getVersionedExportBatchSize();
+    const knownAnchors: CodingVariableAnchorMaps = new Map();
     let lastId = 0;
     let totalWritten = 0;
 
@@ -1374,25 +1360,23 @@ export class CodingListStreamService {
         lastReportedAt: Date.now()
       };
 
-      let hasMoreRows = true;
-      while (hasMoreRows) {
+      while (true) {
         await checkCancellation?.();
         const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
           workspace_id,
           lastId,
           batchSize,
-          versionExportOptions
+          versionExportOptions,
+          includeResponseValues
         );
         await checkCancellation?.();
 
-        if (!rows.length) {
-          hasMoreRows = false;
-          continue;
-        }
+        if (!rows.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
           rows,
           workspace_id,
+          knownAnchors,
           checkCancellation
         );
 
@@ -1426,10 +1410,6 @@ export class CodingListStreamService {
               progressState
             );
           }
-        }
-
-        if (global.gc) {
-          global.gc();
         }
 
         lastId = rows[rows.length - 1].id;
@@ -1605,6 +1585,7 @@ export class CodingListStreamService {
     let geoGebraFileCount = 0;
     const geoGebraExportLimits = this.getGeoGebraExportLimits();
     const batchSize = this.getVersionedExportBatchSize();
+    const knownAnchors: CodingVariableAnchorMaps = new Map();
     let lastId = 0;
     let totalWritten = 0;
 
@@ -1627,8 +1608,7 @@ export class CodingListStreamService {
         lastReportedAt: Date.now()
       };
 
-      let hasMoreRows = true;
-      while (hasMoreRows) {
+      while (true) {
         await checkCancellation?.();
         const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
           workspace_id,
@@ -1638,14 +1618,12 @@ export class CodingListStreamService {
         );
         await checkCancellation?.();
 
-        if (!rows.length) {
-          hasMoreRows = false;
-          continue;
-        }
+        if (!rows.length) break;
 
         const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
           rows,
           workspace_id,
+          knownAnchors,
           checkCancellation
         );
 
@@ -1716,10 +1694,6 @@ export class CodingListStreamService {
               progressState
             );
           }
-        }
-
-        if (global.gc) {
-          global.gc();
         }
 
         lastId = rows[rows.length - 1].id;

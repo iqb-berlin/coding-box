@@ -71,6 +71,7 @@ export type QuickSearchResult = {
   units: QuickSearchResultItem[];
   responses: QuickSearchResultItem[];
   totals: Record<QuickSearchResultKind, number>;
+  hasMoreResponses?: boolean;
 };
 
 export type FlatFrequenciesResult = Record<

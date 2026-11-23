@@ -542,7 +542,8 @@ describe('CodingListStreamService', () => {
         1,
         0,
         250,
-        versionExportOptions
+        versionExportOptions,
+        false
       );
       expect(mockItemBuilderService.buildCodingItemWithVersionRow).toHaveBeenCalledWith(
         row,
@@ -1016,7 +1017,8 @@ describe('CodingListStreamService', () => {
           validCodingVariablesOnly: true,
           givenResponsesOnly: true,
           includePartlyDisplayed: true
-        }
+        },
+        true
       );
     });
 

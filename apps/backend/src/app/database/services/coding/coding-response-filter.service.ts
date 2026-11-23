@@ -377,7 +377,8 @@ export class CodingResponseFilterService {
     workspaceId: number,
     lastId: number,
     batchSize: number,
-    options: ResponseFilterOptions = {}
+    options: ResponseFilterOptions = {},
+    includeResponseValues = true
   ): Promise<CodingItemVersionRow[]> {
     const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
 
@@ -390,7 +391,7 @@ export class CodingResponseFilterService {
       .addSelect('person.group', 'personGroup')
       .addSelect('bookletinfo.name', 'bookletName')
       .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
+      .addSelect(includeResponseValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.code_v1', 'codeV1')
       .addSelect('response.score_v1', 'scoreV1')
@@ -402,7 +403,7 @@ export class CodingResponseFilterService {
       .addSelect('response.score_v3', 'scoreV3')
       .andWhere('response.id > :lastId', { lastId })
       .orderBy('response.id', 'ASC')
-      .take(batchSize)
+      .limit(batchSize)
       .getRawMany<RawCodingItemVersionRow>();
 
     return rows.map(row => ({

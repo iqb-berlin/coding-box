@@ -29,7 +29,7 @@ import {
   applyExclusionsToQuery, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses, nonAutocoderGeneratedResponseCondition
 } from './test-results.util';
 import { QuickSearchResult, QuickSearchResultKind, WorkspaceOverviewStats } from './workspace-test-results.types';
-import { formatQuickSearchResults } from './quick-search-results';
+import { formatQuickSearchResults, selectQuickResponseRows } from './quick-search-results';
 
 @Injectable()
 export class TestResultsQueryService {
@@ -527,7 +527,8 @@ export class TestResultsQueryService {
     workspaceId: number,
     query: string,
     limit = 8,
-    kind?: QuickSearchResultKind
+    kind?: QuickSearchResultKind,
+    responsePreview = false
   ): Promise<QuickSearchResult> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
@@ -626,7 +627,7 @@ export class TestResultsQueryService {
       run('person', () => personQb.clone().getCount(), 0),
       run('booklet', () => bookletQb.clone().getCount(), 0),
       run('unit', () => unitQb.clone().getCount(), 0),
-      run('response', () => responseQb.clone().getCount(), 0),
+      responsePreview ? 0 : run('response', () => responseQb.clone().getCount(), 0),
       run('person', () => personQb
         .clone()
         .select([
@@ -673,36 +674,22 @@ export class TestResultsQueryService {
         .addOrderBy('person.code', 'ASC')
         .limit(validLimit)
         .getRawMany(), []),
-      run('response', () => responseQb
-        .clone()
-        .select([
-          'response.id AS "responseId"',
-          'response.variableid AS "variableId"',
-          'SUBSTRING(response.value, 1, 200) AS "responseValue"',
-          'response.status AS "responseStatus"',
-          'unit.id AS "unitId"',
-          'unit.name AS "unitName"',
-          'unit.alias AS "unitAlias"',
-          'booklet.id AS "bookletId"',
-          'bookletinfo.name AS "bookletName"',
-          'person.id AS "personId"',
-          'person.code AS "personCode"',
-          'person.group AS "personGroup"',
-          'person.login AS "personLogin"'
-        ])
-        .orderBy('person.code', 'ASC')
-        .addOrderBy('bookletinfo.name', 'ASC')
-        .addOrderBy('COALESCE(unit.alias, unit.name)', 'ASC')
-        .addOrderBy('response.variableid', 'ASC')
-        .limit(validLimit)
-        .getRawMany(), [])
+      run('response', () => selectQuickResponseRows(responseQb, validLimit, responsePreview), [])
     ]);
 
-    return formatQuickSearchResults(normalizedQuery, validLimit, {
-      person: personRows, booklet: bookletRows, unit: unitRows, response: responseRows
+    const visibleResponses = responseRows.slice(0, validLimit);
+    const result = formatQuickSearchResults(normalizedQuery, validLimit, {
+      person: personRows, booklet: bookletRows, unit: unitRows, response: visibleResponses
     }, {
-      person: personTotal, booklet: bookletTotal, unit: unitTotal, response: responseTotal
+      person: personTotal,
+      booklet: bookletTotal,
+      unit: unitTotal,
+      response: responsePreview ? visibleResponses.length : responseTotal
     });
+    if (responsePreview && (!kind || kind === 'response')) {
+      result.hasMoreResponses = responseRows.length > validLimit;
+    }
+    return result;
   }
 
   async findWorkspaceResponses(

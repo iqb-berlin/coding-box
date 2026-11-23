@@ -9,6 +9,7 @@ import { PassThrough, Stream } from 'stream';
 import { once } from 'events';
 import { pipeline } from 'stream/promises';
 import { Repository } from 'typeorm';
+import type { RawResponseValueRow } from './item-dataset-response-row';
 import {
   ItemDatasetNotReachedScope,
   ItemDatasetOptionsDto,
@@ -73,25 +74,6 @@ interface MatrixRow {
 }
 
 interface RawMatrixRow extends MatrixRow {}
-
-interface RawResponseValueRow {
-  id: number;
-  bookletId: number | string;
-  bookletName: string;
-  unitName: string;
-  unitAlias: string | null;
-  variableId: string;
-  status: number | string | null;
-  statusV1: number | string | null;
-  codeV1: number | string | null;
-  scoreV1: number | string | null;
-  statusV2: number | string | null;
-  codeV2: number | string | null;
-  scoreV2: number | string | null;
-  statusV3: number | string | null;
-  codeV3: number | string | null;
-  scoreV3: number | string | null;
-}
 
 interface MatrixContext {
   rows: MatrixRow[];
@@ -831,6 +813,7 @@ export class CodingItemMatrixExportService {
       .getRawMany<RawResponseValueRow>();
     await checkCancellation?.();
     const result = new Map<number, Map<string, ResponseValue>>();
+    const canonicalKeysByBooklet = new Map<number, Set<string>>();
     for (let index = 0; index < responses.length; index += 1) {
       if (index % 500 === 0) {
         await checkCancellation?.();
@@ -846,20 +829,27 @@ export class CodingItemMatrixExportService {
       ) {
         continue;
       }
-      const key = [response.unitAlias, response.unitName]
-        .filter((unitId): unitId is string => !!unitId)
-        .map(unitId => this.getResponseKey(
-          unitId,
-          response.variableId || ''
-        ))
-        .find(candidate => validPairs.has(candidate));
-      if (!key) {
+      const variable = response.variableId;
+      const bookletId = Number(response.bookletId);
+      const canonicalKey = this.getResponseKey(response.unitName, variable);
+      const aliasKey = this.getResponseKey(response.unitAlias || '', variable);
+      const includeCanonical = validPairs.has(canonicalKey);
+      const includeAlias = aliasKey !== canonicalKey && validPairs.has(aliasKey);
+      if (!includeCanonical && !includeAlias) {
         continue;
       }
-      const bookletId = Number(response.bookletId);
       const values = result.get(bookletId) || new Map<string, ResponseValue>();
-      values.set(key, this.getVersionedValue(response, version));
+      const canonicalKeys = canonicalKeysByBooklet.get(bookletId) || new Set<string>();
+      const value = this.getVersionedValue(response, version);
+      if (includeCanonical) {
+        values.set(canonicalKey, value);
+        canonicalKeys.add(canonicalKey);
+      }
+      if (includeAlias && !canonicalKeys.has(aliasKey)) {
+        values.set(aliasKey, value);
+      }
       result.set(bookletId, values);
+      canonicalKeysByBooklet.set(bookletId, canonicalKeys);
     }
     return result;
   }

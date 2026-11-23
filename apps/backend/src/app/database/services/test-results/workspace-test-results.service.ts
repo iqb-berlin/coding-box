@@ -142,9 +142,10 @@ export class WorkspaceTestResultsService {
     workspaceId: number,
     query: string,
     limit = 8,
-    kind?: QuickSearchResultKind
+    kind?: QuickSearchResultKind,
+    responsePreview = false
   ): Promise<QuickSearchResult> {
-    return this.query.quickSearchTestResults(workspaceId, query, limit, kind);
+    return this.query.quickSearchTestResults(workspaceId, query, limit, kind, responsePreview);
   }
 
   async findWorkspaceResponses(

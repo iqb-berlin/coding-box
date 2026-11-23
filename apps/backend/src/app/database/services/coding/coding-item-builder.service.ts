@@ -334,18 +334,6 @@ export class CodingItemBuilderService {
       const loginCode = row.personCode || '';
       const loginGroup = row.personGroup || '';
       const bookletId = row.bookletName || '';
-      const url = generateReplayUrl({
-        serverUrl,
-        loginName,
-        loginCode,
-        loginGroup,
-        bookletId,
-        unitId: unitKey,
-        variablePage,
-        variableAnchor,
-        authToken,
-        workspaceId: authToken ? undefined : workspaceId
-      });
 
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
@@ -390,7 +378,18 @@ export class CodingItemBuilderService {
       }
 
       if (includeReplayUrls) {
-        baseItem.url = url;
+        baseItem.url = generateReplayUrl({
+          serverUrl,
+          loginName,
+          loginCode,
+          loginGroup,
+          bookletId,
+          unitId: unitKey,
+          variablePage,
+          variableAnchor,
+          authToken,
+          workspaceId: authToken ? undefined : workspaceId
+        });
       }
 
       return baseItem;

@@ -595,6 +595,7 @@
     }
   },
   "ws-admin": {
+    "workspace-navigation": "Arbeitsbereichsnavigation",
     "diagnostics-history": {
       "title": "Gespeicherte Itemmatrix-Diagnosen",
       "description": "Vollständige Fehlerlisten bleiben auch nach Ablauf oder Entfernen der Exportaufträge erhalten. Die Zelldiagnose enthält Personenkennungen und die genaue Position jeder betroffenen Zelle.",
@@ -4934,6 +4935,7 @@
       "minimum-search-length": "Geben Sie mindestens {{MIN_SEARCH_LENGTH}} Zeichen ein.",
       "no-matches": "Keine Treffer gefunden.",
       "result-count": "{{value1}} von {{value2}}",
+      "preview-count": "{{count}} Treffer in der Vorschau, weitere vorhanden",
       "open-browser": "Im Ergebnisbrowser öffnen",
       "start-replay": "Replay starten",
       "replay-unavailable": "Für diesen Treffer ist kein Replay verfügbar."

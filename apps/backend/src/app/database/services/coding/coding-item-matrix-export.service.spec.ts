@@ -110,7 +110,17 @@ const createService = (
     })
   };
   const metadataService = new ItemDatasetMetadataService(
-    (overrides.unitRepository || {}) as never,
+    (overrides.unitRepository || {
+      createQueryBuilder: jest.fn().mockReturnValue({
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([])
+      })
+    }) as never,
     (overrides.fileUploadRepository || { find: jest.fn().mockResolvedValue([]) }) as never,
     workspaceFilesService as never,
     workspaceExclusionService as never,
@@ -2756,6 +2766,38 @@ describe('CodingItemMatrixExportService', () => {
       select: ['file_id', 'data'],
       order: { file_id: 'ASC' }
     });
+  });
+
+  it('includes the canonical unit at the booklet position of its unique imported alias', async () => {
+    const aliases = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { unitName: 'UNIT', unitAlias: 'UNIT-ALIAS' },
+        { unitName: 'FIRST', unitAlias: 'SHARED' },
+        { unitName: 'SECOND', unitAlias: 'SHARED' }
+      ])
+    };
+    const service = createService({
+      fileUploadRepository: {
+        find: jest.fn().mockResolvedValue([{
+          file_id: 'Booklet-1',
+          data: '<Booklet><Testlet id="T"><Unit id="UNIT-ALIAS"/><Unit id="SHARED"/></Testlet></Booklet>'
+        }])
+      },
+      unitRepository: { createQueryBuilder: jest.fn().mockReturnValue(aliases) }
+    });
+    const designs = await (service as never as {
+      getBookletDesigns: (workspaceId: number) => Promise<Map<string, { units: Map<string, unknown> }>>;
+    }).getBookletDesigns(7);
+    const units = designs.get('BOOKLET-1')?.units;
+    expect(units?.get('UNIT')).toMatchObject({ unitId: 'UNIT', order: 0, testletKey: '0:T' });
+    expect(units?.has('FIRST')).toBe(false);
+    expect(units?.has('SECOND')).toBe(false);
   });
 
   it('removes testlet-specific exclusions from the effective booklet design', async () => {

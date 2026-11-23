@@ -369,6 +369,26 @@ describe('WorkspaceTestResultsService', () => {
     expect(response.getRawMany).not.toHaveBeenCalled();
   });
 
+  it('loads one extra response for the preview without computing an exact count or sorting the matches', async () => {
+    const response = mockQueryBuilder();
+    response.getRawMany.mockResolvedValue([
+      { responseId: 101, variableId: '01' },
+      { responseId: 102, variableId: '001' },
+      { responseId: 103, variableId: '01a' }
+    ]);
+    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(response);
+
+    await expect(service.quickSearchTestResults(1, '01', 2, 'response', true))
+      .resolves.toMatchObject({
+        responses: [{ id: 101 }, { id: 102 }],
+        totals: { response: 2 },
+        hasMoreResponses: true
+      });
+    expect(response.getCount).not.toHaveBeenCalled();
+    expect(response.orderBy).not.toHaveBeenCalled();
+    expect(response.limit).toHaveBeenCalledWith(3);
+  });
+
   describe('hasGeogebraResponses', () => {
     it.each([true, false])('returns %s from an existence query without counting matches', async exists => {
       const qb = mockQueryBuilder();
@@ -1955,7 +1975,7 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
       expect(countQb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('FROM unit_tag count_unit_tag'),
+        expect.stringContaining('FROM unit_tag matching_tag'),
         { tags: '%review%' }
       );
       expect(countQb.select).toHaveBeenCalledWith(

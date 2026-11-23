@@ -1,3 +1,5 @@
+import type { SelectQueryBuilder } from 'typeorm';
+import type { ResponseEntity } from '../../entities/response.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
 import type { QuickSearchResult, QuickSearchResultKind } from './workspace-test-results.types';
 
@@ -98,4 +100,38 @@ export function formatQuickSearchResults(
     }),
     totals
   };
+}
+
+export function selectQuickResponseRows(
+  responseQb: SelectQueryBuilder<ResponseEntity>,
+  validLimit: number,
+  responsePreview: boolean
+): Promise<SearchRow[]> {
+  const rows = responseQb
+    .clone()
+    .select([
+      'response.id AS "responseId"',
+      'response.variableid AS "variableId"',
+      'SUBSTRING(response.value, 1, 200) AS "responseValue"',
+      'response.status AS "responseStatus"',
+      'unit.id AS "unitId"',
+      'unit.name AS "unitName"',
+      'unit.alias AS "unitAlias"',
+      'booklet.id AS "bookletId"',
+      'bookletinfo.name AS "bookletName"',
+      'person.id AS "personId"',
+      'person.code AS "personCode"',
+      'person.group AS "personGroup"',
+      'person.login AS "personLogin"'
+    ]);
+  if (responsePreview) {
+    return rows.limit(validLimit + 1).getRawMany();
+  }
+  return rows
+    .orderBy('person.code', 'ASC')
+    .addOrderBy('bookletinfo.name', 'ASC')
+    .addOrderBy('COALESCE(unit.alias, unit.name)', 'ASC')
+    .addOrderBy('response.variableid', 'ASC')
+    .limit(validLimit)
+    .getRawMany();
 }
