@@ -1,13 +1,16 @@
 import { TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
-import { Subject, of, throwError } from 'rxjs';
+import {
+  BehaviorSubject, NEVER, Subject, of, throwError
+} from 'rxjs';
 import { HttpErrorResponse } from '@angular/common/http';
 import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultsUploadStateService, PendingUploadBatch } from './test-results-upload-state.service';
 import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
+import { TestResultsImportProgressState } from '../components/test-results/test-results-import-progress-dialog.component';
 
 describe('TestResultsUploadStateService', () => {
   let service: TestResultsUploadStateService;
@@ -255,7 +258,7 @@ describe('TestResultsUploadStateService', () => {
     );
   });
 
-  it('should register a batch and start polling', async () => {
+  it('keeps progress visible until the import result can be shown', async () => {
     jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
     try {
       service = TestBed.inject(TestResultsUploadStateService);
@@ -281,18 +284,28 @@ describe('TestResultsUploadStateService', () => {
       };
 
       fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 50 }));
-
-      service.registerBatch(batch);
-
-      await jest.advanceTimersByTimeAsync(1001); // First interval tick
+      const state$ = new BehaviorSubject<TestResultsImportProgressState>({
+        title: '', icon: '', phase: 'uploading', phaseLabel: '', message: ''
+      });
+      const close = jest.fn();
+      service.registerBatch(batch, { state$, dialogRef: { close } as never });
 
       let currentBatches: PendingUploadBatch[] = [];
       service.uploadingBatches$.subscribe(b => { currentBatches = b; });
 
       expect(currentBatches.length).toBe(1);
       expect(currentBatches[0].progress).toBe(50);
+      expect(state$.value).toMatchObject({ phase: 'readingFile', mode: 'determinate', percent: 50 });
 
-      // Now complete it
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 100 }));
+      await jest.advanceTimersByTimeAsync(17000);
+
+      expect(state$.value).toMatchObject({ phase: 'processing', mode: 'indeterminate', completed: 0 });
+      expect(state$.value.percent).toBeUndefined();
+      expect(close).not.toHaveBeenCalled();
+      expect(dialogMock.open).not.toHaveBeenCalled();
+
+      testPersonCodingServiceMock.getCodingFreshness.mockReturnValue(NEVER);
       fileServiceMock.getUploadJobStatus.mockReturnValue(of({
         status: 'completed',
         progress: 100,
@@ -323,13 +336,23 @@ describe('TestResultsUploadStateService', () => {
         }
       }));
 
-      await jest.advanceTimersByTimeAsync(1001); // Trigger competition detection
-      await jest.advanceTimersByTimeAsync(1000); // Allow async finishBatch (setTimeout 500ms + async calls)
-      await jest.advanceTimersByTimeAsync(0);
+      await jest.advanceTimersByTimeAsync(1000);
+
+      expect(state$.value).toMatchObject({ phase: 'preparingResult', mode: 'indeterminate', completed: 1 });
+      expect(state$.value.percent).toBeUndefined();
+      expect(close).not.toHaveBeenCalled();
+      expect(dialogMock.open).not.toHaveBeenCalled();
+
+      await jest.advanceTimersByTimeAsync(5000);
 
       expect(currentBatches.length).toBe(0);
       expect(testPersonCodingServiceMock.invalidateCodingStatusCache).toHaveBeenCalledWith(1);
-      expect(dialogMock.open).toHaveBeenCalled();
+      expect(close).toHaveBeenCalledTimes(1);
+      expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+        data: expect.objectContaining({
+          result: expect.objectContaining({ delta: expect.objectContaining({ uniqueResponses: 50 }) })
+        })
+      }));
       expect(snackBarMock.open).toHaveBeenCalled();
 
       jest.clearAllTimers();

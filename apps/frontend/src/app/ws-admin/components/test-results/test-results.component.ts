@@ -360,12 +360,8 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         const myBatch = batches.find(
           (b: PendingUploadBatch) => b.workspaceId === this.appService.selectedWorkspaceId
         );
-        if (myBatch) {
-          this.imports.updateUploadProgress(true, this.uiTranslate('ui-text.test-results.processing-files', { progress: myBatch.progress, completedCount: myBatch.completedCount, totalJobs: myBatch.totalJobs }));
-          this.isLoading.set(true);
-        } else {
-          this.imports.updateUploadProgress(false);
-        }
+        this.imports.updateUploadProgress(myBatch);
+        if (myBatch) this.isLoading.set(true);
       }
     );
 
@@ -380,7 +376,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
           this.getCurrentSearchText()
         );
         this.isLoading.set(false);
-        this.imports.updateUploadProgress(false);
+        this.imports.updateUploadProgress();
       }
     });
 
@@ -393,7 +389,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
         this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies() && !!request.forceShowLogAnomalies);
         this.isTableView.set(true);
         this.isLoading.set(false);
-        this.imports.updateUploadProgress(false);
+        this.imports.updateUploadProgress();
       });
 
     this.loadTestResultsLogAnomalySetting();
@@ -913,7 +909,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.forceShowLogAnomalyTableColumn.set(this.showTestResultsLogAnomalies());
     this.isTableView.set(true);
     this.isLoading.set(false);
-    this.imports.updateUploadProgress(false);
+    this.imports.updateUploadProgress();
   }
 
   protected openLogAnomalyDetailsDialog(): void {
@@ -1088,7 +1084,7 @@ export class TestResultsComponent implements OnInit, OnDestroy {
     this.forceShowLogAnomalyTableColumn.set(false);
     this.isTableView.set(true);
     this.isLoading.set(false);
-    this.imports.updateUploadProgress(false);
+    this.imports.updateUploadProgress();
   }
 
   getResponseStatusTooltip(status: string): string { return this.summary.getResponseStatusTooltip(status); }

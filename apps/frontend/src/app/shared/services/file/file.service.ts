@@ -305,7 +305,7 @@ export class FileService {
               .pipe(
                 tap(() => {
                   if (onProgress) {
-                    onProgress(Math.round(((i + 1) / totalChunks) * 100));
+                    onProgress(Math.floor(((i + 1) / totalChunks) * 100));
                   }
                 })
               )

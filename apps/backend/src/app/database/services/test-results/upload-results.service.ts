@@ -533,13 +533,14 @@ export class UploadResultsService {
           if (file.size) {
             this.logger.log(`File size: ${file.size}`);
             let bytesRead = 0;
-            let lastProgress = 0;
+            let lastReadProgress = 0;
+            // CSV parsing, database writes and result aggregation can continue after all bytes have been read.
             fileStream.on('data', (chunk: Buffer) => {
               bytesRead += chunk.length;
-              const progress = Math.round((bytesRead / file.size) * 100);
-              if (progress > lastProgress) {
-                lastProgress = progress;
-                job.updateProgress(progress).catch(err => {
+              const readProgress = Math.min(100, Math.floor((bytesRead / file.size) * 100));
+              if (readProgress > lastReadProgress) {
+                lastReadProgress = readProgress;
+                job.updateProgress(readProgress).catch(err => {
                   this.logger.warn(`Failed to update job progress: ${err.message}`);
                 });
               }

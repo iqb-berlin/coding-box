@@ -1639,7 +1639,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.ts": {
       "file": {
-        "max-lines": 1241
+        "max-lines": 1237
       },
       "functions": {}
     },
@@ -1655,19 +1655,9 @@
     },
     "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.ts": {
       "file": {
-        "max-lines": 959
+        "max-lines": 918
       },
-      "functions": {
-        "class TestResultsUploadStateService#1/method finishBatch#1": {
-          "max-lines-per-function": 159
-        },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1": {
-          "max-lines-per-function": 141
-        },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1/anonymous:91b09bc27fe02d6a#1": {
-          "complexity": 22
-        }
-      }
+      "functions": {}
     }
   }
 }

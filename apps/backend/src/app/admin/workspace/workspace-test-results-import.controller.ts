@@ -308,7 +308,10 @@ export class WorkspaceTestResultsImportController {
             'paused'
           ]
         },
-        progress: { type: 'number' },
+        progress: {
+          type: 'number',
+          description: 'Percentage of file bytes read. The job status determines when processing has ended.'
+        },
         result: { type: 'object' },
         error: { type: 'object' }
       }
