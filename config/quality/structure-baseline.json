@@ -571,7 +571,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts": {
       "file": {
-        "max-lines": 1517
+        "max-lines": 1503
       },
       "functions": {
         "class CodingListStreamService#1/method getCodingListAsExcel#1": {
@@ -591,16 +591,16 @@
           "max-lines-per-function": 146
         },
         "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1": {
-          "max-lines-per-function": 125
+          "max-lines-per-function": 122
         },
         "class CodingListStreamService#1/method processJsonExport#1": {
           "complexity": 25,
           "max-depth": 5
         },
         "class CodingListStreamService#1/method writeCodingListExcelToFile#1": {
-          "complexity": 27,
+          "complexity": 23,
           "max-depth": 5,
-          "max-lines-per-function": 124
+          "max-lines-per-function": 108
         },
         "class CodingListStreamService#1/method writeCodingResultsByVersionExcelToFile#1": {
           "complexity": 25,
@@ -1563,7 +1563,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
       "file": {
-        "max-lines": 1371
+        "max-lines": 1302
       },
       "functions": {
         "class TestFilesComponent#1/method handleValidationResponse#1": {

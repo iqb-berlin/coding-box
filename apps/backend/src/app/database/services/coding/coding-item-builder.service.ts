@@ -8,6 +8,7 @@ import {
 import { mapCodeForExport } from '../../../utils/coding-utils';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
+import type { LRUCache } from '../shared/lru-cache';
 import {
   extractGeoGebraBase64,
   suppressedGeoGebraValuePlaceholder
@@ -30,8 +31,9 @@ export interface CodingItem {
 }
 
 export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
+export type CodingVariablePageCache = LRUCache<Map<string, string>>;
 
-export interface CodingItemVersionRow {
+export interface CodingListResponseRow {
   id: number;
   unitKey: string;
   unitAlias: string | null;
@@ -40,8 +42,11 @@ export interface CodingItemVersionRow {
   personGroup: string | null;
   bookletName: string | null;
   variableId: string;
-  value: string | null;
   statusV1: number | null;
+}
+
+export interface CodingItemVersionRow extends CodingListResponseRow {
+  value: string | null;
   codeV1: number | null;
   scoreV1: number | null;
   statusV2: number | null;
@@ -114,18 +119,32 @@ export class CodingItemBuilderService {
     workspaceId: number,
     variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
+    const unit = response.unit;
+    const booklet = unit?.booklet;
+    if (!unit || !booklet) return null;
+    return this.buildCodingItemFromRow({
+      id: response.id,
+      unitKey: unit.name,
+      unitAlias: unit.alias,
+      personLogin: booklet.person?.login ?? null,
+      personCode: booklet.person?.code ?? null,
+      personGroup: booklet.person?.group ?? null,
+      bookletName: booklet.bookletinfo?.name ?? null,
+      variableId: response.variableid,
+      statusV1: response.status_v1
+    }, authToken, serverUrl, workspaceId, variableAnchorMaps);
+  }
+
+  async buildCodingItemFromRow(
+    row: CodingListResponseRow,
+    authToken: string,
+    serverUrl: string,
+    workspaceId: number,
+    variableAnchorMaps?: CodingVariableAnchorMaps
+  ): Promise<CodingItem | null> {
     try {
-      const unit = response.unit;
-      if (!unit) return null;
-
-      const booklet = unit.booklet;
-      if (!booklet) return null;
-
-      const person = booklet.person;
-      const bookletInfo = booklet.bookletinfo;
-
-      const unitKey = unit.name || '';
-      const variableId = response.variableid || '';
+      const unitKey = row.unitKey || '';
+      const variableId = row.variableId || '';
 
       // Load variable page mapping
       const variablePageMap = await this.fileCacheService.loadVoudData(
@@ -134,11 +153,11 @@ export class CodingItemBuilderService {
       );
       const variablePage = variablePageMap.get(variableId) || '0';
 
-      const loginName = person?.login || '';
-      const loginCode = person?.code || '';
-      const loginGroup = person?.group || '';
-      const bookletId = bookletInfo?.name || '';
-      const unitAlias = unit.alias || '';
+      const loginName = row.personLogin || '';
+      const loginCode = row.personCode || '';
+      const loginGroup = row.personGroup || '';
+      const bookletId = row.bookletName || '';
+      const unitAlias = row.unitAlias || '';
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
@@ -169,12 +188,12 @@ export class CodingItemBuilderService {
         variable_id: variableId,
         variable_page: variablePage,
         variable_anchor: variableAnchor,
-        status_v1: this.formatStatus(response.status_v1),
+        status_v1: this.formatStatus(row.statusV1),
         url
       };
     } catch (error) {
       this.logger.error(
-        `Error building coding item for response ${response.id}: ${getErrorMessage(error)}`
+        `Error building coding item for response ${row.id}: ${getErrorMessage(error)}`
       );
       return null;
     }
@@ -308,7 +327,8 @@ export class CodingItemBuilderService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
     variableAnchorMaps?: CodingVariableAnchorMaps,
-    resolvedValues?: CodingItemVersionExportValues
+    resolvedValues?: CodingItemVersionExportValues,
+    variablePageCache?: CodingVariablePageCache
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
@@ -318,10 +338,7 @@ export class CodingItemBuilderService {
         return null;
       }
 
-      const variablePageMap = await this.fileCacheService.loadVoudData(
-        unitKey,
-        workspaceId
-      );
+      const variablePageMap = await this.loadVariablePages(unitKey, workspaceId, variablePageCache);
       const variablePage = variablePageMap.get(variableId) || '0';
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
@@ -449,6 +466,19 @@ export class CodingItemBuilderService {
       'code_v3',
       'score_v3'
     ];
+  }
+
+  private async loadVariablePages(
+    unitName: string,
+    workspaceId: number,
+    cache?: CodingVariablePageCache
+  ): Promise<Map<string, string>> {
+    const cachedPages = cache?.get(unitName);
+    if (cachedPages) return cachedPages;
+
+    const pages = await this.fileCacheService.loadVoudData(unitName, workspaceId);
+    cache?.set(unitName, pages);
+    return pages;
   }
 
   private async resolveVariableAnchor(

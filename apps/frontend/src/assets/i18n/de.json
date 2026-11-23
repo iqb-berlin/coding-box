@@ -4631,7 +4631,7 @@
       "overwrite-failed": "Fehler beim Überschreiben der Dateien.",
       "upload-failed": "Fehler beim Hochladen der Dateien.",
       "file-types-required": "Keine Dateitypen ausgewählt.",
-      "zip-download-success": "ZIP-Datei wurde erfolgreich heruntergeladen.",
+      "zip-download-started": "ZIP-Download gestartet. Den Fortschritt sehen Sie in den Downloads Ihres Browsers.",
       "zip-download-failed": "Fehler beim Herunterladen der ZIP-Datei.",
       "no-test-takers-title": "Keine Testtaker gefunden",
       "create-test-takers-question": "Es wurden keine Testtaker-Dateien gefunden. Möchten Sie eine automatisch generierte Testtaker-Datei erstellen?",
@@ -4648,8 +4648,7 @@
       "size-1mb-to-10mb": "1MB - 10MB",
       "size-over-10mb": "> 10MB",
       "content-pool-upload-result": "Content-Pool-Upload Ergebnis",
-      "loading-list": "Dateiliste wird geladen...",
-      "empty-zip-response": "Leere ZIP-Antwort erhalten."
+      "loading-list": "Dateiliste wird geladen..."
     },
     "test-results-delete-preview-dialog": {
       "scope": "Betroffener Bereich",

@@ -1,7 +1,7 @@
 import {
   BadRequestException, Logger, NotFoundException, ServiceUnavailableException, StreamableFile
 } from '@nestjs/common';
-import { randomUUID } from 'node:crypto';
+import { randomBytes, randomUUID } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -16,7 +16,10 @@ interface Archive {
   workspaceId: number;
   path: string;
   size: number;
+  secret?: string;
 }
+
+export const workspaceZipCookie = 'workspace_zip';
 
 export class WorkspaceZipDownload {
   private readonly logger = new Logger(WorkspaceZipDownload.name);
@@ -30,6 +33,37 @@ export class WorkspaceZipDownload {
         disposition: `attachment; filename="workspace-${workspaceId}-files.zip"`
       });
     }
+    const id = await this.store(workspaceId, data);
+    return this.segment(workspaceId, id, 0, response);
+  }
+
+  async prepare(workspaceId: number, data: Buffer, route: string, secure: boolean, response: Response): Promise<{ id: string }> {
+    const secret = randomBytes(32).toString('hex');
+    const id = await this.store(workspaceId, data, secret);
+    response.cookie(workspaceZipCookie, secret, {
+      path: `${route}/${id}/download`,
+      httpOnly: true,
+      sameSite: 'strict',
+      secure,
+      maxAge: retentionMs
+    });
+    response.setHeader('Cache-Control', 'no-store');
+    return { id };
+  }
+
+  download(workspaceId: number, id: string, cookie: string | undefined, response: Response): void {
+    const archive = this.archives.get(id);
+    const secret = cookie?.split(';').map(part => part.trim())
+      .find(part => part.startsWith(`${workspaceZipCookie}=`))?.slice(workspaceZipCookie.length + 1);
+    if (!archive?.secret || archive.workspaceId !== workspaceId || archive.secret !== secret) {
+      throw new NotFoundException('ZIP archive unavailable');
+    }
+    response.download(archive.path, `workspace-${workspaceId}-files.zip`, {
+      headers: { 'Cache-Control': 'no-store, no-transform' }
+    });
+  }
+
+  private async store(workspaceId: number, data: Buffer, secret?: string): Promise<string> {
     if (this.storedBytes + data.length > storageLimit) {
       throw new ServiceUnavailableException('ZIP download storage is full. Try again later.');
     }
@@ -42,12 +76,14 @@ export class WorkspaceZipDownload {
       const path = join(directory, 'workspace.zip');
       await writeFile(path, data, { mode: 0o600 });
       const id = randomUUID();
-      this.archives.set(id, { path, workspaceId, size });
+      this.archives.set(id, {
+        path, workspaceId, size, secret
+      });
       setTimeout(() => {
         this.archives.delete(id);
         this.discard(directory, size);
       }, retentionMs).unref();
-      return this.segment(workspaceId, id, 0, response);
+      return id;
     } catch (error) {
       this.discard(directory, size);
       throw error;
@@ -56,7 +92,7 @@ export class WorkspaceZipDownload {
 
   segment(workspaceId: number, id: string, offset: number, response: Response): StreamableFile {
     const archive = this.archives.get(id);
-    if (!archive || archive.workspaceId !== workspaceId) {
+    if (!archive || archive.secret || archive.workspaceId !== workspaceId) {
       throw new NotFoundException('ZIP archive unavailable');
     }
     if (offset < 0 || offset >= archive.size || offset % segmentSize !== 0) {

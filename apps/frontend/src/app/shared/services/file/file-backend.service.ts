@@ -1,11 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpEvent, HttpParams } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { map, Observable } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
-
-import { downloadZipSegments } from './segmented-zip-download';
 
 @Injectable({
   providedIn: 'root'
@@ -29,25 +27,10 @@ export class FileBackendService {
     });
   }
 
-  downloadWorkspaceFilesAsZipWithProgress(
-    workspaceId: number,
-    fileTypes?: string[]
-  ): Observable<HttpEvent<Blob>> {
+  prepareWorkspaceZip(workspaceId: number, fileTypes: string[]): Observable<string> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/download-zip`;
-    const body = fileTypes && fileTypes.length > 0 ? { fileTypes } : {};
-    return downloadZipSegments((offset, archiveId) => {
-      const options = {
-        responseType: 'blob' as const,
-        reportProgress: true,
-        observe: 'events' as const
-      };
-      if (archiveId) {
-        const params = new HttpParams().set('offset', String(offset));
-        return this.http.get(`${url}/${encodeURIComponent(archiveId)}`, { ...options, params });
-      }
-      const params = new HttpParams().set('segmented', 'true');
-      return this.http.post(url, body, { ...options, params });
-    });
+    return this.http.post<{ id: string }>(url, { fileTypes }, { params: { prepare: true } })
+      .pipe(map(({ id }) => `${url}/${encodeURIComponent(id)}/download`));
   }
 
   getUnitVariables(workspaceId: number): Observable<UnitVariableDetailsDto[]> {

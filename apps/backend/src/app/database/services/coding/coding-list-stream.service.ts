@@ -20,6 +20,7 @@ import {
   CodingItemBuilderService,
   CodingItem,
   CodingVariableAnchorMaps,
+  CodingVariablePageCache,
   CodingItemVersionRow,
   CodingItemVersionExportValues
 } from './coding-item-builder.service';
@@ -31,6 +32,7 @@ import {
   decodeGeoGebraValue
 } from './geogebra-export.util';
 import { ResponseEntity } from '../../entities/response.entity';
+import { LRUCache } from '../shared/lru-cache';
 import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import {
@@ -79,6 +81,7 @@ export class CodingListStreamService {
   private static readonly defaultCodingListExportBatchSize = 500;
   private static readonly defaultVersionedExportBatchSize = 250;
   private static readonly exportYieldEveryRows = 50;
+  private static readonly exportPageMapCacheSize = 1024;
   private static readonly versionedProgressEveryRows = 500;
   private static readonly versionedProgressEveryMs = 1000;
 
@@ -124,7 +127,8 @@ export class CodingListStreamService {
     includeResponseValues: boolean,
     includeGeoGebraResponseValues: boolean,
     variableAnchorMaps: CodingVariableAnchorMaps,
-    exportProfile: ResolvedMissingsProfile
+    exportProfile: ResolvedMissingsProfile,
+    variablePageCache?: CodingVariablePageCache
   ): Promise<CodingItem | null> {
     const resolvedValues: CodingItemVersionExportValues =
       resolveVersionedExportValues(row, version, exportProfile);
@@ -138,7 +142,8 @@ export class CodingListStreamService {
       includeResponseValues,
       includeGeoGebraResponseValues,
       variableAnchorMaps,
-      resolvedValues
+      resolvedValues,
+      variablePageCache
     );
   }
 
@@ -348,7 +353,7 @@ export class CodingListStreamService {
   }
 
   private async loadVariableAnchorMapsForVersionRows(
-    rows: CodingItemVersionRow[],
+    rows: Array<Pick<CodingItemVersionRow, 'unitKey'>>,
     workspaceId: number,
     knownAnchors: CodingVariableAnchorMaps,
     checkCancellation?: () => Promise<void>
@@ -726,29 +731,15 @@ export class CodingListStreamService {
       );
       await checkCancellation?.();
       const batchSize = this.getCodingListExportBatchSize();
-      let lastId = 0;
+      const knownAnchors: CodingVariableAnchorMaps = new Map();
       let totalWritten = 0;
 
-      let hasMoreRows = true;
-      while (hasMoreRows) {
+      for await (const responses of this.responseFilterService.readCodingListResponseBatches(
+        workspace_id, batchSize, filterOptions
+      )) {
         await checkCancellation?.();
-        const responses = await this.responseFilterService.getResponsesBatch(
-          workspace_id,
-          lastId,
-          batchSize,
-          filterOptions
-        );
-        await checkCancellation?.();
-
-        if (!responses.length) {
-          hasMoreRows = false;
-          continue;
-        }
-
-        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
-          responses,
-          workspace_id,
-          checkCancellation
+        const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
+          responses, workspace_id, knownAnchors, checkCancellation
         );
 
         for (let responseIndex = 0; responseIndex < responses.length; responseIndex += 1) {
@@ -759,15 +750,15 @@ export class CodingListStreamService {
 
           const response = responses[responseIndex];
           if (trainingRequired !== undefined && trainingRequiredMap) {
-            const unitKey = response.unit?.name || '';
-            const variableId = response.variableid || '';
+            const unitKey = response.unitKey || '';
+            const variableId = response.variableId || '';
             const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
             if (isRequired !== trainingRequired) {
               continue;
             }
           }
 
-          const item = await this.itemBuilderService.buildCodingItem(
+          const item = await this.itemBuilderService.buildCodingItemFromRow(
             response,
             authToken!,
             serverUrl!,
@@ -779,12 +770,6 @@ export class CodingListStreamService {
             totalWritten += 1;
           }
         }
-
-        if (global.gc) {
-          global.gc();
-        }
-
-        lastId = responses[responses.length - 1].id;
 
         if (progressCallback && totalRows > 0) {
           const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
@@ -1004,7 +989,7 @@ export class CodingListStreamService {
         await checkCancellation?.();
         const batchSize = this.getVersionedExportBatchSize();
         const knownAnchors: CodingVariableAnchorMaps = new Map();
-        let lastId = 0;
+        const pageCache = new LRUCache<Map<string, string>>(CodingListStreamService.exportPageMapCacheSize);
         let totalWritten = 0;
         const versionExportOptions = this.getVersionedResponseFilterOptions(version);
         await progressCallback?.(0, { phase: 'counting' });
@@ -1023,15 +1008,10 @@ export class CodingListStreamService {
           lastReportedAt: Date.now()
         };
 
-        while (true) {
+        for await (const rows of this.responseFilterService.readVersionedResponseBatches(
+          workspace_id, batchSize, versionExportOptions, includeResponseValues
+        )) {
           await checkCancellation?.();
-          const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
-            workspace_id, lastId, batchSize, versionExportOptions, includeResponseValues
-          );
-          await checkCancellation?.();
-
-          if (!rows.length) break;
-
           const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
             rows,
             workspace_id,
@@ -1056,7 +1036,8 @@ export class CodingListStreamService {
               includeResponseValues,
               includeGeoGebraResponseValues,
               variableAnchorMaps,
-              exportProfile
+              exportProfile,
+              pageCache
             );
 
             if (item === null) continue;
@@ -1075,7 +1056,6 @@ export class CodingListStreamService {
             }
           }
 
-          lastId = rows[rows.length - 1].id;
           await this.reportRowBasedProgress(
             progressCallback,
             totalWritten,
@@ -1101,7 +1081,7 @@ export class CodingListStreamService {
         this.logger.error(
           `Error streaming CSV export for version ${version}: ${getErrorMessage(error)}`
         );
-        csvStream.emit('error', error);
+        csvStream.destroy(toError(error));
       } finally {
         // Clear caches after export to free memory
         this.fileCacheService.clearCaches();

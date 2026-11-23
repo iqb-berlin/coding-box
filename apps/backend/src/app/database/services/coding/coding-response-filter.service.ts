@@ -1,6 +1,6 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Brackets, Repository } from 'typeorm';
+import { Brackets, Repository, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusStringToNumber,
@@ -24,8 +24,10 @@ import {
   getCodingVariableIdCandidateSql,
   isCodingResponseCandidateByPattern
 } from './coding-response-candidate.util';
-import type { CodingItemVersionRow } from './coding-item-builder.service';
+import type { CodingItemVersionRow, CodingListResponseRow } from './coding-item-builder.service';
 import { getBaseCodingSourceKeys, getCodingDependencyVariables, mergeCodingVariableMaps } from './coding-dependency-variables.util';
+
+import { readPostgresQueryBatches } from '../shared/postgres-query-batches.util';
 
 type RawNumericValue = number | string | null;
 
@@ -382,7 +384,43 @@ export class CodingResponseFilterService {
   ): Promise<CodingItemVersionRow[]> {
     const queryBuilder = await this.createBatchQueryBuilder(workspaceId, options);
 
-    const rows = await queryBuilder
+    const rows = await this.selectVersionedRows(queryBuilder, includeResponseValues)
+      .andWhere('response.id > :lastId', { lastId })
+      .limit(batchSize)
+      .getRawMany<RawCodingItemVersionRow>();
+    return rows.map(row => this.normalizeVersionedRow(row));
+  }
+
+  async* readCodingListResponseBatches(
+    workspaceId: number,
+    batchSize: number,
+    options: ResponseFilterOptions
+  ): AsyncGenerator<CodingListResponseRow[]> {
+    const query = this.selectCodingListRows(await this.createBatchQueryBuilder(workspaceId, options));
+    yield* this.readExportBatches<CodingListResponseRow>(query, batchSize);
+  }
+
+  async* readVersionedResponseBatches(
+    workspaceId: number,
+    batchSize: number,
+    options: ResponseFilterOptions,
+    includeResponseValues: boolean
+  ): AsyncGenerator<CodingItemVersionRow[]> {
+    const query = this.selectVersionedRows(await this.createBatchQueryBuilder(workspaceId, options), includeResponseValues);
+    for await (const rows of this.readExportBatches<RawCodingItemVersionRow>(query, batchSize)) {
+      yield rows.map(row => this.normalizeVersionedRow(row));
+    }
+  }
+
+  private readExportBatches<T extends object>(query: SelectQueryBuilder<ResponseEntity>, batchSize: number): AsyncGenerator<T[]> {
+    // The export consumes the entire cursor. Plan for total cost instead of the first few rows.
+    return readPostgresQueryBatches<T>(query, Math.min(batchSize, 10000), async manager => {
+      await manager.query('SET LOCAL cursor_tuple_fraction = 1');
+    });
+  }
+
+  private selectCodingListRows(query: SelectQueryBuilder<ResponseEntity>): SelectQueryBuilder<ResponseEntity> {
+    return query
       .select('response.id', 'id')
       .addSelect('unit.name', 'unitKey')
       .addSelect('unit.alias', 'unitAlias')
@@ -391,8 +429,16 @@ export class CodingResponseFilterService {
       .addSelect('person.group', 'personGroup')
       .addSelect('bookletinfo.name', 'bookletName')
       .addSelect('response.variableid', 'variableId')
-      .addSelect(includeResponseValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.status_v1', 'statusV1')
+      .orderBy('response.id', 'ASC');
+  }
+
+  private selectVersionedRows(
+    query: SelectQueryBuilder<ResponseEntity>,
+    includeResponseValues: boolean
+  ): SelectQueryBuilder<ResponseEntity> {
+    return this.selectCodingListRows(query)
+      .addSelect(includeResponseValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.code_v1', 'codeV1')
       .addSelect('response.score_v1', 'scoreV1')
       .addSelect('response.status_v2', 'statusV2')
@@ -400,13 +446,11 @@ export class CodingResponseFilterService {
       .addSelect('response.score_v2', 'scoreV2')
       .addSelect('response.status_v3', 'statusV3')
       .addSelect('response.code_v3', 'codeV3')
-      .addSelect('response.score_v3', 'scoreV3')
-      .andWhere('response.id > :lastId', { lastId })
-      .orderBy('response.id', 'ASC')
-      .limit(batchSize)
-      .getRawMany<RawCodingItemVersionRow>();
+      .addSelect('response.score_v3', 'scoreV3');
+  }
 
-    return rows.map(row => ({
+  private normalizeVersionedRow(row: RawCodingItemVersionRow): CodingItemVersionRow {
+    return {
       ...row,
       id: Number(row.id),
       statusV1: this.toIntegerOrNull(row.statusV1),
@@ -418,7 +462,7 @@ export class CodingResponseFilterService {
       statusV3: this.toIntegerOrNull(row.statusV3),
       codeV3: this.toIntegerOrNull(row.codeV3),
       scoreV3: this.toIntegerOrNull(row.scoreV3)
-    }));
+    };
   }
 
   /**

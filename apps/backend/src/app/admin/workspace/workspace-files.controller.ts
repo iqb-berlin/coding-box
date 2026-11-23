@@ -32,7 +32,7 @@ import {
   getSchemaPath
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import type { Response } from 'express';
+import type { Request, Response } from 'express';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
@@ -415,15 +415,18 @@ export class WorkspaceFilesController {
     }
   })
   @ApiQuery({ name: 'segmented', required: false, type: Boolean })
+  @ApiQuery({ name: 'prepare', required: false, type: Boolean })
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or request body'
   })
   async downloadWorkspaceFilesAsZip(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() request: Request,
     @Res({ passthrough: true }) response: Response,
     @Query('segmented', new DefaultValuePipe(false), ParseBoolPipe) segmented: boolean,
+    @Query('prepare', new DefaultValuePipe(false), ParseBoolPipe) prepare: boolean,
     @ValidatedBody('WorkspaceFilesController_downloadWorkspaceFilesAsZip', true) body?: RequestBody<'WorkspaceFilesController_downloadWorkspaceFilesAsZip'>
-  ): Promise<StreamableFile> {
+  ): Promise<StreamableFile | { id: string }> {
     if (workspaceId <= 0) {
       throw new BadRequestException('Workspace ID must be a positive integer.');
     }
@@ -478,7 +481,23 @@ export class WorkspaceFilesController {
       `ZIP download completed for workspace ${workspaceId} in ${Date.now() - startTime} ms(${zipBuffer.length} bytes)`
     );
 
+    if (prepare) {
+      const route = request.originalUrl.split('?')[0].replace(/\/{2,}/g, '/').replace(/\/$/, '');
+      const secure = request.secure || request.get('origin')?.startsWith('https://') === true;
+      return this.zipDownload.prepare(workspaceId, zipBuffer, route, secure, response);
+    }
     return this.zipDownload.start(workspaceId, zipBuffer, segmented, response);
+  }
+
+  @Get(':workspace_id/files/download-zip/:archiveId/download')
+  @ApiOperation({ summary: 'Download a prepared workspace ZIP using its download cookie' })
+  downloadPreparedWorkspaceZip(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('archiveId') archiveId: string,
+    @Req() request: Request,
+    @Res() response: Response
+  ): void {
+    this.zipDownload.download(workspaceId, archiveId, request.get('cookie'), response);
   }
 
   @Get(':workspace_id/files/download-zip/:archiveId')
