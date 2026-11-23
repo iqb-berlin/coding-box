@@ -107,6 +107,7 @@
   },
   "export-toast": {
     "title": "Datenexport",
+    "download-failed": "Exportdatei konnte nicht heruntergeladen werden. Versuchen Sie es erneut.",
     "download": "Herunterladen",
     "remove": "Entfernen",
     "clear-all": "Alle löschen",

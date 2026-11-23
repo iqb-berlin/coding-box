@@ -1434,7 +1434,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
       "file": {
-        "max-lines": 1244
+        "max-lines": 1242
       },
       "functions": {
         "class CodingJobBackendService#1/method mapApiCodingJob#1": {
@@ -1563,7 +1563,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
       "file": {
-        "max-lines": 1302
+        "max-lines": 1295
       },
       "functions": {
         "class TestFilesComponent#1/method handleValidationResponse#1": {

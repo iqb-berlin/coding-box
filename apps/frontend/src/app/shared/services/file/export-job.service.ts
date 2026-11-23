@@ -30,6 +30,7 @@ import {
   EXTERNAL_REPLAY_WORKSPACE_TOKEN_SCOPES
 } from '../../../core/services/auth-session.config';
 import { WorkspaceSettingsService } from '../workspace/workspace-settings.service';
+import { downloadInBrowser } from '../../utils/browser-download';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../../api-dto/coding/psychometric-discrimination.dto';
 import {
   BackgroundExportRequest,
@@ -445,28 +446,25 @@ export class ExportJobService implements OnDestroy {
     }
 
     this.updateJob(jobId, { status: 'downloading', progress: 0 });
-    const subscription = this.codingJobBackendService
-      .downloadExportFile(workspaceId, jobId)
-      .subscribe({
-        next: (blob: Blob) => {
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          const ext = this.getDownloadExtension(exportType, fileName);
-          const date = new Date().toISOString().slice(0, 10);
-          a.download = `export-${downloadFilePrefix || exportType}-${date}.${ext}`;
-          document.body.appendChild(a);
-          a.click();
-          document.body.removeChild(a);
-          window.URL.revokeObjectURL(url);
-          this.downloadSubscriptions.delete(jobId);
-          this.updateJob(jobId, { status: 'completed', progress: 100 });
-        },
-        error: () => {
-          this.downloadSubscriptions.delete(jobId);
-          this.updateJob(jobId, { status: 'completed', progress: 100 });
-        }
-      });
+    const ext = this.getDownloadExtension(exportType, fileName);
+    const transfer: Observable<string | Blob> = window.isSecureContext && exportType === 'results-by-version' && ext === 'csv' ?
+      this.codingJobBackendService.prepareResultsCsvDownload(workspaceId, jobId) :
+      this.codingJobBackendService.downloadExportFile(workspaceId, jobId);
+    const subscription = transfer.subscribe({
+      next: file => {
+        const date = new Date().toISOString().slice(0, 10);
+        downloadInBrowser(file, `export-${downloadFilePrefix || exportType}-${date}.${ext}`);
+      },
+      error: () => {
+        this.snackBar.open(this.translateService.instant('export-toast.download-failed'), 'OK', {
+          duration: 5000
+        });
+      }
+    });
+    subscription.add(() => {
+      this.downloadSubscriptions.delete(jobId);
+      this.updateJob(jobId, { status: 'completed', progress: 100 });
+    });
     this.downloadSubscriptions.set(jobId, subscription);
     if (subscription.closed) {
       this.downloadSubscriptions.delete(jobId);

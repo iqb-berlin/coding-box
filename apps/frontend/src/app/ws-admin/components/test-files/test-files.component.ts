@@ -30,6 +30,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import {
+  Observable,
   Subject,
   Subscription,
   timer
@@ -67,6 +68,7 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
+import { downloadInBrowser } from '../../../shared/utils/browser-download';
 import {
   TestFilesUploadConflictsDialogComponent,
   TestFilesUploadConflictsDialogResult
@@ -930,14 +932,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           const blob = new Blob([byteArray], {
             type: res.mimeType || 'application/xml'
           });
-          const url = window.URL.createObjectURL(blob);
-          const anchor = document.createElement('a');
-          anchor.href = url;
-          anchor.download = row.filename || 'download';
-          document.body.appendChild(anchor);
-          anchor.click();
-          document.body.removeChild(anchor);
-          window.URL.revokeObjectURL(url);
+          downloadInBrowser(blob, row.filename || 'download');
         }
       });
   }
@@ -965,17 +960,15 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
       const workspaceId = this.appService.selectedWorkspaceId;
       this.isDownloadingAllFiles.set(true);
-      this.fileBackendService.prepareWorkspaceZip(workspaceId, result.fileTypes).pipe(
+      const transfer: Observable<string | Blob> = window.isSecureContext ?
+        this.fileBackendService.prepareWorkspaceZip(workspaceId, result.fileTypes) :
+        this.fileBackendService.downloadWorkspaceFilesAsZip(workspaceId, result.fileTypes);
+      transfer.pipe(
         takeUntilDestroyed(this.destroyRef),
         finalize(() => this.isDownloadingAllFiles.set(false))
       ).subscribe({
-        next: url => {
-          const anchor = document.createElement('a');
-          anchor.href = url;
-          anchor.download = `workspace-${workspaceId}-files.zip`;
-          document.body.appendChild(anchor);
-          anchor.click();
-          anchor.remove();
+        next: archive => {
+          downloadInBrowser(archive, `workspace-${workspaceId}-files.zip`);
           this.snackBar.open(this.uiTranslate('ui-text.test-files.zip-download-started'), 'OK', {
             duration: 5000
           });

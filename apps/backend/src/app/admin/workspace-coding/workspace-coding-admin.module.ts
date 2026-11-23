@@ -10,6 +10,7 @@ import { JobQueueModule } from '../../job-queue/job-queue.module';
 import { CacheModule } from '../../cache/cache.module';
 import { WorkspaceCodingController } from '../workspace/workspace-coding.controller';
 import { WorkspaceCodingExportController } from '../workspace/workspace-coding-export.controller';
+import { WorkspaceResultsDownloadController } from '../workspace/workspace-results-download.controller';
 import { WorkspaceCodingJobController } from '../workspace/workspace-coding-job.controller';
 import { WorkspaceCodingStatisticsController } from '../workspace/workspace-coding-statistics.controller';
 import { WorkspaceCodingAnalysisController } from '../workspace/workspace-coding-analysis.controller';
@@ -41,6 +42,7 @@ import { DistributionPreviewLimiterService } from './distribution-preview-limite
   controllers: [
     WorkspaceCodingController,
     WorkspaceCodingExportController,
+    WorkspaceResultsDownloadController,
     WorkspaceCodingJobController,
     WorkspaceCodingStatisticsController,
     WorkspaceCodingAnalysisController,

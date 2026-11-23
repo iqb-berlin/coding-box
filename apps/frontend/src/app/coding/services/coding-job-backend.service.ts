@@ -1243,22 +1243,24 @@ export class CodingJobBackendService {
     });
   }
 
-  getExportJobStatus(
-    workspaceId: number,
-    jobId: string
-  ): Observable<ExportJobStatusResponseDto> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
-    return this.http.get<ExportJobStatusResponseDto>(url, {
+  private exportJobUrl(workspaceId: number, jobId: string): string {
+    return `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
+  }
+
+  getExportJobStatus(workspaceId: number, jobId: string): Observable<ExportJobStatusResponseDto> {
+    return this.http.get<ExportJobStatusResponseDto>(this.exportJobUrl(workspaceId, jobId), { headers: this.authHeader });
+  }
+
+  downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
+    return this.http.get(`${this.exportJobUrl(workspaceId, jobId)}/download`, {
+      responseType: 'blob',
       headers: this.authHeader
     });
   }
 
-  downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`;
-    return this.http.get(url, {
-      responseType: 'blob',
-      headers: this.authHeader
-    });
+  prepareResultsCsvDownload(workspaceId: number, jobId: string): Observable<string> {
+    const url = `${this.exportJobUrl(workspaceId, jobId)}/download`;
+    return this.http.get(`${url}/prepare`, { headers: this.authHeader }).pipe(map(() => `${url}/file`));
   }
 
   listArchivedItemMatrixDiagnostics(workspaceId: number): Observable<ItemMatrixDiagnosticsArchiveEntryDto[]> {
@@ -1315,8 +1317,7 @@ export class CodingJobBackendService {
     workspaceId: number,
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`;
-    return this.http.delete<{ success: boolean; message: string }>(url, {
+    return this.http.delete<{ success: boolean; message: string }>(this.exportJobUrl(workspaceId, jobId), {
       headers: this.authHeader
     });
   }
@@ -1325,9 +1326,8 @@ export class CodingJobBackendService {
     workspaceId: number,
     jobId: string
   ): Observable<{ success: boolean; message: string }> {
-    const url = `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/cancel`;
     return this.http.post<{ success: boolean; message: string }>(
-      url,
+      `${this.exportJobUrl(workspaceId, jobId)}/cancel`,
       {},
       {
         headers: this.authHeader

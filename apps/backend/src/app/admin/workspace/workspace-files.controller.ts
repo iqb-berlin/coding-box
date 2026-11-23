@@ -48,6 +48,7 @@ import { toRegexSearchException } from '../../utils/regex-search.util';
 import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
 import { WorkspaceZipDownload } from './workspace-zip-download';
+import { workspaceDownloadPath } from './workspace-download-ticket';
 
 const MAX_FILE_TYPES = 100;
 const MAX_ZIP_SIZE = 500 * 1024 * 1024;
@@ -482,9 +483,7 @@ export class WorkspaceFilesController {
     );
 
     if (prepare) {
-      const route = request.originalUrl.split('?')[0].replace(/\/{2,}/g, '/').replace(/\/$/, '');
-      const secure = request.secure || request.get('origin')?.startsWith('https://') === true;
-      return this.zipDownload.prepare(workspaceId, zipBuffer, route, secure, response);
+      return this.zipDownload.prepare(workspaceId, zipBuffer, workspaceDownloadPath(request), response);
     }
     return this.zipDownload.start(workspaceId, zipBuffer, segmented, response);
   }
@@ -497,7 +496,7 @@ export class WorkspaceFilesController {
     @Req() request: Request,
     @Res() response: Response
   ): void {
-    this.zipDownload.download(workspaceId, archiveId, request.get('cookie'), response);
+    this.zipDownload.download(workspaceId, archiveId, workspaceDownloadPath(request), request.get('cookie'), response);
   }
 
   @Get(':workspace_id/files/download-zip/:archiveId')
