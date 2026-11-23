@@ -1,7 +1,9 @@
 import { TranslateModule } from '@ngx-translate/core';
 import { Component, inject } from '@angular/core';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { BehaviorSubject, of, Subject } from 'rxjs';
+import {
+  BehaviorSubject, defer, of, Subject, throwError
+} from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { ResponseService } from '../../../shared/services/response/response.service';
@@ -141,6 +143,28 @@ describe('test-results feature request and polling lifetimes', () => {
     pending.next({ jobId: 'old', status: 'completed', progress: 100 });
     expect(snack.open).not.toHaveBeenCalled();
     expect(host.exports.exportJobProgress()).toBe(0);
+  });
+
+  it('retries a transient server error and then reports the finished export once', () => {
+    jest.useFakeTimers();
+    let attempts = 0;
+    const completed = {
+      jobId: 'job', status: 'completed', exportType: 'test-results', progress: 100
+    };
+    backend.getExportTestResultsJob.mockReturnValue(defer(() => {
+      attempts += 1;
+      return attempts === 1 ? throwError(() => ({ status: 500 })) : of(completed);
+    }));
+
+    host.exports.pollExportJobStatus('job');
+    jest.advanceTimersByTime(2000);
+    expect(attempts).toBe(1);
+    expect(snack.open).not.toHaveBeenCalled();
+
+    jest.advanceTimersByTime(2000);
+    expect(attempts).toBe(2);
+    expect(host.exports.exportJobStatus()).toBe('completed');
+    expect(snack.open).toHaveBeenCalledTimes(1);
   });
 
   it('releases failed export polling and permits an explicit retry', () => {

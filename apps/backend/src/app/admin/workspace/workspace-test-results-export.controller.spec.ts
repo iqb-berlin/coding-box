@@ -359,7 +359,8 @@ describe('WorkspaceTestResultsExportController', () => {
       progress: 100
     };
     const artifactService = new ExportArtifactService({
-      get: jest.fn().mockResolvedValue({ workspaceId: 7, filePath, fileName })
+      get: jest.fn().mockResolvedValue({ workspaceId: 7, filePath, fileName }),
+      getStrict: jest.fn().mockResolvedValue({ workspaceId: 7, filePath, fileName })
     } as unknown as CacheService, {} as never);
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
@@ -390,6 +391,34 @@ describe('WorkspaceTestResultsExportController', () => {
     } finally {
       fs.rmSync(directory, { recursive: true, force: true });
     }
+  });
+
+  it('propagates an artifact-cache read error from completed CSV status requests', async () => {
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 7, exportType: 'test-results' },
+      getState: jest.fn().mockResolvedValue('completed'),
+      timestamp: 12345,
+      progress: 100
+    };
+    const error = new Error('Redis temporarily unavailable');
+    const artifactService = new ExportArtifactService({
+      get: jest.fn().mockResolvedValue(null),
+      getStrict: jest.fn().mockRejectedValue(error)
+    } as unknown as CacheService, {} as never);
+    const controller = new WorkspaceTestResultsExportController(
+      {} as WorkspaceTestResultsService,
+      {
+        getExportJobs: jest.fn().mockResolvedValue([job]),
+        getExportJob: jest.fn().mockResolvedValue(job)
+      } as unknown as JobQueueService,
+      artifactService,
+      {} as JournalService,
+      {} as Queue<DatabaseExportJobData>
+    );
+
+    await expect(controller.getExportJobStatus(7, 'job-1')).rejects.toBe(error);
+    await expect(controller.getExportJobs(7)).rejects.toBe(error);
   });
 
   it('reads one CSV job by ID and rejects jobs from other workspaces or export types', async () => {

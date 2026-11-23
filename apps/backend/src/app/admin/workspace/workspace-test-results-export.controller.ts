@@ -510,7 +510,7 @@ export class WorkspaceTestResultsExportController {
     const jobId = requireJobId(job);
     const { exportType } = job.data;
     const status = this.mapDataExportJobState(state, job);
-    if (status === 'completed' && isTestDataCsvExport(exportType) && !(await this.exportArtifactService.getArtifact(jobId))) {
+    if (status === 'completed' && isTestDataCsvExport(exportType) && !(await this.exportArtifactService.getArtifact(jobId, { strict: true }))) {
       return null;
     }
     return {
