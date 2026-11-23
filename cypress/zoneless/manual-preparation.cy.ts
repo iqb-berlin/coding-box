@@ -124,6 +124,7 @@ describe('Zoneless manual preparation workflows', () => {
 
   it('shows the full duplicate count with five occurrence previews', () => {
     setup();
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/response-analysis', { statusCode: 201 }).as('startDuplicateAnalysis');
     cy.intercept('GET', '**/api/admin/workspace/5/coding/response-analysis?*', request => {
       expect(request.query.occurrencesLimit).to.equal('5');
       request.reply({ body: {
@@ -152,7 +153,8 @@ describe('Zoneless manual preparation workflows', () => {
     }).as('duplicatePreview');
     openManual();
     cy.contains('.manual-coding-tabs [role="tab"]', 'Vorbereitung').click();
-    cy.wait('@duplicatePreview');
+    cy.contains('.response-analysis-section button', 'Analyse starten').click();
+    cy.wait(['@startDuplicateAnalysis', '@duplicatePreview']);
     cy.get('button[aria-controls="duplicate-values-details"]').click();
     cy.get('#duplicate-values-details .occurrence-count').should('contain.text', '(100000x)');
     cy.get('#duplicate-values-details .occurrence-list li:not(.more-occurrences)').should('have.length', 5);
