@@ -47,6 +47,28 @@ Vorschau beenden:
 docker compose -f config/keycloak/docker-compose.theme-preview.yaml down
 ```
 
+## Neuinstallation mit eigenem Keycloak
+
+Wenn der Kodierbox-Installer die Traefik-Infrastruktur neu einrichtet und
+deren Keycloak fuer die Anmeldung ausgewaehlt wird, laedt er das Theme aus
+dem ausgewaehlten Kodierbox-Release. Er speichert es unter
+`config/keycloak/themes/kodierbox` im Traefik-Installationsverzeichnis,
+bindet es schreibgeschuetzt in der lokalen `docker-compose.traefik.yaml`
+ein und setzt das Login-Theme des neuen Kodierbox-Clients auf `kodierbox`.
+
+Der Mount gilt auch beim regelmaessigen Start mit den installierten
+Traefik-Make-Targets. Das Traefik-Update ersetzt die lokale Compose-Datei.
+Vor dem Neustart nach einem Traefik-Update den folgenden Eintrag unter
+`services.keycloak.volumes` wieder ergaenzen oder das unten beschriebene
+Compose-Override mitladen.
+
+```yaml
+      - "./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro"
+```
+
+Bei einer bestehenden Infrastruktur koennen Betreiber das Theme gezielt im
+Keycloak einbinden, der die Kodierbox-Anmeldung bedient.
+
 ## In Bestehenden Keycloak Einbinden
 
 Das Theme muss in dem Keycloak-Container verfuegbar sein, auf den die

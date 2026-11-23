@@ -13,6 +13,8 @@ declare REQUIRED_PACKAGES=("docker -v" "docker compose version")
 declare OPTIONAL_PACKAGES=("make -v")
 
 declare TRAEFIK_DIR
+declare -a EXISTING_TRAEFIK_CONFIGS=()
+declare INSTALLED_TRAEFIK=false
 declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
 declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
 declare ARE_KEYCLOAK_SERVICES_UP=false
@@ -128,22 +130,21 @@ check_prerequisites() {
 
   printf "2.3 Checking application infrastructure software is installed ...\n"
   # Check edge router (traefik) is already installed
-  declare traefik_dir_array
-  readarray -d '' traefik_dir_array < <(find / -name ".env.traefik" -print0 2>/dev/null)
+  readarray -d '' EXISTING_TRAEFIK_CONFIGS < <(find / -name ".env.traefik" -print0 2>/dev/null)
 
-  declare traefik_dir_count=${#traefik_dir_array[*]}
+  declare traefik_dir_count=${#EXISTING_TRAEFIK_CONFIGS[*]}
   if [ "${traefik_dir_count}" -eq 0 ]; then
     printf -- "- No 'Traefik' installation found.\n"
     TRAEFIK_DIR=""
 
   elif [ "${traefik_dir_count}" -eq 1 ]; then
     printf -- "- 'Traefik' installation found:\n"
-    printf -- "  [1] %s\n" "$(dirname "${traefik_dir_array[0]}")"
+    printf -- "  [1] %s\n" "$(dirname "${EXISTING_TRAEFIK_CONFIGS[0]}")"
     printf -- "  [2] Additional Installation\n\n"
     declare choice
     while read -p "Which one do you want to choose? [1/2] " -er choice; do
       if [ "${choice}" = 1 ]; then
-        TRAEFIK_DIR=$(dirname "${traefik_dir_array[0]}")
+        TRAEFIK_DIR=$(dirname "${EXISTING_TRAEFIK_CONFIGS[0]}")
         break
 
       elif [ "${choice}" = 2 ]; then
@@ -156,13 +157,13 @@ check_prerequisites() {
   else
     printf -- "- Multiple 'Traefik' installations found:\n"
     for ((i = 0; i < traefik_dir_count; i++)); do
-      printf -- "  [%d] %s\n" $((i + 1)) "$(dirname "${traefik_dir_array[i]}")"
+      printf -- "  [%d] %s\n" $((i + 1)) "$(dirname "${EXISTING_TRAEFIK_CONFIGS[i]}")"
     done
     printf -- "  [%d] Additional Installation\n\n" $((traefik_dir_count + 1))
 
     while read -p "Which one do you want to choose? [1-$((traefik_dir_count + 1))] " -er choice; do
       if [ "${choice}" -gt 0 ] && [ "${choice}" -le "${traefik_dir_count}" ]; then
-        TRAEFIK_DIR=$(dirname "${traefik_dir_array[$((choice - 1))]}")
+        TRAEFIK_DIR=$(dirname "${EXISTING_TRAEFIK_CONFIGS[$((choice - 1))]}")
         break
 
       elif [ "${choice}" -eq $((traefik_dir_count + 1)) ]; then
@@ -196,12 +197,24 @@ install_application_infrastructure() {
     fi
 
     printf 'Downloaded installation script will be started now.\n\n'
-    (./install_traefik.sh)
+    if ! (./install_traefik.sh); then
+      rm ./install_traefik.sh
+      printf 'Traefik installation script finished with error\n' >&2
+      exit 1
+    fi
     rm ./install_traefik.sh
 
     printf '\nChecking Infrastructure installation ...\n'
-    declare traefik_dir_array
-    readarray -d '' traefik_dir_array < <(find / -name ".env.traefik" -mmin -5 -print0 2>/dev/null)
+    declare -a traefik_dir_array=()
+    declare config_path existing_path
+    while IFS= read -r -d '' config_path; do
+      for existing_path in "${EXISTING_TRAEFIK_CONFIGS[@]}"; do
+        if [ "${existing_path}" = "${config_path}" ]; then
+          continue 2
+        fi
+      done
+      traefik_dir_array+=("${config_path}")
+    done < <(find / -name ".env.traefik" -print0 2>/dev/null)
 
     declare traefik_dir_count=${#traefik_dir_array[*]}
     if [ "${traefik_dir_count}" -eq 0 ]; then
@@ -227,6 +240,7 @@ install_application_infrastructure() {
       done
     fi
 
+    INSTALLED_TRAEFIK=true
     printf "Infrastructure installation checked.\n"
     printf "\n"
     printf "Missing application infrastructure successfully installed.\n"
@@ -302,7 +316,61 @@ download_files() {
   printf "Downloads done!\n\n"
 }
 
+configure_keycloak_login_theme() {
+  local theme_path=config/keycloak/themes/kodierbox
+  local theme_dir="${TRAEFIK_DIR}/${theme_path}"
+  local compose_file="${TRAEFIK_DIR}/docker-compose.traefik.yaml"
+  local realm_file="${APP_DIR}/config/keycloak/${APP_NAME}-realm.json"
+  local volume_line='      - "./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro"'
+  local -a theme_files=(
+    login/theme.properties
+    login/messages/messages_de.properties
+    login/messages/messages_en.properties
+    login/resources/css/kodierbox.css
+    login/resources/img/iqb-logo.png
+  )
+  local theme_file staged_compose
+
+  if ! grep -Eq '"login_theme": "(iqb|kodierbox)"' "${realm_file}"; then
+    printf "Could not find the login theme setting for the Kodierbox client in %s.\n" "${realm_file}" >&2
+    return 1
+  fi
+
+  printf "Installing the Kodierbox login theme for the new Keycloak.\n"
+  for theme_file in "${theme_files[@]}"; do
+    install -d -m 0755 "${theme_dir}/$(dirname "${theme_file}")" || return 1
+    download_file "${theme_dir}/${theme_file}" "${theme_path}/${theme_file}"
+    chmod 0644 "${theme_dir}/${theme_file}" || return 1
+  done
+
+  staged_compose=$(mktemp "${TRAEFIK_DIR}/.compose-theme.XXXXXXXX") || return 1
+  # Keep the local mount in the file used by the infrastructure's regular start commands.
+  if ! cp -p "${compose_file}" "${staged_compose}" ||
+    ! awk -v mount="${volume_line}" '
+      /^  [^[:space:]]/ { in_keycloak = ($1 == "keycloak:") }
+      in_keycloak && $0 == mount { next }
+      { print }
+      in_keycloak && /^    volumes:[[:space:]]*$/ { print mount; mounts++ }
+      END { if (mounts != 1) exit 1 }
+    ' "${compose_file}" >"${staged_compose}" ||
+    ! docker compose --env-file "${TRAEFIK_DIR}/.env.traefik" \
+      --file "${staged_compose}" --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" config --quiet ||
+    ! mv "${staged_compose}" "${compose_file}"; then
+    rm -f "${staged_compose}"
+    printf "Could not configure the Kodierbox theme mount in %s.\n" "${compose_file}" >&2
+    return 1
+  fi
+
+  # The downloaded realm assigns its login theme to the Kodierbox client.
+  sed -i.bak 's/"login_theme": "iqb"/"login_theme": "kodierbox"/' "${realm_file}" &&
+    rm "${realm_file}.bak"
+}
+
 import_keycloak_realm() {
+  if ${INSTALLED_TRAEFIK}; then
+    configure_keycloak_login_theme || return 1
+  fi
+
   # Copy Coding Box realm
   declare realm_file="${TRAEFIK_DIR}/config/keycloak/${APP_NAME}-realm.json"
   if test -e "${realm_file}"; then
@@ -330,11 +398,13 @@ import_keycloak_realm() {
   fi
 
   # Start/Stop Keycloak Services
-  if [ "$(docker compose \
-      --env-file "${TRAEFIK_DIR}/.env.traefik" \
-      --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-      --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-    ps -q keycloak keycloak-db | wc -l)" != 2 ]; then
+  local running_services
+  running_services=$(docker compose \
+    --env-file "${TRAEFIK_DIR}/.env.traefik" \
+    --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
+    --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
+    ps -q keycloak keycloak-db)
+  if [ "$(wc -w <<<"${running_services}")" -ne 2 ]; then
     printf "\nOne or more Keycloak services are down ...\n"
 
     printf -- "- Starting Keycloak DB\n"
@@ -374,6 +444,7 @@ import_keycloak_realm() {
   keycloak_db_root_password=$(grep -oP 'POSTGRES_PASSWORD=\K[^*]*' "${TRAEFIK_DIR}/.env.traefik")
   keycloak_container_realm_file="/opt/keycloak/data/import/${APP_NAME}-realm.json"
 
+  local import_status=0
   docker run \
       --rm \
       --name keycloak-coding-box-realm-import \
@@ -388,9 +459,13 @@ import_keycloak_realm() {
       --env-file "${realm_config}" \
       --volume "${realm_file}:${keycloak_container_realm_file}" \
       --network app-net \
-    "quay.io/keycloak/keycloak:${keycloak_version}" import --file "${keycloak_container_realm_file}"
+    "quay.io/keycloak/keycloak:${keycloak_version}" import --file "${keycloak_container_realm_file}" || import_status=$?
 
-  printf "Keycloak realm imported.\n\n"
+  if [ "${import_status}" -eq 0 ]; then
+    printf "Keycloak realm imported.\n\n"
+  else
+    printf "Could not import the Kodierbox Realm into Keycloak.\n" >&2
+  fi
 
   # Start/Stop Keycloak Services
   if ! ${ARE_KEYCLOAK_SERVICES_UP}; then
@@ -409,9 +484,10 @@ import_keycloak_realm() {
         --env-file "${TRAEFIK_DIR}/.env.traefik" \
         --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
         --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-      up --detach keycloak
+      up --detach keycloak || return 1
     printf "All Keycloak Services are up again.\n\n"
   fi
+  return "${import_status}"
 }
 
 customize_settings() {

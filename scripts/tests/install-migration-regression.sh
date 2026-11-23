@@ -25,6 +25,84 @@ grep -Fxq 'POSTGRES_USER=selected-user' "${env_file}"
 grep -Fxq "JWT_SECRET=${jwt_secret}" "${env_file}"
 ! grep -Fq 'JWT_SECRET=random_string' "${env_file}"
 
+# A recently edited existing infrastructure must not be taken for a new one.
+(
+  mkdir -p "${test_dir}/infrastructure-discovery"
+  cd "${test_dir}/infrastructure-discovery"
+  TRAEFIK_DIR=
+  EXISTING_TRAEFIK_CONFIGS=("$PWD/existing/.env.traefik")
+
+  curl() {
+    if [[ "$*" == */releases/latest ]]; then
+      printf '{"tag_name": "fixture"}\n'
+    else
+      cat >install_traefik.sh <<'EOF'
+#!/usr/bin/env bash
+mkdir -p new
+touch new/.env.traefik
+EOF
+    fi
+  }
+  find() {
+    printf '%s\0' "${EXISTING_TRAEFIK_CONFIGS[0]}" "$PWD/new/.env.traefik"
+  }
+
+  install_application_infrastructure
+  [[ "${TRAEFIK_DIR}" == "$PWD/new" && "${INSTALLED_TRAEFIK}" == true ]]
+)
+
+# Install the release theme into a fresh infrastructure fixture and validate the
+# candidate Compose file before it replaces the file used by regular starts.
+(
+  APP_DIR="${test_dir}/theme-app"
+  TRAEFIK_DIR="${test_dir}/theme-infra"
+  mkdir -p "${APP_DIR}/config/keycloak" "${TRAEFIK_DIR}"
+  realm_file="${APP_DIR}/config/keycloak/coding-box-realm.json"
+  compose_file="${TRAEFIK_DIR}/docker-compose.traefik.yaml"
+  cp "${repo_root}/config/keycloak/realm/coding-box-realm.json" "${realm_file}"
+  cat >"${compose_file}" <<'EOF'
+services:
+  frontend:
+    volumes:
+      - "./site:/site"
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.4
+    volumes:
+      - "./config/keycloak/themes/iqb:/opt/keycloak/themes/iqb"
+  keycloak-db:
+    volumes:
+      - "database:/var/lib/postgresql/data"
+EOF
+
+  download_file() {
+    cp "${repo_root}/$2" "$1"
+  }
+
+  docker() {
+    [[ "$1" == compose && "$2" == --env-file && "$3" == "${TRAEFIK_DIR}/.env.traefik" ]]
+    [[ "$4" == --file && "$6" == --file && "$8" == config && "$9" == --quiet ]]
+    grep -Fq '/opt/keycloak/themes/kodierbox:ro' "$5"
+    return "${compose_status:-0}"
+  }
+
+  cp "${compose_file}" "${compose_file}.before"
+  cp "${realm_file}" "${realm_file}.before"
+  if compose_status=1 configure_keycloak_login_theme; then
+    printf 'Theme installation should fail if Compose rejects the mount.\n' >&2
+    exit 1
+  fi
+  cmp "${compose_file}" "${compose_file}.before"
+  cmp "${realm_file}" "${realm_file}.before"
+
+  configure_keycloak_login_theme
+  configure_keycloak_login_theme
+  diff -r "${repo_root}/config/keycloak/themes/kodierbox" "${TRAEFIK_DIR}/config/keycloak/themes/kodierbox"
+  [[ $(grep -cF '/opt/keycloak/themes/kodierbox:ro' "${compose_file}") -eq 1 ]]
+  sed '\|/opt/keycloak/themes/kodierbox:ro|d' "${compose_file}" | cmp - "${compose_file}.before"
+  sed 's/"login_theme": "kodierbox"/"login_theme": "iqb"/' "${realm_file}" | cmp - "${realm_file}.before"
+  grep -Fq '"login_theme": "kodierbox"' "${realm_file}"
+)
+
 migration_legacy_env="${test_dir}/.env.legacy"
 printf 'JWT_SECRET=random_string\n' >"${migration_legacy_env}"
 ensure_secure_jwt_secret "${migration_legacy_env}"

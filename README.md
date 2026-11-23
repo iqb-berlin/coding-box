@@ -196,7 +196,9 @@ Sie benötigen auf dem Server einen Account mit dem Recht, Docker auszuführen.
 Laden Sie bitte die Skript-Datei `install.sh` in der gewünschten Version herunter
 (zu finden beim jeweiligen Release bzw. im Projektverzeichnis `scripts/`) und
 starten Sie sie mit dem Befehl `bash install.sh` auf der Kommandozeile.
-Folgen Sie danach den Anweisungen des Skripts.
+Folgen Sie danach den Anweisungen des Skripts. Wenn der Installer eine neue
+IQB-Infrastruktur einrichtet und Sie den zugehörigen Keycloak für die Anmeldung
+auswählen, richtet er das [Kodierbox-Login-Theme](config/keycloak/README.md#neuinstallation-mit-eigenem-keycloak) ein.
 
 Zu Beginn der Installation wird u.a. geprüft, ob bereits IQB-Infrastruktur auf dem Server installiert wurde.
 Falls dies noch nicht geschehen sein sollte empfehlen wir diese zu installieren. Sie enthält den Edge-Router
