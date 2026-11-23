@@ -29,6 +29,7 @@ import {
   getCodingAnalysisRunMarkerKey,
   PagedCodingAnalysis
 } from './coding-analysis-cache-key.util';
+import { readDuplicateOccurrencePage } from './coding-analysis-occurrences';
 import { tryWithWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export interface AggregationSettingsResult {
@@ -73,7 +74,8 @@ export class CodingAnalysisService {
     emptyPage = 1,
     emptyLimit = 50,
     duplicatePage = 1,
-    duplicateLimit = 50
+    duplicateLimit = 50,
+    occurrences?: { page: number; limit: number }
   ): Promise<ResponseAnalysisDto> {
     try {
       const requestedThreshold = this.normalizeThreshold(threshold);
@@ -110,27 +112,34 @@ export class CodingAnalysisService {
       const emptyStart = (emptyPage - 1) * emptyLimit;
       const duplicateStart = (duplicatePage - 1) * duplicateLimit;
       let emptyItems: EmptyResponseDto[];
-      let duplicateGroups: DuplicateValueGroupDto[];
+      let duplicateGroups: DuplicateValueGroupDto[] | null;
       if ('storage' in cached) {
         const keys = getCodingAnalysisListKeys(cached.listPrefix);
         const expectedEmpty = Math.max(0, Math.min(emptyLimit, cached.emptyResponses.total - emptyStart));
         const expectedDuplicates = Math.max(0, Math.min(duplicateLimit, cached.duplicateValues.total - duplicateStart));
-        [emptyItems, duplicateGroups] = await Promise.all([
+        const [emptyRows, groupRows] = await Promise.all([
           this.cacheService.getListItems<EmptyResponseDto>(keys.empty, emptyStart, expectedEmpty),
           this.cacheService.getListItems<DuplicateValueGroupDto>(keys.duplicates, duplicateStart, expectedDuplicates)
         ]);
-        if (emptyItems.length !== expectedEmpty || duplicateGroups.length !== expectedDuplicates) {
-          return {
-            ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
-            isCalculating,
-            isQueued,
-            needsCalculation: !isCalculating,
-            progress
-          };
-        }
+        emptyItems = emptyRows;
+        duplicateGroups = groupRows.length === expectedDuplicates && emptyItems.length === expectedEmpty ?
+          await readDuplicateOccurrencePage(this.cacheService, keys.occurrences, groupRows, occurrences) :
+          null;
       } else {
         emptyItems = cached.emptyResponses.items.slice(emptyStart, emptyStart + emptyLimit);
-        duplicateGroups = cached.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit);
+        duplicateGroups = await readDuplicateOccurrencePage(
+          this.cacheService, '', cached.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit), occurrences
+        );
+      }
+
+      if (!duplicateGroups) {
+        return {
+          ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
+          isCalculating,
+          isQueued,
+          needsCalculation: !isCalculating,
+          progress
+        };
       }
 
       return {

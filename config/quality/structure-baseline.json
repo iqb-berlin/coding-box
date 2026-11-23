@@ -70,7 +70,7 @@
           "max-lines-per-function": 110
         },
         "class WorkspaceCodingAnalysisController#1/method getResponseAnalysis#1": {
-          "max-lines-per-function": 146
+          "max-lines-per-function": 133
         }
       }
     },
@@ -1262,17 +1262,6 @@
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
           "max-depth": 5
-        }
-      }
-    },
-    "apps/backend/src/app/job-queue/processors/coding-analysis.processor.ts": {
-      "file": {},
-      "functions": {
-        "class CodingAnalysisProcessor#1/method analyzeBatch#1": {
-          "complexity": 40
-        },
-        "class CodingAnalysisProcessor#1/method computeResponseAnalysis#1": {
-          "max-lines-per-function": 139
         }
       }
     },

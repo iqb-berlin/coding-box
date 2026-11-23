@@ -423,6 +423,7 @@
                   group of responseAnalysisValue.duplicateValues.groups;
                   track duplicateGroupKey(group)
                 ) {
+                  @let occurrenceCount = group.occurrenceCount ?? group.occurrences.length;
                   <div class="duplicate-group">
                     <div class="duplicate-group-header">
                       <strong>{{ group.unitAlias || group.unitName }}</strong> /
@@ -434,7 +435,7 @@
                         }}"</span
                       >
                       <span class="occurrence-count"
-                        >({{ group.occurrences.length }}x)</span
+                        >({{ occurrenceCount }}x)</span
                       >
                     </div>
                     <ul class="occurrence-list">
@@ -450,9 +451,9 @@
                           - {{ occ.bookletName }}
                         </li>
                       }
-                      @if (group.occurrences.length > 5) {
+                      @if (occurrenceCount > 5) {
                         <li class="more-occurrences">
-                          +{{ group.occurrences.length - 5 }}
+                          +{{ occurrenceCount - 5 }}
                           {{
                             'coding-management-manual.response-analysis.more'
                               | translate

@@ -24,7 +24,7 @@ import { ExpectedCombinationDto } from '../../../../../../api-dto/coding/expecte
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ValidateCodingCompletenessRequestDto } from '../../../../../../api-dto/coding/validate-coding-completeness-request.dto';
 import { ExternalCodingImportResultDto } from '../../../../../../api-dto/coding/external-coding-import-result.dto';
-import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
+import { ResponseAnalysisDto, RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE } from '../../../../../../api-dto/coding/response-analysis.dto';
 import {
   CodingFreshnessJobResultDto,
   CodingFreshnessScopeDto,
@@ -1604,7 +1604,7 @@ export class TestPersonCodingService {
     duplicatePage?: number,
     duplicateLimit?: number
   ): Observable<ResponseAnalysisDto> {
-    let params = new HttpParams();
+    let params = new HttpParams().set('occurrencesLimit', RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE);
     if (threshold) {
       params = params.set('threshold', threshold.toString());
     }

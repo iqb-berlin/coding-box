@@ -1,5 +1,6 @@
 import { Job } from 'bullmq';
 import type { Repository } from 'typeorm';
+import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import { CacheService } from '../../cache/cache.service';
 import type { PagedCodingAnalysis } from '../../database/services/coding/coding-analysis-cache-key.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
@@ -12,6 +13,7 @@ import {
 } from '../../database/utils/manual-coding-candidate.util';
 import { CodingAnalysisJobData } from '../job-queue.service';
 import { CodingAnalysisProcessor } from './coding-analysis.processor';
+import { ANALYSIS_BATCH_SIZE } from './coding-analysis-duplicates';
 
 describe('CodingAnalysisProcessor', () => {
   function createProcessor(cacheService: Partial<CacheService>) {
@@ -88,7 +90,7 @@ describe('CodingAnalysisProcessor', () => {
         marker: { key: 'response-analysis:7__t2:run', value: 'old-run' }
       })
     );
-    expect(cacheService.delete).toHaveBeenCalledTimes(2);
+    expect(cacheService.delete).toHaveBeenCalledTimes(4);
   });
 
   it('publishes the current result and records only the summary in the job', async () => {
@@ -104,14 +106,15 @@ describe('CodingAnalysisProcessor', () => {
       listTtl: 660,
       lists: [
         { key: `${analysis.listPrefix}:empty`, length: 0 },
-        { key: `${analysis.listPrefix}:duplicates`, length: 0 }
+        { key: `${analysis.listPrefix}:duplicates`, length: 0 },
+        { key: `${analysis.listPrefix}:occurrences`, length: 0 }
       ],
       marker: { key: 'response-analysis:7__t2:run', value: 'current-run' }
     });
     expect(job.updateProgress).toHaveBeenCalledWith(100);
   });
 
-  it('renews both list expiries during a long calculation and stops after it finishes', async () => {
+  it('renews staging expiries during a long calculation and stops after it finishes', async () => {
     jest.useFakeTimers();
     try {
       const expire = jest.fn().mockResolvedValue(undefined);
@@ -131,14 +134,18 @@ describe('CodingAnalysisProcessor', () => {
       expect(expire.mock.calls).toEqual([
         [`${analysis.listPrefix}:empty`, 3600],
         [`${analysis.listPrefix}:duplicates`, 3600],
+        [`${analysis.listPrefix}:occurrences`, 3600],
+        [`${analysis.listPrefix}:candidates`, 3600],
         [`${analysis.listPrefix}:empty`, 3600],
-        [`${analysis.listPrefix}:duplicates`, 3600]
+        [`${analysis.listPrefix}:duplicates`, 3600],
+        [`${analysis.listPrefix}:occurrences`, 3600],
+        [`${analysis.listPrefix}:candidates`, 3600]
       ]);
       finishCalculation();
       await job;
 
       jest.advanceTimersByTime(60 * 60_000);
-      expect(expire).toHaveBeenCalledTimes(4);
+      expect(expire).toHaveBeenCalledTimes(8);
     } finally {
       jest.useRealTimers();
     }
@@ -172,6 +179,103 @@ describe('CodingAnalysisProcessor', () => {
     expect(deleteIfMarkerMatches).toHaveBeenNthCalledWith(2, 'response-analysis:7__t2:run', 'completed-run');
   });
 
+  function repositoryWithCursor<T>(rows: T[], sourceRepository?: unknown) {
+    let offset = 0;
+    const runner = {
+      connect: jest.fn(),
+      startTransaction: jest.fn(),
+      commitTransaction: jest.fn(),
+      release: jest.fn(),
+      manager: { getRepository: () => sourceRepository },
+      query: jest.fn(async (sql: string) => {
+        const fetch = /^FETCH FORWARD (\d+) FROM batch_rows$/.exec(sql);
+        if (!fetch) return [];
+        const limit = Number(fetch[1]);
+        const page = rows.slice(offset, offset + limit);
+        offset += limit;
+        return page;
+      })
+    };
+    const query = {
+      select: jest.fn().mockReturnThis(),
+      innerJoin: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      clone: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      addOrderBy: jest.fn().mockReturnThis(),
+      getExists: jest.fn().mockResolvedValue(false),
+      getCount: jest.fn().mockResolvedValue(rows.length),
+      getQueryAndParameters: () => ['SELECT id FROM response', []],
+      connection: { createQueryRunner: () => runner }
+    };
+    const repository = { createQueryBuilder: () => query } as unknown as Repository<ResponseEntity>;
+    return { repository, query, runner };
+  }
+
+  function workspaceExclusions() {
+    return {
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({
+        globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: []
+      })
+    } as unknown as WorkspaceExclusionService;
+  }
+
+  it('reads a popular variable in fixed pages and preserves every duplicate occurrence', async () => {
+    const rows = Array.from({ length: ANALYSIS_BATCH_SIZE * 2 + 1 }, (_, index) => ({
+      id: index + 1,
+      unitid: index + 1,
+      variableid: 'VAR',
+      unitName: 'UNIT',
+      unitAlias: 'UNIT',
+      value: index === 1 ? 'unique' : ['ab', ' A B '][index % 2],
+      personLogin: 'person',
+      bookletName: 'booklet'
+    }));
+    const { repository, runner } = repositoryWithCursor(rows);
+    const lists = new Map<string, unknown[]>();
+    const staged: string[] = [];
+    const cache = {
+      appendSortedItems: jest.fn(async (_key, candidates: unknown[]) => {
+        staged.push(...candidates.map(item => JSON.stringify(item)));
+      }),
+      getSortedItems: jest.fn(async (_key, offset: number, limit: number) => (
+        staged.sort().slice(offset, offset + limit).map(item => JSON.parse(item))
+      )),
+      delete: jest.fn(async () => { staged.length = 0; return true; }),
+      appendListItems: jest.fn(async (key: string, items: unknown[]) => {
+        const list = lists.get(key) ?? [];
+        list.push(...items);
+        lists.set(key, list);
+      }),
+      publishListResult: jest.fn().mockResolvedValue(true)
+    };
+    const selectionService = {
+      createContext: jest.fn().mockResolvedValue({ derivedVariableMap: new Map() }),
+      filterEffectivelyEmptyResponses: jest.fn().mockResolvedValue([])
+    } as unknown as EmptyResponseSelectionService;
+    const processor = new CodingAnalysisProcessor(
+      repository, cache as unknown as CacheService, workspaceExclusions(), selectionService
+    );
+    const job = createJob('large-variable');
+    job.data.matchingFlags = [ResponseMatchingFlag.IGNORE_CASE, ResponseMatchingFlag.IGNORE_WHITESPACE];
+
+    await expect(processor.handleResponseAnalysis(job)).resolves.toMatchObject({
+      rawCases: rows.length, duplicateGroups: 1, duplicateResponses: rows.length - 1
+    });
+
+    expect(runner.query.mock.calls.filter(([sql]) => sql.startsWith('FETCH'))).toEqual([
+      ['FETCH FORWARD 500 FROM batch_rows'], ['FETCH FORWARD 500 FROM batch_rows'], ['FETCH FORWARD 500 FROM batch_rows']
+    ]);
+    const { listPrefix } = cache.publishListResult.mock.calls[0][1] as PagedCodingAnalysis;
+    expect(lists.get(`${listPrefix}:duplicates`)).toEqual([expect.objectContaining({
+      occurrenceCount: 1000, occurrenceStart: 0, normalizedValue: 'ab'
+    })]);
+    expect(lists.get(`${listPrefix}:occurrences`)).toHaveLength(1000);
+    expect(lists.get(`${listPrefix}:occurrences`)).toContainEqual(expect.objectContaining({ responseId: 1001 }));
+    expect(lists.get(`${listPrefix}:occurrences`)).not.toContainEqual(expect.objectContaining({ responseId: 2 }));
+  });
+
   it('selects the status needed to report an empty derived response for a mixed selection and justification', async () => {
     const derivedResponse = {
       id: 1,
@@ -180,27 +284,12 @@ describe('CodingAnalysisProcessor', () => {
       unitid: 2,
       status_v1: CODING_INCOMPLETE_STATUS,
       status_v2: null,
-      unit: {
-        name: 'UNIT',
-        booklet: {
-          person: { login: 'person' },
-          bookletinfo: { name: 'booklet' }
-        }
-      }
-    } as ResponseEntity;
-
-    const analysisQuery = {
-      select: jest.fn().mockReturnThis(),
-      addSelect: jest.fn().mockReturnThis(),
-      distinct: jest.fn().mockReturnThis(),
-      innerJoin: jest.fn().mockReturnThis(),
-      leftJoinAndSelect: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{ unitName: 'UNIT', variableId: 'DERIVED' }]),
-      getCount: jest.fn().mockResolvedValue(0),
-      getMany: jest.fn().mockResolvedValue([derivedResponse])
+      code_v2: null,
+      unitName: 'UNIT',
+      personLogin: 'person',
+      bookletName: 'booklet'
     };
+
     const sourceQuery = {
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
@@ -213,8 +302,10 @@ describe('CodingAnalysisProcessor', () => {
         }
       ])
     };
+    const sourceRepository = { createQueryBuilder: () => sourceQuery };
+    const { repository, query: analysisQuery } = repositoryWithCursor([derivedResponse], sourceRepository);
     const emptyResponseSelectionService = new EmptyResponseSelectionService(
-      { createQueryBuilder: () => sourceQuery } as unknown as Repository<ResponseEntity>,
+      sourceRepository as unknown as Repository<ResponseEntity>,
       {
         getDerivedVariableMetadata: jest.fn().mockResolvedValue({
           metadataAvailable: true,
@@ -229,19 +320,15 @@ describe('CodingAnalysisProcessor', () => {
     const appendListItems = jest.fn();
     const publish = jest.fn().mockResolvedValue(true);
     const processor = new CodingAnalysisProcessor(
-      { createQueryBuilder: () => analysisQuery } as unknown as Repository<ResponseEntity>,
-      { appendListItems, publishListResult: publish } as unknown as CacheService,
-      {
-        resolveExclusionsForQueries: jest.fn().mockResolvedValue({
-          globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: []
-        })
-      } as unknown as WorkspaceExclusionService,
+      repository,
+      { appendListItems, appendSortedItems: jest.fn(), publishListResult: publish } as unknown as CacheService,
+      workspaceExclusions(),
       emptyResponseSelectionService
     );
 
     await processor.handleResponseAnalysis(createJob('mixed-response-run'));
 
-    expect(analysisQuery.select).toHaveBeenCalledWith(expect.arrayContaining(['response.status_v1']));
+    expect(analysisQuery.select).toHaveBeenCalledWith(expect.arrayContaining(['response.status_v1 AS status_v1']));
     expect(appendListItems).toHaveBeenCalledWith(expect.stringMatching(/:empty$/), [
       expect.objectContaining({ responseId: 1, value: 'technical solver value' })
     ], expect.any(Number));
@@ -254,7 +341,8 @@ describe('CodingAnalysisProcessor', () => {
         listTtl: 660,
         lists: [
           { key: `${analysis.listPrefix}:empty`, length: 1 },
-          { key: `${analysis.listPrefix}:duplicates`, length: 0 }
+          { key: `${analysis.listPrefix}:duplicates`, length: 0 },
+          { key: `${analysis.listPrefix}:occurrences`, length: 0 }
         ],
         marker: { key: 'response-analysis:7__t2:run', value: 'mixed-response-run' }
       }

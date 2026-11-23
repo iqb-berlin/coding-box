@@ -169,6 +169,21 @@ export class CacheService {
     return values.map(value => JSON.parse(value) as T);
   }
 
+  async appendSortedItems<T>(key: string, items: T[], ttl: number): Promise<void> {
+    if (items.length === 0) return;
+    const entries = items.flatMap(item => [0, JSON.stringify(item)]);
+    const results = await this.redis.multi().zadd(key, ...entries).expire(key, ttl).exec();
+    if (!results || results.some(([error]) => error !== null)) {
+      throw new Error('Could not store sorted analysis candidates');
+    }
+  }
+
+  async getSortedItems<T>(key: string, start: number, limit: number): Promise<T[]> {
+    if (limit <= 0) return [];
+    const values = await this.redis.zrange(key, start, start + limit - 1);
+    return values.map(value => JSON.parse(value) as T);
+  }
+
   async expire(key: string, ttl: number): Promise<void> {
     await this.redis.expire(key, ttl);
   }

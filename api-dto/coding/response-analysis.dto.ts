@@ -17,19 +17,25 @@ export interface EmptyResponseDto {
   assignedCode?: number;
 }
 
+export const RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE = 5;
+
+export interface DuplicateValueOccurrenceDto {
+  personLogin: string;
+  personCode: string;
+  bookletName: string;
+  responseId: number;
+  value: string;
+}
+
 export interface DuplicateValueGroupDto {
   unitName: string;
   unitAlias: string | null;
   variableId: string;
   normalizedValue: string;
   originalValue: string;
-  occurrences: {
-    personLogin: string;
-    personCode: string;
-    bookletName: string;
-    responseId: number;
-    value: string;
-  }[];
+  occurrences: DuplicateValueOccurrenceDto[];
+  /** Total, including occurrences outside the requested page. */
+  occurrenceCount?: number;
 }
 
 export interface EmptyResponseAnalysisDto {

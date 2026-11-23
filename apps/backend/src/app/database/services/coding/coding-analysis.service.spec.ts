@@ -353,4 +353,32 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:empty', 4, 1);
     expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:duplicates', 2, 2);
   });
+  it('uses the stored preview and can read later occurrences from the same group', async () => {
+    const { service, cacheService } = createService();
+    const rows = Array.from({ length: 12 }, (_, index) => ({ responseId: index + 1 }));
+    const storedGroup = { occurrences: rows.slice(0, 5), occurrenceStart: 30, occurrenceCount: 12 };
+    cacheService.get.mockResolvedValue({
+      storage: 'paged',
+      listPrefix: 'analysis-results',
+      emptyResponses: { total: 0, totalUncoded: 0 },
+      duplicateValues: { total: 1, totalResponses: rows.length },
+      aggregationSummary: {},
+      matchingFlags: []
+    });
+    const read = cacheService.getListItems.mockImplementation(async (key, start: number, limit: number) => {
+      if (key === 'analysis-results:duplicates') return [storedGroup];
+      return key === 'analysis-results:occurrences' ? rows.slice(start - 30, start - 30 + limit) : [];
+    });
+
+    const preview = await service.getResponseAnalysis(7, 2, 1, 50, 1, 50, { page: 1, limit: 5 });
+    expect(preview.duplicateValues.groups).toEqual([{ occurrences: rows.slice(0, 5), occurrenceCount: 12 }]);
+    expect(read).not.toHaveBeenCalledWith('analysis-results:occurrences', expect.any(Number), expect.any(Number));
+
+    const later = await service.getResponseAnalysis(7, 2, 1, 50, 1, 50, { page: 3, limit: 5 });
+    expect(later.duplicateValues.groups).toEqual([{ occurrences: rows.slice(10), occurrenceCount: 12 }]);
+    expect(read).toHaveBeenCalledWith('analysis-results:occurrences', 40, 2);
+
+    const legacy = await service.getResponseAnalysis(7);
+    expect(legacy.duplicateValues.groups).toEqual([{ occurrences: rows }]);
+  });
 });
