@@ -71,6 +71,7 @@ describe('CodingAnalysisService aggregation settings', () => {
     };
     const cacheService = {
       get: jest.fn().mockResolvedValue(null),
+      getStrict: jest.fn().mockResolvedValue(null),
       getListItems: jest.fn().mockResolvedValue([]),
       acquireShortLock: jest.fn().mockResolvedValue(true),
       getAndDeleteIfFieldMatches: jest.fn().mockResolvedValue(null),
@@ -238,13 +239,49 @@ describe('CodingAnalysisService aggregation settings', () => {
 
   it('reuses an active analysis with the same settings even on an explicit refresh', async () => {
     const { service, jobQueueService, cacheService } = createService();
+    cacheService.getStrict.mockResolvedValue('current-run');
     jobQueueService.getActiveCodingAnalysisJob.mockResolvedValue({ id: 'active-job' });
 
     await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, { forceRefresh: true });
 
-    expect(jobQueueService.getActiveCodingAnalysisJob).toHaveBeenCalledWith(7, 'response-analysis:7_IGNORE_CASE_t4');
+    expect(cacheService.getStrict).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4:run');
+    expect(jobQueueService.getActiveCodingAnalysisJob)
+      .toHaveBeenCalledWith(7, 'response-analysis:7_IGNORE_CASE_t4', 'current-run');
     expect(cacheService.delete).not.toHaveBeenCalled();
     expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
+  });
+
+  it('accepts a fresh run after invalidation while the previous run is still active', async () => {
+    const { service, jobQueueService, cacheService } = createService();
+    const cacheKey = 'response-analysis:7__t2';
+    let marker: string | null = 'previous-run';
+    const queue = [{ data: { runId: marker }, getState: async () => 'active', progress: 70 }];
+    cacheService.getStrict.mockImplementation(async () => marker);
+    cacheService.deleteByPattern.mockImplementation(async () => { marker = null; });
+    cacheService.set.mockImplementation(async (_key, runId: string) => {
+      marker = runId;
+      return true;
+    });
+    jobQueueService.getActiveCodingAnalysisJob.mockImplementation(async (_workspaceId, _cacheKey, runId) => (
+      queue.find(job => runId === undefined || job.data.runId === runId) ?? null
+    ));
+    jobQueueService.addCodingAnalysisJob.mockImplementation(async data => {
+      queue.push({ data, getState: async () => 'waiting', progress: 0 });
+    });
+
+    await service.invalidateCache(7);
+    await expect(service.getResponseAnalysis(7)).resolves.toMatchObject({
+      isCalculating: false, needsCalculation: true
+    });
+    await service.startAnalysis(7, [], 2, { forceRefresh: true });
+    await service.startAnalysis(7, [], 2, { forceRefresh: true });
+
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledTimes(1);
+    expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith(expect.objectContaining({ cacheKey, runId: marker }));
+    expect(marker).not.toBe('previous-run');
+    await expect(service.getResponseAnalysis(7)).resolves.toMatchObject({
+      isCalculating: true, isQueued: true, progress: 0
+    });
   });
 
   it('reports a missing analysis from a status read without starting a job', async () => {

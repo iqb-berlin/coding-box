@@ -1257,7 +1257,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1205
+        "max-lines": 1199
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1278,7 +1278,7 @@
     },
     "apps/backend/src/app/job-queue/processors/export-job.processor.ts": {
       "file": {
-        "max-lines": 826
+        "max-lines": 824
       },
       "functions": {
         "class ExportJobProcessor#1/method processWorkspaceJob#1": {

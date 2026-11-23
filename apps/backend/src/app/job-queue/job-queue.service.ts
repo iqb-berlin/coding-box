@@ -13,6 +13,7 @@ import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-
 import { overviewProgress, sanitizeJobData } from './job-queue-overview';
 import { ContentPoolJobData, ContentPoolJobResult, validateContentPoolJobData } from '../admin/content-pool/content-pool-job';
 import { requireJobId, withQueueJobId, jobMatchesWorkspace } from './job-queue.util';
+import { listWorkspaceExportJobs, removeExpiredCsvExportJobs } from './data-export-queue-jobs';
 import { addCodingResetPreviewJob, ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -879,17 +880,11 @@ export class JobQueueService {
   }
 
   async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
-    this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
-    const jobs = await this.dataExportQueue.getJobs([
-      'completed',
-      'failed',
-      'active',
-      'waiting',
-      'prioritized',
-      'delayed'
-    ]);
-    this.logger.log(`Found ${jobs.length} export jobs in total`);
-    return jobs.filter(job => jobMatchesWorkspace(job, workspaceId));
+    return listWorkspaceExportJobs(this.dataExportQueue, workspaceId);
+  }
+
+  async removeExpiredCsvExportJobs(expiresBefore: number): Promise<void> {
+    await removeExpiredCsvExportJobs(this.dataExportQueue, expiresBefore, message => this.logger.warn(message));
   }
 
   createExportJobCancellationSignal(jobId: string): AbortSignal {
@@ -1122,12 +1117,12 @@ export class JobQueueService {
   }
 
   async getActiveCodingAnalysisJob(
-    workspaceId: number,
-    cacheKey?: string
+    workspaceId: number, cacheKey: string, runId: string | null
   ): Promise<Job<CodingAnalysisJobData> | null> {
-    return await this.findActiveJob<CodingAnalysisJobData>(this.responseAnalysisQueue, data => (
-      Number(data.workspaceId) === workspaceId && (cacheKey === undefined || data.cacheKey === cacheKey)
-    )) ?? null;
+    const job = await this.findActiveJob<CodingAnalysisJobData>(this.responseAnalysisQueue, data => (
+      Number(data.workspaceId) === workspaceId && data.cacheKey === cacheKey && (data.runId ?? null) === runId
+    ));
+    return job ?? null;
   }
 
   async addVariableAnalysisJob(

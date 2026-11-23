@@ -43,6 +43,7 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
   private static readonly workingDirectoryLeaseTtlSeconds = 10 * 60;
   private static readonly workingDirectoryPrefix = '.export-working-';
   private expiredFileCleanupTimer?: ReturnType<typeof setInterval>;
+  private isCleaningExpiredJobs = false;
   private readonly workingDirectoryHeartbeatTimers = new Map<
     string,
     ReturnType<typeof setInterval>
@@ -68,13 +69,7 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
     this.ensureExportTempDir(tempDir);
     await this.cleanupExpiredExportFiles(tempDir);
     this.expiredFileCleanupTimer = setInterval(
-      () => {
-        this.cleanupExpiredExportFiles(tempDir).catch(error => {
-          this.logger.warn(
-            `Failed to clean up expired export files: ${error.message}`
-          );
-        });
-      },
+      () => this.cleanupExpiredExportFiles(tempDir, true),
       ExportJobProcessor.expiredFileCleanupIntervalMs
     );
     this.expiredFileCleanupTimer.unref?.();
@@ -223,7 +218,9 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
     }
   }
 
-  private async cleanupExpiredExportFiles(tempDir: string): Promise<void> {
+  private async cleanupExpiredExportFiles(tempDir: string, pruneJobs = false): Promise<void> {
+    if (pruneJobs && this.isCleaningExpiredJobs) return;
+    if (pruneJobs) this.isCleaningExpiredJobs = true;
     try {
       this.exportArtifactService.cleanupExpiredArtifacts(tempDir);
       const expiresBefore = Date.now() -
@@ -257,10 +254,11 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
           );
         }
       }
+      if (pruneJobs) await this.jobQueueService.removeExpiredCsvExportJobs(expiresBefore);
     } catch (error) {
-      this.logger.warn(
-        `Failed to clean up expired export files: ${getErrorMessage(error)}`
-      );
+      this.logger.warn(`Failed to clean up expired exports: ${getErrorMessage(error)}`);
+    } finally {
+      if (pruneJobs) this.isCleaningExpiredJobs = false;
     }
   }
 

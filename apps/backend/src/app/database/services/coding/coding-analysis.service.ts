@@ -92,7 +92,7 @@ export class CodingAnalysisService {
 
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
       // A job publishes its result before it leaves the queue. Read the cache after the queue snapshot.
-      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey);
+      const activeJob = await this.getCurrentAnalysisJob(workspaceId, cacheKey);
       const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis>(cacheKey);
       const progress = activeJob ? numericJobProgress(activeJob) : 0;
       const isCalculating = !!activeJob;
@@ -190,7 +190,7 @@ export class CodingAnalysisService {
     if (!(await this.cacheService.acquireShortLock(startKey, runId, 30))) return;
 
     try {
-      const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey);
+      const activeJob = await this.getCurrentAnalysisJob(workspaceId, cacheKey);
       if (activeJob) return;
 
       if (options.forceRefresh) {
@@ -211,6 +211,11 @@ export class CodingAnalysisService {
     } finally {
       await this.cacheService.getAndDeleteIfFieldMatches(startKey, 'owner', runId);
     }
+  }
+
+  private async getCurrentAnalysisJob(workspaceId: number, cacheKey: string) {
+    const runId = await this.cacheService.getStrict<string>(getCodingAnalysisRunMarkerKey(cacheKey));
+    return this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey, runId);
   }
 
   private analyzeBatch(

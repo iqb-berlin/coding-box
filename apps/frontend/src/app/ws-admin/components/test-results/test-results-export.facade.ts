@@ -5,7 +5,7 @@ import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  Subscription, timer, exhaustMap, map, takeWhile, finalize
+  Subscription, timer, exhaustMap, takeWhile, finalize
 } from 'rxjs';
 import { retryTransientStatus } from '../../../shared/utils/retry-transient-status';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
@@ -169,13 +169,13 @@ export class TestResultsExportFacade {
   }
 
   checkExistingExportJobs(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
     this.recoveryRequest?.unsubscribe();
     const generation = this.exportGeneration;
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
     this.recoveryRequest = this.testResultBackendService
-      .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(retryTransientStatus(), takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
+      .getExportTestResultsJobs(workspaceId).pipe(retryTransientStatus(), takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           if (generation !== this.exportGeneration) return;
@@ -184,13 +184,13 @@ export class TestResultsExportFacade {
               j.exportType === 'test-logs'
           );
           this.completedJobs.set(relevantJobs.filter(job => job.status === 'completed'));
-          if (this.isExporting() && !this.exportJobId()) return;
-          // Resume the existing job and keep completed files available.
-          const activeJob = relevantJobs.find(
+          if ((this.pollSubscription && !this.pollSubscription.closed) || (this.isExporting() && !this.exportJobId())) return;
+          const activeJobs = relevantJobs.filter(
             (j: TestResultExportJob) => j.status === 'active' ||
               j.status === 'waiting' ||
               j.status === 'delayed' || j.status === 'prioritized'
           );
+          const activeJob = activeJobs.find(job => job.jobId === this.exportJobId()) ?? activeJobs[0];
           if (activeJob) {
             this.exportJobStatusState.set(activeJob.status);
             this.exportJobProgressState.set(activeJob.progress);
@@ -212,8 +212,7 @@ export class TestResultsExportFacade {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
     this.pollSubscription = timer(2000, 2000).pipe(
-      exhaustMap(() => this.testResultBackendService.getExportTestResultsJobs(workspaceId).pipe(retryTransientStatus())),
-      map(jobs => jobs.find(job => job.jobId === jobId)),
+      exhaustMap(() => this.testResultBackendService.getExportTestResultsJob(workspaceId, jobId).pipe(retryTransientStatus())),
       takeWhile(job => !!job && !['completed', 'failed', 'cancelled'].includes(job.status), true),
       takeUntilWorkspaceChanged(this.appService, workspaceId),
       takeUntilDestroyed(this.destroyRef)
@@ -223,6 +222,7 @@ export class TestResultsExportFacade {
         this.exportJobStatusState.set(job.status);
         this.exportJobProgressState.set(job.progress);
         if (job.status === 'completed') {
+          this.recoveryRequest?.unsubscribe();
           this.completedJobs.update(jobs => [job, ...jobs.filter(entry => entry.jobId !== jobId)]);
           this.isExportingState.set(false);
           const ref = this.snackBar.open(this.uiTranslate('ui-text.test-results-export.completed'), 'Herunterladen', { duration: 10000 });

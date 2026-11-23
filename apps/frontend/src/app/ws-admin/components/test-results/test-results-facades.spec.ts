@@ -46,7 +46,7 @@ describe('test-results feature request and polling lifetimes', () => {
   let fixture: ComponentFixture<ResultsFacadeHost>;
   let host: ResultsFacadeHost;
   let app: { selectedWorkspaceId: number; selectedWorkspaceId$: BehaviorSubject<number> };
-  let backend: { getExportTestResultsJobs: jest.Mock; downloadExportTestResultsJob: jest.Mock };
+  let backend: { getExportTestResultsJobs: jest.Mock; getExportTestResultsJob: jest.Mock; downloadExportTestResultsJob: jest.Mock };
   let results: { getWorkspaceOverview: jest.Mock; invalidateCache: jest.Mock };
   let validation: { getValidationTask: jest.Mock; getValidationResults: jest.Mock };
   let coding: { notifyTestResultsChanged: jest.Mock };
@@ -55,7 +55,9 @@ describe('test-results feature request and polling lifetimes', () => {
 
   beforeEach(() => {
     app = { selectedWorkspaceId: 5, selectedWorkspaceId$: new BehaviorSubject(5) };
-    backend = { getExportTestResultsJobs: jest.fn(), downloadExportTestResultsJob: jest.fn() };
+    backend = {
+      getExportTestResultsJobs: jest.fn(), getExportTestResultsJob: jest.fn(), downloadExportTestResultsJob: jest.fn()
+    };
     results = { getWorkspaceOverview: jest.fn(), invalidateCache: jest.fn() };
     validation = { getValidationTask: jest.fn(), getValidationResults: jest.fn() };
     coding = { notifyTestResultsChanged: jest.fn() };
@@ -115,36 +117,39 @@ describe('test-results feature request and polling lifetimes', () => {
   });
 
   it('does not overlap export status requests and stops at one terminal notification', () => {
-    jest.useFakeTimers(); const pending = new Subject<unknown[]>();
-    backend.getExportTestResultsJobs.mockReturnValueOnce(pending).mockReturnValue(of([{ jobId: 'job', status: 'completed', progress: 100 }]));
+    jest.useFakeTimers(); const pending = new Subject<unknown>();
+    backend.getExportTestResultsJob.mockReturnValueOnce(pending).mockReturnValue(of({ jobId: 'job', status: 'completed', progress: 100 }));
     host.exports.pollExportJobStatus('job');
-    jest.advanceTimersByTime(8000); expect(backend.getExportTestResultsJobs).toHaveBeenCalledTimes(1);
-    pending.next([{ jobId: 'job', status: 'active', progress: 25 }]); pending.complete();
+    jest.advanceTimersByTime(8000); expect(backend.getExportTestResultsJob).toHaveBeenCalledTimes(1);
+    pending.next({ jobId: 'job', status: 'active', progress: 25 }); pending.complete();
     jest.advanceTimersByTime(2000);
     expect(host.exports.exportJobProgress()).toBe(100);
     expect(snack.open).toHaveBeenCalledTimes(1);
     jest.advanceTimersByTime(10000);
-    expect(backend.getExportTestResultsJobs).toHaveBeenCalledTimes(2);
+    expect(backend.getExportTestResultsJob).toHaveBeenCalledTimes(2);
+    expect(backend.getExportTestResultsJob).toHaveBeenCalledWith(5, 'job');
+    expect(backend.getExportTestResultsJobs).not.toHaveBeenCalled();
   });
 
   it.each(['workspace', 'destroy', 'replacement'] as const)('cancels an export request on %s and ignores its late response', target => {
-    jest.useFakeTimers(); const pending = new Subject<unknown[]>();
-    backend.getExportTestResultsJobs.mockReturnValue(pending);
+    jest.useFakeTimers(); const pending = new Subject<unknown>();
+    backend.getExportTestResultsJob.mockReturnValue(pending);
     host.exports.pollExportJobStatus('old'); jest.advanceTimersByTime(2000);
     if (target === 'workspace') { changeWorkspace(6); changeWorkspace(5); } else if (target === 'destroy') fixture.destroy();
     else host.exports.pollExportJobStatus('new');
     expect(pending.observed).toBe(false);
-    pending.next([{ jobId: 'old', status: 'completed', progress: 100 }]);
+    pending.next({ jobId: 'old', status: 'completed', progress: 100 });
     expect(snack.open).not.toHaveBeenCalled();
     expect(host.exports.exportJobProgress()).toBe(0);
   });
 
   it('releases failed export polling and permits an explicit retry', () => {
-    jest.useFakeTimers(); const pending = new Subject<unknown[]>();
+    jest.useFakeTimers(); const pending = new Subject<unknown>();
     backend.getExportTestResultsJobs.mockReturnValueOnce(of([{
       jobId: 'old', status: 'active', exportType: 'test-results', progress: 0
-    }]))
-      .mockReturnValueOnce(pending).mockReturnValue(of([{ jobId: 'retry', status: 'active', progress: 60 }]));
+    }]));
+    backend.getExportTestResultsJob.mockReturnValueOnce(pending)
+      .mockReturnValue(of({ jobId: 'retry', status: 'active', progress: 60 }));
     host.exports.checkExistingExportJobs(); host.exports.pollExportJobStatus('old'); jest.advanceTimersByTime(2000);
     pending.error(new Error('offline')); expect(host.exports.isExporting()).toBe(false);
     host.exports.pollExportJobStatus('retry'); jest.advanceTimersByTime(2000);
@@ -171,6 +176,39 @@ describe('test-results feature request and polling lifetimes', () => {
     expect(data.state?.()).toMatchObject({ isExporting: false, completedJobs: [completed] });
     changeWorkspace(6);
     expect(data.state?.()).toMatchObject({ completedJobs: [] });
+  });
+
+  it('refreshes the downloads on dialog open without changing the tracked job', () => {
+    jest.useFakeTimers();
+    const tracked = {
+      jobId: 'results', status: 'active', exportType: 'test-results', progress: 40
+    };
+    const other = {
+      jobId: 'logs', status: 'waiting', exportType: 'test-logs', progress: 0
+    };
+    const ready = {
+      jobId: 'ready', status: 'completed', exportType: 'test-logs', progress: 100
+    };
+    const terminal = { ...tracked, status: 'completed', progress: 100 };
+    backend.getExportTestResultsJobs.mockReturnValueOnce(of([tracked]))
+      .mockReturnValueOnce(of([other, tracked, ready]));
+    backend.getExportTestResultsJob.mockReturnValueOnce(of({ ...tracked, progress: 60 }))
+      .mockReturnValueOnce(of(terminal));
+    const open = jest.mocked(TestBed.inject(MatDialog).open);
+    open.mockReturnValue({ afterClosed: () => of(undefined) } as never);
+
+    host.exports.checkExistingExportJobs();
+    jest.advanceTimersByTime(1000);
+    host.exports.openExportDialog();
+    jest.advanceTimersByTime(1000);
+    const data = open.mock.calls[0][1]?.data as TestResultsExportDialogData;
+    expect(data.state?.()).toMatchObject({
+      exportJobId: tracked.jobId, exportJobProgress: 60, completedJobs: [ready]
+    });
+
+    jest.advanceTimersByTime(2000);
+    expect(data.state?.()).toMatchObject({ isExporting: false, completedJobs: [terminal, ready] });
+    expect(backend.getExportTestResultsJobs).toHaveBeenCalledTimes(2);
   });
 
   it('cancels a pending download when its workspace changes', () => {
