@@ -129,6 +129,7 @@ export class ManualCodingSummaryFacade {
     const referenceRawCases = this.getResponseAnalysisReferenceRawCases();
     return !!responseAnalysisSnapshot &&
       !responseAnalysisSnapshot.isCalculating &&
+      !responseAnalysisSnapshot.needsCalculation &&
       referenceRawCases > 0 &&
       analysisRawCases !== referenceRawCases;
   });
@@ -140,6 +141,7 @@ export class ManualCodingSummaryFacade {
     const currentRawManualResponses = this.getCurrentRawManualResponses();
     return !!responseAnalysisSnapshot &&
       !responseAnalysisSnapshot.isCalculating &&
+      !responseAnalysisSnapshot.needsCalculation &&
       !this.isResponseAnalysisOutdated() &&
       currentRawManualResponses > 0 &&
       analysisRawCases !== currentRawManualResponses;
@@ -153,6 +155,7 @@ export class ManualCodingSummaryFacade {
 
     return !!responseAnalysisSnapshot &&
       !responseAnalysisSnapshot.isCalculating &&
+      !responseAnalysisSnapshot.needsCalculation &&
       !this.hasPreparationWarnings();
   });
 

@@ -19,6 +19,7 @@ import { FileValidationResultDto } from '../../../../../../../api-dto/files/file
 import { FileDownloadDto } from '../../../../../../../api-dto/files/file-download.dto';
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
+import type { TestResultsUploadProgressDto } from '../../../../../../../api-dto/files/test-results-upload-progress.dto';
 import { TestResultsUploadJobDto } from '../../../../../../../api-dto/files/test-results-upload-job.dto';
 import {
   ChunkedUploadInitResponseDto,
@@ -61,6 +62,13 @@ export interface DeleteFilesResult {
   success: boolean;
   requestHandled: boolean;
 }
+
+type TestResultsUploadStatus = TestResultsUploadProgressDto & {
+  id: string;
+  status: 'completed' | 'waiting' | 'active' | 'delayed' | 'failed' | 'paused';
+  result?: TestResultsUploadResultDto;
+  error?: unknown;
+};
 
 @Injectable({
   providedIn: 'root'
@@ -335,32 +343,8 @@ export class FileService {
   getUploadJobStatus(
     workspaceId: number,
     jobId: string
-  ): Observable<{
-    id: string;
-    status:
-      | 'completed'
-      | 'waiting'
-      | 'active'
-      | 'delayed'
-      | 'failed'
-      | 'paused';
-    progress: number;
-    result?: TestResultsUploadResultDto;
-    error?: unknown;
-  }> {
-    return this.http.get<{
-      id: string;
-      status:
-      | 'completed'
-      | 'waiting'
-      | 'active'
-      | 'delayed'
-      | 'failed'
-      | 'paused';
-      progress: number;
-      result?: TestResultsUploadResultDto;
-      error?: unknown;
-    }>(
+  ): Observable<TestResultsUploadStatus> {
+    return this.http.get<TestResultsUploadStatus>(
       `${this.serverUrl}admin/workspace/${workspaceId}/upload/status/${jobId}`,
       {
         headers: this.authHeader

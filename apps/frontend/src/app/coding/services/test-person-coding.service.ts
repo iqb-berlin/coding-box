@@ -415,16 +415,6 @@ export class TestPersonCodingService {
     };
   }
 
-  private createCodingFreshnessFallback(
-    workspaceId: number
-  ): CodingFreshnessSummaryDto {
-    return {
-      workspaceId,
-      currentRevision: 0,
-      items: []
-    };
-  }
-
   private createAutocodingReadinessFallback(
     workspaceId: number,
     autoCoderRun: 1 | 2
@@ -700,17 +690,23 @@ export class TestPersonCodingService {
   }
 
   getCodingFreshness(
-    workspaceId: number
+    workspaceId: number,
+    { reportErrors = false } = {}
   ): Observable<CodingFreshnessSummaryDto> {
-    const cached = this.codingFreshnessCache.get(workspaceId);
-    if (
-      this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)
-    ) {
-      return of(cached || this.createCodingFreshnessFallback(workspaceId));
-    }
+    const result$ = this.loadCodingFreshness(workspaceId);
+    return reportErrors ? result$ : result$.pipe(
+      catchError(() => of({ workspaceId, currentRevision: 0, items: [] }))
+    );
+  }
 
+  private loadCodingFreshness(workspaceId: number): Observable<CodingFreshnessSummaryDto> {
+    const cached = this.codingFreshnessCache.get(workspaceId);
     if (cached) {
       return of(cached);
+    }
+
+    if (this.codingBackgroundJobsService.isStatusCheckGuardActive(workspaceId)) {
+      return throwError(() => new Error('Coding freshness is unavailable while background processing is active'));
     }
 
     const pendingRequest = this.codingFreshnessRequests.get(workspaceId);
@@ -733,7 +729,6 @@ export class TestPersonCodingService {
             this.codingFreshnessCache.set(workspaceId, summary);
           }
         }),
-        catchError(() => of(this.createCodingFreshnessFallback(workspaceId))),
         finalize(() => {
           if (this.codingFreshnessRequests.get(workspaceId) === request$) {
             this.codingFreshnessRequests.delete(workspaceId);

@@ -82,7 +82,8 @@ describe('zoneless test-results view', () => {
           body: {
             id: 'job-1',
             status: jobStage === 'completed' ? 'completed' : 'active',
-            progress: jobStage === 'reading' ? 42 : 100,
+            progress: jobStage === 'completed' ? 100 : 42,
+            phase: jobStage === 'reading' ? 'reading' : 'processing',
             result: jobStage === 'completed' ? {
               expected: delta,
               before,

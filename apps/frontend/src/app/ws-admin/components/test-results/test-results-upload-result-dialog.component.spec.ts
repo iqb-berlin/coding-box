@@ -1,3 +1,4 @@
+import { of } from 'rxjs';
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MAT_DIALOG_DATA, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
@@ -131,6 +132,30 @@ describe('TestResultsUploadResultDialogComponent', () => {
 
     fixture = TestBed.createComponent(TestResultsUploadResultDialogComponent);
     component = fixture.componentInstance;
+  });
+
+  it('shows a retry when coding freshness is unavailable and displays the recovered warnings', () => {
+    const reloadCodingContext = jest.fn(() => of({
+      codingFreshness: data.result.codingFreshness,
+      codingFreshnessLoadFailed: false,
+      manualOverview: { overview: data.manualAppliedResultsOverview, loadFailed: false }
+    }));
+    component.data = {
+      ...data,
+      result: { ...data.result, codingFreshness: undefined },
+      reloadCodingContext
+    };
+
+    fixture.detectChanges();
+    const view: HTMLElement = fixture.nativeElement;
+    expect(view.textContent).toContain('Der Kodierstand konnte noch nicht geladen werden.');
+    const retryButton = Array.from(view.querySelectorAll('button')).find(button => button.textContent?.includes('Kodierstand erneut laden'));
+    retryButton?.click();
+    fixture.detectChanges();
+
+    expect(reloadCodingContext).toHaveBeenCalledTimes(1);
+    expect(view.textContent).not.toContain('Der Kodierstand konnte noch nicht geladen werden.');
+    expect(component.hasCodingFreshnessWarning).toBe(true);
   });
 
   it('filters and formats upload result details', () => {

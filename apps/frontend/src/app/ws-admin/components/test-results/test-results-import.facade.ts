@@ -52,7 +52,7 @@ export class TestResultsImportFacade {
 
     if (batch.completedCount === batch.totalJobs) {
       this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.preparing-result'));
-    } else if (batch.progress > 0 && batch.progress < 100) {
+    } else if (batch.phase === 'reading') {
       this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.reading-file-progress', { progress: batch.progress }));
     } else {
       this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.processing'));

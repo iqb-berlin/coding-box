@@ -4761,6 +4761,8 @@
       "start-upload": "Upload starten"
     },
     "test-results-upload-result-dialog": {
+      "coding-freshness-unavailable": "Der Kodierstand konnte noch nicht geladen werden.",
+      "retry-coding-freshness": "Kodierstand erneut laden",
       "refreshing-overview": "Übersicht wird aktualisiert",
       "log-import-title": "Hinweis zum Log-Import",
       "log-import-hint": "Logs werden nur bestehenden Testpersonen, Testheften und Aufgaben zugeordnet. Wenn die passenden Testergebnisse fehlen, legt der Import sie nicht automatisch an.",

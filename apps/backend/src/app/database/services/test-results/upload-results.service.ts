@@ -16,6 +16,7 @@ import {
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { Log, Person, Response } from '../shared';
 import { PersonService } from './person.service';
+import { UploadProgress } from './upload-progress';
 import {
   TestResultsUploadIssueDto,
   TestResultsUploadResultDto,
@@ -512,6 +513,13 @@ export class UploadResultsService {
 
     const statusCounts: Record<string, number> = {};
 
+    const progress = new UploadProgress(async update => {
+      try {
+        await job.updateProgress(update);
+      } catch (error) {
+        this.logger.warn(`Failed to update upload progress: ${getErrorMessage(error)}`);
+      }
+    });
     try {
       const validMimeTypes = [
         'text/csv',
@@ -528,26 +536,9 @@ export class UploadResultsService {
         let fileStream: Readable;
         if (file.path) {
           this.logger.log(`Reading from file: ${file.path}`);
+          await progress.setPhase('reading');
           fileStream = fs.createReadStream(file.path);
-
-          if (file.size) {
-            this.logger.log(`File size: ${file.size}`);
-            let bytesRead = 0;
-            let lastReadProgress = 0;
-            // CSV parsing, database writes and result aggregation can continue after all bytes have been read.
-            fileStream.on('data', (chunk: Buffer) => {
-              bytesRead += chunk.length;
-              const readProgress = Math.min(100, Math.floor((bytesRead / file.size) * 100));
-              if (readProgress > lastReadProgress) {
-                lastReadProgress = readProgress;
-                job.updateProgress(readProgress).catch(err => {
-                  this.logger.warn(`Failed to update job progress: ${err.message}`);
-                });
-              }
-            });
-          } else {
-            this.logger.warn(`File size missing for ${file.originalname}, progress tracking disabled.`);
-          }
+          progress.track(fileStream, file.size);
         } else {
           throw new Error('File path missing in job data');
         }
@@ -567,7 +558,7 @@ export class UploadResultsService {
           } finally {
             await handle.close();
           }
-          await this.handleCsvStream<Log>(fileStream, resultType, issues, file.originalname, async rowData => {
+          await this.handleCsvStream<Log>(fileStream, resultType, issues, file.originalname, progress, async rowData => {
             const bookletLogKeys = new Set(
               rowData
                 .filter(row => row.unitname === '' && row.bookletname)
@@ -652,7 +643,7 @@ export class UploadResultsService {
         } else if (resultType === 'responses') {
           let responsesImportMutatedData = false;
           try {
-            await this.handleCsvStream<Response>(fileStream, resultType, issues, file.originalname, async rowData => {
+            await this.handleCsvStream<Response>(fileStream, resultType, issues, file.originalname, progress, async rowData => {
               // ... (Same logic as uploadFile for responses)
               rowData.forEach((row, rowIndex) => {
                 importSummaryAgg.totalRows += 1;
@@ -812,6 +803,8 @@ export class UploadResultsService {
       this.logger.error(`Error processing file ${file.originalname}: ${getErrorMessage(e)}`);
       issues.push({ level: 'error', message: `Processing error: ${getErrorMessage(e)}`, fileName: file.originalname });
     }
+
+    await progress.setPhase('processing');
 
     try {
       await this.connection.transaction(manager => JournalService.recordEventInTransaction(manager, {
@@ -986,6 +979,7 @@ export class UploadResultsService {
     resultType: 'logs' | 'responses',
     issues: TestResultsUploadIssueDto[],
     fileName: string,
+    progress: UploadProgress,
     onDataProcessed: (rowData: T[]) => Promise<void>,
     quotedLogCsv = false
   ): Promise<void> {
@@ -1030,8 +1024,10 @@ export class UploadResultsService {
           if (processInBatches && batch.length >= BATCH_SIZE) {
             stream.pause();
             try {
+              await progress.setPhase('processing');
               await onDataProcessed(batch);
               batch = [];
+              await progress.setPhase('reading');
             } catch (processError) {
               stream.destroy(toError(processError));
               reject(processError);
@@ -1046,6 +1042,7 @@ export class UploadResultsService {
               return;
             }
             if (batch.length > 0) {
+              await progress.setPhase('processing');
               await onDataProcessed(batch);
             }
             resolve();

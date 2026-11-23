@@ -1089,7 +1089,7 @@
     },
     "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
       "file": {
-        "max-lines": 968
+        "max-lines": 966
       },
       "functions": {
         "class UploadResultsService#1/method buildImportSummary#1": {
@@ -1099,9 +1099,8 @@
           "complexity": 25
         },
         "class UploadResultsService#1/method processUpload#1": {
-          "complexity": 21,
           "max-depth": 5,
-          "max-lines-per-function": 410
+          "max-lines-per-function": 403
         },
         "class UploadResultsService#1/method processUpload#1/anonymous:17c848eb0f2cddb2#1": {
           "max-lines-per-function": 130
@@ -1483,7 +1482,7 @@
     },
     "apps/frontend/src/app/coding/services/test-person-coding.service.ts": {
       "file": {
-        "max-lines": 1605
+        "max-lines": 1600
       },
       "functions": {
         "class TestPersonCodingService#1/method importExternalCodingWithProgress#1": {
@@ -1644,7 +1643,7 @@
     },
     "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.ts": {
       "file": {
-        "max-lines": 918
+        "max-lines": 891
       },
       "functions": {}
     }

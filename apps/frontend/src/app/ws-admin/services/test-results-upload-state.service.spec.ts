@@ -283,7 +283,7 @@ describe('TestResultsUploadStateService', () => {
         totalJobs: 1
       };
 
-      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 50 }));
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', phase: 'reading', progress: 50 }));
       const state$ = new BehaviorSubject<TestResultsImportProgressState>({
         title: '', icon: '', phase: 'uploading', phaseLabel: '', message: ''
       });
@@ -297,7 +297,7 @@ describe('TestResultsUploadStateService', () => {
       expect(currentBatches[0].progress).toBe(50);
       expect(state$.value).toMatchObject({ phase: 'readingFile', mode: 'determinate', percent: 50 });
 
-      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', progress: 100 }));
+      fileServiceMock.getUploadJobStatus.mockReturnValue(of({ status: 'active', phase: 'processing', progress: 50 }));
       await jest.advanceTimersByTimeAsync(17000);
 
       expect(state$.value).toMatchObject({ phase: 'processing', mode: 'indeterminate', completed: 0 });
@@ -350,6 +350,7 @@ describe('TestResultsUploadStateService', () => {
       expect(close).toHaveBeenCalledTimes(1);
       expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
         data: expect.objectContaining({
+          reloadCodingContext: expect.any(Function),
           result: expect.objectContaining({ delta: expect.objectContaining({ uniqueResponses: 50 }) })
         })
       }));
@@ -525,7 +526,7 @@ describe('TestResultsUploadStateService', () => {
       await jest.advanceTimersByTimeAsync(0);
 
       expect(fileServiceMock.getUploadJobStatus).toHaveBeenCalledTimes(2);
-      expect(testPersonCodingServiceMock.getCodingFreshness).toHaveBeenCalledWith(1);
+      expect(testPersonCodingServiceMock.getCodingFreshness).toHaveBeenCalledWith(1, { reportErrors: true });
       expect(dialogMock.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
         data: expect.objectContaining({
           manualAppliedResultsOverview: expect.objectContaining({

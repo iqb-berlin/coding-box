@@ -24,12 +24,14 @@ import { JobQueueService } from '../../../job-queue/job-queue.service';
 import { createAggregationSummary } from './aggregation-metrics.util';
 import {
   CODING_ANALYSIS_CACHE_KEY_PREFIX,
+  FileCodingAnalysis,
   getCodingAnalysisCacheKey,
   getCodingAnalysisListKeys,
   getCodingAnalysisRunMarkerKey,
   PagedCodingAnalysis
 } from './coding-analysis-cache-key.util';
-import { readDuplicateOccurrencePage } from './coding-analysis-occurrences';
+import { readCodingAnalysisResult, type ReadAnalysisResultItems } from './coding-analysis-result-store';
+import { readDuplicateOccurrencePage, readStoredAnalysisPage } from './coding-analysis-occurrences';
 import { tryWithWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
 
 export interface AggregationSettingsResult {
@@ -95,7 +97,7 @@ export class CodingAnalysisService {
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
       // A job publishes its result before it leaves the queue. Read the cache after the queue snapshot.
       const activeJob = await this.getCurrentAnalysisJob(workspaceId, cacheKey);
-      const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis>(cacheKey);
+      const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis | FileCodingAnalysis>(cacheKey);
       const progress = activeJob ? numericJobProgress(activeJob) : 0;
       const isCalculating = !!activeJob;
       const isQueued = activeJob ? (await activeJob.getState()) !== 'active' : false;
@@ -111,28 +113,29 @@ export class CodingAnalysisService {
 
       const emptyStart = (emptyPage - 1) * emptyLimit;
       const duplicateStart = (duplicatePage - 1) * duplicateLimit;
-      let emptyItems: EmptyResponseDto[];
-      let duplicateGroups: DuplicateValueGroupDto[] | null;
-      if ('storage' in cached) {
+      const readPage = (reader: ReadAnalysisResultItems) => readStoredAnalysisPage(
+        reader,
+        { start: emptyStart, count: Math.max(0, Math.min(emptyLimit, cached.emptyResponses.total - emptyStart)) },
+        { start: duplicateStart, count: Math.max(0, Math.min(duplicateLimit, cached.duplicateValues.total - duplicateStart)) },
+        occurrences
+      );
+
+      let page;
+      if ('storage' in cached && cached.storage === 'file') {
+        page = await readCodingAnalysisResult(workspaceId, cached.resultId, readPage);
+      } else if ('storage' in cached) {
         const keys = getCodingAnalysisListKeys(cached.listPrefix);
-        const expectedEmpty = Math.max(0, Math.min(emptyLimit, cached.emptyResponses.total - emptyStart));
-        const expectedDuplicates = Math.max(0, Math.min(duplicateLimit, cached.duplicateValues.total - duplicateStart));
-        const [emptyRows, groupRows] = await Promise.all([
-          this.cacheService.getListItems<EmptyResponseDto>(keys.empty, emptyStart, expectedEmpty),
-          this.cacheService.getListItems<DuplicateValueGroupDto>(keys.duplicates, duplicateStart, expectedDuplicates)
-        ]);
-        emptyItems = emptyRows;
-        duplicateGroups = groupRows.length === expectedDuplicates && emptyItems.length === expectedEmpty ?
-          await readDuplicateOccurrencePage(this.cacheService, keys.occurrences, groupRows, occurrences) :
-          null;
+        page = await readPage((list, start, limit) => this.cacheService.getListItems(keys[list], start, limit));
       } else {
-        emptyItems = cached.emptyResponses.items.slice(emptyStart, emptyStart + emptyLimit);
-        duplicateGroups = await readDuplicateOccurrencePage(
-          this.cacheService, '', cached.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit), occurrences
-        );
+        page = {
+          emptyItems: cached.emptyResponses.items.slice(emptyStart, emptyStart + emptyLimit),
+          duplicateGroups: await readDuplicateOccurrencePage(
+            async () => [], cached.duplicateValues.groups.slice(duplicateStart, duplicateStart + duplicateLimit), occurrences
+          )
+        };
       }
 
-      if (!duplicateGroups) {
+      if (!page?.duplicateGroups) {
         return {
           ...this.createEmptyAnalysisResult(matchingFlags, effectiveThreshold),
           isCalculating,
@@ -149,7 +152,7 @@ export class CodingAnalysisService {
         emptyResponses: {
           total: cached.emptyResponses.total,
           totalUncoded: cached.emptyResponses.totalUncoded,
-          items: emptyItems,
+          items: page.emptyItems,
           page: emptyPage,
           pageSize: emptyLimit
         },
@@ -157,7 +160,7 @@ export class CodingAnalysisService {
           total: cached.duplicateValues.total,
           totalResponses: cached.duplicateValues.totalResponses,
           isAggregationApplied: cached.duplicateValues.isAggregationApplied,
-          groups: duplicateGroups,
+          groups: page.duplicateGroups,
           page: duplicatePage,
           pageSize: duplicateLimit
         },

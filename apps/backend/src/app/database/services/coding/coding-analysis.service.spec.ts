@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import { CodingAnalysisResultWriter } from './coding-analysis-result-store';
 import { CodingAnalysisService } from './coding-analysis.service';
 import { ResponseMatchingFlag } from './coding-job.service';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -353,6 +354,34 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:empty', 4, 1);
     expect(cacheService.getListItems).toHaveBeenCalledWith('analysis-results:duplicates', 2, 2);
   });
+  it('reads paged and complete occurrences from the result file and recovers from an expired file', async () => {
+    const { service, cacheService } = createService();
+    const writer = await CodingAnalysisResultWriter.create(7);
+    const rows = Array.from({ length: 12 }, (_, index) => ({ responseId: index + 1 }));
+    try {
+      await writer.appendItems('occurrences', rows);
+      await writer.appendItems('duplicates', [{ occurrences: rows.slice(0, 5), occurrenceStart: 0, occurrenceCount: 12 }]);
+      await writer.finish();
+      cacheService.get.mockResolvedValue({
+        storage: 'file',
+        resultId: writer.resultId,
+        emptyResponses: { total: 0, totalUncoded: 0 },
+        duplicateValues: { total: 1, totalResponses: rows.length },
+        aggregationSummary: {},
+        matchingFlags: []
+      });
+      await expect(service.getResponseAnalysis(7, 2, 1, 50, 1, 50, { page: 3, limit: 5 })).resolves.toMatchObject({
+        duplicateValues: { groups: [{ occurrences: rows.slice(10), occurrenceCount: 12 }] }
+      });
+      const complete = await service.getResponseAnalysis(7);
+      expect(complete.duplicateValues.groups).toEqual([{ occurrences: rows }]);
+      expect(cacheService.getListItems).not.toHaveBeenCalled();
+    } finally {
+      await writer.discard();
+    }
+    await expect(service.getResponseAnalysis(7)).resolves.toMatchObject({ needsCalculation: true });
+  });
+
   it('uses the stored preview and can read later occurrences from the same group', async () => {
     const { service, cacheService } = createService();
     const rows = Array.from({ length: 12 }, (_, index) => ({ responseId: index + 1 }));

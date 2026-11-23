@@ -6,7 +6,7 @@ import {
   BehaviorSubject, defer, interval, Subscription, forkJoin, of, Observable
 } from 'rxjs';
 import {
-  filter, finalize, shareReplay, startWith, switchMap, take, takeWhile, tap, map, catchError
+  exhaustMap, filter, finalize, shareReplay, startWith, take, takeWhile, tap, map, catchError
 } from 'rxjs/operators';
 import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
@@ -22,10 +22,12 @@ import {
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import type { TestResultsUploadPhase } from '../../../../../../api-dto/files/test-results-upload-progress.dto';
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
 import { loadUploadCodingContext } from './test-results-upload-coding-context';
+import { summarizeUploadProgress, type UploadJobStatus } from './test-results-upload-progress';
 
 export interface PendingUploadBatch {
   workspaceId: number;
@@ -35,24 +37,10 @@ export interface PendingUploadBatch {
   initialIssues: TestResultsUploadIssueDto[];
   /** File-read progress reported by the queue. Completion is tracked separately. */
   progress: number;
+  phase?: TestResultsUploadPhase;
   completedCount: number;
   totalJobs: number;
 }
-
-type UploadJobStatus = {
-  id?: string;
-  status:
-  | 'completed'
-  | 'waiting'
-  | 'active'
-  | 'delayed'
-  | 'failed'
-  | 'paused'
-  | 'poll-error';
-  progress: number;
-  result?: TestResultsUploadResultDto;
-  error?: unknown;
-};
 
 type ImportSummaryNumberKey =
   | 'responseRows'
@@ -212,7 +200,7 @@ export class TestResultsUploadStateService {
     const sub = interval(1000)
       .pipe(
         startWith(0),
-        switchMap(() => forkJoin(
+        exhaustMap(() => forkJoin(
           batch.jobIds.map(id => this.fileService.getUploadJobStatus(batch.workspaceId, id).pipe(
             catchError(error => of({
               id,
@@ -225,9 +213,6 @@ export class TestResultsUploadStateService {
         )
         ),
         map(statuses => {
-          let totalProgress = 0;
-          let completedCount = 0;
-          const totalJobs = statuses.length;
           const currentBatch = this.batches$.value.find(b => this.isSameBatch(b, batch));
           const fallbackProgress = currentBatch?.progress || batch.progress || 0;
           const normalizedStatuses = statuses.map((status, index): UploadJobStatus => {
@@ -267,32 +252,15 @@ export class TestResultsUploadStateService {
             };
           });
 
-          normalizedStatuses.forEach(status => {
-            if (status.status === 'completed' || status.status === 'failed') {
-              completedCount += 1;
-              totalProgress += 100;
-            } else {
-              totalProgress += status.progress || 0;
-            }
-          });
-
-          return {
-            avgProgress: totalJobs > 0 ? Math.floor(totalProgress / totalJobs) : 0,
-            completedCount,
-            totalJobs,
-            jobStatuses: normalizedStatuses
-          };
+          return { ...summarizeUploadProgress(normalizedStatuses), jobStatuses: normalizedStatuses };
         }),
         takeWhile(res => res.completedCount < res.totalJobs, true)
       )
       .subscribe({
         next: res => {
-          const currentBatches = this.batches$.value.map(b => {
-            if (b.workspaceId === batch.workspaceId && JSON.stringify(b.jobIds) === JSON.stringify(batch.jobIds)) {
-              return { ...b, progress: res.avgProgress, completedCount: res.completedCount };
-            }
-            return b;
-          });
+          const currentBatches = this.batches$.value.map(b => (this.isSameBatch(b, batch) ? {
+            ...b, phase: res.phase, progress: res.avgProgress, completedCount: res.completedCount
+          } : b));
           this.batches$.next(currentBatches);
           if (res.completedCount === res.totalJobs) {
             this.finishBatch(batch, res.jobStatuses);
@@ -300,7 +268,7 @@ export class TestResultsUploadStateService {
             return;
           }
 
-          this.updateProcessingProgressDialog(batch, res.avgProgress, res.completedCount, res.totalJobs);
+          this.updateProcessingProgressDialog(batch, res.phase, res.avgProgress, res.completedCount, res.totalJobs);
         }
       });
 
@@ -309,11 +277,12 @@ export class TestResultsUploadStateService {
 
   private updateProcessingProgressDialog(
     batch: PendingUploadBatch,
+    phase: TestResultsUploadPhase,
     readProgress: number,
     completed: number,
     total: number
   ): void {
-    const isReadingFile = readProgress > 0 && readProgress < 100;
+    const isReadingFile = phase === 'reading';
     this.updateProgressDialog(batch, {
       phase: isReadingFile ? 'readingFile' : 'processing',
       phaseLabel: isReadingFile ?
@@ -470,12 +439,13 @@ export class TestResultsUploadStateService {
       total: batch.totalJobs,
       mode: 'indeterminate'
     });
-    loadUploadCodingContext(
+    const loadCodingContext = () => loadUploadCodingContext(
       this.testPersonCodingService,
       batch.workspaceId,
       completedResults,
       batch.resultType === 'responses'
-    ).subscribe(codingContext => {
+    );
+    loadCodingContext().subscribe(codingContext => {
       this.closeProgressDialog(batch);
       this.dialog.open(TestResultsUploadResultDialogComponent, {
         width: '90vw',
@@ -484,7 +454,8 @@ export class TestResultsUploadStateService {
           resultType: batch.resultType,
           result: { ...uploadResult, codingFreshness: codingContext.codingFreshness || undefined },
           manualAppliedResultsOverview: codingContext.manualOverview.overview,
-          manualAppliedResultsOverviewLoadFailed: codingContext.manualOverview.loadFailed
+          manualAppliedResultsOverviewLoadFailed: codingContext.manualOverview.loadFailed,
+          ...(codingContext.codingFreshnessLoadFailed ? { reloadCodingContext: loadCodingContext } : {})
         }
       });
 

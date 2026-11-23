@@ -1,8 +1,17 @@
+import { mkdtemp, readdir, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { Job } from 'bullmq';
 import type { Repository } from 'typeorm';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
 import { CacheService } from '../../cache/cache.service';
-import type { PagedCodingAnalysis } from '../../database/services/coding/coding-analysis-cache-key.util';
+import type {
+  FileCodingAnalysis, StoredDuplicateValueGroup
+} from '../../database/services/coding/coding-analysis-cache-key.util';
+import {
+  cleanExpiredCodingAnalysisResults, readCodingAnalysisResult
+} from '../../database/services/coding/coding-analysis-result-store';
+import type { DuplicateValueOccurrenceDto, EmptyResponseDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
@@ -16,6 +25,19 @@ import { CodingAnalysisProcessor } from './coding-analysis.processor';
 import { ANALYSIS_BATCH_SIZE } from './coding-analysis-duplicates';
 
 describe('CodingAnalysisProcessor', () => {
+  let root: string;
+  let cwd: jest.SpyInstance;
+
+  beforeEach(async () => {
+    root = await mkdtemp(join(tmpdir(), 'response-analysis-'));
+    cwd = jest.spyOn(process, 'cwd').mockReturnValue(root);
+  });
+
+  afterEach(async () => {
+    cwd.mockRestore();
+    await rm(root, { recursive: true, force: true });
+  });
+
   function createProcessor(cacheService: Partial<CacheService>) {
     const processor = new CodingAnalysisProcessor(
       {} as never,
@@ -23,9 +45,9 @@ describe('CodingAnalysisProcessor', () => {
       {} as WorkspaceExclusionService,
       {} as EmptyResponseSelectionService
     );
-    const analysis: PagedCodingAnalysis = {
-      storage: 'paged',
-      listPrefix: '',
+    const analysis: FileCodingAnalysis = {
+      storage: 'file',
+      resultId: '',
       emptyResponses: {
         total: 0,
         totalUncoded: 0
@@ -48,8 +70,8 @@ describe('CodingAnalysisProcessor', () => {
       analysisTimestamp: '2026-05-22T00:00:00.000Z'
     };
 
-    const computeResponseAnalysis = jest.fn(async (_workspaceId: number, _flags: string[], _threshold: number, listPrefix: string) => {
-      analysis.listPrefix = listPrefix;
+    const computeResponseAnalysis = jest.fn(async (_workspaceId: number, _flags: string[], _threshold: number, writer: { resultId: string }) => {
+      analysis.resultId = writer.resultId;
       return analysis;
     });
     (processor as unknown as { computeResponseAnalysis: typeof computeResponseAnalysis }).computeResponseAnalysis = computeResponseAnalysis;
@@ -77,91 +99,41 @@ describe('CodingAnalysisProcessor', () => {
   }
 
   it('does not publish analysis results superseded by a newer run', async () => {
-    const cacheService = {
-      publishListResult: jest.fn().mockResolvedValue(false),
-      delete: jest.fn().mockResolvedValue(true)
-    };
+    const cacheService = { publishIfMarkerMatches: jest.fn().mockResolvedValue(false) };
     const { processor, analysis } = createProcessor(cacheService);
 
     await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis.aggregationSummary);
 
-    expect(cacheService.publishListResult).toHaveBeenCalledWith(
-      'response-analysis:7__t2', expect.anything(), expect.objectContaining({
-        marker: { key: 'response-analysis:7__t2:run', value: 'old-run' }
-      })
+    expect(cacheService.publishIfMarkerMatches).toHaveBeenCalledWith(
+      'response-analysis:7__t2', analysis, 600, { key: 'response-analysis:7__t2:run', value: 'old-run' }
     );
-    expect(cacheService.delete).toHaveBeenCalledTimes(4);
+    await expect(readdir(join(root, 'temp', 'response-analysis', '7'))).resolves.toEqual([]);
   });
 
-  it('publishes the current result and records only the summary in the job', async () => {
-    const cacheService = {
-      publishListResult: jest.fn().mockResolvedValue(true)
-    };
+  it('publishes the pointer and expires the result file after the read grace period', async () => {
+    const cacheService = { publishIfMarkerMatches: jest.fn().mockResolvedValue(true) };
     const { processor, analysis } = createProcessor(cacheService);
     const job = createJob('current-run');
 
     await expect(processor.handleResponseAnalysis(job)).resolves.toBe(analysis.aggregationSummary);
-    expect(cacheService.publishListResult).toHaveBeenCalledWith('response-analysis:7__t2', analysis, {
-      ttl: 600,
-      listTtl: 660,
-      lists: [
-        { key: `${analysis.listPrefix}:empty`, length: 0 },
-        { key: `${analysis.listPrefix}:duplicates`, length: 0 },
-        { key: `${analysis.listPrefix}:occurrences`, length: 0 }
-      ],
-      marker: { key: 'response-analysis:7__t2:run', value: 'current-run' }
-    });
+    expect(cacheService.publishIfMarkerMatches).toHaveBeenCalledWith(
+      'response-analysis:7__t2', analysis, 600, { key: 'response-analysis:7__t2:run', value: 'current-run' }
+    );
     expect(job.updateProgress).toHaveBeenCalledWith(100);
+    await cleanExpiredCodingAnalysisResults(Date.now() + 601_000);
+    await expect(readCodingAnalysisResult(7, analysis.resultId, getItems => getItems('empty', 0, 1))).resolves.toEqual([]);
+    await cleanExpiredCodingAnalysisResults(Date.now() + 661_000);
+    await expect(readCodingAnalysisResult(7, analysis.resultId, getItems => getItems('empty', 0, 1))).resolves.toBeNull();
   });
 
-  it('renews staging expiries during a long calculation and stops after it finishes', async () => {
-    jest.useFakeTimers();
-    try {
-      const expire = jest.fn().mockResolvedValue(undefined);
-      const { processor, analysis, computeResponseAnalysis } = createProcessor({
-        expire, publishListResult: jest.fn().mockResolvedValue(true)
-      });
-      let finishCalculation!: () => void;
-      const calculation = new Promise<void>(resolve => { finishCalculation = resolve; });
-      computeResponseAnalysis.mockImplementationOnce(async (_workspaceId, _flags, _threshold, listPrefix) => {
-        analysis.listPrefix = listPrefix;
-        await calculation;
-        return analysis;
-      });
+  it('leaves the result file to expire when publication may have succeeded without a Redis reply', async () => {
+    const cacheService = { publishIfMarkerMatches: jest.fn().mockRejectedValue(new Error('Lost Redis reply')) };
+    const { processor, analysis } = createProcessor(cacheService);
+    const job = createJob('uncertain-run');
 
-      const job = processor.handleResponseAnalysis(createJob('long-running'));
-      jest.advanceTimersByTime(61 * 60_000);
-      expect(expire.mock.calls).toEqual([
-        [`${analysis.listPrefix}:empty`, 3600],
-        [`${analysis.listPrefix}:duplicates`, 3600],
-        [`${analysis.listPrefix}:occurrences`, 3600],
-        [`${analysis.listPrefix}:candidates`, 3600],
-        [`${analysis.listPrefix}:empty`, 3600],
-        [`${analysis.listPrefix}:duplicates`, 3600],
-        [`${analysis.listPrefix}:occurrences`, 3600],
-        [`${analysis.listPrefix}:candidates`, 3600]
-      ]);
-      finishCalculation();
-      await job;
-
-      jest.advanceTimersByTime(60 * 60_000);
-      expect(expire).toHaveBeenCalledTimes(8);
-    } finally {
-      jest.useRealTimers();
-    }
-  });
-
-  it('fails the job if Redis rejects publication and leaves the staging keys to expire', async () => {
-    const cacheService = {
-      publishListResult: jest.fn().mockRejectedValue(new Error('Incomplete analysis result list')),
-      delete: jest.fn()
-    };
-    const { processor } = createProcessor(cacheService);
-    const job = createJob('incomplete-run');
-
-    await expect(processor.handleResponseAnalysis(job)).rejects.toThrow('Incomplete analysis result list');
+    await expect(processor.handleResponseAnalysis(job)).rejects.toThrow('Lost Redis reply');
     expect(job.updateProgress).not.toHaveBeenCalled();
-    expect(cacheService.delete).not.toHaveBeenCalled();
+    await expect(readCodingAnalysisResult(7, analysis.resultId, getItems => getItems('empty', 0, 1))).resolves.toEqual([]);
   });
 
   it('keeps the marker during a retry and releases it only when a job finishes', async () => {
@@ -222,7 +194,7 @@ describe('CodingAnalysisProcessor', () => {
   }
 
   it('reads a popular variable in fixed pages and preserves every duplicate occurrence', async () => {
-    const rows = Array.from({ length: ANALYSIS_BATCH_SIZE * 2 + 1 }, (_, index) => ({
+    const rows = Array.from({ length: ANALYSIS_BATCH_SIZE * 12 + 1 }, (_, index) => ({
       id: index + 1,
       unitid: index + 1,
       variableid: 'VAR',
@@ -233,23 +205,7 @@ describe('CodingAnalysisProcessor', () => {
       bookletName: 'booklet'
     }));
     const { repository, runner } = repositoryWithCursor(rows);
-    const lists = new Map<string, unknown[]>();
-    const staged: string[] = [];
-    const cache = {
-      appendSortedItems: jest.fn(async (_key, candidates: unknown[]) => {
-        staged.push(...candidates.map(item => JSON.stringify(item)));
-      }),
-      getSortedItems: jest.fn(async (_key, offset: number, limit: number) => (
-        staged.sort().slice(offset, offset + limit).map(item => JSON.parse(item))
-      )),
-      delete: jest.fn(async () => { staged.length = 0; return true; }),
-      appendListItems: jest.fn(async (key: string, items: unknown[]) => {
-        const list = lists.get(key) ?? [];
-        list.push(...items);
-        lists.set(key, list);
-      }),
-      publishListResult: jest.fn().mockResolvedValue(true)
-    };
+    const cache = { publishIfMarkerMatches: jest.fn().mockResolvedValue(true) };
     const selectionService = {
       createContext: jest.fn().mockResolvedValue({ derivedVariableMap: new Map() }),
       filterEffectivelyEmptyResponses: jest.fn().mockResolvedValue([])
@@ -265,15 +221,21 @@ describe('CodingAnalysisProcessor', () => {
     });
 
     expect(runner.query.mock.calls.filter(([sql]) => sql.startsWith('FETCH'))).toEqual([
-      ['FETCH FORWARD 500 FROM batch_rows'], ['FETCH FORWARD 500 FROM batch_rows'], ['FETCH FORWARD 500 FROM batch_rows']
+      ...Array.from({ length: 13 }, () => ['FETCH FORWARD 500 FROM batch_rows'])
     ]);
-    const { listPrefix } = cache.publishListResult.mock.calls[0][1] as PagedCodingAnalysis;
-    expect(lists.get(`${listPrefix}:duplicates`)).toEqual([expect.objectContaining({
-      occurrenceCount: 1000, occurrenceStart: 0, normalizedValue: 'ab'
+    const { resultId } = cache.publishIfMarkerMatches.mock.calls[0][1] as FileCodingAnalysis;
+    const page = await readCodingAnalysisResult(7, resultId, async getItems => ({
+      groups: await getItems<StoredDuplicateValueGroup>('duplicates', 0, 1),
+      pages: await Promise.all(Array.from(
+        { length: 12 }, (_, index) => getItems<DuplicateValueOccurrenceDto>('occurrences', index * 500, 500)
+      ))
+    }));
+    expect(page?.groups).toEqual([expect.objectContaining({
+      occurrenceCount: 6000, occurrenceStart: 0, normalizedValue: 'ab'
     })]);
-    expect(lists.get(`${listPrefix}:occurrences`)).toHaveLength(1000);
-    expect(lists.get(`${listPrefix}:occurrences`)).toContainEqual(expect.objectContaining({ responseId: 1001 }));
-    expect(lists.get(`${listPrefix}:occurrences`)).not.toContainEqual(expect.objectContaining({ responseId: 2 }));
+    expect(page?.pages.map(items => items.length)).toEqual(Array(12).fill(500));
+    expect(page?.pages.flat().map(item => item.responseId).sort((a, b) => a - b))
+      .toEqual(rows.filter(row => row.id !== 2).map(row => row.id));
   });
 
   it('selects the status needed to report an empty derived response for a mixed selection and justification', async () => {
@@ -317,11 +279,10 @@ describe('CodingAnalysisProcessor', () => {
         })
       } as unknown as WorkspaceFileMetadataReader
     );
-    const appendListItems = jest.fn();
     const publish = jest.fn().mockResolvedValue(true);
     const processor = new CodingAnalysisProcessor(
       repository,
-      { appendListItems, appendSortedItems: jest.fn(), publishListResult: publish } as unknown as CacheService,
+      { publishIfMarkerMatches: publish } as unknown as CacheService,
       workspaceExclusions(),
       emptyResponseSelectionService
     );
@@ -329,23 +290,16 @@ describe('CodingAnalysisProcessor', () => {
     await processor.handleResponseAnalysis(createJob('mixed-response-run'));
 
     expect(analysisQuery.select).toHaveBeenCalledWith(expect.arrayContaining(['response.status_v1 AS status_v1']));
-    expect(appendListItems).toHaveBeenCalledWith(expect.stringMatching(/:empty$/), [
-      expect.objectContaining({ responseId: 1, value: 'technical solver value' })
-    ], expect.any(Number));
-    const analysis = publish.mock.calls[0][1] as PagedCodingAnalysis;
+    const { resultId } = publish.mock.calls[0][1] as FileCodingAnalysis;
+    await expect(readCodingAnalysisResult(7, resultId, getItems => getItems<EmptyResponseDto>('empty', 0, 1)))
+      .resolves.toEqual([expect.objectContaining({ responseId: 1, value: 'technical solver value' })]);
     expect(publish).toHaveBeenCalledWith(
       'response-analysis:7__t2',
-      expect.objectContaining({ emptyResponses: { total: 1, totalUncoded: 1 }, duplicateValues: expect.objectContaining({ total: 0 }) }),
-      {
-        ttl: 600,
-        listTtl: 660,
-        lists: [
-          { key: `${analysis.listPrefix}:empty`, length: 1 },
-          { key: `${analysis.listPrefix}:duplicates`, length: 0 },
-          { key: `${analysis.listPrefix}:occurrences`, length: 0 }
-        ],
-        marker: { key: 'response-analysis:7__t2:run', value: 'mixed-response-run' }
-      }
+      expect.objectContaining({
+        emptyResponses: { total: 1, totalUncoded: 1 }, duplicateValues: expect.objectContaining({ total: 0 })
+      }),
+      600,
+      { key: 'response-analysis:7__t2:run', value: 'mixed-response-run' }
     );
   });
 });

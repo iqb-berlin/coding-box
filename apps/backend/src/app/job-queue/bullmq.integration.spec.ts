@@ -118,38 +118,25 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     }
   });
 
-  it('publishes response analysis only while its result lists are complete and the run is current', async () => {
+  it('publishes a response analysis file pointer only while its run marker is current', async () => {
     const redis = new Redis({
       host: process.env.BULLMQ_TEST_REDIS_HOST || '127.0.0.1',
       port: redisPort,
       keyPrefix: `${legacyPrefix}:response-analysis:`
     });
     const cache = new CacheService(redis);
-    const publication = {
-      ttl: 600,
-      listTtl: 660,
-      lists: [{ key: 'empty', length: 2 }, { key: 'duplicates', length: 0 }],
-      marker: { key: 'run', value: 'current-run' }
-    };
+    const marker = { key: 'run', value: 'current-run' };
     try {
-      await cache.set('run', 'current-run', 0);
-      await cache.set('result', { previous: true }, 600);
-      await cache.appendListItems('empty', [{ responseId: 1 }, { responseId: 2 }], 3600);
-      await redis.expire('empty', 0);
-      await cache.appendListItems('empty', [{ responseId: 3 }], 3600);
-      await expect(cache.publishListResult('result', { incomplete: true }, publication))
-        .rejects.toThrow('Incomplete analysis result list');
-      await expect(cache.get('result')).resolves.toEqual({ previous: true });
-
-      await cache.appendListItems('empty', [{ responseId: 4 }], 3600);
-      await expect(cache.publishListResult('result', { total: 2 }, publication)).resolves.toBe(true);
-      expect(await redis.ttl('empty')).toBeGreaterThan(await redis.ttl('result'));
+      const pointer = { storage: 'file', resultId: 'finished-analysis' };
+      await cache.set('run', marker.value, 0);
+      await expect(cache.publishIfMarkerMatches('result', pointer, 600, marker)).resolves.toBe(true);
+      expect(await redis.ttl('result')).toBeGreaterThan(0);
 
       await cache.set('run', 'new-run', 0);
-      await expect(cache.publishListResult('result', { stale: true }, publication)).resolves.toBe(false);
-      await expect(cache.get('result')).resolves.toEqual({ total: 2 });
+      await expect(cache.publishIfMarkerMatches('result', { stale: true }, 600, marker)).resolves.toBe(false);
+      await expect(cache.get('result')).resolves.toEqual(pointer);
     } finally {
-      await redis.del('run', 'empty', 'duplicates', 'result');
+      await redis.del('run', 'result');
       await redis.quit();
     }
   });

@@ -1,11 +1,12 @@
 import type { DuplicateValueGroupDto, ResponseAnalysisDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 
-export type PagedCodingAnalysis = Omit<ResponseAnalysisDto, 'emptyResponses' | 'duplicateValues'> & {
-  storage: 'paged';
-  listPrefix: string;
+type CodingAnalysisSummary = Omit<ResponseAnalysisDto, 'emptyResponses' | 'duplicateValues'> & {
   emptyResponses: Omit<ResponseAnalysisDto['emptyResponses'], 'items'>;
   duplicateValues: Omit<ResponseAnalysisDto['duplicateValues'], 'groups'>;
 };
+
+export type PagedCodingAnalysis = CodingAnalysisSummary & { storage: 'paged'; listPrefix: string };
+export type FileCodingAnalysis = CodingAnalysisSummary & { storage: 'file'; resultId: string };
 
 export type StoredDuplicateValueGroup = DuplicateValueGroupDto & {
   occurrenceStart: number;

@@ -14,8 +14,9 @@ type ManualOverviewResult = {
   loadFailed: boolean;
 };
 
-type UploadCodingContext = {
+export type UploadCodingContext = {
   codingFreshness: TestResultsUploadResultDto['codingFreshness'] | null;
+  codingFreshnessLoadFailed: boolean;
   manualOverview: ManualOverviewResult;
 };
 
@@ -37,15 +38,16 @@ export function loadUploadCodingContext(
 ): Observable<UploadCodingContext> {
   const completedCodingFreshness = getLatestCodingFreshness(completedResults);
   const codingFreshness$ = completedCodingFreshness || !shouldLoadCodingFreshness ?
-    of(completedCodingFreshness) :
-    codingService.getCodingFreshness(workspaceId).pipe(
+    of({ codingFreshness: completedCodingFreshness, codingFreshnessLoadFailed: false }) :
+    codingService.getCodingFreshness(workspaceId, { reportErrors: true }).pipe(
       timeout(RESULT_DETAILS_TIMEOUT_MS),
-      catchError(() => of(null))
+      map(codingFreshness => ({ codingFreshness, codingFreshnessLoadFailed: false })),
+      catchError(() => of({ codingFreshness: null, codingFreshnessLoadFailed: true }))
     );
 
   return codingFreshness$.pipe(
-    switchMap(codingFreshness => {
-      const hasManualCodingWarning = getSecondAutocodingFreshnessWarnings(codingFreshness?.items || []).length > 0;
+    switchMap(freshness => {
+      const hasManualCodingWarning = getSecondAutocodingFreshnessWarnings(freshness.codingFreshness?.items || []).length > 0;
       const manualOverview$ = hasManualCodingWarning ?
         codingService.getAppliedResultsOverview(workspaceId).pipe(
           timeout(RESULT_DETAILS_TIMEOUT_MS),
@@ -53,7 +55,7 @@ export function loadUploadCodingContext(
           catchError(() => of({ overview: null, loadFailed: true }))
         ) :
         of({ overview: null, loadFailed: false });
-      return manualOverview$.pipe(map(manualOverview => ({ codingFreshness, manualOverview })));
+      return manualOverview$.pipe(map(manualOverview => ({ ...freshness, manualOverview })));
     })
   );
 }

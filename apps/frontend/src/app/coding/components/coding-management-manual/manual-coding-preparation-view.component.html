@@ -38,7 +38,7 @@
           />
         </div>
       </div>
-      @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
+      @if (!responseAnalysisValue?.needsCalculation && !responseAnalysisValue?.isCalculating && responseAnalysisValue?.aggregationSummary; as aggregation) {
         <div class="aggregation-impact">
           <mat-icon>insights</mat-icon>
           <div>

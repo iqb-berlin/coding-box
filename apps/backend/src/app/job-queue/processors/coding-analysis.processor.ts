@@ -1,6 +1,7 @@
-import { randomUUID } from 'node:crypto';
 import { OnWorkerEvent, Processor } from '@nestjs/bullmq';
-import { Logger, Optional } from '@nestjs/common';
+import {
+  Logger, OnModuleDestroy, OnModuleInit, Optional
+} from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository } from 'typeorm';
@@ -25,13 +26,16 @@ import {
 } from '../../database/services/coding/aggregation-metrics.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
 import {
-  getCodingAnalysisListKeys, getCodingAnalysisRunMarkerKey, PagedCodingAnalysis
+  getCodingAnalysisRunMarkerKey, FileCodingAnalysis
 } from '../../database/services/coding/coding-analysis-cache-key.util';
 import {
   IQB_STANDARD_MISSING_CODES,
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
 
+import {
+  ANALYSIS_RESULT_TTL_SECONDS, cleanExpiredCodingAnalysisResults, CodingAnalysisResultWriter
+} from '../../database/services/coding/coding-analysis-result-store';
 import { readPostgresQueryBatches } from '../../database/services/shared/postgres-query-batches.util';
 import { ANALYSIS_BATCH_SIZE, DuplicateCandidate, writeDuplicateResults } from './coding-analysis-duplicates';
 
@@ -51,13 +55,12 @@ type ResponseRow = {
   bookletName: string;
 };
 
-const TARGET_STAGED_CANDIDATES = 5000;
-const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
-const LIST_WRITE_TTL_SECONDS = 3600;
+const CLEANUP_INTERVAL_MS = 5 * 60_000;
 
 @Processor('response-analysis', { concurrency: 1 })
-export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
+export class CodingAnalysisProcessor extends WorkspaceWorkerHost implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CodingAnalysisProcessor.name);
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -69,6 +72,18 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     private missingsProfilesService?: MissingsProfilesService
   ) {
     super();
+  }
+
+  onModuleInit(): void {
+    const clean = () => cleanExpiredCodingAnalysisResults().catch(error => {
+      this.logger.warn(`Could not clean up response analysis files: ${getErrorMessage(error)}`);
+    });
+    clean();
+    this.cleanupTimer = setInterval(clean, CLEANUP_INTERVAL_MS).unref();
+  }
+
+  onModuleDestroy(): void {
+    clearInterval(this.cleanupTimer);
   }
 
   async processWorkspaceJob(job: Job<CodingAnalysisJobData>) {
@@ -114,45 +129,45 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     } = job.data;
     this.logger.log(`Processing response analysis for workspace ${workspaceId}...`);
 
-    const listPrefix = `${cacheKey}:results:${randomUUID()}`;
-    const lists = getCodingAnalysisListKeys(listPrefix);
-    const candidateKey = `${listPrefix}:candidates`;
-    const stagingKeys = [...Object.values(lists), candidateKey];
-    // Renew staging keys even while the cursor or a variable takes longer to process.
-    const renewStagingTtl = setInterval(() => {
-      Promise.all(stagingKeys.map(key => this.cacheService.expire(key, LIST_WRITE_TTL_SECONDS))).catch(error => this.logger.warn(`Could not renew response analysis lists for job ${job.id}: ${getErrorMessage(error)}`));
-    }, (LIST_WRITE_TTL_SECONDS / 2) * 1000).unref();
+    const writer = await CodingAnalysisResultWriter.create(workspaceId);
+    const refreshLease = setInterval(() => {
+      writer.refreshLease().catch(error => {
+        this.logger.warn(`Could not renew response analysis file lease for job ${job.id}: ${getErrorMessage(error)}`);
+      });
+    }, CLEANUP_INTERVAL_MS).unref();
+
     let publicationAttempted = false;
     try {
       const analysis = await this.computeResponseAnalysis(
-        workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, listPrefix, job
-      ).finally(() => clearInterval(renewStagingTtl));
+        workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, writer, job
+      );
+      clearInterval(refreshLease);
+      await writer.finish();
+
       publicationAttempted = true;
-      const published = await this.cacheService.publishListResult(cacheKey, analysis, {
-        ttl: CODING_ANALYSIS_CACHE_TTL_SECONDS,
-        listTtl: CODING_ANALYSIS_CACHE_TTL_SECONDS + 60,
-        lists: [
-          { key: lists.empty, length: analysis.emptyResponses.total },
-          { key: lists.duplicates, length: analysis.duplicateValues.total },
-          { key: lists.occurrences, length: analysis.duplicateValues.totalResponses }
-        ],
-        marker: job.data.runId ? { key: getCodingAnalysisRunMarkerKey(cacheKey), value: job.data.runId } : undefined
-      });
+      const published = job.data.runId ?
+        await this.cacheService.publishIfMarkerMatches(cacheKey, analysis, ANALYSIS_RESULT_TTL_SECONDS, {
+          key: getCodingAnalysisRunMarkerKey(cacheKey), value: job.data.runId
+        }) :
+        await this.cacheService.set(cacheKey, analysis, ANALYSIS_RESULT_TTL_SECONDS);
+
       if (!published) {
+        if (!job.data.runId) throw new Error('Could not publish response analysis');
         this.logger.log(`Discarding stale response analysis for workspace ${workspaceId} (job ${job.id})`);
-        await Promise.all(stagingKeys.map(key => this.cacheService.delete(key)));
+        await writer.discard();
         return analysis.aggregationSummary;
       }
       await job.updateProgress(100);
-      this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis.aggregationSummary;
     } catch (error) {
-      // A lost Redis reply can leave the result published. Its lists then have their own expiry.
+      // A lost Redis reply can leave the pointer published. Keep the finished file until expiry.
       if (!publicationAttempted) {
-        await Promise.all(stagingKeys.map(key => this.cacheService.delete(key)));
+        await writer.discard().catch(cause => this.logger.warn(getErrorMessage(cause)));
       }
       this.logger.error(`Response analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
+    } finally {
+      clearInterval(refreshLease);
     }
   }
 
@@ -160,9 +175,9 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     workspaceId: number,
     matchingFlags: ResponseMatchingFlag[],
     threshold: number,
-    listPrefix: string,
+    writer: CodingAnalysisResultWriter,
     job: Job<CodingAnalysisJobData>
-  ): Promise<PagedCodingAnalysis> {
+  ): Promise<FileCodingAnalysis> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
     const emptyResponseContext =
@@ -170,29 +185,11 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     const { query, isAggregationApplied } = await this.createAnalysisQuery(workspaceId, exclusions, defaultMirCode);
     const totalCandidates = await query.getCount();
 
-    const lists = getCodingAnalysisListKeys(listPrefix);
-    const candidateKey = `${listPrefix}:candidates`;
     let totalEmpty = 0;
     let totalUncoded = 0;
-    let totalDuplicateGroups = 0;
-    let totalDuplicateResponses = 0;
     let totalProcessed = 0;
     let reportedProgress = 0;
-    let candidateCount = 0;
-    let previousVariable = '';
     let manager: EntityManager | undefined;
-
-    const flushCandidates = async () => {
-      const result = await writeDuplicateResults(
-        this.cacheService, listPrefix, candidateKey, candidateCount, threshold, totalDuplicateResponses, LIST_WRITE_TTL_SECONDS
-      );
-      totalDuplicateGroups += result.groups;
-      totalDuplicateResponses += result.occurrences;
-      if (candidateCount && !await this.cacheService.delete(candidateKey)) {
-        throw new Error('Could not clear response analysis candidates');
-      }
-      candidateCount = 0;
-    };
 
     for await (const rows of readPostgresQueryBatches<ResponseRow>(
       query, ANALYSIS_BATCH_SIZE, async snapshotManager => { manager = snapshotManager; }
@@ -202,25 +199,16 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
         emptyResponseContext,
         manager
       );
-      await this.cacheService.appendListItems(lists.empty, emptyResponses.map(row => this.toEmptyResponse(row)), LIST_WRITE_TTL_SECONDS);
+      await writer.appendItems('empty', emptyResponses.map(row => this.toEmptyResponse(row)));
       totalEmpty += emptyResponses.length;
       totalUncoded += emptyResponses.filter(row => row.status_v2 === null).length;
 
       const emptyIds = new Set(emptyResponses.map(row => row.id));
-      let candidates: DuplicateCandidate[] = [];
+      const candidates: DuplicateCandidate[] = [];
       for (const row of rows) {
         if (emptyIds.has(row.id) || !isAggregatableValue(row.value) ||
           isDerivedAggregationVariable(emptyResponseContext.derivedVariableMap, row.unitName, row.variableid)) continue;
 
-        const variable = JSON.stringify([row.unitName, row.variableid]);
-        // Keep the staging set small, while letting every value of a variable reach the same aggregation.
-        if (variable !== previousVariable && candidateCount + candidates.length >= TARGET_STAGED_CANDIDATES) {
-          await this.cacheService.appendSortedItems(candidateKey, candidates, LIST_WRITE_TTL_SECONDS);
-          candidateCount += candidates.length;
-          await flushCandidates();
-          candidates = [];
-        }
-        previousVariable = variable;
         candidates.push([
           row.unitName, row.variableid, normalizeAggregationValue(row.value, matchingFlags),
           row.unitName ? null : row.unitid, row.unitAlias || null,
@@ -233,8 +221,7 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
           }
         ]);
       }
-      await this.cacheService.appendSortedItems(candidateKey, candidates, LIST_WRITE_TTL_SECONDS);
-      candidateCount += candidates.length;
+      await writer.appendCandidates(candidates);
       totalProcessed += rows.length;
       const progress = totalCandidates ? Math.min(98, Math.round((totalProcessed / totalCandidates) * 98)) : 0;
       if (progress > reportedProgress) {
@@ -243,19 +230,19 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
       }
     }
 
-    await flushCandidates();
+    const { groups, occurrences } = await writeDuplicateResults(writer, threshold);
 
     return {
-      storage: 'paged',
-      listPrefix,
+      storage: 'file',
+      resultId: writer.resultId,
       emptyResponses: { total: totalEmpty, totalUncoded },
       duplicateValues: {
-        total: totalDuplicateGroups,
-        totalResponses: totalDuplicateResponses,
+        total: groups,
+        totalResponses: occurrences,
         isAggregationApplied
       },
       aggregationSummary: createAggregationSummary(
-        totalDuplicateGroups, totalDuplicateResponses, totalProcessed, threshold, matchingFlags
+        groups, occurrences, totalProcessed, threshold, matchingFlags
       ),
       matchingFlags,
       analysisTimestamp: new Date().toISOString()

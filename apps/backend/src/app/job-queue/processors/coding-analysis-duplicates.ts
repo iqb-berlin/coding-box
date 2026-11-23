@@ -1,7 +1,5 @@
-import type { CacheService } from '../../cache/cache.service';
-import {
-  getCodingAnalysisListKeys, type StoredDuplicateValueGroup
-} from '../../database/services/coding/coding-analysis-cache-key.util';
+import type { StoredDuplicateValueGroup } from '../../database/services/coding/coding-analysis-cache-key.util';
+import type { CodingAnalysisResultWriter } from '../../database/services/coding/coding-analysis-result-store';
 import {
   type DuplicateValueOccurrenceDto, RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE
 } from '../../../../../../api-dto/coding/response-analysis.dto';
@@ -13,14 +11,12 @@ export type DuplicateCandidate = [
 
 export const ANALYSIS_BATCH_SIZE = 500;
 
-/** Equal group keys are contiguous in the sorted set, including across read pages. */
+/** Equal group keys are contiguous in the disk-backed index, including across read pages. */
 export async function writeDuplicateResults(
-  cache: CacheService, listPrefix: string, candidateKey: string, candidateCount: number,
-  threshold: number, initialOccurrenceCount: number, ttl: number
+  writer: CodingAnalysisResultWriter, threshold: number
 ): Promise<{ groups: number; occurrences: number }> {
-  const lists = getCodingAnalysisListKeys(listPrefix);
   let groupCount = 0;
-  let occurrenceCount = initialOccurrenceCount;
+  let occurrenceCount = 0;
   let current: StoredDuplicateValueGroup | undefined;
   let currentKey = '';
   let pending: DuplicateValueOccurrenceDto[] = [];
@@ -32,10 +28,12 @@ export async function writeDuplicateResults(
     }
   };
 
-  for (let start = 0; start < candidateCount; start += ANALYSIS_BATCH_SIZE) {
-    const limit = Math.min(ANALYSIS_BATCH_SIZE, candidateCount - start);
-    const rows = await cache.getSortedItems<DuplicateCandidate>(candidateKey, start, limit);
-    if (rows.length !== limit) throw new Error('Incomplete response analysis candidates');
+  let after = '';
+  while (true) {
+    const page = await writer.readCandidatePage(after, ANALYSIS_BATCH_SIZE);
+    if (page.length === 0) break;
+    after = page[page.length - 1];
+    const rows = page.map(payload => JSON.parse(payload) as DuplicateCandidate);
 
     const groups: StoredDuplicateValueGroup[] = [];
     const occurrences: DuplicateValueOccurrenceDto[] = [];
@@ -67,10 +65,12 @@ export async function writeDuplicateResults(
         pending = [];
       }
     }
-    if (start + limit === candidateCount) finishGroup(groups);
-    await cache.appendListItems(lists.occurrences, occurrences, ttl);
-    await cache.appendListItems(lists.duplicates, groups, ttl);
+    await writer.appendItems('occurrences', occurrences);
+    await writer.appendItems('duplicates', groups);
   }
 
-  return { groups: groupCount, occurrences: occurrenceCount - initialOccurrenceCount };
+  const finalGroups: StoredDuplicateValueGroup[] = [];
+  finishGroup(finalGroups);
+  await writer.appendItems('duplicates', finalGroups);
+  return { groups: groupCount, occurrences: occurrenceCount };
 }
