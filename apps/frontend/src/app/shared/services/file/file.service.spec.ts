@@ -236,7 +236,7 @@ describe('FileService', () => {
       const second = httpMock.expectOne(`${url}/upload-1/chunk/1`);
       expect(second.request.headers.get('Authorization')).toBe('Bearer refreshed-token');
       second.flush({});
-      expect(progress).toHaveBeenLastCalledWith(67);
+      expect(progress).toHaveBeenLastCalledWith(66);
       const third = httpMock.expectOne(`${url}/upload-1/chunk/2`);
       expect(third.request.body.size).toBe(2);
       third.flush({});

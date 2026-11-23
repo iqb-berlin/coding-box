@@ -350,6 +350,25 @@ describe('WorkspaceTestResultsService', () => {
     }
   });
 
+  it('answers a scoped person search without executing the answer-value scans', async () => {
+    const person = mockQueryBuilder();
+    const response = mockQueryBuilder();
+    person.getCount.mockResolvedValue(1);
+    person.getRawMany.mockResolvedValue([{ personId: 11, personLogin: 'sample-login' }]);
+    (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(person);
+    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(response);
+
+    await expect(service.quickSearchTestResults(1, 'sample-login', 8, 'person')).resolves.toMatchObject({
+      persons: [{ personLogin: 'sample-login' }],
+      totals: {
+        person: 1, booklet: 0, unit: 0, response: 0
+      }
+    });
+    expect(person.setParameter).toHaveBeenCalledWith('exactLogin', 'sample-login');
+    expect(response.getCount).not.toHaveBeenCalled();
+    expect(response.getRawMany).not.toHaveBeenCalled();
+  });
+
   describe('hasGeogebraResponses', () => {
     it.each([true, false])('returns %s from an existence query without counting matches', async exists => {
       const qb = mockQueryBuilder();

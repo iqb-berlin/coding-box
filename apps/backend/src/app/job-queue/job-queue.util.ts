@@ -16,6 +16,10 @@ export function numericJobProgress(job: { progress?: unknown }): number {
   return typeof job.progress === 'number' && Number.isFinite(job.progress) ? job.progress : 0;
 }
 
+export function isTestDataCsvExport(exportType: string): boolean {
+  return exportType === 'test-results' || exportType === 'test-logs';
+}
+
 /** New queue counters must not collide with old export/cache entries keyed by ID. */
 export function withQueueJobId(options: JobsOptions = {}): JobsOptions {
   return { ...options, jobId: options.jobId ?? randomUUID() };

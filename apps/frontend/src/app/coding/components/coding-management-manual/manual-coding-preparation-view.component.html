@@ -38,7 +38,7 @@
           />
         </div>
       </div>
-      @if (responseAnalysisValue?.aggregationSummary; as aggregation) {
+      @if (!responseAnalysisValue?.needsCalculation && !responseAnalysisValue?.isCalculating && responseAnalysisValue?.aggregationSummary; as aggregation) {
         <div class="aggregation-impact">
           <mat-icon>insights</mat-icon>
           <div>
@@ -133,8 +133,9 @@
           <mat-spinner diameter="16"></mat-spinner>
           @if (responseAnalysisValue?.isCalculating) {
             <span class="analysis-progress-text">
-              {{ 'ui-text.manual-coding-preparation-view.calculation-running' | translate }}
+              {{ (responseAnalysisValue?.isQueued ? 'ui-text.manual-coding-preparation-view.calculation-queued' : 'ui-text.manual-coding-preparation-view.calculation-running') | translate }}
               @if (
+                !responseAnalysisValue?.isQueued &&
                 responseAnalysisValue?.progress !== null &&
                 responseAnalysisValue?.progress !== undefined
               ) {
@@ -148,7 +149,11 @@
     <p class="subsection-description">
       {{ 'coding-management-manual.response-analysis.description' | translate }}
     </p>
-    @if (responseAnalysisValue) {
+    @if (responseAnalysisValue?.needsCalculation) {
+      <button mat-stroked-button type="button" (click)="restartAnalysis()" [disabled]="isLoadingResponseAnalysis()">
+        {{ 'ui-text.manual-coding-preparation-view.calculate-analysis' | translate }}
+      </button>
+    } @else if (responseAnalysisValue) {
       <div class="analysis-summary">
         <!-- Empty Responses Summary -->
         @if (!responseAnalysisValue.isCalculating) {
@@ -418,6 +423,7 @@
                   group of responseAnalysisValue.duplicateValues.groups;
                   track duplicateGroupKey(group)
                 ) {
+                  @let occurrenceCount = group.occurrenceCount ?? group.occurrences.length;
                   <div class="duplicate-group">
                     <div class="duplicate-group-header">
                       <strong>{{ group.unitAlias || group.unitName }}</strong> /
@@ -429,7 +435,7 @@
                         }}"</span
                       >
                       <span class="occurrence-count"
-                        >({{ group.occurrences.length }}x)</span
+                        >({{ occurrenceCount }}x)</span
                       >
                     </div>
                     <ul class="occurrence-list">
@@ -445,9 +451,9 @@
                           - {{ occ.bookletName }}
                         </li>
                       }
-                      @if (group.occurrences.length > 5) {
+                      @if (occurrenceCount > 5) {
                         <li class="more-occurrences">
-                          +{{ group.occurrences.length - 5 }}
+                          +{{ occurrenceCount - 5 }}
                           {{
                             'coding-management-manual.response-analysis.more'
                               | translate

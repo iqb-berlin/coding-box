@@ -7,6 +7,7 @@ import { JobQueueService, WorkspaceDeletionJob } from '../../../job-queue/job-qu
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { CacheService } from '../../../cache/cache.service';
 import ResourcePackage from '../../entities/resource-package.entity';
+import { removeWorkspaceCodingAnalysisResults } from '../coding/coding-analysis-result-store';
 import { withResourcePackageLock } from '../shared/resource-package-lock.util';
 
 interface CleanupManifest {
@@ -117,7 +118,10 @@ export class WorkspaceDeletionService {
         }
       });
     }
-    for (const id of resources.workspaceIds) await fs.rm(this.manifestPath(id), { force: true });
+    for (const id of resources.workspaceIds) {
+      await removeWorkspaceCodingAnalysisResults(id);
+      await fs.rm(this.manifestPath(id), { force: true });
+    }
   }
 
   private resultKeys(job: Pick<Job, 'id' | 'queueName'>): string[] {

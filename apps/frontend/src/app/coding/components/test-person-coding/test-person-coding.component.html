@@ -212,13 +212,22 @@
 
 
   @let status = jobStatus();
-  @if (activeJobId() && status) {
+  @let jobId = activeJobId();
+  @if (isStartingCoding() || jobId) {
     <mat-card class="job-status-card">
       <mat-card-header>
         <mat-card-title>{{ 'test-person-coding.current-job.title' | translate }}</mat-card-title>
-        <mat-card-subtitle>{{ 'test-person-coding.current-job.subtitle' | translate }}: {{ activeJobId() }}</mat-card-subtitle>
+        @if (jobId) {
+          <mat-card-subtitle>{{ 'test-person-coding.current-job.subtitle' | translate: { id: jobId } }}</mat-card-subtitle>
+        }
       </mat-card-header>
       <mat-card-content>
+        @if (!status) {
+          <p role="status">
+            {{ (jobId ? 'ui-text.autocoder.loading-job-status' : 'ui-text.autocoder.checking-start') | translate }}
+          </p>
+          <mat-progress-bar mode="indeterminate"></mat-progress-bar>
+        } @else {
         <div class="job-status-content">
           <div class="status-row">
             <span class="status-label">{{ 'test-person-coding.current-job.status' | translate }}</span>
@@ -258,6 +267,7 @@
             </div>
           }
         </div>
+        }
       </mat-card-content>
     </mat-card>
   }

@@ -3,6 +3,7 @@ import { HttpTestingController, provideHttpClientTesting } from '@angular/common
 import { provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
 import { GermanTranslationsTestingModule } from '../../../testing/german-translations';
 import { CodingExecutionService } from './coding-execution.service';
+import { pollCodingStatisticsStatus } from './coding-statistics-job-polling';
 import { SERVER_URL } from '../../injection-tokens';
 
 describe('CodingExecutionService', () => {
@@ -80,12 +81,38 @@ describe('CodingExecutionService', () => {
     req.flush(mockRes);
   });
 
-  it.each([404, 500])('maps statistics status HTTP %s to the failed polling state', status => {
-    service.getCodingStatisticsJobStatus(1, 'job1').subscribe(result => {
-      expect(result).toEqual({ status: 'failed', progress: 0, error: 'Failed to get coding statistics job status' });
-    });
+  it('propagates an HTTP error from the statistics status request', () => {
+    const error = jest.fn();
+    service.getCodingStatisticsJobStatus(1, 'job1').subscribe({ error });
     httpMock.expectOne(`${mockServerUrl}admin/workspace/1/coding/statistics/job/job1`)
-      .flush({ message: 'Request failed' }, { status, statusText: 'Request failed' });
+      .flush({ message: 'Request failed' }, { status: 404, statusText: 'Not Found' });
+    expect(error).toHaveBeenCalledWith(expect.objectContaining({ status: 404 }));
+  });
+
+  it('keeps polling after an HTTP 503 and delivers the completed statistics', () => {
+    jest.useFakeTimers();
+    try {
+      const jobUrl = `${mockServerUrl}admin/workspace/1/coding/statistics/job/job1`;
+      const reportStatusError = jest.fn();
+      const next = jest.fn();
+      const completed = { status: 'completed', progress: 100, result: { totalResponses: 42, statusCounts: {} } };
+      const subscription = pollCodingStatisticsStatus(
+        () => service.getCodingStatisticsJobStatus(1, 'job1'),
+        reportStatusError
+      ).subscribe(next);
+
+      jest.advanceTimersByTime(0);
+      httpMock.expectOne(jobUrl).flush(null, { status: 503, statusText: 'Service Unavailable' });
+      expect(next).not.toHaveBeenCalled();
+      jest.advanceTimersByTime(2000);
+      httpMock.expectOne(jobUrl).flush(completed);
+      expect(next).toHaveBeenCalledTimes(1);
+      expect(next).toHaveBeenCalledWith(completed);
+      expect(reportStatusError).not.toHaveBeenCalled();
+      expect(subscription.closed).toBe(true);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('should create coding statistics job', () => {

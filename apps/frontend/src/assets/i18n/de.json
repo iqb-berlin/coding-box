@@ -3658,6 +3658,17 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "coding-statistics": {
+      "status-load-failed": "Der Status der Kodierstatistik konnte nicht geladen werden."
+    },
+    "autocoder": {
+      "checking-start": "Voraussetzungen für Auto-Coding werden geprüft.",
+      "loading-job-status": "Auftrag angenommen. Der aktuelle Status wird geladen."
+    },
+    "my-coding-jobs": {
+      "replay-blocked": "Der Browser hat das Replay-Fenster blockiert.",
+      "open-replay-in-current-tab": "Replay hier öffnen"
+    },
     "reset-version-dialog": {
       "preview-help": "Prüfen Sie den gewählten Bereich vor dem Zurücksetzen. Die Prüfung startet nur auf Knopfdruck und verändert keine Daten.",
       "process-label": "Reset-Vorschau",
@@ -4121,6 +4132,8 @@
       "assigned-to": "Zugeordnet zu:"
     },
     "manual-coding-preparation-view": {
+      "calculate-analysis": "Antwortanalyse starten",
+      "calculation-queued": "Wartet auf Bearbeitung",
       "analysis-running": "Analyse läuft",
       "calculation-running": "Berechnung läuft...",
       "coded-value": "Kodiert (Code: {{assignedCode}})",
@@ -4172,6 +4185,8 @@
       "boolean-option": "Boolesche Option"
     },
     "variable-analysis-dialog": {
+      "results-expired": "Das gespeicherte Ergebnis ist abgelaufen.",
+      "recalculate": "Erneut berechnen",
       "results-tab": "Analyseergebnisse",
       "total-responses-column": "Antworten gesamt",
       "loading-distribution": "Lade Code-/Score-Verteilung...",
@@ -4746,6 +4761,8 @@
       "start-upload": "Upload starten"
     },
     "test-results-upload-result-dialog": {
+      "coding-freshness-unavailable": "Der Kodierstand konnte noch nicht geladen werden.",
+      "retry-coding-freshness": "Kodierstand erneut laden",
       "refreshing-overview": "Übersicht wird aktualisiert",
       "log-import-title": "Hinweis zum Log-Import",
       "log-import-hint": "Logs werden nur bestehenden Testpersonen, Testheften und Aufgaben zugeordnet. Wenn die passenden Testergebnisse fehlen, legt der Import sie nicht automatisch an.",
@@ -4847,6 +4864,8 @@
       "no-category": "Ohne Kategorie"
     },
     "test-results": {
+      "flat-load-failed": "Testergebnisse konnten nicht geladen werden.",
+      "flat-load-retry": "Erneut laden",
       "import": "Import",
       "running": "Läuft...",
       "quick-search": "Schnellsuche",
@@ -4886,7 +4905,6 @@
       "value": "Value:",
       "empty-title": "Keine Testergebnisse vorhanden",
       "empty-description": "Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.",
-      "processing-files": "Verarbeite... {{progress}}% ({{completedCount}}/{{totalJobs}} Dateien)",
       "invalid-booklet": "Ungültiges Testheft",
       "invalid-person": "Keine gültige Testperson ausgewählt",
       "no-booklet-units": "Keine Units im Testheft vorhanden",
@@ -4910,6 +4928,7 @@
       "loading-unit-info": "Lade Unit-Informationen..."
     },
     "test-results-search": {
+      "load-failed": "Mindestens ein Suchbereich konnte nicht geladen werden.",
       "search-placeholder": "Code, Login, Testheft, Aufgabe, Variable oder Antwortwert",
       "search-scopes": "Suchbereiche",
       "minimum-search-length": "Geben Sie mindestens {{MIN_SEARCH_LENGTH}} Zeichen ein.",
@@ -5336,6 +5355,7 @@
       "error-count": "fehler"
     },
     "test-results-export": {
+      "status-load-failed": "Der Exportstatus konnte nicht geladen werden. Öffnen Sie den Exportdialog erneut.",
       "start-failed": "Fehler beim Starten des Exports",
       "completed": "Export abgeschlossen",
       "cancel-failed": "Export konnte nicht abgebrochen werden",
@@ -5346,10 +5366,10 @@
     "test-results-import": {
       "completed-refreshing": "Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.",
       "overview-loaded": "Die Ergebnisübersicht wurde geladen.",
-      "importing-responses": "Importiere Antworten... (0%)",
+      "importing-responses": "Antwortdatei wird hochgeladen",
       "uploading": "Ergebnisse werden hochgeladen...",
       "ready": "Ergebnis bereit",
-      "importing-logs": "Importiere Logs... (0%)"
+      "importing-logs": "Log-Datei wird hochgeladen"
     },
     "test-results-summary": {
       "controller-error": "Controller-Fehler",
@@ -5380,7 +5400,11 @@
       "chunked-logs-hint": "Die Log-Datei wird in Teilen übertragen.",
       "chunked-responses-hint": "Die Antwortdatei wird in Teilen übertragen.",
       "start-failed": "Fehler beim Upload-Start: {{message}}",
-      "processing": "Verarbeitung läuft",
+      "preparing-upload": "Import wird vorbereitet",
+      "transfer-complete": "Die Datei wurde übertragen und wird für den Import vorbereitet.",
+      "reading-file": "Datei wird eingelesen",
+      "reading-file-progress": "Datei wird eingelesen ({{progress}} %)",
+      "processing": "Daten werden verarbeitet",
       "accepted": "Die Datei wurde angenommen. Der Server verarbeitet die Upload-Jobs.",
       "status-unavailable": "Upload läuft möglicherweise weiter, aber der Status konnte gerade nicht gelesen werden.",
       "completed-refreshing": "Die Jobs sind abgeschlossen. Lade die aktualisierten Ergebniszahlen.",
@@ -5394,9 +5418,11 @@
       "log-quality-unavailable": "Logs importiert. Die Log-Qualität konnte nicht geprüft werden.",
       "waiting-for-results": "Die Jobs sind abgeschlossen. Warte auf die vollständigen Ergebnisdaten.",
       "job-failed": "Upload-Job {{value1}} ist fehlgeschlagen.",
-      "processing-jobs": "Der Server verarbeitet die Upload-Jobs.",
+      "processing-jobs": "Der Import läuft. Das Ergebnis wird anschließend angezeigt.",
       "logs-title": "Upload-Ergebnis (Logs)",
-      "reading-result": "Ergebnis wird gelesen"
+      "reading-result": "Ergebnis wird gelesen",
+      "preparing-result": "Ergebnis wird vorbereitet",
+      "loading-result-details": "Die Details für den Ergebnisdialog werden geladen."
     },
     "message-dialog": {
       "error-title": "Achtung: Fehler",

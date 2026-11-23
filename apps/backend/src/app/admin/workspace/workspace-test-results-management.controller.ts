@@ -24,6 +24,7 @@ import {
   UnitSearchResult,
   QuickSearchResult
 } from './dto/workspace-test-results.interfaces';
+import type { QuickSearchResultKind } from '../../database/services/test-results/workspace-test-results.types';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { ValidationTaskService } from '../../database/services/validation';
@@ -145,6 +146,12 @@ export class WorkspaceTestResultsManagementController {
     description: 'Maximum results per category',
     type: Number
   })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['person', 'booklet', 'unit', 'response'],
+    description: 'Restrict the search to one category'
+  })
   @ApiOkResponse({
     description: 'Quick search results retrieved successfully.'
   })
@@ -154,12 +161,14 @@ export class WorkspaceTestResultsManagementController {
   async quickSearchTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Query('q') query: string,
-    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
+    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8,
+    @Query('kind') kind?: QuickSearchResultKind
   ): Promise<QuickSearchResult> {
     return this.workspaceTestResultsService.quickSearchTestResults(
       workspaceId,
       query,
-      limit
+      limit,
+      kind
     );
   }
 

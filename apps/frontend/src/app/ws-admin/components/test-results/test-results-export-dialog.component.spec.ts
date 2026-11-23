@@ -50,11 +50,27 @@ describe('TestResultsExportDialogComponent', () => {
 
     const text = fixture.nativeElement.textContent as string;
     expect(text).toContain('Logs');
-    expect(text).toContain('active');
+    expect(text).toContain('Läuft');
     expect(text).toContain('42%');
     expect(text).toContain('Export abbrechen');
     expect(text).not.toContain('Testergebnisse ohne Kodierung exportieren');
     expect(text).not.toContain('Logs exportieren');
+  });
+
+  it('offers a retained export after reopening the dialog', () => {
+    createComponent({
+      completedJobs: [{
+        jobId: 'previous-job',
+        status: 'completed',
+        progress: 100,
+        createdAt: Date.UTC(2026, 10, 23),
+        exportType: 'test-results'
+      }]
+    });
+
+    const downloadButton = fixture.debugElement.query(By.css('mat-dialog-content button'));
+    downloadButton.triggerEventHandler('click');
+    expect(dialogRef.close).toHaveBeenCalledWith({ type: 'download', jobId: 'previous-job' });
   });
 
   it('returns a cancel result for the active export job', () => {

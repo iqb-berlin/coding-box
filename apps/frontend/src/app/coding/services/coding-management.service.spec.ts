@@ -177,6 +177,26 @@ describe('CodingManagementService', () => {
       expect(executionServiceMock.createCodingStatisticsJob).toHaveBeenCalledTimes(1);
     });
 
+    it('lets a slow job status request finish before polling again', async () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const status = new Subject<CodingJobStatus>();
+        executionServiceMock.createCodingStatisticsJob.mockReturnValue(of({ jobId: 'slow-job', message: '' }));
+        executionServiceMock.getCodingStatisticsJobStatus.mockReturnValue(status);
+
+        service.fetchCodingStatistics('v1');
+        await jest.advanceTimersByTimeAsync(6000);
+        expect(executionServiceMock.getCodingStatisticsJobStatus).toHaveBeenCalledTimes(1);
+        status.next({ status: 'completed', progress: 100, result: mockCodingStatistics } as CodingJobStatus);
+
+        let statistics: CodingStatistics | null | undefined;
+        service.codingStatistics$.subscribe(value => { statistics = value; });
+        expect(statistics).toEqual(mockCodingStatistics);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('should cancel view-bound statistics polling without cancelling other background operations', async () => {
       jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
       try {

@@ -1,5 +1,5 @@
 import {
-  Processor
+  OnWorkerEvent, Processor
 } from '@nestjs/bullmq';
 import {
   Injectable,
@@ -22,6 +22,18 @@ export class ValidationTaskProcessor extends WorkspaceWorkerHost {
     private readonly validationTaskService: ValidationTaskService
   ) {
     super();
+  }
+
+  @OnWorkerEvent('failed')
+  async markTerminalFailure(job: Job<ValidationTaskJobData> | undefined, error: Error): Promise<void> {
+    if (!job) return;
+    try {
+      if (await job.getState() === 'failed') {
+        await this.validationTaskService.markInterruptedTaskFailed(job.data.taskId, error.message);
+      }
+    } catch (cause) {
+      this.logger.error(`Could not synchronize status for validation task ${job.data.taskId}: ${getErrorMessage(cause)}`);
+    }
   }
 
   async processWorkspaceJob(job: Job<ValidationTaskJobData>): Promise<void> {

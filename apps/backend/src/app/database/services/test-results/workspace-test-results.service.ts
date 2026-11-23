@@ -25,7 +25,7 @@ import { TestResultsFilterOptionsService } from './test-results-filter-options.s
 import { TestResultsResponsesService } from './test-results-responses.service';
 import { TestResultsSearchService } from './test-results-search.service';
 import {
-  FlatResponseOptions, FlatResponseResult, LogAnomalyDashboardSummary, LogAnomalyDetailsResponse, QuickSearchResult, ResponseSearchSortBy, ResponseSearchSortDirection, TestResultsExportFilters, WorkspaceOverviewStats
+  FlatResponseOptions, FlatResponseResult, LogAnomalyDashboardSummary, LogAnomalyDetailsResponse, QuickSearchResult, QuickSearchResultKind, ResponseSearchSortBy, ResponseSearchSortDirection, TestResultsExportFilters, WorkspaceOverviewStats
 } from './workspace-test-results.types';
 
 export type {
@@ -141,9 +141,10 @@ export class WorkspaceTestResultsService {
   async quickSearchTestResults(
     workspaceId: number,
     query: string,
-    limit = 8
+    limit = 8,
+    kind?: QuickSearchResultKind
   ): Promise<QuickSearchResult> {
-    return this.query.quickSearchTestResults(workspaceId, query, limit);
+    return this.query.quickSearchTestResults(workspaceId, query, limit, kind);
   }
 
   async findWorkspaceResponses(

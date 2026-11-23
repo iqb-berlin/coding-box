@@ -77,7 +77,7 @@ describe('MyCodingJobsComponent', () => {
         {
           provide: MatSnackBar,
           useValue: {
-            open: jest.fn().mockReturnValue({ dismiss: jest.fn() })
+            open: jest.fn().mockReturnValue({ dismiss: jest.fn(), onAction: () => of() })
           }
         },
         {
@@ -640,20 +640,34 @@ describe('MyCodingJobsComponent', () => {
     ) as unknown as {
       startCodingJob: jest.Mock;
     };
-    codingJobBackendService.startCodingJob.mockReturnValueOnce(
-      of({
-        total: 1,
-        firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var'
-      })
-    );
-    jest.spyOn(window, 'open').mockImplementation(() => null);
+    const prepared = new Subject();
+    codingJobBackendService.startCodingJob.mockReturnValueOnce(prepared);
+    const replayWindow = { location: { replace: jest.fn() }, close: jest.fn() };
+    const open = jest.spyOn(window, 'open').mockReturnValueOnce(replayWindow as unknown as Window);
 
     component.startCodingJob(completedJob);
 
-    expect(window.open).toHaveBeenCalledWith(
-      'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=10&workspaceId=1',
-      '_blank'
+    expect(open).toHaveBeenCalledWith('about:blank', '_blank');
+    expect(replayWindow.location.replace).not.toHaveBeenCalled();
+    prepared.next({ total: 1, firstReplayUrl: 'http://localhost:3333/#/replay/person/unit/0/var' });
+    prepared.complete();
+    expect(replayWindow.location.replace).toHaveBeenCalledWith(
+      'http://localhost/#/replay/person/unit/0/var?mode=coding&codingJobId=10&workspaceId=1'
     );
+    expect(replayWindow.close).not.toHaveBeenCalled();
+    open.mockRestore();
+  });
+
+  it('offers same-tab replay when the browser rejects the new tab', () => {
+    const open = jest.spyOn(window, 'open').mockReturnValueOnce(null);
+    const snackBar = TestBed.inject(MatSnackBar);
+    component.startCodingJob(completedJob);
+    expect(snackBar.open).toHaveBeenCalledWith(
+      'ui-text.my-coding-jobs.replay-blocked',
+      'ui-text.my-coding-jobs.open-replay-in-current-tab'
+    );
+    expect(snackBar.open).not.toHaveBeenCalledWith('coding.my-coding-jobs.preparing-replay', expect.anything(), expect.anything());
+    open.mockRestore();
   });
   it('renders the empty state after delayed authorization without workspaces', async () => {
     const auth = new Subject<{ userId: number; workspaces: [] }>();

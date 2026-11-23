@@ -70,7 +70,7 @@
           "max-lines-per-function": 110
         },
         "class WorkspaceCodingAnalysisController#1/method getResponseAnalysis#1": {
-          "max-lines-per-function": 146
+          "max-lines-per-function": 133
         }
       }
     },
@@ -913,16 +913,16 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1064
+        "max-lines": 1059
       },
       "functions": {
         "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
-          "max-lines-per-function": 114
+          "max-lines-per-function": 106
         },
         "class PersonPersistenceService#1/method processPersonBooklets#1": {
-          "complexity": 30,
-          "max-depth": 9,
-          "max-lines-per-function": 128
+          "complexity": 27,
+          "max-depth": 5,
+          "max-lines-per-function": 114
         },
         "class PersonPersistenceService#1/method processPersonLogs#1": {
           "complexity": 21,
@@ -1029,7 +1029,7 @@
     },
     "apps/backend/src/app/database/services/test-results/test-results-query.service.ts": {
       "file": {
-        "max-lines": 1142
+        "max-lines": 1066
       },
       "functions": {
         "class TestResultsQueryService#1/method findBookletLogsByUnitId#1": {
@@ -1045,7 +1045,7 @@
           "max-lines-per-function": 162
         },
         "class TestResultsQueryService#1/method quickSearchTestResults#1": {
-          "max-lines-per-function": 247
+          "max-lines-per-function": 170
         }
       }
     },
@@ -1089,7 +1089,7 @@
     },
     "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
       "file": {
-        "max-lines": 968
+        "max-lines": 966
       },
       "functions": {
         "class UploadResultsService#1/method buildImportSummary#1": {
@@ -1099,9 +1099,8 @@
           "complexity": 25
         },
         "class UploadResultsService#1/method processUpload#1": {
-          "complexity": 21,
           "max-depth": 5,
-          "max-lines-per-function": 410
+          "max-lines-per-function": 403
         },
         "class UploadResultsService#1/method processUpload#1/anonymous:17c848eb0f2cddb2#1": {
           "max-lines-per-function": 130
@@ -1257,7 +1256,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1206
+        "max-lines": 1199
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1265,20 +1264,9 @@
         }
       }
     },
-    "apps/backend/src/app/job-queue/processors/coding-analysis.processor.ts": {
-      "file": {},
-      "functions": {
-        "class CodingAnalysisProcessor#1/method analyzeBatch#1": {
-          "complexity": 40
-        },
-        "class CodingAnalysisProcessor#1/method computeResponseAnalysis#1": {
-          "max-lines-per-function": 151
-        }
-      }
-    },
     "apps/backend/src/app/job-queue/processors/export-job.processor.ts": {
       "file": {
-        "max-lines": 826
+        "max-lines": 824
       },
       "functions": {
         "class ExportJobProcessor#1/method processWorkspaceJob#1": {
@@ -1476,7 +1464,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-management.service.ts": {
       "file": {
-        "max-lines": 828
+        "max-lines": 826
       },
       "functions": {
         "class CodingManagementService#1/method statisticsDiffer#1": {
@@ -1494,7 +1482,7 @@
     },
     "apps/frontend/src/app/coding/services/test-person-coding.service.ts": {
       "file": {
-        "max-lines": 1605
+        "max-lines": 1600
       },
       "functions": {
         "class TestPersonCodingService#1/method importExternalCodingWithProgress#1": {
@@ -1553,7 +1541,7 @@
     },
     "apps/frontend/src/app/shared/services/test-result/test-result.service.ts": {
       "file": {
-        "max-lines": 842
+        "max-lines": 817
       },
       "functions": {}
     },
@@ -1639,13 +1627,13 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-results/test-results.component.ts": {
       "file": {
-        "max-lines": 1241
+        "max-lines": 1237
       },
       "functions": {}
     },
     "apps/frontend/src/app/ws-admin/components/variable-analysis-dialog/variable-analysis-dialog.component.ts": {
       "file": {
-        "max-lines": 1091
+        "max-lines": 1088
       },
       "functions": {
         "class VariableAnalysisDialogComponent#1/method analyzeVariables#1": {
@@ -1655,19 +1643,9 @@
     },
     "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.ts": {
       "file": {
-        "max-lines": 959
+        "max-lines": 891
       },
-      "functions": {
-        "class TestResultsUploadStateService#1/method finishBatch#1": {
-          "max-lines-per-function": 159
-        },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1": {
-          "max-lines-per-function": 141
-        },
-        "class TestResultsUploadStateService#1/method finishBatch#1/anonymous:f34babfb951103e6#1/anonymous:91b09bc27fe02d6a#1": {
-          "complexity": 22
-        }
-      }
+      "functions": {}
     }
   }
 }

@@ -74,6 +74,39 @@ describe('Zoneless asynchronous dialogs', () => {
     cy.window().should('not.have.property', 'Zone');
   });
 
+  it('tracks the selected CSV export by ID while showing ready downloads', () => {
+    cy.intercept('GET', '**/api/admin/workspace/5/test-results/?*', { body: { data: [], total: 0 } });
+    cy.intercept('GET', '**/api/admin/workspace/5/test-results/overview', {
+      body: { testPersons: 0, testGroups: 0, uniqueBooklets: 0, uniqueUnits: 0, uniqueResponses: 0 }
+    }).as('overview');
+    const tracked = {
+      jobId: 'results', status: 'active', exportType: 'test-results', progress: 40, createdAt: '2026-11-23T10:00:00Z'
+    };
+    const ready = {
+      jobId: 'ready', status: 'completed', exportType: 'test-logs', progress: 100, createdAt: '2026-11-23T09:58:00Z'
+    };
+    let completed = false;
+    cy.intercept('GET', '**/api/admin/workspace/5/results/export/jobs', { body: [tracked, ready] }).as('jobHistory');
+    cy.intercept('GET', '**/api/admin/workspace/5/results/export/jobs/results', request => {
+      request.reply({
+        body: { ...tracked, status: completed ? 'completed' : 'active', progress: completed ? 100 : 52 }
+      });
+    }).as('jobStatus');
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-results'; });
+    cy.wait('@overview');
+    cy.get('coding-box-test-results .action-bar').contains('button', 'Export')
+      .as('exportButton').find('mat-spinner').should('be.visible');
+    cy.get('@exportButton').click();
+    cy.get('coding-box-test-results-export-dialog').as('exportDialog');
+    cy.get('@exportDialog').contains('mat-dialog-content button', 'Logs').should('be.visible');
+    cy.get('@exportDialog').find('.export-percentage').should('have.text', '52%');
+    cy.then(() => { completed = true; });
+    cy.get('@exportDialog').contains('mat-dialog-content button', 'Ergebnisse').should('be.visible');
+    cy.get('@jobHistory.all').should('have.length', 2);
+  });
+
   it('enables result export after delayed missing profiles arrive', () => {
     cy.intercept('GET', '**/api/admin/workspace/5/coding/export-missings-profiles', {
       delay: 1000, body: [{ id: 4, label: 'IQB-Standard' }]

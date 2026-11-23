@@ -526,6 +526,13 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
     this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
   }
 
+  protected readonly flatLoadFailed = this.data.loadFailed;
+
+  protected retryFlatLoad(): void {
+    this.data.loadOptions();
+    this.fetchFlatResponses(this.flatPageIndex(), this.flatPageSize());
+  }
+
   private fetchFlatResponses(page: number, limit: number): void {
     if (!this.appService.selectedWorkspaceId || !this.logAnomalyTableSettingLoaded) return;
     if (this.hasInvalidRegexFilters()) {

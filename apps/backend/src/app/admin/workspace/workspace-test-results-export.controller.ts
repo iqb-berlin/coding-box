@@ -13,19 +13,19 @@ import {
 } from '@nestjs/swagger';
 import { Response } from 'express';
 import * as fs from 'fs';
-import { requireJobId, withQueueJobId } from '../../job-queue/job-queue.util';
+import { isTestDataCsvExport, requireJobId, withQueueJobId } from '../../job-queue/job-queue.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { ExportArtifactService } from '../../database/services/coding/export-artifact.service';
 import { WorkspaceTestResultsService } from '../../database/services/test-results';
 import {
   ExportJobData,
   ExportJobProgress,
   JobQueueService
 } from '../../job-queue/job-queue.service';
-import { CacheService } from '../../cache/cache.service';
 import { JournalService } from '../../database/services/shared';
 import {
   DatabaseExportJobData,
@@ -33,7 +33,6 @@ import {
 } from '../database/database-export.processor';
 import {
   ExportJobStatus,
-  ExportResult,
   type RequestWithUser
 } from './dto/workspace-test-results.interfaces';
 
@@ -54,7 +53,7 @@ export class WorkspaceTestResultsExportController {
   constructor(
     private workspaceTestResultsService: WorkspaceTestResultsService,
     private jobQueueService: JobQueueService,
-    private cacheService: CacheService,
+    private readonly exportArtifactService: ExportArtifactService,
     private journalService: JournalService,
     @InjectQueue('database-export')
     private readonly databaseExportQueue: Queue<DatabaseExportJobData>
@@ -477,19 +476,51 @@ export class WorkspaceTestResultsExportController {
 
     const result: ExportJobStatus[] = [];
     for (const job of jobs) {
-      const state = await job.getState();
-      const progress = this.toPublicProgress(job.progress);
-      result.push({
-        jobId: requireJobId(job),
-        status: this.mapDataExportJobState(state, job),
-        progress: progress,
-        exportType: job.data.exportType,
-        createdAt: new Date(job.timestamp),
-        error: job.failedReason ?? ''
-      });
+      const status = await this.getPublicExportStatus(job);
+      if (status) result.push(status);
     }
 
     return result.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  }
+
+  @Get(':workspace_id/results/export/jobs/:jobId')
+  @ApiOperation({ summary: 'Get a test results or test logs export job by ID' })
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiParam({ name: 'jobId', type: String })
+  @ApiOkResponse({ description: 'The current export job status.' })
+  @ApiResponse({ status: 404, description: 'The export job or its completed file is unavailable.' })
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  async getExportJobStatus(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('jobId') jobId: string
+  ): Promise<ExportJobStatus> {
+    const job = await this.jobQueueService.getExportJob(jobId);
+    if (job && Number(job.data.workspaceId) === workspaceId && isTestDataCsvExport(job.data.exportType)) {
+      const status = await this.getPublicExportStatus(job);
+      if (status) return status;
+    }
+    throw new NotFoundException('Export job not found or expired.');
+  }
+
+  private async getPublicExportStatus(job: Job<ExportJobData>): Promise<ExportJobStatus | null> {
+    const state = await job.getState();
+    if (state === 'unknown') return null;
+
+    const jobId = requireJobId(job);
+    const { exportType } = job.data;
+    const status = this.mapDataExportJobState(state, job);
+    if (status === 'completed' && isTestDataCsvExport(exportType) && !(await this.exportArtifactService.getArtifact(jobId, { strict: true }))) {
+      return null;
+    }
+    return {
+      jobId,
+      status,
+      progress: this.toPublicProgress(job.progress),
+      exportType,
+      createdAt: new Date(job.timestamp),
+      error: job.failedReason ?? ''
+    };
   }
 
   @Get(':workspace_id/results/export/jobs/:jobId/download')
@@ -513,9 +544,7 @@ export class WorkspaceTestResultsExportController {
     @Param('jobId') jobId: string,
     @Res() res: Response
   ): Promise<void> {
-    const result = await this.cacheService.get<ExportResult>(
-      `export-result:${jobId}`
-    );
+    const result = await this.exportArtifactService.getArtifact(jobId);
 
     if (!result) {
       throw new BadRequestException('Export result not found or expired.');
@@ -584,7 +613,7 @@ export class WorkspaceTestResultsExportController {
 
     if (
       job.data.workspaceId !== Number(workspace_id) ||
-      (job.data.exportType !== 'test-results' && job.data.exportType !== 'test-logs')
+      !isTestDataCsvExport(job.data.exportType)
     ) {
       throw new BadRequestException('Invalid export job for this workspace.');
     }

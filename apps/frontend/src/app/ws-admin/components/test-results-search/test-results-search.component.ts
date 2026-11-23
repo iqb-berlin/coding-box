@@ -19,7 +19,7 @@ import { MatProgressSpinnerModule } from '@angular/material/progress-spinner';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { MatTooltipModule } from '@angular/material/tooltip';
 import {
-  Subject, Subscription, debounceTime, distinctUntilChanged
+  Subject, Subscription, debounceTime, finalize
 } from 'rxjs';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import {
@@ -88,13 +88,15 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
   private readonly changeDetectorRef = inject(ChangeDetectorRef);
 
   protected searchText = '';
-  protected isLoading = false;
+  protected get isLoading(): boolean { return this.loadingKinds.size > 0; }
+  protected readonly loadingKinds = new Set<QuickSearchResultKind>();
+  protected readonly failedKinds = new Set<QuickSearchResultKind>();
+  private readonly requests = new Map<QuickSearchResultKind, Subscription>();
   protected hasSearched = false;
   selectedKinds = new Set<QuickSearchResultKind>([
     'person',
     'booklet',
-    'unit',
-    'response'
+    'unit'
   ]);
 
   private readonly localizedTypeOptions = computed<QuickSearchTypeOption[]>(() => ([
@@ -115,15 +117,20 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
 
   ngOnInit(): void {
     this.searchSubscription = this.searchSubject
-      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME), distinctUntilChanged())
+      .pipe(debounceTime(this.SEARCH_DEBOUNCE_TIME))
       .subscribe(query => this.runSearch(query));
   }
 
   ngOnDestroy(): void {
     this.searchSubscription?.unsubscribe();
+    this.cancelSearchRequests();
   }
 
   protected onSearchChange(): void {
+    this.cancelSearchRequests();
+    this.failedKinds.clear();
+    this.results = this.createEmptyResult(this.searchText.trim());
+    this.hasSearched = false;
     this.searchSubject.next(this.searchText);
   }
 
@@ -133,8 +140,13 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
         return;
       }
       this.selectedKinds.delete(kind);
+      this.requests.get(kind)?.unsubscribe();
+      this.requests.delete(kind);
+      this.loadingKinds.delete(kind);
+      this.failedKinds.delete(kind);
     } else {
       this.selectedKinds.add(kind);
+      if (this.hasSearched) this.searchKind(kind, this.searchText.trim());
     }
   }
 
@@ -226,32 +238,54 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
   }
 
   private runSearch(query: string): void {
-    const trimmedQuery = String(query || '').trim();
-    if (trimmedQuery.length < this.MIN_SEARCH_LENGTH) {
-      this.results = this.createEmptyResult(trimmedQuery);
-      this.hasSearched = false;
-      this.isLoading = false;
-      this.changeDetectorRef.markForCheck();
-      return;
-    }
-
-    this.isLoading = true;
+    const trimmedQuery = query.trim();
+    if (trimmedQuery.length < this.MIN_SEARCH_LENGTH) return;
     this.hasSearched = true;
+    for (const kind of this.selectedKinds) {
+      this.searchKind(kind, trimmedQuery);
+    }
     this.changeDetectorRef.markForCheck();
-    this.testResultService
-      .quickSearch(this.appService.selectedWorkspaceId, trimmedQuery, 8).pipe(takeUntilDestroyed(this.destroyRef))
+  }
+
+  private cancelSearchRequests(): void {
+    this.requests.forEach(request => request.unsubscribe());
+    this.requests.clear();
+    this.loadingKinds.clear();
+  }
+
+  private searchKind(kind: QuickSearchResultKind, query: string): void {
+    this.loadingKinds.add(kind);
+    const request = this.testResultService
+      .quickSearch(this.appService.selectedWorkspaceId, query, 8, kind)
+      .pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => {
+          this.loadingKinds.delete(kind);
+          this.changeDetectorRef.markForCheck();
+        })
+      )
       .subscribe({
-        next: results => {
-          this.results = results || this.createEmptyResult(trimmedQuery);
-          this.isLoading = false;
+        next: result => {
+          const field = {
+            person: 'persons', booklet: 'booklets', unit: 'units', response: 'responses'
+          } as const;
+          this.results[field[kind]] = result[field[kind]];
+          this.results.totals[kind] = result.totals[kind];
           this.changeDetectorRef.markForCheck();
         },
         error: () => {
-          this.results = this.createEmptyResult(trimmedQuery);
-          this.isLoading = false;
+          this.failedKinds.add(kind);
           this.changeDetectorRef.markForCheck();
         }
       });
+    this.requests.set(kind, request);
+  }
+
+  protected retrySearch(): void {
+    for (const kind of [...this.failedKinds]) {
+      this.failedKinds.delete(kind);
+      this.searchKind(kind, this.searchText.trim());
+    }
   }
 
   private createTableFilters(

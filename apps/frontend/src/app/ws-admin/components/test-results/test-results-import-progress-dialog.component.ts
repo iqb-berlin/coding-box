@@ -9,8 +9,11 @@ import { BehaviorSubject, Observable } from 'rxjs';
 
 export type TestResultsImportProgressPhase =
   | 'uploading'
+  | 'preparingUpload'
+  | 'readingFile'
   | 'processing'
   | 'refreshingOverview'
+  | 'preparingResult'
   | 'completed'
   | 'failed';
 

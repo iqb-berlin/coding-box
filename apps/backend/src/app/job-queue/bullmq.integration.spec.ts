@@ -6,7 +6,10 @@ import {
   BullModule, getQueueToken, Processor, WorkerHost
 } from '@nestjs/bullmq';
 import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
-import { Job, Queue, QueueEvents } from 'bullmq';
+import {
+  Job, Queue, QueueEvents, Worker
+} from 'bullmq';
+import Redis from 'ioredis';
 import { JobQueueService, TestPersonCodingJobData } from './job-queue.service';
 import { AutocoderRunService } from './autocoder-run.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
@@ -15,6 +18,7 @@ import { CodingResetPreviewService } from '../database/services/coding/coding-re
 import { createJobQueueOptions, JOB_QUEUE_NAMES } from './job-queue.config';
 import { requireJobId } from './job-queue.util';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+import { CacheService } from '../cache/cache.service';
 
 // Redis integration isolates queue delivery; PostgreSQL lifecycle locks have their own real-DB suite.
 jest.mock('../database/services/shared/workspace-lifecycle-lock.util', () => ({
@@ -114,6 +118,29 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     }
   });
 
+  it('publishes a response analysis file pointer only while its run marker is current', async () => {
+    const redis = new Redis({
+      host: process.env.BULLMQ_TEST_REDIS_HOST || '127.0.0.1',
+      port: redisPort,
+      keyPrefix: `${legacyPrefix}:response-analysis:`
+    });
+    const cache = new CacheService(redis);
+    const marker = { key: 'run', value: 'current-run' };
+    try {
+      const pointer = { storage: 'file', resultId: 'finished-analysis' };
+      await cache.set('run', marker.value, 0);
+      await expect(cache.publishIfMarkerMatches('result', pointer, 600, marker)).resolves.toBe(true);
+      expect(await redis.ttl('result')).toBeGreaterThan(0);
+
+      await cache.set('run', 'new-run', 0);
+      await expect(cache.publishIfMarkerMatches('result', { stale: true }, 600, marker)).resolves.toBe(false);
+      await expect(cache.get('result')).resolves.toEqual(pointer);
+    } finally {
+      await redis.del('run', 'result');
+      await redis.quit();
+    }
+  });
+
   it('does not consume or overwrite the previous Bull namespace', async () => {
     const client = await queue.getBackend().client;
     const oldWait = `${legacyPrefix}:test-person-coding:wait`;
@@ -128,6 +155,25 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
       expect(await client.runCommand('get', [oldResult])).toBe('legacy-result');
     } finally {
       await client.runCommand('del', [oldWait, oldResult]);
+    }
+  });
+
+  it('reports a validation waiting for recovery when its active lock is gone', async () => {
+    const validationQueue = app.get<Queue>(getQueueToken('validation-task'));
+    const worker = new Worker('validation-task', null, { ...options, autorun: false });
+    try {
+      const submitted = await service.addValidationTaskJob({ taskId: 71 });
+      await worker.getNextJob('test-worker', { block: false });
+      expect(await submitted.getState()).toBe('active');
+      expect(await service.getValidationTaskRecovery([71])).toEqual(new Map());
+
+      const redis = await validationQueue.getBackend().client;
+      await redis.runCommand('del', [validationQueue.toKey(`${submitted.id}:lock`)]);
+      expect(await submitted.getState()).toBe('active');
+      expect(await service.getValidationTaskRecovery([71])).toEqual(new Map([[71, { status: 'pending' }]]));
+    } finally {
+      await worker.close(true);
+      await validationQueue.obliterate({ force: true });
     }
   });
 
