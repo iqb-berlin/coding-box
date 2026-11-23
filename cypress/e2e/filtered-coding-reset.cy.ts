@@ -26,7 +26,15 @@ describe('Filtered coding version reset', () => {
       status: 'completed', result: { status: 'valid', unknownUnits: [], unknownVariables: [], affectedResponseCount: 1,
         resetResponseCount: 1, deletedGeneratedResponseCount: 0, checkedAt: '2026-11-17T10:00:00Z' }
     } });
-    cy.visit('/');
+    cy.visit('/', {
+      onBeforeLoad(window) {
+        // Electron can stall Material's entrance frame under CI load.
+        const reducedMotion = window.matchMedia('(prefers-reduced-motion)');
+        Object.defineProperty(reducedMotion, 'matches', { value: true });
+        cy.stub(window, 'matchMedia').callThrough()
+          .withArgs('(prefers-reduced-motion)').returns(reducedMotion);
+      }
+    });
     cy.wait('@authData');
     cy.get('coding-box-home').should('be.visible');
     cy.window().then(win => { win.location.hash = '/workspace-admin/5/coding/management'; });
