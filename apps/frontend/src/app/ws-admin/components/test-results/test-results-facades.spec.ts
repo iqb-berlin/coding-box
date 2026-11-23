@@ -152,8 +152,12 @@ describe('test-results feature request and polling lifetimes', () => {
   });
 
   it('keeps completed downloads after cancelling another export in the same workspace', () => {
-    const completed = { jobId: 'download', status: 'completed', exportType: 'test-logs', progress: 100 };
-    const active = { jobId: 'active', status: 'active', exportType: 'test-results', progress: 20 };
+    const completed = {
+      jobId: 'download', status: 'completed', exportType: 'test-logs', progress: 100
+    };
+    const active = {
+      jobId: 'active', status: 'active', exportType: 'test-results', progress: 20
+    };
     backend.getExportTestResultsJobs.mockReturnValueOnce(of([completed, active])).mockReturnValue(new Subject());
     Object.assign(backend, { cancelTestResultExportJob: jest.fn().mockReturnValue(of({ success: true })) });
     const open = jest.mocked(TestBed.inject(MatDialog).open);
