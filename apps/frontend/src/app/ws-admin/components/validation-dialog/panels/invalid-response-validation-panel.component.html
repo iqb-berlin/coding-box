@@ -54,9 +54,7 @@
   @if (invalidVariables().length > 0 || totalInvalid() > 0) {
     <div class="validation-result validation-error">
       <mat-icon>error</mat-icon>
-      <span
-        >{{ config.invalid | translate: { value1: (totalInvalid()) } }}</span
-      >
+      <span>{{ config.formatInvalidResult(totalInvalid()) }}</span>
     </div>
     @if (
       summary().unitFileNotFound > 0 || summary().variableNotDefinedInUnit > 0

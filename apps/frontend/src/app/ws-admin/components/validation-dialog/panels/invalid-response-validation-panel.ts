@@ -43,7 +43,7 @@ export interface InvalidResponsePanelConfig {
   title: string;
   run: string;
   running: string;
-  invalid: string;
+  formatInvalidResult: (count: number) => string;
   valid: string;
   description: string;
   whyText: string;

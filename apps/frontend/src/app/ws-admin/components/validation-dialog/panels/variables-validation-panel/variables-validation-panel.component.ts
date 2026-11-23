@@ -17,7 +17,7 @@ export class VariablesValidationPanelComponent extends InvalidResponseValidation
     title: 'ui-text.variables-validation-panel.title',
     run: 'ui-text.variables-validation-panel.run',
     running: 'ui-text.variables-validation-panel.running',
-    invalid: 'ui-text.variables-validation-panel.invalid-variables-found',
+    formatInvalidResult: count => this.uiTranslate('ui-text.variables-validation-panel.invalid-variables-found', { value1: count }),
     valid: 'ui-text.variables-validation-panel.no-invalid-variables',
     description: 'Prüft, ob die Variable in der Unit.xml definiert ist.',
     whyText: 'Undefinierte Variablen können nicht korrekt verarbeitet oder exportiert werden und deuten auf Inkonsistenzen zwischen Unit-Definitionen und Antwortdaten hin.',

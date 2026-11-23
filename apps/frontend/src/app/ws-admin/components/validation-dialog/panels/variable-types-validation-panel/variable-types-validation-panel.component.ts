@@ -17,7 +17,7 @@ export class VariableTypesValidationPanelComponent extends InvalidResponseValida
     title: 'ui-text.variable-types-validation-panel.title',
     run: 'ui-text.variable-types-validation-panel.run',
     running: 'ui-text.variable-types-validation-panel.running',
-    invalid: 'ui-text.variable-types-validation-panel.invalid-values-found',
+    formatInvalidResult: count => this.uiTranslate('ui-text.variable-types-validation-panel.invalid-values-found', { value1: count }),
     valid: 'ui-text.variable-types-validation-panel.no-invalid-values',
     description: 'Prüft, ob der Wert der Variable dem definierten Typ entspricht (string, integer, number, boolean, json).',
     whyText: 'Falsche Variablentypen können zu Fehlern bei der Datenverarbeitung, Auswertung und beim Export führen.',

@@ -17,7 +17,7 @@ export class ResponseStatusValidationPanelComponent extends InvalidResponseValid
     title: 'ui-text.response-status-validation-panel.title',
     run: 'ui-text.response-status-validation-panel.run',
     running: 'ui-text.response-status-validation-panel.running',
-    invalid: 'ui-text.response-status-validation-panel.invalid-statuses-found',
+    formatInvalidResult: count => this.uiTranslate('ui-text.response-status-validation-panel.invalid-statuses-found', { value1: count }),
     valid: 'ui-text.response-status-validation-panel.no-invalid-statuses',
     description: 'Prüft, ob der Status der Antwort gültig ist (gemäß Unit.xml).',
     whyText: 'Ungültige Antwortstatus können zu Problemen bei der Datenauswertung und beim Export führen.',
