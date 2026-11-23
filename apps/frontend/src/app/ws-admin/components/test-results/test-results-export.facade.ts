@@ -47,7 +47,11 @@ export class TestResultsExportFacade {
   constructor() {
     let workspaceId = this.appService.selectedWorkspaceId;
     this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
-      if (id !== workspaceId) { this.resetExportState(); workspaceId = id; }
+      if (id !== workspaceId) {
+        this.resetExportState();
+        this.completedJobs.set([]);
+        workspaceId = id;
+      }
     });
     this.destroyRef.onDestroy(() => this.stopExportStatusPolling());
   }
@@ -232,7 +236,10 @@ export class TestResultsExportFacade {
           this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', { duration: 3000 });
         }
       },
-      error: () => this.showStatusLoadError()
+      error: () => {
+        this.isExportingState.set(false);
+        this.showStatusLoadError();
+      }
     });
   }
 
@@ -278,7 +285,6 @@ export class TestResultsExportFacade {
     this.exportJobProgressState.set(0);
     this.exportJobIdState.set(null);
     this.exportTypeInProgressState.set(null);
-    this.completedJobs.set([]);
   }
 
   stopExportStatusPolling(): void { this.pollSubscription?.unsubscribe(); this.pollSubscription = undefined; }

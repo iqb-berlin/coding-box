@@ -15,6 +15,7 @@ import { ValidationService } from '../../../shared/services/validation/validatio
 import { ValidationTaskStateService } from '../../../shared/services/validation/validation-task-state.service';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
 import { TestResultsExportFacade } from './test-results-export.facade';
+import type { TestResultsExportDialogData } from './test-results-export-dialog.component';
 import { TestResultsDeletionFacade } from './test-results-deletion.facade';
 import { TestResultsStatisticsFacade } from './test-results-statistics.facade';
 
@@ -148,6 +149,24 @@ describe('test-results feature request and polling lifetimes', () => {
     pending.error(new Error('offline')); expect(host.exports.isExporting()).toBe(false);
     host.exports.pollExportJobStatus('retry'); jest.advanceTimersByTime(2000);
     expect(host.exports.exportJobProgress()).toBe(60);
+  });
+
+  it('keeps completed downloads after cancelling another export in the same workspace', () => {
+    const completed = { jobId: 'download', status: 'completed', exportType: 'test-logs', progress: 100 };
+    const active = { jobId: 'active', status: 'active', exportType: 'test-results', progress: 20 };
+    backend.getExportTestResultsJobs.mockReturnValueOnce(of([completed, active])).mockReturnValue(new Subject());
+    Object.assign(backend, { cancelTestResultExportJob: jest.fn().mockReturnValue(of({ success: true })) });
+    const open = jest.mocked(TestBed.inject(MatDialog).open);
+    open.mockReturnValue({ afterClosed: () => of(undefined) } as never);
+
+    host.exports.checkExistingExportJobs();
+    host.exports.cancelExportJob(active.jobId);
+    host.exports.openExportDialog();
+
+    const data = open.mock.calls[0][1]?.data as TestResultsExportDialogData;
+    expect(data.state?.()).toMatchObject({ isExporting: false, completedJobs: [completed] });
+    changeWorkspace(6);
+    expect(data.state?.()).toMatchObject({ completedJobs: [] });
   });
 
   it('cancels a pending download when its workspace changes', () => {
