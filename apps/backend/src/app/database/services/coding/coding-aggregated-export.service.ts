@@ -5,6 +5,7 @@ import { Request } from 'express';
 import {
   calculateModalValue, getCurrentCoding, getCurrentManualCoding, getModalTieLabel, mapCodeForExport
 } from '../../../utils/coding-utils';
+import { buildTrainingManagerExportRows } from './training-discussion-export-rows';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { applyResolvedExclusionsToQuery, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
@@ -323,38 +324,7 @@ export class CodingAggregatedExportService {
           normalizedCoderTrainingIds,
           responseIds
         );
-        const managerRows: Record<string, unknown>[] = [];
-        const handledCases = new Set<string>();
-
-        for (const row of manualCoding) {
-          const trainingId = parseInt(row.trainingId, 10);
-          const responseId = parseInt(row.responseId, 10);
-          if (Number.isNaN(trainingId) || Number.isNaN(responseId)) continue;
-
-          const caseKey = `${trainingId}|${responseId}`;
-          if (handledCases.has(caseKey)) continue;
-          handledCases.add(caseKey);
-
-          const discussionResult = discussionResultMap.get(caseKey);
-          if (!discussionResult?.managerUsername) continue;
-
-          managerRows.push({
-            ...row,
-            username: discussionResult.managerUsername,
-            cju_code: discussionResult.code,
-            cju_score: discussionResult.score,
-            code_v1: null,
-            code_v2: null,
-            code_v3: null,
-            score_v1: null,
-            score_v2: null,
-            score_v3: null,
-            autocoder_invalidated_version: null,
-            notes: discussionResult.notes
-          });
-        }
-
-        manualCoding.push(...managerRows);
+        manualCoding.push(...buildTrainingManagerExportRows(manualCoding, discussionResultMap));
       }
 
       const autoCoding = (excludeAutoCoded || hasScopedJobFilters) ? [] : await this.responseRepository.createQueryBuilder('resp')

@@ -70,8 +70,7 @@ import {
   FilesValidation,
   FilesValidationView,
   isValidationUnitIgnored,
-  ValidationIgnoreContext,
-  ValidationSummary
+  UNIT_FILE_CARDS, ValidationIgnoreContext, ValidationSummary
 } from './files-validation-view-model';
 
 const VALIDATION_REFRESH_POLL_INTERVAL_MS = 300;
@@ -122,6 +121,7 @@ export class FilesValidationDialogComponent implements OnInit {
   readonly unusedTestFiles = signal<UnusedTestFile[]>([]);
   protected readonly geogebra = signal<GeoGebraValidationResult | undefined>(undefined);
   protected readonly replayCompatibilityWarnings = signal<ReplayCompatibilityWarning[]>([]);
+  protected readonly unitFileCards = UNIT_FILE_CARDS;
   protected readonly validationResults = signal<FilesValidationView[]>([]);
 
   readonly selection = new SelectionModel<FilteredTestTaker>(true, []);

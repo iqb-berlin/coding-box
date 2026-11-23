@@ -1,105 +1,12 @@
 import { Injectable } from '@angular/core';
 import { Observable } from 'rxjs';
-import { switchMap, tap } from 'rxjs/operators';
-import { BaseValidationService } from './base-validation.service';
-import { InvalidVariableDto } from '../../../../../../../api-dto/files/variable-validation.dto';
-import { ValidationTaskDto } from '../../../models/validation-task.dto';
+import { InvalidResponsePage, InvalidResponseValidationService } from './invalid-response-validation.service';
 
-interface ResponseStatusValidationResult {
-  data: InvalidVariableDto[];
-  total: number;
-  page: number;
-  limit: number;
-}
+@Injectable({ providedIn: 'root' })
+export class ResponseStatusValidationService extends InvalidResponseValidationService {
+  protected readonly validationType = 'responseStatus';
 
-/**
- * Service for validating response status.
- * Checks if response status values are valid according to Unit.xml definitions.
- */
-@Injectable({
-  providedIn: 'root'
-})
-export class ResponseStatusValidationService extends BaseValidationService<ResponseStatusValidationResult> {
-  protected validationType = 'responseStatus';
-
-  /**
-   * Deletes selected invalid response status responses
-   */
-  deleteSelected(responseIds: number[]): Observable<void> {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService
-      .createDeleteResponsesTask(workspaceId, responseIds)
-      .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
-        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
-      );
-  }
-
-  /**
-   * Deletes all invalid response status responses
-   */
-  deleteAll(): Observable<void> {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService
-      .createDeleteAllResponsesTask(
-        workspaceId,
-        this.validationType as 'responseStatus'
-      )
-      .pipe(
-        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
-        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
-      );
-  }
-
-  /**
-   * Gets the current validation status
-   */
-  getValidationStatus(): 'not-run' | 'running' | 'success' | 'failed' {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
-    const results =
-      this.validationTaskStateService.getAllValidationResults(workspaceId);
-
-    if (taskIds.responseStatus) {
-      return 'running';
-    }
-
-    return results.responseStatus?.status || 'not-run';
-  }
-
-  /**
-   * Fetches a specific page of validation results using the direct API (no task creation).
-   * Used for pagination after the initial validation has been run.
-   */
-  fetchPage(
-    page: number = 1,
-    limit: number = 10
-  ): Observable<ResponseStatusValidationResult> {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    return this.validationService
-      .validateResponseStatus(workspaceId, page, limit)
-      .pipe(tap(result => this.saveResult(result, workspaceId)));
-  }
-
-  /**
-   * Calculates the validation status based on the result
-   */
-  protected calculateStatus(
-    result: ResponseStatusValidationResult
-  ): 'success' | 'failed' | 'not-run' {
-    return result.total > 0 ? 'failed' : 'success';
-  }
-
-  /**
-   * Gets the cached validation result
-   */
-  getCachedResult(): ResponseStatusValidationResult | null {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    const results =
-      this.validationTaskStateService.getAllValidationResults(workspaceId);
-    return (
-      (results.responseStatus
-        ?.details as unknown as ResponseStatusValidationResult) || null
-    );
+  protected loadPage(workspaceId: number, page: number, limit: number): Observable<InvalidResponsePage> {
+    return this.validationService.validateResponseStatus(workspaceId, page, limit);
   }
 }

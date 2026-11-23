@@ -1,3 +1,5 @@
+@use '../../../shared/styles/dialog-result-states';
+
 // Dialog container styles
 .dialog-container {
   display: flex;
@@ -224,66 +226,7 @@
   }
 }
 
-// Loading container styles
-.loading-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 0;
-  width: 100%;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  margin-bottom: 24px;
-  height: 200px;
-  border: 1px solid rgba(0, 0, 0, 0.03);
-
-  .loading-text {
-    margin-top: 16px;
-    font-size: 16px;
-    color: #666;
-  }
-}
-
-// Empty state styles
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 40px 0;
-  text-align: center;
-  background-color: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
-  margin-bottom: 24px;
-  border: 1px solid rgba(0, 0, 0, 0.03);
-  animation: fadeIn 0.3s ease-in-out;
-
-  .empty-icon {
-    font-size: 64px;
-    height: 64px;
-    width: 64px;
-    color: #bbdefb;
-    margin-bottom: 16px;
-  }
-
-  h3 {
-    font-size: 20px;
-    font-weight: 500;
-    color: #1976d2;
-    margin: 0 0 8px 0;
-  }
-
-  p {
-    font-size: 16px;
-    color: #666;
-    max-width: 400px;
-    line-height: 1.5;
-    margin: 0;
-  }
-}
+@include dialog-result-states.styles(0);
 
 // Variable Analysis Bar Chart styles
 .bar-chart-container {

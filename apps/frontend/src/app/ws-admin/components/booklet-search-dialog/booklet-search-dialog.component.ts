@@ -24,8 +24,10 @@ import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
 import { Router } from '@angular/router';
 import {
-  Subject, debounceTime, distinctUntilChanged, takeUntil
+  Subject, debounceTime, defaultIfEmpty, distinctUntilChanged, takeUntil
 } from 'rxjs';
+import { deleteBookletsSequentially } from '../../utils/delete-booklets-sequentially';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { FileService } from '../../../shared/services/file/file.service';
@@ -250,6 +252,7 @@ export class BookletSearchDialogComponent implements OnInit {
       return;
     }
 
+    const workspaceId = this.appService.selectedWorkspaceId;
     const dialogRef = this.dialog.open(ConfirmDialogComponent, {
       width: '400px',
       data: {
@@ -260,50 +263,30 @@ export class BookletSearchDialogComponent implements OnInit {
       } as ConfirmDialogData
     });
 
-    dialogRef.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(result => {
+    dialogRef.afterClosed().pipe(
+      takeUntilWorkspaceChanged(this.appService, workspaceId),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(result => {
       if (result) {
         const bookletIds = this.bookletSearchResults().map(booklet => booklet.bookletId);
-        let successCount = 0;
-        let failCount = 0;
-
         this.isLoading.set(true);
-
-        // Process each booklet deletion sequentially
-        const processNextBooklet = (index: number) => {
-          if (index >= bookletIds.length) {
-            // All booklets processed
+        deleteBookletsSequentially(bookletIds, id => this.testResultService.deleteBooklet(workspaceId, id))
+          .pipe(
+            takeUntilWorkspaceChanged(this.appService, workspaceId),
+            defaultIfEmpty(null),
+            takeUntilDestroyed(this.destroyRef)
+          )
+          .subscribe(counts => {
             this.isLoading.set(false);
+            if (!counts) return;
+            const { successCount, failCount } = counts;
             this.snackBar.open(
-              this.uiTranslate('test-results-search.snackbars.booklets-deleted', { successCount: successCount, failCount: failCount }),
+              this.uiTranslate('test-results-search.snackbars.booklets-deleted', { successCount, failCount }),
               'OK',
               { duration: 5000 }
             );
-            // Refresh the search results
             this.searchBooklets(this.bookletSearchText);
-            return;
-          }
-
-          this.testResultService.deleteBooklet(
-            this.appService.selectedWorkspaceId,
-            bookletIds[index]
-          ).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
-            next: (response: { success: boolean }) => {
-              if (response.success) {
-                successCount += 1;
-              } else {
-                failCount += 1;
-              }
-              processNextBooklet(index + 1);
-            },
-            error: () => {
-              failCount += 1;
-              processNextBooklet(index + 1);
-            }
           });
-        };
-
-        // Start processing
-        processNextBooklet(0);
       }
     });
   }

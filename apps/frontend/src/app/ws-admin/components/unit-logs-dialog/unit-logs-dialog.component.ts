@@ -11,6 +11,7 @@ import {
 } from '@angular/material/dialog';
 import { MatList, MatListItem } from '@angular/material/list';
 import { MatButton } from '@angular/material/button';
+import { filterAndSortLogs, formatDuration, formatLogTimestamp } from '../../utils/log-display';
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -257,8 +258,7 @@ export class UnitLogsDialogComponent implements OnInit {
   protected processingDuration: string | null = null;
 
   ngOnInit(): void {
-    this.filteredLogs = [...this.data.logs];
-    this.sortLogsByTimestamp();
+    this.filteredLogs = filterAndSortLogs(this.data.logs);
     this.calculateProcessingDuration();
   }
 
@@ -277,75 +277,15 @@ export class UnitLogsDialogComponent implements OnInit {
         const durationMs = endTime - startTime;
 
         // Store the duration for display
-        this.processingDuration = this.formatDuration(durationMs);
+        this.processingDuration = formatDuration(durationMs);
       }
     }
   }
 
-  /**
-   * Formats a duration in milliseconds to a readable format (minutes:seconds)
-   */
-  private formatDuration(durationMs: number): string {
-    if (durationMs < 0) return '00:00';
+  protected readonly formatTimestamp = formatLogTimestamp;
 
-    // Convert to seconds
-    const totalSeconds = Math.floor(durationMs / 1000);
-
-    // Calculate minutes and remaining seconds
-    const minutes = Math.floor(totalSeconds / 60);
-    const seconds = totalSeconds % 60;
-
-    // Format as MM:SS
-    return `${minutes.toString().padStart(2, '0')}:${seconds
-      .toString()
-      .padStart(2, '0')}`;
-  }
-
-  /**
-   * Formats a timestamp to a readable date and time
-   */
-  protected formatTimestamp(timestamp: string): string {
-    const date = new Date(Number(timestamp));
-    return date.toLocaleString('de-DE', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit',
-      hour: '2-digit',
-      minute: '2-digit',
-      second: '2-digit'
-    });
-  }
-
-  /**
-   * Filters logs based on search input
-   */
   protected filterLogs(event: Event): void {
-    const searchTerm = (event.target as HTMLInputElement).value.toLowerCase();
-
-    if (!searchTerm) {
-      // If search term is empty, show all logs
-      this.filteredLogs = [...this.data.logs];
-    } else {
-      // Filter logs by key or parameter containing the search term
-      this.filteredLogs = this.data.logs.filter(
-        log => log.key.toLowerCase().includes(searchTerm) ||
-          log.parameter.toLowerCase().includes(searchTerm)
-      );
-    }
-
-    // Always maintain the sort order
-    this.sortLogsByTimestamp();
-  }
-
-  /**
-   * Sorts logs by timestamp (newest first)
-   */
-  private sortLogsByTimestamp(): void {
-    this.filteredLogs.sort((a, b) => {
-      const timeA = Number(a.ts);
-      const timeB = Number(b.ts);
-      return timeB - timeA; // Descending order (newest first)
-    });
+    this.filteredLogs = filterAndSortLogs(this.data.logs, (event.target as HTMLInputElement).value);
   }
 
   /**

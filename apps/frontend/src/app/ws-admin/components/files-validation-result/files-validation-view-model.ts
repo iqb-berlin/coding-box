@@ -248,3 +248,38 @@ export function buildFilesValidationViewModel(raw: FilesValidation[], context: V
   });
   return { results, summary };
 }
+
+export const UNIT_FILE_CARDS = [
+  {
+    key: 'schemes',
+    icon: 'schema',
+    title: 'ui-text.files-validation.coding-schemes',
+    missing: 'ui-text.files-validation.missing-coding-schemes-status',
+    affectedUnitsTitle: 'Betroffene Aufgaben (Kodierschema)',
+    actionLabel: 'coding-management.tooltips.show-coding-schema'
+  },
+  {
+    key: 'schemer',
+    icon: 'app_registration',
+    title: 'ui-text.files-validation.schemer',
+    missing: 'ui-text.files-validation.missing-schemer-status',
+    affectedUnitsTitle: 'Betroffene Aufgaben (Schemer)',
+    actionLabel: null
+  },
+  {
+    key: 'definitions',
+    icon: 'description',
+    title: 'ui-text.files-validation.unit-definitions',
+    missing: 'ui-text.files-validation.missing-definitions-status',
+    affectedUnitsTitle: 'Betroffene Aufgaben (Definition)',
+    actionLabel: 'ui-text.files-validation.show-definition'
+  },
+  {
+    key: 'player',
+    icon: 'play_circle',
+    title: 'ui-text.files-validation.players',
+    missing: 'ui-text.files-validation.missing-players-status',
+    affectedUnitsTitle: 'Betroffene Aufgaben (Player)',
+    actionLabel: null
+  }
+] as const;
