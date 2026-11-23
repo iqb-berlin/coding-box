@@ -91,8 +91,9 @@ export class CodingAnalysisService {
         requestedThreshold;
 
       const cacheKey = this.getCacheKey(workspaceId, matchingFlags, effectiveThreshold);
-      const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis>(cacheKey);
+      // A job publishes its result before it leaves the queue. Read the cache after the queue snapshot.
       const activeJob = await this.jobQueueService.getActiveCodingAnalysisJob(workspaceId, cacheKey);
+      const cached = await this.cacheService.get<ResponseAnalysisDto | PagedCodingAnalysis>(cacheKey);
       const progress = activeJob ? numericJobProgress(activeJob) : 0;
       const isCalculating = !!activeJob;
       const isQueued = activeJob ? (await activeJob.getState()) !== 'active' : false;

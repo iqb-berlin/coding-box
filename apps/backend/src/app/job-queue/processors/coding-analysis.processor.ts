@@ -98,33 +98,39 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
 
     const listPrefix = `${cacheKey}:results:${randomUUID()}`;
     const lists = getCodingAnalysisListKeys(listPrefix);
-    let committed = false;
+    // Renew both staging lists even while a query is running or a category has no new entries.
+    const renewListTtl = setInterval(() => {
+      Promise.all([
+        this.cacheService.expire(lists.empty, LIST_WRITE_TTL_SECONDS),
+        this.cacheService.expire(lists.duplicates, LIST_WRITE_TTL_SECONDS)
+      ]).catch(error => this.logger.warn(`Could not renew response analysis lists for job ${job.id}: ${getErrorMessage(error)}`));
+    }, (LIST_WRITE_TTL_SECONDS / 2) * 1000).unref();
+    let publicationAttempted = false;
     try {
       const analysis = await this.computeResponseAnalysis(
         workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, listPrefix, job
-      );
-      await Promise.all([
-        this.cacheService.expire(lists.empty, CODING_ANALYSIS_CACHE_TTL_SECONDS + 60),
-        this.cacheService.expire(lists.duplicates, CODING_ANALYSIS_CACHE_TTL_SECONDS + 60)
-      ]);
-      if (job.data.runId) {
-        const published = await this.cacheService.setIfMarkerMatches(
-          cacheKey, analysis, CODING_ANALYSIS_CACHE_TTL_SECONDS, getCodingAnalysisRunMarkerKey(cacheKey), job.data.runId
-        );
-        if (!published) {
-          this.logger.log(`Discarding stale response analysis for workspace ${workspaceId} (job ${job.id})`);
-          await Promise.all([this.cacheService.delete(lists.empty), this.cacheService.delete(lists.duplicates)]);
-          return analysis.aggregationSummary;
-        }
-      } else if (!(await this.cacheService.set(cacheKey, analysis, CODING_ANALYSIS_CACHE_TTL_SECONDS))) {
-        throw new Error('Could not publish response analysis result');
+      ).finally(() => clearInterval(renewListTtl));
+      publicationAttempted = true;
+      const published = await this.cacheService.publishListResult(cacheKey, analysis, {
+        ttl: CODING_ANALYSIS_CACHE_TTL_SECONDS,
+        listTtl: CODING_ANALYSIS_CACHE_TTL_SECONDS + 60,
+        lists: [
+          { key: lists.empty, length: analysis.emptyResponses.total },
+          { key: lists.duplicates, length: analysis.duplicateValues.total }
+        ],
+        marker: job.data.runId ? { key: getCodingAnalysisRunMarkerKey(cacheKey), value: job.data.runId } : undefined
+      });
+      if (!published) {
+        this.logger.log(`Discarding stale response analysis for workspace ${workspaceId} (job ${job.id})`);
+        await Promise.all([this.cacheService.delete(lists.empty), this.cacheService.delete(lists.duplicates)]);
+        return analysis.aggregationSummary;
       }
-      committed = true;
       await job.updateProgress(100);
       this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
       return analysis.aggregationSummary;
     } catch (error) {
-      if (!committed) {
+      // A lost Redis reply can leave the result published. Its lists then have their own expiry.
+      if (!publicationAttempted) {
         await Promise.all([this.cacheService.delete(lists.empty), this.cacheService.delete(lists.duplicates)]);
       }
       this.logger.error(`Response analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));

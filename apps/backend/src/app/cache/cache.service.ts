@@ -177,15 +177,41 @@ export class CacheService {
     return (await this.redis.set(key, JSON.stringify({ owner }), 'EX', ttlSeconds, 'NX')) === 'OK';
   }
 
-  async setIfMarkerMatches<T>(
-    key: string, value: T, ttl: number, markerKey: string, marker: string
+  async publishListResult<T>(
+    key: string,
+    value: T,
+    options: {
+      ttl: number;
+      listTtl: number;
+      lists: { key: string; length: number }[];
+      marker?: { key: string; value: string };
+    }
   ): Promise<boolean> {
-    const command = [
-      'if redis.call("GET", KEYS[1]) ~= ARGV[1] then return 0 end',
-      'redis.call("SET", KEYS[2], ARGV[2], "EX", ARGV[3])',
-      'return 1'
-    ].join(' ');
-    return (await this.redis.eval(command, 2, markerKey, key, JSON.stringify(marker), JSON.stringify(value), ttl)) === 1;
+    const {
+      ttl, listTtl, lists, marker
+    } = options;
+    const keys = [key, ...lists.map(list => list.key)];
+    if (marker) keys.push(marker.key);
+    const publication = JSON.stringify({
+      ttl,
+      listTtl,
+      lengths: lists.map(list => list.length),
+      marker: marker && JSON.stringify(marker.value)
+    });
+    const command = `
+      local publication = cjson.decode(ARGV[1])
+      if publication.marker and redis.call('GET', KEYS[#KEYS]) ~= publication.marker then return 0 end
+      for index, length in ipairs(publication.lengths) do
+        if redis.call('LLEN', KEYS[index + 1]) ~= length then
+          return redis.error_reply('Incomplete analysis result list')
+        end
+      end
+      for index = 1, #publication.lengths do
+        redis.call('EXPIRE', KEYS[index + 1], publication.listTtl)
+      end
+      redis.call('SET', KEYS[1], ARGV[2], 'EX', publication.ttl)
+      return 1`;
+    return (await this.redis.eval(command, keys.length, ...keys, publication, JSON.stringify(value))) === 1;
   }
 
   async deleteIfMarkerMatches(key: string, marker: string): Promise<void> {

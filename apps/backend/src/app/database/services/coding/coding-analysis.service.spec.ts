@@ -256,6 +256,32 @@ describe('CodingAnalysisService aggregation settings', () => {
     expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
   });
 
+  it('returns the result when a job publishes it while the queue is being checked', async () => {
+    const { service, cacheService, jobQueueService } = createService();
+    jobQueueService.getActiveCodingAnalysisJob.mockImplementationOnce(async () => {
+      cacheService.get.mockResolvedValue({
+        storage: 'paged',
+        listPrefix: 'completed-analysis',
+        emptyResponses: { total: 1, totalUncoded: 1 },
+        duplicateValues: { total: 0, totalResponses: 0 },
+        aggregationSummary: { rawCases: 1 },
+        matchingFlags: [],
+        analysisTimestamp: '2026-11-23T09:00:00Z'
+      });
+      return null;
+    });
+    cacheService.getListItems.mockResolvedValueOnce([{ responseId: 42 }]);
+
+    const result = await service.getResponseAnalysis(7);
+
+    expect(result).toMatchObject({
+      isCalculating: false,
+      aggregationSummary: { rawCases: 1 },
+      emptyResponses: { items: [{ responseId: 42 }] }
+    });
+    expect(result.needsCalculation).toBeUndefined();
+  });
+
   it('still pages a legacy cached result created before lists were used', async () => {
     const { service, cacheService } = createService();
     cacheService.get.mockResolvedValue({

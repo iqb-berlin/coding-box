@@ -9,6 +9,7 @@ import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import {
   Job, Queue, QueueEvents, Worker
 } from 'bullmq';
+import Redis from 'ioredis';
 import { JobQueueService, TestPersonCodingJobData } from './job-queue.service';
 import { AutocoderRunService } from './autocoder-run.service';
 import { TestPersonCodingProcessor } from './processors/test-person-coding.processor';
@@ -17,6 +18,7 @@ import { CodingResetPreviewService } from '../database/services/coding/coding-re
 import { createJobQueueOptions, JOB_QUEUE_NAMES } from './job-queue.config';
 import { requireJobId } from './job-queue.util';
 import { ValidationTask } from '../database/entities/validation-task.entity';
+import { CacheService } from '../cache/cache.service';
 
 // Redis integration isolates queue delivery; PostgreSQL lifecycle locks have their own real-DB suite.
 jest.mock('../database/services/shared/workspace-lifecycle-lock.util', () => ({
@@ -113,6 +115,42 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
       await expect(service.getWorkspaceJob(8, 'coding-reset-preview', requireJobId(job))).resolves.toBeNull();
     } finally {
       await previewEvents.close();
+    }
+  });
+
+  it('publishes response analysis only while its result lists are complete and the run is current', async () => {
+    const redis = new Redis({
+      host: process.env.BULLMQ_TEST_REDIS_HOST || '127.0.0.1',
+      port: redisPort,
+      keyPrefix: `${legacyPrefix}:response-analysis:`
+    });
+    const cache = new CacheService(redis);
+    const publication = {
+      ttl: 600,
+      listTtl: 660,
+      lists: [{ key: 'empty', length: 2 }, { key: 'duplicates', length: 0 }],
+      marker: { key: 'run', value: 'current-run' }
+    };
+    try {
+      await cache.set('run', 'current-run', 0);
+      await cache.set('result', { previous: true }, 600);
+      await cache.appendListItems('empty', [{ responseId: 1 }, { responseId: 2 }], 3600);
+      await redis.expire('empty', 0);
+      await cache.appendListItems('empty', [{ responseId: 3 }], 3600);
+      await expect(cache.publishListResult('result', { incomplete: true }, publication))
+        .rejects.toThrow('Incomplete analysis result list');
+      await expect(cache.get('result')).resolves.toEqual({ previous: true });
+
+      await cache.appendListItems('empty', [{ responseId: 4 }], 3600);
+      await expect(cache.publishListResult('result', { total: 2 }, publication)).resolves.toBe(true);
+      expect(await redis.ttl('empty')).toBeGreaterThan(await redis.ttl('result'));
+
+      await cache.set('run', 'new-run', 0);
+      await expect(cache.publishListResult('result', { stale: true }, publication)).resolves.toBe(false);
+      await expect(cache.get('result')).resolves.toEqual({ total: 2 });
+    } finally {
+      await redis.del('run', 'empty', 'duplicates', 'result');
+      await redis.quit();
     }
   });
 

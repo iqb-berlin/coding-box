@@ -1,7 +1,7 @@
 import { Job } from 'bullmq';
 import type { Repository } from 'typeorm';
-import { ResponseAnalysisDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
+import type { PagedCodingAnalysis } from '../../database/services/coding/coding-analysis-cache-key.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { WorkspaceExclusionService } from '../../database/services/workspace';
@@ -21,16 +21,16 @@ describe('CodingAnalysisProcessor', () => {
       {} as WorkspaceExclusionService,
       {} as EmptyResponseSelectionService
     );
-    const analysis: ResponseAnalysisDto = {
+    const analysis: PagedCodingAnalysis = {
+      storage: 'paged',
+      listPrefix: '',
       emptyResponses: {
         total: 0,
-        totalUncoded: 0,
-        items: []
+        totalUncoded: 0
       },
       duplicateValues: {
         total: 0,
         totalResponses: 0,
-        groups: [],
         isAggregationApplied: false
       },
       aggregationSummary: {
@@ -46,18 +46,16 @@ describe('CodingAnalysisProcessor', () => {
       analysisTimestamp: '2026-05-22T00:00:00.000Z'
     };
 
-    (processor as unknown as {
-      computeResponseAnalysis: jest.Mock<Promise<ResponseAnalysisDto>, [
-        number,
-        string[],
-        number,
-        Job<CodingAnalysisJobData>
-      ]>;
-    }).computeResponseAnalysis = jest.fn().mockResolvedValue(analysis);
+    const computeResponseAnalysis = jest.fn(async (_workspaceId: number, _flags: string[], _threshold: number, listPrefix: string) => {
+      analysis.listPrefix = listPrefix;
+      return analysis;
+    });
+    (processor as unknown as { computeResponseAnalysis: typeof computeResponseAnalysis }).computeResponseAnalysis = computeResponseAnalysis;
 
     return {
       processor,
-      analysis
+      analysis,
+      computeResponseAnalysis
     };
   }
 
@@ -78,33 +76,85 @@ describe('CodingAnalysisProcessor', () => {
 
   it('does not publish analysis results superseded by a newer run', async () => {
     const cacheService = {
-      setIfMarkerMatches: jest.fn().mockResolvedValue(false),
-      expire: jest.fn().mockResolvedValue(undefined),
+      publishListResult: jest.fn().mockResolvedValue(false),
       delete: jest.fn().mockResolvedValue(true)
     };
     const { processor, analysis } = createProcessor(cacheService);
 
     await expect(processor.handleResponseAnalysis(createJob('old-run'))).resolves.toBe(analysis.aggregationSummary);
 
-    expect(cacheService.setIfMarkerMatches).toHaveBeenCalledWith(
-      'response-analysis:7__t2', expect.anything(), 600, 'response-analysis:7__t2:run', 'old-run'
+    expect(cacheService.publishListResult).toHaveBeenCalledWith(
+      'response-analysis:7__t2', expect.anything(), expect.objectContaining({
+        marker: { key: 'response-analysis:7__t2:run', value: 'old-run' }
+      })
     );
     expect(cacheService.delete).toHaveBeenCalledTimes(2);
   });
 
   it('publishes the current result and records only the summary in the job', async () => {
     const cacheService = {
-      setIfMarkerMatches: jest.fn().mockResolvedValue(true),
-      expire: jest.fn().mockResolvedValue(undefined)
+      publishListResult: jest.fn().mockResolvedValue(true)
     };
     const { processor, analysis } = createProcessor(cacheService);
     const job = createJob('current-run');
 
     await expect(processor.handleResponseAnalysis(job)).resolves.toBe(analysis.aggregationSummary);
-    expect(cacheService.setIfMarkerMatches).toHaveBeenCalledWith(
-      'response-analysis:7__t2', analysis, 600, 'response-analysis:7__t2:run', 'current-run'
-    );
+    expect(cacheService.publishListResult).toHaveBeenCalledWith('response-analysis:7__t2', analysis, {
+      ttl: 600,
+      listTtl: 660,
+      lists: [
+        { key: `${analysis.listPrefix}:empty`, length: 0 },
+        { key: `${analysis.listPrefix}:duplicates`, length: 0 }
+      ],
+      marker: { key: 'response-analysis:7__t2:run', value: 'current-run' }
+    });
     expect(job.updateProgress).toHaveBeenCalledWith(100);
+  });
+
+  it('renews both list expiries during a long calculation and stops after it finishes', async () => {
+    jest.useFakeTimers();
+    try {
+      const expire = jest.fn().mockResolvedValue(undefined);
+      const { processor, analysis, computeResponseAnalysis } = createProcessor({
+        expire, publishListResult: jest.fn().mockResolvedValue(true)
+      });
+      let finishCalculation!: () => void;
+      const calculation = new Promise<void>(resolve => { finishCalculation = resolve; });
+      computeResponseAnalysis.mockImplementationOnce(async (_workspaceId, _flags, _threshold, listPrefix) => {
+        analysis.listPrefix = listPrefix;
+        await calculation;
+        return analysis;
+      });
+
+      const job = processor.handleResponseAnalysis(createJob('long-running'));
+      jest.advanceTimersByTime(61 * 60_000);
+      expect(expire.mock.calls).toEqual([
+        [`${analysis.listPrefix}:empty`, 3600],
+        [`${analysis.listPrefix}:duplicates`, 3600],
+        [`${analysis.listPrefix}:empty`, 3600],
+        [`${analysis.listPrefix}:duplicates`, 3600]
+      ]);
+      finishCalculation();
+      await job;
+
+      jest.advanceTimersByTime(60 * 60_000);
+      expect(expire).toHaveBeenCalledTimes(4);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('fails the job if Redis rejects publication and leaves the staging keys to expire', async () => {
+    const cacheService = {
+      publishListResult: jest.fn().mockRejectedValue(new Error('Incomplete analysis result list')),
+      delete: jest.fn()
+    };
+    const { processor } = createProcessor(cacheService);
+    const job = createJob('incomplete-run');
+
+    await expect(processor.handleResponseAnalysis(job)).rejects.toThrow('Incomplete analysis result list');
+    expect(job.updateProgress).not.toHaveBeenCalled();
+    expect(cacheService.delete).not.toHaveBeenCalled();
   });
 
   it('keeps the marker during a retry and releases it only when a job finishes', async () => {
@@ -180,7 +230,7 @@ describe('CodingAnalysisProcessor', () => {
     const publish = jest.fn().mockResolvedValue(true);
     const processor = new CodingAnalysisProcessor(
       { createQueryBuilder: () => analysisQuery } as unknown as Repository<ResponseEntity>,
-      { appendListItems, expire: jest.fn(), setIfMarkerMatches: publish } as unknown as CacheService,
+      { appendListItems, publishListResult: publish } as unknown as CacheService,
       {
         resolveExclusionsForQueries: jest.fn().mockResolvedValue({
           globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: []
@@ -195,12 +245,19 @@ describe('CodingAnalysisProcessor', () => {
     expect(appendListItems).toHaveBeenCalledWith(expect.stringMatching(/:empty$/), [
       expect.objectContaining({ responseId: 1, value: 'technical solver value' })
     ], expect.any(Number));
+    const analysis = publish.mock.calls[0][1] as PagedCodingAnalysis;
     expect(publish).toHaveBeenCalledWith(
       'response-analysis:7__t2',
       expect.objectContaining({ emptyResponses: { total: 1, totalUncoded: 1 }, duplicateValues: expect.objectContaining({ total: 0 }) }),
-      600,
-      'response-analysis:7__t2:run',
-      'mixed-response-run'
+      {
+        ttl: 600,
+        listTtl: 660,
+        lists: [
+          { key: `${analysis.listPrefix}:empty`, length: 1 },
+          { key: `${analysis.listPrefix}:duplicates`, length: 0 }
+        ],
+        marker: { key: 'response-analysis:7__t2:run', value: 'mixed-response-run' }
+      }
     );
   });
 });
