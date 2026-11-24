@@ -254,10 +254,11 @@ export class WsgCodingJobController {
         serverUrl
       );
 
-    return {
-      total: items.length,
-      firstReplayUrl: firstItemWithUrl[0]?.replayUrl ?? ''
-    };
+    const replayUrl = firstItemWithUrl[0]?.replayUrl ?? '';
+    // Keep the replay-session filter in the hash route that selects its first case.
+    const firstReplayUrl = onlyOpen && replayUrl ?
+      `${replayUrl}${replayUrl.includes('?') ? '&' : '?'}onlyOpen=true` : replayUrl;
+    return { total: items.length, firstReplayUrl };
   }
 
   @Post('transfer-cases')

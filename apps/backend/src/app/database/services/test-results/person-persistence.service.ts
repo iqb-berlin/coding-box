@@ -4,7 +4,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, EntityManager, In, Repository
 } from 'typeorm';
-import { ResponseStatusType } from '@iqbspecs/response/response.interface';
+import { responseInsertEntries, ResponseInsertEntry, restoreLegacyChunk } from './response-chunk.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Log,
@@ -23,7 +23,6 @@ import { ChunkEntity } from '../../entities/chunk.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { Session } from '../../entities/session.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
-import { statusStringToNumber } from '../../utils/response-status-converter';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { JournalService, RecordAuditJournalEventInput } from '../shared/journal.service';
 
@@ -48,14 +47,6 @@ type ResponseProcessingResult = {
   skipped: number;
   deleted: number;
   addedResponseIds: number[];
-};
-
-type ResponseInsertEntry = {
-  unitid: number;
-  variableid: string;
-  status: number;
-  value: string | null;
-  subform: string;
 };
 
 /**
@@ -627,75 +618,57 @@ export class PersonPersistenceService {
       const writtenSubforms = new Set<string>();
       for (const subform of subforms) {
         if (subform.responses && subform.responses.length > 0) {
-          const responseEntries: ResponseInsertEntry[] = subform.responses.map(response => {
-            let value: string | null;
-            if (response.value === null) {
-              value = null;
-            } else if (typeof response.value === 'object' || Array.isArray(response.value)) {
-              // For objects and arrays, use JSON.stringify to properly serialize
-              value = JSON.stringify(response.value);
-            } else {
-              // For primitive values (string, number, boolean), convert to string without extra quotes
-              value = String(response.value);
-            }
+          const responseEntries = responseInsertEntries(Number(savedUnit.id), subform);
 
-            return {
-              unitid: Number(savedUnit.id),
-              variableid: response.id,
-              status: statusStringToNumber(response.status as ResponseStatusType) || 0,
-              value: value,
-              subform: subform.id
-            };
-          });
+          const couldContainResponses = !isNewUnit || writtenSubforms.has(subform.id);
+          const variables = Array.from(new Set(responseEntries.map(r => r.variableid)));
 
-          if (responseEntries.length > 0) {
-            const couldContainResponses = !isNewUnit || writtenSubforms.has(subform.id);
-            const variables = Array.from(new Set(responseEntries.map(r => r.variableid)));
-
-            if (couldContainResponses && overwriteMode === 'replace') {
-              const deleteResult = await repository
-                .createQueryBuilder()
-                .delete()
-                .from(ResponseEntity)
-                .where('unitid = :unitid', { unitid: savedUnit.id })
-                .andWhere('subform = :subform', { subform: subform.id })
-                .andWhere('variableid IN (:...variables)', { variables })
-                .execute();
-              totalResponsesDeleted += deleteResult.affected || 0;
-            }
-
-            let filteredEntries = responseEntries;
-            if (couldContainResponses && overwriteMode !== 'replace') {
-              const existing = await repository.find({
-                where: {
-                  unitid: Number(savedUnit.id),
-                  subform: subform.id,
-                  variableid: In(variables)
-                },
-                select: ['variableid', 'subform']
-              });
-              const existingKeys = new Set(existing.map(r => `${r.variableid}@@${r.subform || ''}`));
-              filteredEntries = responseEntries.filter(r => {
-                const k = `${r.variableid}@@${r.subform || ''}`;
-                return !existingKeys.has(k);
-              });
-              totalResponsesSkipped += (responseEntries.length - filteredEntries.length);
-            }
-
-            if (filteredEntries.length === 0) {
-              continue;
-            }
-            const BATCH_SIZE = 1000;
-            for (let i = 0; i < filteredEntries.length; i += BATCH_SIZE) {
-              const batch = filteredEntries.slice(i, i + BATCH_SIZE);
-              const savedResponses = await repository.save(batch);
-              addedResponseIds.push(
-                ...(await this.collectSavedResponseIds(savedResponses, batch, repository, !!manager))
-              );
-            }
-            totalResponsesSaved += filteredEntries.length;
-            writtenSubforms.add(subform.id);
+          if (couldContainResponses && overwriteMode === 'replace') {
+            const deleteResult = await repository
+              .createQueryBuilder()
+              .delete()
+              .from(ResponseEntity)
+              .where('unitid = :unitid', { unitid: savedUnit.id })
+              .andWhere('subform = :subform', { subform: subform.id })
+              .andWhere('variableid IN (:...variables)', { variables })
+              .execute();
+            totalResponsesDeleted += deleteResult.affected || 0;
           }
+
+          let filteredEntries = responseEntries;
+          if (couldContainResponses && overwriteMode !== 'replace') {
+            const existing = await repository.find({
+              where: {
+                unitid: Number(savedUnit.id),
+                subform: subform.id,
+                variableid: In(variables)
+              },
+              select: ['id', 'variableid', 'subform', 'source_chunk_key']
+            });
+            if (overwriteMode === 'merge') {
+              await restoreLegacyChunk(repository, subforms, subform, responseEntries, existing);
+            }
+            const existingKeys = new Set(existing.map(r => `${r.variableid}@@${r.subform || ''}`));
+            filteredEntries = responseEntries.filter(r => {
+              const k = `${r.variableid}@@${r.subform || ''}`;
+              return !existingKeys.has(k);
+            });
+            totalResponsesSkipped += (responseEntries.length - filteredEntries.length);
+          }
+
+          if (filteredEntries.length === 0) {
+            continue;
+          }
+          const BATCH_SIZE = 1000;
+          for (let i = 0; i < filteredEntries.length; i += BATCH_SIZE) {
+            const batch = filteredEntries.slice(i, i + BATCH_SIZE);
+            const savedResponses = await repository.save(batch);
+            addedResponseIds.push(
+              ...(await this.collectSavedResponseIds(savedResponses, batch, repository, !!manager))
+            );
+          }
+          totalResponsesSaved += filteredEntries.length;
+          writtenSubforms.add(subform.id);
         }
       }
 

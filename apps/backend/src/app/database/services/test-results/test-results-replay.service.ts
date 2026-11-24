@@ -1,5 +1,5 @@
 import {
-  Inject,
+  ConflictException, Inject,
   Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -22,6 +22,16 @@ import {
 import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 import { applyExclusionsToQuery, nonAutocoderGeneratedResponseCondition, parseStoredResponseValue } from './test-results.util';
 import { PersonWhere } from './workspace-test-results.types';
+
+interface ReplayResponseRow {
+  id: number;
+  variableid: string;
+  value: string | null;
+  status: number;
+  subform: string | null;
+  sourceChunkKey: string | null;
+  competingLegacyScope?: boolean;
+}
 
 @Injectable()
 export class TestResultsReplayService {
@@ -156,23 +166,34 @@ export class TestResultsReplayService {
       where: { unitid: unitDbId }
     });
 
-    this.logger.log(`Found ${chunks.length} chunks for unit ${unitDbId}`);
-    chunks.forEach(chunk => {
-      this.logger.log(
-        `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
-      );
-    });
-
     const responseRows = await this.readResponseRows(unitDbId, responseId, unitRow.subform);
 
-    const subformChunkVariables = new Set<string>();
+    const result = {
+      responses: this.buildPlayerChunks(chunks, responseRows),
+      subformResponseIds: responseId === undefined ? undefined : responseRows
+        .filter(row => (row.subform ?? '') === (unitRow.subform ?? ''))
+        .map(row => row.id)
+    };
+
+    await this.cacheService.set(cacheKey, result);
+    this.logger.log(
+      `Cached replay responses: workspace=${workspaceId}, unitId=${unitId}`
+    );
+
+    return result;
+  }
+
+  private buildPlayerChunks(chunks: ChunkEntity[], responseRows: ReplayResponseRow[]) {
+    const chunkKeysByVariable = new Map<string, Set<string>>();
     const chunkKeyMap = new Map<string, { key: string; ts: number }>();
     chunks.forEach(chunk => {
       if (chunk.variables) {
         const chunkTs = Number(chunk.ts) || 0;
         const variables = chunk.variables.split(',').map(v => v.trim());
         variables.forEach(variable => {
-          if (responseId !== undefined && chunk.key === unitRow.subform) subformChunkVariables.add(variable);
+          const keys = chunkKeysByVariable.get(variable) ?? new Set<string>();
+          keys.add(chunk.key);
+          chunkKeysByVariable.set(variable, keys);
           const current = chunkKeyMap.get(variable);
           if (!current || chunkTs >= current.ts) {
             chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
@@ -191,7 +212,12 @@ export class TestResultsReplayService {
     responseRows.forEach(response => {
       const mappedChunk = chunkKeyMap.get(response.variableid);
       const subform = response.subform || '';
-      const chunkKey = subform && subformChunkVariables.has(response.variableid) ? subform : mappedChunk?.key || subform;
+      const keys = chunkKeysByVariable.get(response.variableid);
+      if (response.competingLegacyScope && keys && keys.size > 1 && !keys.has(subform)) {
+        throw new ConflictException('Original replay chunk is ambiguous. Reimport the original responses to restore the chunk mapping.');
+      }
+      const legacyKey = keys?.has(subform) ? subform : mappedChunk?.key ?? subform;
+      const chunkKey = response.sourceChunkKey ?? legacyKey;
       const chunkTs = mappedChunk?.ts || 0;
       const mappedResponse = {
         id: response.variableid,
@@ -210,27 +236,13 @@ export class TestResultsReplayService {
       }
     });
 
-    const responsesArray = Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
+    return Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
       id: chunkKey,
       content: JSON.stringify(Array.from(responseMap.values()).map(({
         chunkTs: _chunkTs,
         ...response
       }) => response))
     }));
-
-    const result = {
-      responses: responsesArray,
-      subformResponseIds: responseId === undefined ? undefined : responseRows
-        .filter(row => (row.subform ?? '') === (unitRow.subform ?? ''))
-        .map(row => row.id)
-    };
-
-    await this.cacheService.set(cacheKey, result);
-    this.logger.log(
-      `Cached replay responses: workspace=${workspaceId}, unitId=${unitId}`
-    );
-
-    return result;
   }
 
   private readResponseRows(unitDbId: number, responseId?: number, subform?: string | null) {
@@ -241,7 +253,8 @@ export class TestResultsReplayService {
         'response.variableid AS variableid',
         'response.value AS value',
         'response.status AS status',
-        'response.subform AS subform'
+        'response.subform AS subform',
+        'response.source_chunk_key AS "sourceChunkKey"'
       ])
       .where('response.unitid = :unitDbId', { unitDbId })
       .andWhere(
@@ -252,7 +265,24 @@ export class TestResultsReplayService {
     if (responseId !== undefined) {
       // A derived target can depend on both local and shared inputs. Prefer its local row
       // when a variable exists in both scopes, and the exact target among repeated rows.
-      responseQuery.andWhere("COALESCE(response.subform, '') IN ('', :subform)", { subform: subform ?? '' })
+      responseQuery.addSelect(`response.source_chunk_key IS NULL AND EXISTS (
+        SELECT 1 FROM response sibling WHERE sibling.unitid = response.unitid
+          AND sibling.variableid = response.variableid AND sibling.is_autocoder_generated IS NOT TRUE
+          AND COALESCE(sibling.subform, '') <> COALESCE(response.subform, '')
+      )`, 'competingLegacyScope').andWhere(`(
+        COALESCE(response.subform, '') IN ('', :subform)
+        OR (
+          (response.chunk_has_subform IS FALSE OR (response.chunk_has_subform IS NULL AND EXISTS (
+            SELECT 1 FROM chunk c WHERE c.unitid = response.unitid AND c.key = response.subform
+              AND response.variableid = ANY(string_to_array(c.variables, ','))
+          )))
+          AND NOT EXISTS (
+            SELECT 1 FROM response sibling WHERE sibling.unitid = response.unitid
+              AND sibling.variableid = response.variableid AND sibling.id <> response.id
+              AND sibling.is_autocoder_generated IS NOT TRUE
+          )
+        )
+      )`, { subform: subform ?? '' })
         .distinctOn(['response.variableid'])
         .orderBy('response.variableid', 'ASC')
         .addOrderBy('(response.id = :responseId)', 'DESC')
@@ -260,12 +290,6 @@ export class TestResultsReplayService {
         .addOrderBy('response.id', 'ASC')
         .setParameter('responseId', responseId);
     }
-    return responseQuery.getRawMany<{
-      id: number;
-      variableid: string;
-      value: string | null;
-      status: number;
-      subform: string | null;
-    }>();
+    return responseQuery.getRawMany<ReplayResponseRow>();
   }
 }

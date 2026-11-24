@@ -122,7 +122,7 @@ describe('ResponseCacheSchedulerService', () => {
       'UNIT-ALIAS'
     );
     expect(cacheService.exists).toHaveBeenCalledTimes(4);
-    expect(cacheService.exists).toHaveBeenCalledWith('responses:47:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v7');
+    expect(cacheService.exists).toHaveBeenCalledWith('responses:47:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v8');
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledTimes(4);
   });
 
@@ -146,7 +146,7 @@ describe('ResponseCacheSchedulerService', () => {
     const firstUnitPage = Array.from({ length: 500 }, (_, i) => ({
       ...unit, id: i + 501, alias: unit.name
     }));
-    const cachedKeys = new Set(['responses:47:login-a@code-a@BOOKLET-A:ALREADY-CACHED:v7']);
+    const cachedKeys = new Set(['responses:47:login-a@code-a@BOOKLET-A:ALREADY-CACHED:v8']);
     cacheService.exists.mockImplementation(async key => cachedKeys.has(key));
     cacheService.set.mockImplementation(async key => {
       cachedKeys.add(key);

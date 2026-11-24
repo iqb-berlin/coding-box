@@ -21,8 +21,9 @@ import { Unit } from '../../entities/unit.entity';
 import Workspace from '../../entities/workspace.entity';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import { statusNumberToString, statusStringToNumber } from '../../utils/response-status-converter';
-import type { TcMergeSubForms } from '../shared';
+import type { Chunk, TcMergeSubForms } from '../shared';
 import { TestResultsReplayService } from '../test-results/test-results-replay.service';
+import { PersonDataProcessingService } from '../test-results/person-data-processing.service';
 import { PersonPersistenceService } from '../test-results/person-persistence.service';
 import { ResolvedWorkspaceExclusions, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { DerivedVariableMetadataSnapshot, WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
@@ -167,6 +168,87 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
       value
     });
   }
+
+  async function importReplayChunks(chunks: Chunk[]) {
+    const unit = await createUnit(await createBooklet('chunks'));
+    const importer = new PersonDataProcessingService();
+    const forms = importer.extractSubforms(chunks);
+    const imported = importer.createUnit({
+      unitname: unit.name,
+      originalUnitId: unit.name,
+      groupname: 'synthetic',
+      loginname: 'chunks',
+      code: 'test',
+      bookletname: `chunks-${workspace.id}`,
+      responses: chunks,
+      laststate: '{}'
+    }, [], forms, importer.extractVariablesFromSubforms(forms), chunks);
+    const persistence = module.get(PersonPersistenceService);
+    await persistence.processChunks(imported, unit, {
+      id: 'chunks', units: [imported], logs: [], sessions: []
+    });
+    expect((await persistence.processSubforms(imported, unit)).saved).toBe(chunks.length);
+    return {
+      unit,
+      imported,
+      replay: (id: number) => module.get(TestResultsReplayService)
+        .findUnitResponse(workspace.id, `chunks@test@synthetic@chunks-${workspace.id}`, unit.name, id)
+    };
+  }
+
+  const replayChunk = (id: string, subForm: string, variable: string, value: string, ts: number): Chunk => ({
+    id,
+    subForm,
+    ts,
+    responseType: 'state',
+    content: JSON.stringify([{ id: variable, value, status: 'VALUE_CHANGED' }])
+  });
+
+  it.each([false, true])('keeps independent player parts in coding replay (legacy import: %s)', async legacy => {
+    const { unit, replay } = await importReplayChunks([
+      replayChunk('drawing-part', '', 'drawing', 'A', 1),
+      replayChunk('reason-part', '', 'reason', 'because', 2)
+    ]);
+    if (legacy) {
+      await db.manager.update(ResponseEntity, { unitid: unit.id }, { source_chunk_key: null, chunk_has_subform: null });
+    }
+    const selected = await db.manager.findOneByOrFail(ResponseEntity, { unitid: unit.id, variableid: 'drawing' });
+    const result = await replay(selected.id);
+    expect(result.responses.map(part => [part.id, JSON.parse(part.content)[0].value]).sort()).toEqual([
+      ['drawing-part', 'A'], ['reason-part', 'because']
+    ]);
+  });
+
+  it('loads the selected version in its original player part across explicit subforms', async () => {
+    const { unit, imported, replay } = await importReplayChunks([
+      replayChunk('part-A', 'A', 'drawing', 'first', 1),
+      replayChunk('part-B', 'B', 'drawing', 'second', 2),
+      replayChunk('shared', '', 'reason', 'because', 3),
+      replayChunk('B', 'B', 'local', 'B only', 4)
+    ]);
+    const drawings = await db.manager.findBy(ResponseEntity, { unitid: unit.id, variableid: 'drawing' });
+    expect(drawings).toHaveLength(2);
+    for (const drawing of drawings) {
+      const { responses } = await replay(drawing.id);
+      expect(responses.map(part => part.id).sort()).toEqual(drawing.subform === 'A' ?
+        ['part-A', 'shared'] : ['B', 'part-B', 'shared']);
+      const part = responses.find(chunk => chunk.id === `part-${drawing.subform}`)!;
+      expect(JSON.parse(part.content)).toEqual([expect.objectContaining({ id: 'drawing', value: drawing.value })]);
+    }
+
+    // A historical row has no evidence linking A/B to either differently named player part.
+    await db.manager.update(ResponseEntity, { unitid: unit.id }, { source_chunk_key: null, chunk_has_subform: null });
+    cacheEntries.clear();
+    await expect(replay(drawings[0].id)).rejects.toThrow('Original replay chunk is ambiguous');
+    await db.manager.update(ResponseEntity, drawings[0].id, { code_v2: 7 });
+    const merged = await module.get(PersonPersistenceService).processSubforms(imported, unit, 'merge');
+    expect(merged).toMatchObject({
+      success: true, skipped: 4, saved: 0, deleted: 0
+    });
+    const repaired = await db.manager.findOneByOrFail(ResponseEntity, { id: drawings[0].id });
+    expect(Number(repaired.code_v2)).toBe(7);
+    expect((await replay(repaired.id)).responses.map(part => part.id)).toContain(`part-${repaired.subform}`);
+  });
 
   it('replays the selected drawing with its shared inputs for both base and derived coding cases', async () => {
     const unit = await createUnit(await createBooklet('replay'));

@@ -179,6 +179,28 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.get('coding-box-code-selector textarea').should('have.value', 'Viewed');
   });
 
+  it('loads the first open response for the person in a reopened job URL', () => {
+    const cases = ['personA', 'personB'].map((personLogin, index) => ({
+      responseId: 41 + index, unitName: 'UNIT', variableId: 'VAR1', variablePage: '0',
+      personLogin, personCode: 'code', bookletName: 'booklet'
+    }));
+    cy.intercept('GET', '**/coding-job/77/replay-session*', request => {
+      const onlyOpen = new URL(request.url).searchParams.get('onlyOpen') === 'true';
+      request.reply({ body: {
+        units: onlyOpen ? cases.slice(1) : cases,
+        progress: {}, notes: {}, job: { status: 'active' }, serverTimings: {}
+      } });
+    });
+    cy.intercept('PUT', '**/coding-job/77/status', { body: {} });
+    cy.visit(`/#/replay/personB@code@booklet/UNIT/0/VAR1?workspaceId=5&onlyOpen=true&mode=coding&codingJobId=77&auth=${token(true)}`);
+    cy.wait('@response').then(({ request }) => {
+      const url = new URL(request.url);
+      expect(decodeURIComponent(url.pathname)).to.include('/personB@code@booklet/UNIT');
+      expect(url.searchParams.get('responseId')).to.equal('42');
+    });
+    frame().should('contain.text', 'Answer B');
+  });
+
   it('restores unsaved coding notes and the selected case before loading the player', () => {
     cy.intercept('GET', '**/coding-job/77/replay-session*', { body: {
       units: units.slice(0, 2).map(unit => ({ unitName: 'UNIT', unitAlias: 'Unit', variableId: unit.variableId,

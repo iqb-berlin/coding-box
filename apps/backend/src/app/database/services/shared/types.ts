@@ -89,6 +89,7 @@ export type Chunk = {
 
 export type TcMergeSubForms = {
   id: string;
+  sourceChunk?: { key: string; hasSubform: boolean };
   responses: TcMergeResponse[];
 };
 

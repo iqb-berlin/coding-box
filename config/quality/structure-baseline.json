@@ -859,7 +859,7 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1059
+        "max-lines": 1036
       },
       "functions": {
         "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
@@ -998,7 +998,7 @@
       "file": {},
       "functions": {
         "class TestResultsReplayService#1/method findUnitResponse#1": {
-          "max-lines-per-function": 160
+          "max-lines-per-function": 106
         }
       }
     },

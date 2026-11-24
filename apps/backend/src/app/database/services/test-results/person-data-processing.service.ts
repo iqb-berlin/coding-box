@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { extractChunkSubforms } from './response-chunk.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
@@ -331,16 +332,7 @@ export class PersonDataProcessingService {
    * @returns Array of subforms with responses
    */
   extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
-    return parsedResponses
-      .map(chunk => {
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
-        } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-          return { id: chunk.subForm || chunk.id || '', responses: [] };
-        }
-      });
+    return extractChunkSubforms(parsedResponses, this.logger);
   }
 
   /**

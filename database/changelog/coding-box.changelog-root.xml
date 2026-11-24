@@ -53,4 +53,5 @@
   <include file="coding-box.changelog-1029-response-cache-unit-index.sql"/>
   <include file="coding-box.changelog-coding-job-creation.sql"/>
   <include file="coding-box.changelog-orm-query-hardening.sql"/>
+  <include file="coding-box.changelog-340-replay-chunk.sql"/>
 </databaseChangeLog>

@@ -36,6 +36,12 @@ export class ResponseEntity {
   @Column({ type: 'text', nullable: true })
   subform: string | null;
 
+  @Column({ type: 'text', nullable: true })
+  source_chunk_key?: string | null;
+
+  @Column({ type: 'boolean', nullable: true })
+  chunk_has_subform?: boolean | null;
+
   @Column({ type: 'boolean', default: false })
   is_autocoder_generated?: boolean;
 

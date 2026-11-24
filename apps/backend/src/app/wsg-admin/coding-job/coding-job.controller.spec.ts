@@ -258,6 +258,20 @@ describe('WsgCodingJobController', () => {
     }));
   });
 
+  it('starts a reopened job with the same open-case filter in its replay URL and session', async () => {
+    const closed = { responseId: 41, personLogin: 'closed' };
+    const open = { responseId: 42, personLogin: 'open' };
+    codingJobService.getCodingJob.mockResolvedValue({ codingJob: { id: 123, status: 'open' } });
+    codingJobService.getCodingJobUnits.mockImplementation(async (_id, onlyOpen) => (onlyOpen ? [open] : [closed, open]));
+    codingReplayService.generateReplayUrlsForItemsBulk.mockImplementation(async (_workspace, [first]) => [
+      { replayUrl: `http://localhost/#/replay/${first.personLogin}/UNIT/0/V?workspaceId=47` }
+    ]);
+
+    const { firstReplayUrl, total } = await controller.startCodingJob(47, 123, req);
+    expect(total).toBe(1);
+    expect(new URL(firstReplayUrl).hash).toBe('#/replay/open/UNIT/0/V?workspaceId=47&onlyOpen=true');
+  });
+
   it('changes completed jobs back to active when starting them again', async () => {
     codingJobService.getCodingJob.mockResolvedValue({
       codingJob: { id: 123, status: 'completed' }
