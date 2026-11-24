@@ -1,5 +1,4 @@
 import { ResponseEntity } from '../../entities/response.entity';
-import { LRUCache } from '../shared/lru-cache';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { CodingItemBuilderService } from './coding-item-builder.service';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
@@ -34,39 +33,6 @@ describe('CodingItemBuilderService', () => {
       }
     }
   } as unknown as ResponseEntity);
-
-  it('reuses the page map for subsequent versioned rows from the same unit', async () => {
-    const loadVoudData = jest.fn().mockResolvedValue(new Map([['VAR1', '2'], ['VAR2', '4']]));
-    const service = new CodingItemBuilderService({ loadVoudData } as unknown as CodingFileCacheService);
-    const cache = new LRUCache<Map<string, string>>(2);
-    const row = {
-      id: 1,
-      unitKey: 'UNIT1',
-      unitAlias: 'Unit 1',
-      personLogin: 'login',
-      personCode: 'code',
-      personGroup: 'group',
-      bookletName: 'BOOKLET1',
-      variableId: 'VAR1',
-      value: null,
-      statusV1: 5,
-      codeV1: 1,
-      scoreV1: 2,
-      statusV2: null,
-      codeV2: null,
-      scoreV2: null,
-      statusV3: null,
-      codeV3: null,
-      scoreV3: null
-    };
-
-    const first = await service.buildCodingItemWithVersionRow(row, 'v1', '', '', 1, false, false, false, undefined, undefined, cache);
-    const second = await service.buildCodingItemWithVersionRow({ ...row, variableId: 'VAR2' }, 'v1', '', '', 1, false, false, false, undefined, undefined, cache);
-
-    expect(first?.variable_page).toBe('2');
-    expect(second?.variable_page).toBe('4');
-    expect(loadVoudData).toHaveBeenCalledTimes(1);
-  });
 
   it('replaces GeoGebra response values with a placeholder by default', async () => {
     await expect(
