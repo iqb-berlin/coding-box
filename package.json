@@ -155,7 +155,6 @@
     "jest-preset-angular": "16.2.0",
     "nx": "22.7.12",
     "prisma": "^5.10.2",
-    "sql.js": "^1.17.0",
     "ts-jest": "29.4.15",
     "ts-node": "^10.9.2",
     "typescript": "5.9.3",
