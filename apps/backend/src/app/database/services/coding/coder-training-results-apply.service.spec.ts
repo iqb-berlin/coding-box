@@ -69,7 +69,7 @@ describe('CoderTrainingResultsApplyService', () => {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       manager: {
         query: jest.fn(),
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }

@@ -172,7 +172,7 @@ export class CodingJobReplayService {
   ): Promise<CodingJobNavigationUnit[]> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId },
-      relations: ['codingJobCoders', 'codingJobCoders.user']
+      relations: { codingJobCoders: { user: true } }
     });
     if (!codingJob) {
       return [];
@@ -183,26 +183,24 @@ export class CodingJobReplayService {
       order: { id: 'ASC' }
     });
 
-    const codingJobUnitSelect: (keyof CodingJobUnit)[] = [
-      'response_id',
-      'unit_name',
-      'unit_alias',
-      'variable_id',
-      'variable_anchor',
-      'booklet_name',
-      'person_login',
-      'person_code',
-      'person_group',
-      'notes',
-      'variable_bundle_id',
-      'code',
-      'score',
-      'is_open'
-    ];
-
     const codingJobUnits = await this.codingJobUnitRepository.find({
       where: { coding_job_id: codingJobId },
-      select: codingJobUnitSelect
+      select: {
+        response_id: true,
+        unit_name: true,
+        unit_alias: true,
+        variable_id: true,
+        variable_anchor: true,
+        booklet_name: true,
+        person_login: true,
+        person_code: true,
+        person_group: true,
+        notes: true,
+        variable_bundle_id: true,
+        code: true,
+        score: true,
+        is_open: true
+      }
     });
     const exclusions =
       await this.workspaceExclusionService.resolveExclusionsForQueries(
@@ -355,11 +353,7 @@ export class CodingJobReplayService {
           response_id: In(responseIds),
           coding_job_id: Not(codingJob.id)
         },
-        relations: [
-          'coding_job',
-          'coding_job.codingJobCoders',
-          'coding_job.codingJobCoders.user'
-        ]
+        relations: { coding_job: { codingJobCoders: { user: true } } }
       });
 
       otherUnits.forEach(unit => {
@@ -812,7 +806,7 @@ export class CodingJobReplayService {
 
     const codingJobs = await this.codingJobRepository.find({
       where: { id: In(codingJobIds), workspace_id: workspaceId },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
 
     if (codingJobs.length !== codingJobIds.length) {

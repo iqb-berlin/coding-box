@@ -100,7 +100,7 @@ export class WorkspaceTestcenterFileImportService {
     );
     if (Number.isInteger(workspaceId) && workspaceId > 0) {
       return withWorkspaceFilesMutationLock(
-        this.fileUploadRepository.manager.connection,
+        this.fileUploadRepository.manager.dataSource,
         workspaceId,
         queryRunner => this.testCenterImportUnlocked(
           entries,

@@ -113,12 +113,7 @@ describe('CodingReplayService', () => {
       expect(result).toEqual({ replayUrl: mockReplayUrl });
       expect(mockResponseRepository.findOne).toHaveBeenCalledWith({
         where: { id: 1 },
-        relations: [
-          'unit',
-          'unit.booklet',
-          'unit.booklet.person',
-          'unit.booklet.bookletinfo'
-        ]
+        relations: { unit: { booklet: { person: true, bookletinfo: true } } }
       });
       expect(mockCodingListService.getVariablePageMap).toHaveBeenCalledWith('unit1', 1);
       expect(replayUrlUtil.generateReplayUrl).toHaveBeenCalledWith({

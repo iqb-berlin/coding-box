@@ -485,27 +485,12 @@ export class DoubleCodingReviewQueryService {
         statusMap.set(row.responseId, row.responseStatus);
       });
 
-      const relations = includeRelations ? [
-        'coding_job',
-        'coding_job.training',
-        'coding_job.codingJobVariableBundles',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.person'
-      ] : [
-        'coding_job',
-        'coding_job.training',
-        'coding_job.codingJobVariableBundles',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user'
-      ];
-
       const codingJobUnits = await this.codingJobUnitRepository.find({
         where: { response_id: In(paginatedResponseIds) },
-        relations
+        relations: {
+          coding_job: { training: true, codingJobVariableBundles: true, codingJobCoders: { user: true } },
+          ...(includeRelations && { response: { unit: { booklet: { person: true } } } })
+        }
       });
 
       const isIncludedReviewUnit = (unit: CodingJobUnit) => {
@@ -1212,7 +1197,7 @@ export class DoubleCodingReviewQueryService {
         id: In(jobDefinitionIds),
         workspace_id: workspaceId
       },
-      select: ['assigned_variable_bundles']
+      select: { assigned_variable_bundles: true }
     });
 
     const bundleIds = new Set<number>();
@@ -1234,7 +1219,7 @@ export class DoubleCodingReviewQueryService {
           id: In(Array.from(bundleIds)),
           workspace_id: workspaceId
         },
-        select: ['id', 'variables']
+        select: { id: true, variables: true }
       });
 
       bundles.forEach(bundle => {

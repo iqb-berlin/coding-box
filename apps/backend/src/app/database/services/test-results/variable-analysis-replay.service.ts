@@ -376,7 +376,7 @@ export class VariableAnalysisReplayService {
 
       if (regexSearch) {
         return await withRegexSearchStatementTimeout(
-          this.responseRepository.manager.connection,
+          this.responseRepository.manager.dataSource,
           runAnalysis
         );
       }

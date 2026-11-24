@@ -225,7 +225,9 @@ describe('PersonPersistenceService', () => {
       where: {
         booklet: { id: 30 }
       },
-      select: ['browser', 'os', 'screen', 'loadcompletems', 'ts']
+      select: {
+        browser: true, os: true, screen: true, loadcompletems: true, ts: true
+      }
     });
     expect(saveSpy).not.toHaveBeenCalled();
   });
@@ -834,7 +836,9 @@ describe('PersonPersistenceService', () => {
 
     expect(responseFindSpy).toHaveBeenCalledTimes(2);
     expect(responseFindSpy).toHaveBeenNthCalledWith(2, expect.objectContaining({
-      select: ['id', 'unitid', 'variableid', 'subform']
+      select: {
+        id: true, unitid: true, variableid: true, subform: true
+      }
     }));
     expect(result).toMatchObject({
       addedUnitIds: [],

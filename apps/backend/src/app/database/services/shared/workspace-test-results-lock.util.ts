@@ -7,7 +7,7 @@ Partial<Pick<DataSource, 'options'>>;
 
 type MutationPool = Partial<Pick<DataSource, 'options'>>;
 type TransactionFactory = Pick<EntityManager, 'transaction'> &
-Partial<Pick<EntityManager, 'connection'>> & MutationPool;
+Partial<Pick<EntityManager, 'dataSource'>> & MutationPool;
 
 interface BlockingMutationPoolState {
   active: number;
@@ -110,7 +110,7 @@ export async function withWorkspaceTestResultsMutationTransaction<T>(
   factory: TransactionFactory,
   callback: (manager: EntityManager) => Promise<T>
 ): Promise<T> {
-  return withWorkspaceTestResultsMutationPoolSlot(factory.connection ?? factory,
+  return withWorkspaceTestResultsMutationPoolSlot(factory.dataSource ?? factory,
     () => factory.transaction(callback));
 }
 
@@ -126,7 +126,7 @@ export async function tryWithWorkspaceTestResultsMutationTransaction<T>(
     return row?.locked === true;
   };
 
-  const pool = factory.connection ?? factory;
+  const pool = factory.dataSource ?? factory;
   let releaseSlot = await acquireBlockingMutationPoolSlot(pool, false);
   if (!releaseSlot) {
     // Other workspaces can fill the admission queue. Release the probe connection

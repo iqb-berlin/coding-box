@@ -2931,7 +2931,7 @@ describe('CoderTrainingService', () => {
       });
       expect(codingJobRepository.find).toHaveBeenCalledWith({
         where: { workspace_id: 1, training_id: 5 },
-        relations: ['codingJobCoders.user'],
+        relations: { codingJobCoders: { user: true } },
         order: { id: 'ASC' }
       });
       expect(qb.getRawMany).toHaveBeenCalled();

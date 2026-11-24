@@ -8,7 +8,7 @@ describe('OIDC profile name persistence', () => {
 
   beforeEach(async () => {
     database = await new DataSource({
-      type: 'sqlite', database: ':memory:', entities: [User], synchronize: true
+      type: 'sqljs', entities: [User], synchronize: true
     }).initialize();
     service = new UsersService(database.getRepository(User), {} as never);
   });

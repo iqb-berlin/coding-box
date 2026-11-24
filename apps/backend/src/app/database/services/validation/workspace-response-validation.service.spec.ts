@@ -1466,7 +1466,7 @@ const createMutationLockMock = () => {
 
   return {
     connection,
-    manager: { connection },
+    manager: { dataSource: connection },
     queryRunner
   };
 };

@@ -72,7 +72,7 @@ export class CodingJobAccessService {
   ): Promise<void> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId, workspace_id: workspaceId },
-      select: ['id']
+      select: { id: true }
     });
 
     if (!codingJob) {
@@ -125,7 +125,7 @@ export class CodingJobAccessService {
   ): Promise<void> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId, workspace_id: workspaceId },
-      select: ['id']
+      select: { id: true }
     });
 
     if (!codingJob) {
@@ -196,7 +196,7 @@ export class CodingJobAccessService {
       this.codingJobRepository;
     const codingJob = await codingJobRepository.findOne({
       where: { id: codingJobId },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
 
     if (!codingJob) {

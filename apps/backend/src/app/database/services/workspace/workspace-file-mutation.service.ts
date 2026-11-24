@@ -23,7 +23,7 @@ export class WorkspaceFileMutationService {
     fileIds: string[]
   ): Promise<boolean> {
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspace_id,
       queryRunner => this.deleteTestFilesUnlocked(
         workspace_id,
@@ -80,7 +80,7 @@ export class WorkspaceFileMutationService {
 
   async createDummyTestTakerFile(workspaceId: number): Promise<boolean> {
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspaceId,
       queryRunner => this.createDummyTestTakerFileUnlocked(
         workspaceId,

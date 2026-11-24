@@ -1032,7 +1032,7 @@ export class WorkspaceResponseValidationService {
     }
 
     return withWorkspaceTestResultsMutationLock(
-      this.responseRepository.manager.connection,
+      this.responseRepository.manager.dataSource,
       workspaceId,
       () => this.deleteInvalidResponsesUnlocked(workspaceId, responseIds, audit)
     );
@@ -1109,7 +1109,7 @@ export class WorkspaceResponseValidationService {
         // We need to check which responses actually belong to the units we found
         const responsesToCheck = await this.responseRepository.find({
           where: { id: In(responseIdsBatch) },
-          select: ['id', 'unitid']
+          select: { id: true, unitid: true }
         });
 
         for (const resp of responsesToCheck) {
@@ -1170,7 +1170,7 @@ export class WorkspaceResponseValidationService {
     }
 
     return withWorkspaceTestResultsMutationLock(
-      this.responseRepository.manager.connection,
+      this.responseRepository.manager.dataSource,
       workspaceId,
       () => this.deleteAllInvalidResponsesUnlocked(workspaceId, validationType, audit)
     );

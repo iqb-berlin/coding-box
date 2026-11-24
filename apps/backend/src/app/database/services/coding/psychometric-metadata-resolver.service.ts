@@ -577,7 +577,9 @@ export class PsychometricMetadataResolver {
           file_id: ILike('%.vomd')
         }
       ],
-      select: ['id', 'file_id', 'filename', 'data']
+      select: {
+        id: true, file_id: true, filename: true, data: true
+      }
     });
     const uniqueFiles = Array.from(
       new Map(files.map(file => [file.id, file])).values()

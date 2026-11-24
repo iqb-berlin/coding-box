@@ -71,13 +71,13 @@ export class CodingJobOperationsService {
       };
     }>;
   }> {
-    this.logger.log(
-      `Starting bulk apply coding results for workspace ${workspaceId}`
-    );
+    this.logger.log(`Starting bulk apply coding results for workspace ${workspaceId}`);
 
     const codingJobs = await this.codingJobRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'name', 'status', 'training_id', 'freshness_status', 'job_type']
+      select: {
+        id: true, name: true, status: true, training_id: true, freshness_status: true, job_type: true
+      }
     }).then(jobs => jobs.filter(
       job => !isCodingIssueReviewJobType(job.job_type)
     ));
