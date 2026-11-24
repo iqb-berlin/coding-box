@@ -3,6 +3,7 @@ import {
 } from '@nestjs/common';
 import { HttpService } from '@nestjs/axios';
 import { firstValueFrom } from 'rxjs';
+import type { TestFilesUploadResultDto } from '../../../../../../api-dto/files/test-files-upload-result.dto';
 import { getErrorMessage } from '../../utils/error.util';
 import { WorkspaceFilesService } from '../../database/services/workspace/workspace-files.service';
 import { FileIo } from './file-io.interface';
@@ -127,6 +128,8 @@ export class GithubReleasesService {
     workspaceId: number,
     url: string
   ): Promise<boolean> {
+    let result: TestFilesUploadResultDto;
+    let filename: string;
     try {
       this.logger.log(`Downloading file from ${url} for workspace ${workspaceId}`);
       const response = await firstValueFrom(
@@ -134,7 +137,7 @@ export class GithubReleasesService {
       );
 
       const buffer = Buffer.from(response.data);
-      const filename = decodeURIComponent(url.split('/').pop() || 'download.html');
+      filename = decodeURIComponent(url.split('/').pop() || 'download.html');
       const fileIo: FileIo = {
         buffer,
         originalname: filename,
@@ -144,14 +147,15 @@ export class GithubReleasesService {
         encoding: '7bit'
       };
 
-      await this.workspaceFilesService.uploadTestFiles(
-        workspaceId,
-        [fileIo],
-        true);
-      return true;
+      result = await this.workspaceFilesService.uploadTestFiles(workspaceId, [fileIo], true);
     } catch (error) {
       this.logger.error(`Error downloading/installing file: ${getErrorMessage(error)}`);
       throw new InternalServerErrorException('Failed to download and install file');
     }
+    if (result.uploaded !== 1 || result.failed !== 0) {
+      const reason = result.failedFiles?.[0]?.reason || 'No file was installed';
+      throw new InternalServerErrorException(`Failed to install ${filename}: ${reason}`);
+    }
+    return true;
   }
 }

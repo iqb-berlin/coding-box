@@ -243,36 +243,49 @@ export class WorkspaceFileParsingService {
 
   identifyHtmlFile(filename: string, html: string) {
     const document = cheerio.load(html);
-    const json = document('script[type="application/ld+json"]').text();
-    let metadata: Record<string, unknown> = {};
-    if (json) {
+    const scripts = document('script[type="application/ld+json"]').toArray();
+    const blocks = scripts.flatMap(element => {
       try {
-        const parsed: unknown = JSON.parse(json);
+        const parsed: unknown = JSON.parse(document(element).text());
         if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-          metadata = parsed as Record<string, unknown>;
+          return [parsed as Record<string, unknown>];
         }
       } catch {
-        // HTML resources can contain missing or malformed module metadata.
+        // A malformed block does not invalidate the other metadata in the file.
       }
-    }
+      return [];
+    });
 
-    const isSchemer = metadata['@type'] === 'schemer';
-    const id = isSchemer ? metadata['@id'] : metadata.id || metadata['@id'];
+    const modules = blocks.map(metadata => this.identifyHtmlModule(metadata))
+      .filter(module => module !== undefined);
+    // Preserve single-block identification. In mixed documents prefer declared modules, then legacy untyped metadata.
+    const selected = scripts.length === 1 ? modules[0] :
+      modules.find(({ kind }) => kind === 'player' || kind === 'schemer') ??
+      modules.find(({ kind }) => !kind);
+    if (selected) {
+      return {
+        fileId: selected.fileId, fileType: selected.fileType, metadata: selected.metadata, usesFilename: false
+      };
+    }
+    return {
+      fileId: this.getResourceId(filename), fileType: 'Resource', metadata: blocks[0] ?? {}, usesFilename: true
+    };
+  }
+
+  private identifyHtmlModule(metadata: Record<string, unknown>) {
+    const type = metadata['@type'] ?? metadata.type;
+    const kind = typeof type === 'string' ? type.toLowerCase() : type;
+
+    const isSchemer = kind === 'schemer';
+    const id = isSchemer ? metadata['@id'] ?? metadata.id : metadata.id || metadata['@id'];
     const { version } = metadata;
     const release = typeof version === 'string' || typeof version === 'number' ?
       /^(\d+(?:\.\d+){0,2})(?:[-+]\S+)?$/.exec(String(version)) : null;
-    if (typeof id === 'string' && id.trim() && release) {
-      const fileId = this.normalizePlayerId(`${id}-${release[1]}`);
-      if (fileId) {
-        return {
-          fileId, fileType: isSchemer ? 'Schemer' : 'Resource', metadata, usesFilename: false
-        };
-      }
-    }
-
-    return {
-      fileId: this.getResourceId(filename), fileType: 'Resource', metadata, usesFilename: true
-    };
+    if (typeof id !== 'string' || !id.trim() || !release) return undefined;
+    const fileId = this.normalizePlayerId(`${id}-${release[1]}`);
+    return fileId ? {
+      fileId, fileType: isSchemer ? 'Schemer' : 'Resource', metadata, kind
+    } : undefined;
   }
 
   getResourceId(filename: string): string {

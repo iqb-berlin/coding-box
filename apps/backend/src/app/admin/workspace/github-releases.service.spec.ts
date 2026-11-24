@@ -107,6 +107,20 @@ describe('GithubReleasesService', () => {
     });
   });
 
+  describe('downloadAndInstall', () => {
+    it.each([
+      [{
+        total: 1, uploaded: 0, failed: 1, failedFiles: [{ filename: 'module.html', reason: 'write failed' }]
+      }, 'write failed'],
+      [{ total: 1, uploaded: 0, failed: 0 }, 'No file was installed']
+    ] as const)('rejects an unsuccessful upload result %j', async (result, message) => {
+      mockHttpService.get.mockReturnValueOnce(of({ data: Buffer.from('<html/>') }));
+      mockWorkspaceFilesService.uploadTestFiles.mockResolvedValueOnce(result);
+
+      await expect(service.downloadAndInstall(7, 'https://example.org/module.html')).rejects.toThrow(`Failed to install module.html: ${message}`);
+    });
+  });
+
   describe('installCompatibleAspectPlayer', () => {
     it('should install the minimal compatible Aspect player release', async () => {
       mockHttpService.get
@@ -127,7 +141,7 @@ describe('GithubReleasesService', () => {
         .mockReturnValueOnce(of({
           data: Buffer.from('<html></html>')
         }));
-      mockWorkspaceFilesService.uploadTestFiles.mockResolvedValue([]);
+      mockWorkspaceFilesService.uploadTestFiles.mockResolvedValueOnce({ total: 1, uploaded: 1, failed: 0 });
 
       const result = await service.installCompatibleAspectPlayer(7);
 

@@ -152,6 +152,42 @@ describe('WorkspaceFileParsingService', () => {
     });
   });
 
+  it.each(['before', 'after'])('recognizes a schemer with unrelated JSON-LD %s the module', order => {
+    const metadata = { '@type': 'schemer', '@id': 'module', version: '1.2.3' };
+    const schemer = `<script type="application/ld+json">${JSON.stringify(metadata)}</script>`;
+    const other = '<script type="application/ld+json">{"@type":"WebPage","@id":"page","version":"2.0"}</script>';
+    const html = order === 'before' ? other + schemer : schemer + other;
+    expect(service.identifyHtmlFile('module.html', html)).toEqual({
+      fileId: 'MODULE-1.2.3', fileType: 'Schemer', metadata, usesFilename: false
+    });
+  });
+
+  it('preserves the versioned resource key for a single legacy module block', () => {
+    const html = '<script type="application/ld+json">{"type":"editor","id":"old-editor","version":"2.4"}</script>';
+    expect(service.identifyHtmlFile('editor.html', html)).toMatchObject({
+      fileId: 'OLD-EDITOR-2.4.0', fileType: 'Resource', usesFilename: false
+    });
+  });
+
+  it('prefers an explicitly typed player over an earlier untyped candidate', () => {
+    const html = `
+      <script type="application/ld+json">{"id":"page","version":"1"}</script>
+      <script type="application/ld+json">{"type":"PLAYER","id":"iqb-player-aspect","version":"3.1.2"}</script>`;
+    expect(service.identifyHtmlFile('module.html', html)).toMatchObject({
+      fileId: 'IQB-PLAYER-ASPECT-3.1.2', fileType: 'Resource', usesFilename: false
+    });
+  });
+
+  it('reads legacy player metadata alongside malformed and unrelated JSON-LD', () => {
+    const html = `
+      <script type="application/ld+json">{broken</script>
+      <script type="application/ld+json">{"@type":"WebPage","@id":"page","version":"2.0"}</script>
+      <script type="application/ld+json">{"id":"old-player","version":"1.0"}</script>`;
+    expect(service.identifyHtmlFile('module.html', html)).toMatchObject({
+      fileId: 'OLD-PLAYER-1.0.0', fileType: 'Resource', usesFilename: false
+    });
+  });
+
   it('decodes resource paths and rejects uploads without a filename', () => {
     expect(service.getResourceId('folder%2Fnested%2Funit%20a.xml')).toBe('UNIT A.XML');
     expect(() => service.getResourceId('')).toThrow('originalname is required');
