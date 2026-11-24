@@ -15,7 +15,7 @@ import {
   UploadedFiles,
   Put,
   ParseIntPipe, Req,
-  ParseBoolPipe, DefaultValuePipe, Res
+  ParseBoolPipe, DefaultValuePipe, Res, Next
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -32,7 +32,7 @@ import {
   getSchemaPath
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
@@ -494,9 +494,10 @@ export class WorkspaceFilesController {
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Param('archiveId') archiveId: string,
     @Req() request: Request,
-    @Res() response: Response
+    @Res() response: Response,
+    @Next() next: NextFunction
   ): void {
-    this.zipDownload.download(workspaceId, archiveId, workspaceDownloadPath(request), request.get('cookie'), response);
+    this.zipDownload.download(workspaceId, archiveId, workspaceDownloadPath(request), request.get('cookie'), response, next);
   }
 
   @Get(':workspace_id/files/download-zip/:archiveId')

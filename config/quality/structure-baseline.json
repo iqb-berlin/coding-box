@@ -455,12 +455,12 @@
     },
     "apps/backend/src/app/database/services/coding/coding-item-matrix-export.service.ts": {
       "file": {
-        "max-lines": 899
+        "max-lines": 891
       },
       "functions": {
         "class CodingItemMatrixExportService#1/method resolveRows#1": {
           "max-depth": 5,
-          "max-lines-per-function": 108
+          "max-lines-per-function": 105
         }
       }
     },
@@ -822,11 +822,8 @@
       "file": {},
       "functions": {
         "class ItemDatasetCellResolver#1/method resolveDerivedState#1": {
-          "complexity": 27,
-          "max-lines-per-function": 153
-        },
-        "class ItemDatasetCellResolver#1/method resolveIncrementally#1": {
-          "max-lines-per-function": 105
+          "complexity": 26,
+          "max-lines-per-function": 110
         },
         "class ItemDatasetCellResolver#1/method resolveInitialCell#1": {
           "complexity": 26

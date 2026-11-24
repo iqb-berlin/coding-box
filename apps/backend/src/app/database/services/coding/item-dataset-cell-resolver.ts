@@ -36,6 +36,7 @@ export interface ItemDatasetResponseValue {
   code: number | null;
   score: number | null;
   status: number | null;
+  failureReason?: ItemMatrixCellFailureReason;
 }
 
 export interface ItemDatasetBookletUnitPosition {
@@ -46,6 +47,7 @@ export interface ItemDatasetBookletUnitPosition {
 
 export interface ItemDatasetBookletDesign {
   units: Map<string, ItemDatasetBookletUnitPosition>;
+  ambiguousUnitPositions?: ReadonlySet<string>;
 }
 
 export interface ItemDatasetMissingValue {
@@ -141,14 +143,10 @@ export class ItemDatasetCellResolver {
       yield* this.checkpoint(operationCounter);
       const value = responseValues.get(column.key);
       derivedWithoutResult.push(
-        column.isDerived &&
+        column.isDerived && !value?.failureReason &&
           (!value || (value.code === null && value.score === null))
       );
-      initialCells.push(
-        design.units.has(column.unitId) ?
-          this.resolveInitialCell(value, profile) :
-          this.fromMissing(profile.byId.get('mbd')!)
-      );
+      initialCells.push(this.resolveCellInDesign(column.unitId, design, value, profile));
     }
     const sourceColumns = yield* this.getDerivedSourceColumns(
       columns,
@@ -159,11 +157,7 @@ export class ItemDatasetCellResolver {
     const sourceCells: ResolvedItemDatasetCell[] = [];
     for (const column of sourceColumns) {
       yield* this.checkpoint(operationCounter);
-      sourceCells.push(
-        design.units.has(column.unitId) ?
-          this.resolveInitialCell(responseValues.get(column.key), profile) :
-          this.fromMissing(profile.byId.get('mbd')!)
-      );
+      sourceCells.push(this.resolveCellInDesign(column.unitId, design, responseValues.get(column.key), profile));
     }
     const resolutionColumns = [...columns, ...sourceColumns];
     const resolutionCells = [...initialCells, ...sourceCells];
@@ -426,6 +420,18 @@ export class ItemDatasetCellResolver {
     }
   }
 
+  private resolveCellInDesign(
+    unitId: string,
+    design: ItemDatasetBookletDesign,
+    value: ItemDatasetResponseValue | undefined,
+    profile: ItemDatasetProfile
+  ): ResolvedItemDatasetCell {
+    if (design.ambiguousUnitPositions?.has(unitId) || value?.failureReason) {
+      return { ...this.unresolvedCell(value?.failureReason), activity: false };
+    }
+    return design.units.has(unitId) ? this.resolveInitialCell(value, profile) : this.fromMissing(profile.byId.get('mbd')!);
+  }
+
   private resolveInitialCell(
     value: ItemDatasetResponseValue | undefined,
     profile: ItemDatasetProfile
@@ -639,70 +645,27 @@ export class ItemDatasetCellResolver {
     for (const sourceKey of sources) {
       yield* this.checkpoint(operationCounter);
       const sourceValue = responseValues.get(sourceKey);
-      if (
-        sourceValue &&
-        (sourceValue.code !== null || sourceValue.score !== null)
-      ) {
-        const state =
-          cellsByResponseKey.get(sourceKey)?.state ||
-          this.resolveInitialCell(sourceValue, profile).state;
-        const hasResolvedSource = state === 'valid';
-        const hasOmittedSource = state === 'mbi_mbo';
-        resolutions.push({
-          state,
-          hasResolvedSource,
-          hasOmittedSource,
-          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
-        });
-        continue;
-      }
-      if (derivedSources.has(sourceKey)) {
-        resolutions.push(
-          yield* this.resolveDerivedState(
-            sourceKey,
-            responseValues,
-            derivedSources,
-            profile,
-            cellsByResponseKey,
-            recursion,
-            operationCounter
-          )
-        );
-        continue;
-      }
       const resolvedSource = cellsByResponseKey.get(sourceKey);
-      if (resolvedSource) {
-        const hasResolvedSource = resolvedSource.state === 'valid';
-        const hasOmittedSource = resolvedSource.state === 'mbi_mbo';
-        resolutions.push({
-          state: resolvedSource.state,
-          failureReason: resolvedSource.failureReason,
-          hasResolvedSource,
-          hasOmittedSource,
-          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
-        });
-        continue;
-      }
-      if (sourceValue) {
+      if (sourceValue?.failureReason) {
+        resolutions.push(this.summarizeDerivedSource('error', sourceValue.failureReason));
+      } else if (sourceValue && (sourceValue.code !== null || sourceValue.score !== null)) {
+        const state = resolvedSource?.state || this.resolveInitialCell(sourceValue, profile).state;
+        resolutions.push(this.summarizeDerivedSource(state));
+      } else if (derivedSources.has(sourceKey)) {
+        resolutions.push(yield* this.resolveDerivedState(
+          sourceKey, responseValues, derivedSources, profile, cellsByResponseKey, recursion, operationCounter
+        ));
+      } else if (resolvedSource) {
+        resolutions.push(this.summarizeDerivedSource(resolvedSource.state, resolvedSource.failureReason));
+      } else if (sourceValue) {
         const sourceCell = this.resolveInitialCell(sourceValue, profile);
-        const hasResolvedSource = sourceCell.state === 'valid';
-        const hasOmittedSource = sourceCell.state === 'mbi_mbo' ||
-          this.isOmittedResponse(sourceValue);
-        resolutions.push({
-          state: sourceCell.state,
-          failureReason: sourceCell.failureReason,
-          hasResolvedSource,
-          hasOmittedSource,
-          hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
-        });
+        resolutions.push(this.summarizeDerivedSource(
+          sourceCell.state,
+          sourceCell.failureReason,
+          sourceCell.state === 'mbi_mbo' || this.isOmittedResponse(sourceValue)
+        ));
       } else {
-        resolutions.push({
-          state: 'error',
-          failureReason: 'derived-source-unresolved',
-          hasResolvedSource: false,
-          hasOmittedSource: false,
-          hasIneligibleSource: true
-        });
+        resolutions.push(this.summarizeDerivedSource('error', 'derived-source-unresolved'));
       }
     }
     recursion.delete(key);
@@ -748,6 +711,17 @@ export class ItemDatasetCellResolver {
       ...(state === 'error' ?
         { failureReason: 'derived-source-unresolved' as const } :
         {})
+    };
+  }
+
+  private summarizeDerivedSource(
+    state: ItemDatasetMissingState,
+    failureReason?: ItemMatrixCellFailureReason,
+    hasOmittedSource = state === 'mbi_mbo'
+  ): DerivedStateResolution {
+    const hasResolvedSource = state === 'valid';
+    return {
+      state, failureReason, hasResolvedSource, hasOmittedSource, hasIneligibleSource: !hasResolvedSource && !hasOmittedSource
     };
   }
 

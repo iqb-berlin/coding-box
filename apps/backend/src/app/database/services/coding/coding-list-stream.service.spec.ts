@@ -323,6 +323,32 @@ describe('CodingListStreamService', () => {
       expect(mockResponseFilterService.readVersionedResponseBatches).not.toHaveBeenCalled();
     });
 
+    it('closes the batch iterator when the CSV stream closes during backpressure', async () => {
+      let closeBatches!: () => void;
+      const batchesClosed = new Promise<void>(resolve => { closeBatches = resolve; });
+      const rows = Array.from({ length: 250 }, (_, index) => createMockVersionRow(index + 1));
+      mockResponseFilterService.readVersionedResponseBatches.mockImplementationOnce(async function* trackBatchClosure() {
+        try {
+          yield rows;
+        } finally {
+          closeBatches();
+        }
+      });
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
+        value: 'x'.repeat(4096)
+      } as Awaited<ReturnType<CodingItemBuilderService['buildCodingItemWithVersionRow']>>);
+      const stream = await service.getCodingResultsByVersionCsvStream(1, 'v1', 1, '', '');
+
+      for (let attempt = 0; attempt < 20 && !stream.writableNeedDrain; attempt += 1) {
+        await new Promise(resolve => { setImmediate(resolve); });
+      }
+      expect(stream.writableNeedDrain).toBe(true);
+      expect(stream.listenerCount('drain')).toBeGreaterThan(0);
+      stream.destroy();
+      await batchesClosed;
+      expect(stream.listenerCount('drain')).toBe(0);
+    });
+
     it('should write headers for empty versioned CSV exports', async () => {
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,

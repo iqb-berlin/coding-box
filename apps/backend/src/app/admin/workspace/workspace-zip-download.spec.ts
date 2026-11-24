@@ -1,9 +1,14 @@
+import { EventEmitter, once } from 'node:events';
+import { PassThrough } from 'node:stream';
 import type { Response } from 'express';
 import { WorkspaceZipDownload } from './workspace-zip-download';
 
 describe('Segmented workspace ZIP downloads', () => {
-  const mockResponse = () => ({
+  const mockResponse = () => Object.assign(new PassThrough(), {
     setHeader: jest.fn(),
+    getHeader: jest.fn(),
+    statusCode: 200,
+    req: Object.assign(new EventEmitter(), { method: 'GET' }),
     cookie: jest.fn(),
     download: jest.fn()
   }) as unknown as jest.Mocked<Response>;
@@ -21,16 +26,68 @@ describe('Segmented workspace ZIP downloads', () => {
       });
       const path = `${route}/${id}/download`;
       const cookie = `${name}=${secret}`;
-      expect(() => service.download(1, id, path, undefined, response)).toThrow('ZIP archive unavailable');
-      expect(() => service.download(2, id, path, cookie, response)).toThrow('ZIP archive unavailable');
-      expect(() => service.download(1, id, path.replace(id, 'another'), cookie, response)).toThrow('ZIP archive unavailable');
+      expect(() => service.download(1, id, path, undefined, response, jest.fn())).toThrow('ZIP archive unavailable');
+      expect(() => service.download(2, id, path, cookie, response, jest.fn())).toThrow('ZIP archive unavailable');
+      expect(() => service.download(1, id, path.replace(id, 'another'), cookie, response, jest.fn())).toThrow('ZIP archive unavailable');
       expect(() => service.segment(1, id, 0, response)).toThrow('ZIP archive unavailable');
-      service.download(1, id, path, cookie, response);
+      service.download(1, id, path, cookie, response, jest.fn());
       expect(response.download).toHaveBeenCalledWith(expect.stringMatching(/workspace\.zip$/), 'workspace-1-files.zip', {
         headers: { 'Cache-Control': 'no-store, no-transform' }
-      });
+      }, expect.any(Function));
       await jest.runOnlyPendingTimersAsync();
-      expect(() => service.download(1, id, path, cookie, response)).toThrow('ZIP archive unavailable');
+      (response.download.mock.lastCall?.[3] as (error?: Error) => void)(new Error('connection aborted'));
+      expect(() => service.download(1, id, path, cookie, response, jest.fn())).toThrow('ZIP archive unavailable');
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('keeps aborted and partial transfers available until a full GET completes', async () => {
+    jest.useFakeTimers({ doNotFake: ['nextTick', 'setImmediate'] });
+    try {
+      const service = new WorkspaceZipDownload();
+      const prepareResponse = mockResponse();
+      const route = '/api/admin/workspace/1/files/download-zip';
+      const { id } = await service.prepare(1, Buffer.from('zip'), route, prepareResponse);
+      const path = `${route}/${id}/download`;
+      const [name, secret] = prepareResponse.cookie.mock.calls[0];
+      const next = jest.fn();
+      const download = (response = mockResponse()) => {
+        service.download(1, id, path, `${name}=${secret}`, response, next);
+        const fileComplete = response.download.mock.lastCall?.[3] as (error?: Error) => void;
+        return { response, fileComplete };
+      };
+      const finish = async ({ response, fileComplete }: ReturnType<typeof download>) => {
+        fileComplete();
+        const completed = once(response, 'finish');
+        response.end();
+        await completed;
+      };
+
+      const interrupted = new Error('file read failed');
+      download().fileComplete(interrupted);
+      expect(next).toHaveBeenCalledWith(interrupted);
+
+      const disconnected = download();
+      disconnected.fileComplete();
+      const closed = once(disconnected.response, 'close');
+      disconnected.response.destroy();
+      await closed;
+
+      const head = download();
+      head.response.req.method = 'HEAD';
+      await finish(head);
+      const partial = download();
+      partial.response.statusCode = 206;
+      partial.response.getHeader.mockReturnValueOnce('bytes 1-2/3');
+      await finish(partial);
+
+      const concurrent = download();
+      await finish(download());
+      expect(() => download()).toThrow('ZIP archive unavailable');
+      await finish(concurrent);
+      await jest.runOnlyPendingTimersAsync();
+      expect(next).toHaveBeenCalledTimes(1);
     } finally {
       jest.useRealTimers();
     }

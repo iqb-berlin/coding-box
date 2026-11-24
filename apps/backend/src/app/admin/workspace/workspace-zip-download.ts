@@ -6,7 +6,8 @@ import { createReadStream } from 'node:fs';
 import { mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import type { Response } from 'express';
+import { finished } from 'node:stream/promises';
+import type { NextFunction, Response } from 'express';
 import { WorkspaceDownloadTicket, workspaceDownloadLifetimeMs } from './workspace-download-ticket';
 
 const segmentSize = 8 * 1024 * 1024;
@@ -17,6 +18,9 @@ interface Archive {
   path: string;
   size: number;
   prepared: boolean;
+  directory: string;
+  expiry: ReturnType<typeof setTimeout>;
+  active: number;
 }
 
 export class WorkspaceZipDownload {
@@ -42,14 +46,58 @@ export class WorkspaceZipDownload {
     return { id };
   }
 
-  download(workspaceId: number, id: string, path: string, cookie: string | undefined, response: Response): void {
+  download(
+    workspaceId: number,
+    id: string,
+    path: string,
+    cookie: string | undefined,
+    response: Response,
+    next: NextFunction
+  ): void {
     const archive = this.archives.get(id);
     if (!archive?.prepared || archive.workspaceId !== workspaceId || !this.ticket.matches(path, cookie)) {
       throw new NotFoundException('ZIP archive unavailable');
     }
+    archive.active += 1;
     response.download(archive.path, `workspace-${workspaceId}-files.zip`, {
       headers: { 'Cache-Control': 'no-store, no-transform' }
+    }, error => {
+      if (error) {
+        this.completeTransfer(id, archive, false);
+        if (!response.destroyed) next(error);
+      } else {
+        // Express can finish reading the file before the HTTP response finishes.
+        finished(response, { readable: false, cleanup: true }).then(
+          () => this.completeTransfer(id, archive, this.isFullTransfer(response, archive.size)),
+          () => this.completeTransfer(id, archive, false)
+        );
+      }
     });
+  }
+
+  private completeTransfer(id: string, archive: Archive, fullTransfer: boolean): void {
+    archive.active -= 1;
+    if (!this.archives.has(id)) {
+      this.discardIfIdle(archive);
+    } else if (fullTransfer) {
+      this.retire(id, archive);
+    }
+  }
+
+  private isFullTransfer(response: Response, size: number): boolean {
+    return response.req.method === 'GET' &&
+      (response.statusCode === 200 ||
+        response.getHeader('Content-Range') === `bytes 0-${size - 1}/${size}`);
+  }
+
+  private retire(id: string, archive: Archive): void {
+    clearTimeout(archive.expiry);
+    this.archives.delete(id);
+    this.discardIfIdle(archive);
+  }
+
+  private discardIfIdle(archive: Archive): void {
+    if (archive.active === 0) this.discard(archive.directory, archive.size);
   }
 
   private async store(workspaceId: number, data: Buffer, prepared = false): Promise<string> {
@@ -65,13 +113,13 @@ export class WorkspaceZipDownload {
       const path = join(directory, 'workspace.zip');
       await writeFile(path, data, { mode: 0o600 });
       const id = randomUUID();
-      this.archives.set(id, {
-        path, workspaceId, size, prepared
-      });
-      setTimeout(() => {
-        this.archives.delete(id);
-        this.discard(directory, size);
+      const expiry = setTimeout(() => {
+        const archive = this.archives.get(id);
+        if (archive) this.retire(id, archive);
       }, workspaceDownloadLifetimeMs).unref();
+      this.archives.set(id, {
+        path, workspaceId, size, prepared, directory, expiry, active: 0
+      });
       return id;
     } catch (error) {
       this.discard(directory, size);
@@ -106,6 +154,6 @@ export class WorkspaceZipDownload {
     }
     rm(directory, { recursive: true, force: true }).then(() => {
       this.storedBytes -= size;
-    }).catch(() => this.logger.warn('Could not remove expired workspace ZIP'));
+    }).catch(() => this.logger.warn('Could not remove temporary workspace ZIP'));
   }
 }

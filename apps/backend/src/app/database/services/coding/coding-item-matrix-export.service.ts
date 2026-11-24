@@ -10,6 +10,7 @@ import { once } from 'events';
 import { pipeline } from 'stream/promises';
 import { Repository } from 'typeorm';
 import type { RawResponseValueRow } from './item-dataset-response-row';
+import { resolveItemDatasetLegacyResponseUnits } from './item-dataset-booklet-aliases';
 import {
   ItemDatasetNotReachedScope,
   ItemDatasetOptionsDto,
@@ -20,7 +21,8 @@ import {
 } from '../../../../../../../api-dto/coding/export-request.dto';
 import {
   ItemDatasetResponseKey,
-  ItemDatasetSelectionKey
+  ItemDatasetSelectionKey,
+  normalizeItemDatasetUnitId
 } from '../../../../../../../api-dto/coding/item-dataset-key';
 import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -584,10 +586,7 @@ export class CodingItemMatrixExportService {
       await checkCancellation?.();
       const rows = context.rows.slice(start, start + batchSize);
       const valuesByBooklet = await this.getResponseValuesForRows(
-        workspaceId,
-        rows,
-        version,
-        checkCancellation
+        workspaceId, rows, version, context.bookletDesigns, checkCancellation
       );
       for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
         await this.checkExportCancellationPoint(rowIndex, checkCancellation);
@@ -768,21 +767,22 @@ export class CodingItemMatrixExportService {
     workspaceId: number,
     rows: MatrixRow[],
     version: ItemMatrixVersion,
+    bookletDesigns: ReadonlyMap<string, BookletDesign>,
     checkCancellation?: () => Promise<void>
   ): Promise<Map<number, Map<string, ResponseValue>>> {
     if (rows.length === 0) {
       return new Map();
     }
-    const exclusions =
-      await this.workspaceExclusionService.resolveExclusionsForQueries(
-        workspaceId
-      );
-    const validMap =
-      await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const isIncluded = (row: RawResponseValueRow) => (
+      !isExcludedByResolvedExclusions(exclusions, row.bookletName, row.unitName)
+    );
+    const validMap = await this.workspaceFilesService.getUnitVariableMap(workspaceId);
+    const canonicalIds = new Set(Array.from(validMap.keys(), normalizeItemDatasetUnitId));
     const validPairs = new Set(
-      Array.from(validMap.entries()).flatMap(([unitName, variables]) => Array.from(variables).map(variable => this.getResponseKey(unitName, variable)
-      )
-      )
+      Array.from(validMap).flatMap(([unitId, variables]) => Array.from(
+        variables, variableId => ItemDatasetResponseKey.from(unitId, variableId).toString()
+      ))
     );
     await checkCancellation?.();
     const responses = await this.responseRepository
@@ -793,6 +793,7 @@ export class CodingItemMatrixExportService {
       .select('response.id', 'id')
       .addSelect('booklet.id', 'bookletId')
       .addSelect('bookletinfo.name', 'bookletName')
+      .addSelect('unit.id', 'unitId')
       .addSelect('unit.name', 'unitName')
       .addSelect('unit.alias', 'unitAlias')
       .addSelect('response.variableid', 'variableId')
@@ -812,6 +813,10 @@ export class CodingItemMatrixExportService {
       .orderBy('response.id', 'ASC')
       .getRawMany<RawResponseValueRow>();
     await checkCancellation?.();
+    const warnAmbiguousUnit = (bookletId: number, unitId: string) => this.logger.warn(
+      `Workspace ${workspaceId}, booklet instance ${bookletId}: multiple imported units for '${unitId}'`
+    );
+    const legacyUnits = resolveItemDatasetLegacyResponseUnits(responses, bookletDesigns, canonicalIds, isIncluded, warnAmbiguousUnit);
     const result = new Map<number, Map<string, ResponseValue>>();
     const canonicalKeysByBooklet = new Map<number, Set<string>>();
     for (let index = 0; index < responses.length; index += 1) {
@@ -820,34 +825,27 @@ export class CodingItemMatrixExportService {
         await this.yieldToEventLoop();
       }
       const response = responses[index];
-      if (
-        isExcludedByResolvedExclusions(
-          exclusions,
-          response.bookletName || '',
-          response.unitName || ''
-        )
-      ) {
-        continue;
-      }
-      const variable = response.variableId;
+      if (!isIncluded(response)) continue;
+      const unitName = normalizeItemDatasetUnitId(response.unitName);
+      const legacyUnit = legacyUnits.get(Number(response.unitId));
+      const canonical = !legacyUnit && canonicalIds.has(unitName);
+      const unitId = canonical ? unitName : legacyUnit?.canonicalId;
+      if (!unitId) continue;
+
+      const key = ItemDatasetResponseKey.from(unitId, response.variableId).toString();
+      if (!validPairs.has(key)) continue;
+
       const bookletId = Number(response.bookletId);
-      const canonicalKey = this.getResponseKey(response.unitName, variable);
-      const aliasKey = this.getResponseKey(response.unitAlias || '', variable);
-      const includeCanonical = validPairs.has(canonicalKey);
-      const includeAlias = aliasKey !== canonicalKey && validPairs.has(aliasKey);
-      if (!includeCanonical && !includeAlias) {
-        continue;
-      }
       const values = result.get(bookletId) || new Map<string, ResponseValue>();
       const canonicalKeys = canonicalKeysByBooklet.get(bookletId) || new Set<string>();
-      const value = this.getVersionedValue(response, version);
-      if (includeCanonical) {
-        values.set(canonicalKey, value);
-        canonicalKeys.add(canonicalKey);
-      }
-      if (includeAlias && !canonicalKeys.has(aliasKey)) {
-        values.set(aliasKey, value);
-      }
+      if (!canonical && canonicalKeys.has(key)) continue;
+
+      values.set(key, legacyUnit?.ambiguous ?
+        {
+          code: null, score: null, status: null, failureReason: 'unresolved-cell'
+        } :
+        this.getVersionedValue(response, version));
+      if (canonical) canonicalKeys.add(key);
       result.set(bookletId, values);
       canonicalKeysByBooklet.set(bookletId, canonicalKeys);
     }
@@ -903,10 +901,6 @@ export class CodingItemMatrixExportService {
 
   private getSelectionKey(unitId: string, itemId: string): string {
     return ItemDatasetSelectionKey.from(unitId, itemId).toString();
-  }
-
-  private getResponseKey(unitId: string, variableId: string): string {
-    return ItemDatasetResponseKey.from(unitId, variableId).toString();
   }
 
   private toNullableNumber(

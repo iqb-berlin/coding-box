@@ -984,9 +984,16 @@ export class CodingListStreamService {
       alwaysWriteHeaders: true
     });
 
+    const transfer = new AbortController();
+    csvStream.once('close', () => transfer.abort());
+    const checkTransfer = async () => {
+      await checkCancellation?.();
+      transfer.signal.throwIfAborted();
+    };
+
     (async () => {
       try {
-        await checkCancellation?.();
+        await checkTransfer();
         const batchSize = this.getVersionedExportBatchSize();
         const knownAnchors: CodingVariableAnchorMaps = new Map();
         const pageCache = new LRUCache<Map<string, string>>(CodingListStreamService.exportPageMapCacheSize);
@@ -996,7 +1003,7 @@ export class CodingListStreamService {
         const totalRows = await this.countVersionedResponseRows(
           workspace_id,
           version,
-          checkCancellation
+          checkTransfer
         );
         await progressCallback?.(totalRows > 0 ? 1 : 0, {
           phase: 'writing',
@@ -1008,20 +1015,23 @@ export class CodingListStreamService {
           lastReportedAt: Date.now()
         };
 
+        const reportProgress = (endOfBatch = false) => this.reportRowBasedProgress(
+          progressCallback, totalWritten, totalRows, progressState, endOfBatch
+        );
         for await (const rows of this.responseFilterService.readVersionedResponseBatches(
           workspace_id, batchSize, versionExportOptions, includeResponseValues
         )) {
-          await checkCancellation?.();
+          await checkTransfer();
           const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
             rows,
             workspace_id,
             knownAnchors,
-            checkCancellation
+            checkTransfer
           );
 
           for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
             if (this.shouldYieldExportRow(rowIndex)) {
-              await checkCancellation?.();
+              await checkTransfer();
               await this.yieldToEventLoop();
             }
 
@@ -1041,33 +1051,21 @@ export class CodingListStreamService {
             );
 
             if (item === null) continue;
-            const ok = csvStream.write(item);
-            totalWritten += 1;
-            await this.reportRowBasedProgress(
-              progressCallback,
-              totalWritten,
-              totalRows,
-              progressState
-            );
-
-            if (!ok) {
-              await once(csvStream, 'drain');
-              await checkCancellation?.();
+            transfer.signal.throwIfAborted();
+            if (!csvStream.write(item)) {
+              await once(csvStream, 'drain', { signal: transfer.signal });
+              await checkTransfer();
             }
+            totalWritten += 1;
+            await reportProgress();
           }
 
-          await this.reportRowBasedProgress(
-            progressCallback,
-            totalWritten,
-            totalRows,
-            progressState,
-            true
-          );
-
+          await reportProgress(true);
           await this.yieldToEventLoop();
+          await checkTransfer();
         }
 
-        await checkCancellation?.();
+        await checkTransfer();
         await progressCallback?.(100, {
           phase: 'finalizing',
           processedRows: totalWritten,
@@ -1078,6 +1076,7 @@ export class CodingListStreamService {
         );
         csvStream.end();
       } catch (error) {
+        if (csvStream.destroyed) return;
         this.logger.error(
           `Error streaming CSV export for version ${version}: ${getErrorMessage(error)}`
         );

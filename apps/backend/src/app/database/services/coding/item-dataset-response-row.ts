@@ -2,6 +2,7 @@ export interface RawResponseValueRow {
   id: number;
   bookletId: number | string;
   bookletName: string;
+  unitId: number | string;
   unitName: string;
   unitAlias: string | null;
   variableId: string;
