@@ -130,7 +130,6 @@ async function selectReplayPeople(config) {
         u.name AS unit_name,
         u.alias AS unit_alias,
         r.value AS response_value,
-        r.status AS response_status,
         COALESCE(NULLIF(c.key, ''), NULLIF(r.subform, ''), '') AS response_chunk_id,
         au.id AS workspace_user_id,
         au.username AS workspace_username,
@@ -164,7 +163,6 @@ async function selectReplayPeople(config) {
         unit_name,
         unit_alias,
         response_value,
-        response_status,
         response_chunk_id,
         workspace_user_id,
         workspace_username
@@ -209,7 +207,6 @@ async function selectReplayPeople(config) {
         unitName: row.unit_name,
         unitAlias: row.unit_alias,
         responseValue: row.response_value,
-        responseStatus: Number(row.response_status),
         responseChunkId: row.response_chunk_id,
         workspaceUserId: Number(row.workspace_user_id),
         workspaceUsername: row.workspace_username
@@ -224,7 +221,7 @@ function toPersonExpectation(person, responseVariableId) {
     ),
     responseChunkId: person.responseChunkId,
     responseVariable: responseVariableId,
-    responseStatus: person.responseStatus,
+    responseStatus: 'VALUE_CHANGED', // selectReplayPeople filters for status 3.
     responseValue: person.responseValue
   };
 }

@@ -2595,6 +2595,52 @@ describe('WorkspaceTestResultsService', () => {
       }
     };
 
+    it('rebuilds legacy cached responses with named player statuses and reuses the updated result', async () => {
+      const connector = 'login@code@group@booklet';
+      const rows = [
+        {
+          variableid: 'answer', value: 'text', status: 3, subform: 'elementCodes'
+        },
+        {
+          variableid: 'seen', value: null, status: 2, subform: 'elementCodes'
+        },
+        {
+          variableid: 'empty', value: null, status: 0, subform: 'elementCodes'
+        },
+        {
+          variableid: 'unknown', value: null, status: 99, subform: 'elementCodes'
+        }
+      ];
+      const cached = new Map<string, { responses: { id: string; content: string }[] }>();
+      cached.set(`1:${connector}:unit:v7`, {
+        responses: [{
+          id: 'elementCodes',
+          content: JSON.stringify([{ id: 'answer', value: 'text', status: 3 }])
+        }]
+      });
+      cacheService.get.mockImplementation(key => cached.get(key));
+      cacheService.set.mockImplementation((key, result) => cached.set(key, result));
+      const unitQb = mockQueryBuilder();
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      const responseQb = mockQueryBuilder();
+      responseQb.getRawMany.mockResolvedValue(rows);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+
+      const result = await service.findUnitResponse(1, connector, 'unit');
+
+      expect(result.responses).toHaveLength(1);
+      expect(result.responses[0].id).toBe('elementCodes');
+      expect(JSON.parse(result.responses[0].content)).toEqual([
+        { id: 'answer', value: 'text', status: 'VALUE_CHANGED' },
+        { id: 'seen', value: null, status: 'DISPLAYED' },
+        { id: 'empty', value: null, status: 'UNSET' },
+        { id: 'unknown', value: null, status: 'UNSET' }
+      ]);
+      await expect(service.findUnitResponse(1, connector, 'unit')).resolves.toEqual(result);
+      expect(responseQb.getRawMany).toHaveBeenCalledTimes(1);
+    });
+
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
         globalIgnoredUnits: [],
