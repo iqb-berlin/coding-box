@@ -1,15 +1,5 @@
 import * as cheerio from 'cheerio';
-import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
-
-const file = (originalname: string, content = ''): FileIo => ({
-  originalname,
-  buffer: Buffer.from(content),
-  fieldname: 'files',
-  encoding: 'utf-8',
-  mimetype: 'text/html',
-  size: Buffer.byteLength(content)
-});
 
 describe('WorkspaceFileParsingService', () => {
   let service: WorkspaceFileParsingService;
@@ -129,32 +119,43 @@ describe('WorkspaceFileParsingService', () => {
   it.each(['id', '@id'])(
     'uses player metadata %s and version rather than the upload filename',
     idField => {
-      const player = file('fallback.html', `<script type="application/ld+json">${JSON.stringify({
+      const html = `<script type="application/ld+json">${JSON.stringify({
         [idField]: 'verona-player', version: '2.4.1'
-      })}</script>`);
+      })}</script>`;
 
-      expect(service.getPlayerId(player)).toBe('VERONA-PLAYER-2.4.1');
+      expect(service.identifyHtmlFile('fallback.html', html)).toMatchObject({
+        fileId: 'VERONA-PLAYER-2.4.1', fileType: 'Resource', usesFilename: false
+      });
     }
   );
 
   it.each([
-    '<script type="application/ld+json">invalid json</script>',
-    '<script type="application/ld+json">{"id":"player"}</script>'
-  ])('falls back to the resource filename when player metadata is unusable', content => {
-    expect(service.getPlayerId(file('folder/player%20upload.html', content)))
-      .toBe('PLAYER UPLOAD.HTML');
+    '',
+    'invalid json',
+    'null',
+    '[]',
+    '{"id":"player"}',
+    '{"@type":"schemer","version":"1.0"}',
+    '{"@type":"schemer","@id":"schemer"}',
+    '{"@type":"schemer","@id":"schemer","version":"invalid"}'
+  ])('uses the decoded resource filename for unusable metadata %j', json => {
+    const html = json && `<script type="application/ld+json">${json}</script>`;
+    expect(service.identifyHtmlFile('folder/player%20upload.html', html)).toMatchObject({
+      fileId: 'PLAYER UPLOAD.HTML', fileType: 'Resource', usesFilename: true
+    });
   });
 
   it('extracts a schemer ID from its metadata', () => {
-    expect(service.getSchemerId(file('fallback.html',
-      '<script type="application/ld+json">{"@id":"verona-schemer","version":"1.2.3"}</script>'
-    ))).toBe('VERONA-SCHEMER-1.2.3');
+    const html = '<script type="application/ld+json">{"@type":"schemer","@id":"verona-schemer","version":"1.2.3-beta.1+build"}</script>';
+    expect(service.identifyHtmlFile('fallback.html', html)).toMatchObject({
+      fileId: 'VERONA-SCHEMER-1.2.3', fileType: 'Schemer', metadata: { version: '1.2.3-beta.1+build' }, usesFilename: false
+    });
   });
 
   it('decodes resource paths and rejects uploads without a filename', () => {
-    expect(service.getResourceId(file('folder%2Fnested%2Funit%20a.xml'))).toBe('UNIT A.XML');
-    expect(() => service.getResourceId(file(''))).toThrow('originalname is required');
-    expect(() => service.getResourceId(file('folder/'))).toThrow('Could not determine the file name');
-    expect(() => service.getResourceId(file('unit%ZZ.xml'))).toThrow(URIError);
+    expect(service.getResourceId('folder%2Fnested%2Funit%20a.xml')).toBe('UNIT A.XML');
+    expect(() => service.getResourceId('')).toThrow('originalname is required');
+    expect(() => service.getResourceId('folder/')).toThrow('Could not determine the file name');
+    expect(() => service.getResourceId('unit%ZZ.xml')).toThrow(URIError);
   });
 });

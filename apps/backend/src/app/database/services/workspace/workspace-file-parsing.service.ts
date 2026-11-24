@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { FileIo } from '../../../admin/workspace/file-io.interface';
 
 @Injectable()
 export class WorkspaceFileParsingService {
@@ -242,42 +241,45 @@ export class WorkspaceFileParsingService {
     }
   }
 
-  getPlayerId(file: FileIo): string {
-    try {
-      const playerCode = file.buffer.toString();
-      const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      const id = metadata.id || metadata['@id'];
-      const version = metadata.version;
-
-      if (!id || !version) {
-        return this.getResourceId(file);
+  identifyHtmlFile(filename: string, html: string) {
+    const document = cheerio.load(html);
+    const json = document('script[type="application/ld+json"]').text();
+    let metadata: Record<string, unknown> = {};
+    if (json) {
+      try {
+        const parsed: unknown = JSON.parse(json);
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          metadata = parsed as Record<string, unknown>;
+        }
+      } catch {
+        // HTML resources can contain missing or malformed module metadata.
       }
-
-      return this.normalizePlayerId(`${id}-${version}`);
-    } catch (error) {
-      return this.getResourceId(file);
     }
+
+    const isSchemer = metadata['@type'] === 'schemer';
+    const id = isSchemer ? metadata['@id'] : metadata.id || metadata['@id'];
+    const { version } = metadata;
+    const release = typeof version === 'string' || typeof version === 'number' ?
+      /^(\d+(?:\.\d+){0,2})(?:[-+]\S+)?$/.exec(String(version)) : null;
+    if (typeof id === 'string' && id.trim() && release) {
+      const fileId = this.normalizePlayerId(`${id}-${release[1]}`);
+      if (fileId) {
+        return {
+          fileId, fileType: isSchemer ? 'Schemer' : 'Resource', metadata, usesFilename: false
+        };
+      }
+    }
+
+    return {
+      fileId: this.getResourceId(filename), fileType: 'Resource', metadata, usesFilename: true
+    };
   }
 
-  getSchemerId(file: FileIo): string {
-    try {
-      const schemerCode = file.buffer.toString();
-      const schemerContent = cheerio.load(schemerCode);
-      const metaDataElement = schemerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      return this.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
-    } catch (error) {
-      return this.getResourceId(file);
-    }
-  }
-
-  getResourceId(file: FileIo): string {
-    if (!file?.originalname) {
+  getResourceId(filename: string): string {
+    if (!filename) {
       throw new Error('Invalid file: originalname is required.');
     }
-    const filePathParts = decodeURIComponent(file.originalname).split('/')
+    const filePathParts = decodeURIComponent(filename).split('/')
       .map(part => part.trim());
     const fileName = filePathParts.pop();
     if (!fileName) {
@@ -286,13 +288,13 @@ export class WorkspaceFileParsingService {
     return fileName.toUpperCase();
   }
 
-  normalizePlayerId(name: string): string {
+  private normalizePlayerId(name: string): string | undefined {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
 
     const matches = name.match(reg);
 
     if (!matches) {
-      throw new Error(`Invalid player name: ${name}`);
+      return undefined;
     }
 
     const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;

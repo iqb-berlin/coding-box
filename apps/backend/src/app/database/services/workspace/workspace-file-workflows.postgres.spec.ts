@@ -309,19 +309,37 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.uploadTestFiles(workspace, [input('after.voud', '{}')], false)).toMatchObject({ uploaded: 1 });
   });
 
-  it('retains the existing HTML fallback overwrite after a real primary-write SQL failure', async () => {
+  it.each([false, true])('preserves the filename resource after a rejected player write (overwrite=%s)', async overwrite => {
     const { workspace } = await fixture();
     await files.uploadTestFiles(workspace, [input('module.html', 'existing resource')], false);
     const html = '<html><script type="application/ld+json">{"id":"PLAYER","version":"1.0.0"}</script></html>';
     await db.query("ALTER TABLE file_upload ADD CONSTRAINT reject_player_fixture CHECK (file_id <> 'PLAYER-1.0.0')");
     try {
-      const result = await files.uploadTestFiles(workspace, [input('module.html', html, 'text/html')], false);
-      expect(result).toMatchObject({ uploaded: 1, failed: 0, uploadedFiles: [{ fileId: 'MODULE.HTML', fileType: 'Resource' }] });
+      const result = await files.uploadTestFiles(workspace, [input('module.html', html, 'text/html')], overwrite);
+      expect(result).toMatchObject({
+        uploaded: 0, failed: 1, failedFiles: [{ filename: 'module.html', reason: expect.stringContaining('reject_player_fixture') }]
+      });
+      expect(result.uploadedFiles).toBeUndefined();
       const stored = await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace, file_id: 'MODULE.HTML' });
-      // Characterize the legacy fallback: it replaces its existing target despite overwrite=false.
-      expect(stored.data).toBe(html);
+      expect(stored.data).toBe('existing resource');
       expect(await countFiles(workspace)).toBe(1);
     } finally { await db.query('ALTER TABLE file_upload DROP CONSTRAINT reject_player_fixture'); }
+  });
+
+  it('keeps the first generic HTML resource when concurrent batch entries share its key', async () => {
+    const { workspace } = await fixture();
+    const inputs = ['module.html', 'MODULE.html'].map(name => input(name, `<html>${name}</html>`, 'text/html'));
+    const result = await files.uploadTestFiles(workspace, inputs, false);
+    expect(result).toMatchObject({
+      uploaded: 1,
+      failed: 0,
+      conflicts: [{ fileId: 'MODULE.HTML' }],
+      uploadedFiles: [{ fileId: 'MODULE.HTML' }],
+      issues: [{ level: 'warning' }]
+    });
+    const stored = await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace, file_id: 'MODULE.HTML' });
+    expect(stored.data).toBe(`<html>${result.uploadedFiles![0].filename}</html>`);
+    expect(await countFiles(workspace)).toBe(1);
   });
 
   it('returns a freshness warning while retaining the file after a real freshness SQL failure', async () => {

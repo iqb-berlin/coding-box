@@ -29,75 +29,54 @@ export class WorkspaceResourceFileUploadService {
   ): Promise<unknown> {
     const fileUploadRepository =
       mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
-    try {
-      const playerCode = file.buffer.toString();
-      const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent(
-        'script[type="application/ld+json"]'
-      );
-      let metadata: Record<string, unknown> = {};
-
-      try {
-        metadata = JSON.parse(metaDataElement.text());
-      } catch (metadataError) {
-        this.logger.warn(
-          `Error parsing metadata from HTML file: ${getErrorMessage(metadataError)}`
-        );
+    const data = file.buffer.toString();
+    const {
+      fileId, fileType, metadata, usesFilename
+    } = this.workspaceFileParsingService.identifyHtmlFile(file.originalname, data);
+    const target = { fileId, filename: file.originalname, fileType };
+    const row = withNormalizedFileLookupFields({
+      filename: file.originalname,
+      workspace_id: workspaceId,
+      file_type: fileType,
+      file_size: file.size,
+      created_at: new Date() as unknown as number,
+      file_id: fileId,
+      data,
+      structured_data: { metadata }
+    });
+    const overwriteAllowed = overwriteExisting && (!overwriteAllowList || overwriteAllowList.has(fileId));
+    if (overwriteAllowed) {
+      await fileUploadRepository.upsert(row, ['file_id', 'workspace_id']);
+    } else {
+      // Avoid sending the HTML for known conflicts. A parallel file in the same
+      // batch can still claim the key between this check and the insert.
+      const conflict = overwriteExisting ? undefined : { ...target, conflict: true };
+      if (await fileUploadRepository.existsBy({ file_id: fileId, workspace_id: workspaceId })) {
+        return conflict;
       }
-      const structuredData: StructuredFileData = {
-        metadata
-      };
-
-      const isSchemer = metadata['@type'] === 'schemer';
-      const resourceFileId = isSchemer ?
-        this.workspaceFileParsingService.getSchemerId(file) :
-        this.workspaceFileParsingService.getPlayerId(file);
-      const fileType = isSchemer ? 'Schemer' : 'Resource';
-      const existing = await fileUploadRepository.findOne({
-        where: { file_id: resourceFileId, workspace_id: workspaceId }
-      });
-      const overwriteAllowed = overwriteExisting &&
-        (!overwriteAllowList || overwriteAllowList.has((resourceFileId || '').toUpperCase()));
-      if (existing && !overwriteAllowed) {
-        if (overwriteExisting && overwriteAllowList) return undefined;
-        return {
-          conflict: true, fileId: resourceFileId, filename: file.originalname, fileType
-        };
+      const inserted = await fileUploadRepository.createQueryBuilder()
+        .insert()
+        .into(FileUpload)
+        .values(row)
+        .onConflict('("file_id", "workspace_id") DO NOTHING')
+        .returning('file_id')
+        .execute();
+      if (inserted.raw.length === 0) {
+        return conflict;
       }
-      await fileUploadRepository.upsert(withNormalizedFileLookupFields({
-        filename: file.originalname,
-        workspace_id: workspaceId,
-        file_type: fileType,
-        file_size: file.size,
-        created_at: new Date() as unknown as number,
-        file_id: resourceFileId,
-        data: file.buffer.toString(),
-        structured_data: structuredData
-      }), ['file_id', 'workspace_id']);
-      return { fileId: resourceFileId, filename: file.originalname, fileType };
-    } catch (error) {
-      const resourceFileId =
-        this.workspaceFileParsingService.getResourceId(file);
-      await fileUploadRepository.upsert(
-        withNormalizedFileLookupFields({
-          filename: file.originalname,
-          workspace_id: workspaceId,
-          file_type: 'Resource',
-          file_size: file.size,
-          created_at: new Date() as unknown as number,
-          file_id: resourceFileId,
-          data: file.buffer.toString(),
-          structured_data: { metadata: {} }
-        }),
-        ['file_id', 'workspace_id']
-      );
+    }
 
+    if (usesFilename) {
       return {
-        fileId: resourceFileId,
-        filename: file.originalname,
-        fileType: 'Resource'
+        ...target,
+        issues: [{
+          level: 'warning',
+          fileName: file.originalname,
+          message: `Keine verwertbare Player- oder Schemer-Kennung gefunden. Die HTML-Datei wurde als Ressource unter „${fileId}“ gespeichert.`
+        }]
       };
     }
+    return target;
   }
 
   async handleOctetStreamFile(
