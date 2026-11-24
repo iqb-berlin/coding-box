@@ -80,6 +80,18 @@ describe('UnitPlayerComponent', () => {
     expect(post).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves player HTML and JSON metadata on first render and when switching units', () => {
+    fixture.destroy();
+    fixture = TestBed.createComponent(UnitPlayerComponent);
+    for (const version of ['6.0', '7.0']) {
+      const html = `<script type="application/ld+json">{"specVersion":"${version}"}</script><p>&quot;</p>`;
+      fixture.componentRef.setInput('unitPlayer', html);
+      fixture.componentRef.setInput('unitDef', JSON.stringify({ version }));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.hostingIframe()!.nativeElement.srcdoc).toBe(html);
+    }
+  });
+
   it('should emit playerReady when the hosted player reports ready', () => {
     const emitSpy = jest.spyOn(component.playerReady, 'emit');
     const appService = TestBed.inject(AppService);

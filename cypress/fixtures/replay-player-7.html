@@ -17,9 +17,10 @@
         type: 'vopStateChangedNotification', sessionId, timeStamp: new Date().toISOString(),
         playerState: { validPages: [{ id: '0' }, { id: '1' }], currentPage: page },
         unitState: { presentationProgress: 'COMPLETE', responseProgress: 'SOME' }
-      }, '*');
+      }, window.origin);
     }
-    window.addEventListener('message', ({ data }) => {
+    window.addEventListener('message', ({ source, origin, data }) => {
+      if (source !== parent || origin !== window.origin) return;
       if (data.type === 'vopStartCommand') {
         const { playerConfig, unitState } = data;
         const print = playerConfig.printMode === 'ON';
@@ -38,7 +39,7 @@
     });
     parent.postMessage({
       type: 'vopReadyNotification', metadata: document.querySelector('script[type="application/ld+json"]').textContent
-    }, '*');
+    }, window.origin);
   </script>
 </body>
 </html>

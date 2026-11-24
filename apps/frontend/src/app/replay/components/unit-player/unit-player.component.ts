@@ -206,7 +206,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       }
       if (unitPlayerChange && unitPlayerChange.currentValue !== unitPlayerChange.previousValue && this.iFrameElement) {
         const unitPlayerContent = unitPlayerChange.currentValue || this.unitPlayer() || '';
-        this.updateIframeContent(unitPlayerContent.replace(/"/g, ''));
+        this.updateIframeContent(unitPlayerContent);
       }
       // If the player is the same but unitDef changed, send the new unit data via postMessage
       if (!unitPlayerChange || unitPlayerChange.currentValue === unitPlayerChange.previousValue) {
@@ -249,7 +249,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     this.subscribeForIframeLoad();
     const unitPlayer = this.unitPlayer();
     if (this.iFrameElement && unitPlayer) {
-      this.updateIframeContent(unitPlayer.replace('&quot;', ''));
+      this.updateIframeContent(unitPlayer);
     }
   }
 
