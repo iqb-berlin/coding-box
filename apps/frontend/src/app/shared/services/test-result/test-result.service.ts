@@ -324,15 +324,12 @@ export class TestResultService {
     kind?: QuickSearchResultKind
   ): Observable<QuickSearchResult> {
     const trimmedQuery = String(query || '').trim();
-    const params = new HttpParams()
-      .set('q', trimmedQuery)
-      .set('limit', String(limit));
-
+    const params = new HttpParams().set('q', trimmedQuery).set('limit', String(limit));
+    const scopedParams = kind ? params.set('kind', kind) : params;
     const request = this.http
-      .get<QuickSearchResult>(
-        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`,
-        { params: kind ? params.set('kind', kind) : params }
-      );
+      .get<QuickSearchResult>(`${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`, {
+        params: kind === 'response' ? scopedParams.set('responsePreview', 'true') : scopedParams
+      });
     if (kind) return request;
     return request.pipe(
       catchError(() => of({

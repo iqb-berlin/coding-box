@@ -17,6 +17,7 @@ function createQueryBuilderMock() {
   queryBuilder.andWhere = jest.fn(() => queryBuilder);
   queryBuilder.orderBy = jest.fn(() => queryBuilder);
   queryBuilder.take = jest.fn(() => queryBuilder);
+  queryBuilder.limit = jest.fn(() => queryBuilder);
   queryBuilder.getCount = jest.fn().mockResolvedValue(0);
   queryBuilder.getMany = jest.fn().mockResolvedValue([]);
   queryBuilder.getRawMany = jest.fn().mockResolvedValue([]);
@@ -346,7 +347,7 @@ describe('CodingResponseFilterService', () => {
     expect(queryBuilder.addSelect).toHaveBeenCalledWith('response.variableid', 'variableId');
     expect(queryBuilder.andWhere).toHaveBeenCalledWith('response.id > :lastId', { lastId: 41 });
     expect(queryBuilder.orderBy).toHaveBeenCalledWith('response.id', 'ASC');
-    expect(queryBuilder.take).toHaveBeenCalledWith(500);
+    expect(queryBuilder.limit).toHaveBeenCalledWith(500);
     expect(queryBuilder.getRawMany).toHaveBeenCalled();
     expect(queryBuilder.getMany).not.toHaveBeenCalled();
     expect(rows[0].id).toBe(42);

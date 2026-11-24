@@ -1,6 +1,6 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpEvent } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import { HttpClient } from '@angular/common/http';
+import { map, Observable } from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
 import { UnitVariableDetailsDto } from '../../../models/unit-variable-details.dto';
 import { FilesDto } from '../../../../../../../api-dto/files/files.dto';
@@ -27,17 +27,10 @@ export class FileBackendService {
     });
   }
 
-  downloadWorkspaceFilesAsZipWithProgress(
-    workspaceId: number,
-    fileTypes?: string[]
-  ): Observable<HttpEvent<Blob>> {
+  prepareWorkspaceZip(workspaceId: number, fileTypes: string[]): Observable<string> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/files/download-zip`;
-    const body = fileTypes && fileTypes.length > 0 ? { fileTypes } : {};
-    return this.http.post(url, body, {
-      responseType: 'blob',
-      reportProgress: true,
-      observe: 'events'
-    });
+    return this.http.post<{ id: string }>(url, { fileTypes }, { params: { prepare: true } })
+      .pipe(map(({ id }) => `${url}/${encodeURIComponent(id)}/download`));
   }
 
   getUnitVariables(workspaceId: number): Observable<UnitVariableDetailsDto[]> {

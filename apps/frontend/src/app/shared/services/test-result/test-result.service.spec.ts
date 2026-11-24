@@ -232,6 +232,15 @@ describe('TestResultService', () => {
   });
 
   describe('quickSearch', () => {
+    it('requests the bounded preview only for response searches', () => {
+      service.quickSearch(mockWorkspaceId, '01', 8, 'response').subscribe();
+      const request = httpMock.expectOne(req => req.params.get('q') === '01' &&
+        req.params.get('kind') === 'response' &&
+        req.url === `${mockServerUrl}admin/workspace/${mockWorkspaceId}/test-results/quick-search`);
+      expect(request.request.params.get('responsePreview')).toBe('true');
+      request.flush({});
+    });
+
     it('should fetch quick search results', () => {
       const mockResponse = {
         query: 'unit',

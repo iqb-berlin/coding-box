@@ -1,10 +1,8 @@
 .export-toast-container {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  z-index: 1000;
-  width: min(460px, calc(100vw - 40px));
-  min-width: 300px;
+  box-sizing: border-box;
+  width: min(460px, 100%);
+  margin-inline-start: auto;
+  padding: 8px 12px;
 }
 
 .export-toast-card {
@@ -62,7 +60,7 @@
 
 .toast-content {
   background-color: white;
-  max-height: 300px;
+  max-height: min(300px, 30dvh);
   overflow-y: auto;
 }
 

@@ -1,3 +1,4 @@
+import { Logger } from '@nestjs/common';
 import * as ExcelJS from 'exceljs';
 import fs from 'fs';
 import * as os from 'os';
@@ -8,10 +9,11 @@ import {
   ItemMatrixExportConfiguration
 } from './coding-item-matrix-export.service';
 import { ItemDatasetMetadataService } from './item-dataset-metadata.service';
-import type {
-  ItemDatasetResponseValue
+import {
+  ItemDatasetCellResolver, type ItemDatasetBookletDesign, type ItemDatasetMissingValue, type ItemDatasetResponseValue
 } from './item-dataset-cell-resolver';
 import { ItemMatrixExportIncompleteError } from './item-matrix-export-incomplete.error';
+import type { IqbStandardMissingId } from './missings-profiles.service';
 
 const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => new Promise((resolve, reject) => {
   let output = '';
@@ -22,7 +24,7 @@ const collectStream = (stream: NodeJS.ReadableStream): Promise<string> => new Pr
   stream.on('error', reject);
 });
 
-const missingEntries = [
+const missingEntries: Array<ItemDatasetMissingValue & { id: IqbStandardMissingId }> = [
   {
     id: 'mir',
     label: 'invalid',
@@ -110,7 +112,17 @@ const createService = (
     })
   };
   const metadataService = new ItemDatasetMetadataService(
-    (overrides.unitRepository || {}) as never,
+    (overrides.unitRepository || {
+      createQueryBuilder: jest.fn().mockReturnValue({
+        innerJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        addSelect: jest.fn().mockReturnThis(),
+        where: jest.fn().mockReturnThis(),
+        andWhere: jest.fn().mockReturnThis(),
+        distinct: jest.fn().mockReturnThis(),
+        getRawMany: jest.fn().mockResolvedValue([])
+      })
+    }) as never,
     (overrides.fileUploadRepository || { find: jest.fn().mockResolvedValue([]) }) as never,
     workspaceFilesService as never,
     workspaceExclusionService as never,
@@ -2586,6 +2598,7 @@ describe('CodingItemMatrixExportService', () => {
           workspaceId: number,
           rows: Array<{ bookletId: number }>,
           version: 'v1' | 'v2' | 'v3',
+          designs: ReadonlyMap<string, ItemDatasetBookletDesign>,
           cancellationCheck: () => Promise<void>
         ) => Promise<unknown>;
       }
@@ -2593,6 +2606,7 @@ describe('CodingItemMatrixExportService', () => {
       7,
       [{ bookletId: 10 }],
       'v2',
+      new Map(),
       checkCancellation
     );
 
@@ -2646,10 +2660,11 @@ describe('CodingItemMatrixExportService', () => {
           getResponseValuesForRows: (
             workspaceId: number,
             rows: Array<{ bookletId: number }>,
-            selectedVersion: 'v1' | 'v2' | 'v3'
+            selectedVersion: 'v1' | 'v2' | 'v3',
+            designs: ReadonlyMap<string, ItemDatasetBookletDesign>
           ) => Promise<Map<number, Map<string, { status: number | null }>>>;
         }
-      ).getResponseValuesForRows(7, [{ bookletId: 10 }], version);
+      ).getResponseValuesForRows(7, [{ bookletId: 10 }], version, new Map());
 
       expect(values.get(10)?.get('UNIT1\u001FVAR1')?.status).toBe(
         expectedStatus
@@ -2661,31 +2676,55 @@ describe('CodingItemMatrixExportService', () => {
     }
   );
 
-  it('matches imported responses by unit alias before the internal unit name', async () => {
+  it('resolves legacy response aliases per booklet instance and gives canonical rows priority', async () => {
+    const legacyResponse = {
+      id: 1,
+      bookletId: 10,
+      unitId: 101,
+      bookletName: 'BOOKLET-1',
+      unitName: 'LEGACY-REPLAY',
+      unitAlias: 'UNIT-REPLAY-ALIAS',
+      variableId: 'answer_1',
+      statusV2: 5,
+      codeV2: 2,
+      scoreV2: 3
+    };
     const queryBuilder = {
       innerJoin: jest.fn().mockReturnThis(),
       select: jest.fn().mockReturnThis(),
       addSelect: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       orderBy: jest.fn().mockReturnThis(),
-      getRawMany: jest.fn().mockResolvedValue([{
-        id: 1,
-        bookletId: 10,
-        bookletName: 'BOOKLET-1',
-        unitName: 'UNIT-REPLAY',
-        unitAlias: 'UNIT-REPLAY-ALIAS',
-        variableId: 'answer_1',
-        status: 5,
-        statusV1: 5,
-        codeV1: 1,
-        scoreV1: 1,
-        statusV2: 5,
-        codeV2: 2,
-        scoreV2: 3,
-        statusV3: 5,
-        codeV3: 4,
-        scoreV3: 5
-      }])
+      getRawMany: jest.fn().mockResolvedValue([
+        legacyResponse,
+        {
+          ...legacyResponse, id: 2, unitId: 201, bookletId: 20, bookletName: 'BOOKLET-2'
+        },
+        {
+          ...legacyResponse, id: 3, unitId: 301, bookletId: 30
+        },
+        {
+          ...legacyResponse, id: 4, unitId: 302, bookletId: 30, unitName: 'UNIT-REPLAY-ALIAS', scoreV2: 9
+        },
+        {
+          ...legacyResponse, id: 5, unitId: 301, bookletId: 30, scoreV2: 5
+        },
+        {
+          ...legacyResponse, id: 6, unitId: 401, bookletId: 40, unitName: 'OTHER-CANONICAL', scoreV2: 7
+        },
+        {
+          ...legacyResponse, id: 7, unitId: 501, bookletId: 50, unitName: 'LEGACY-OTHER', scoreV2: 5
+        },
+        {
+          ...legacyResponse, id: 8, unitId: 601, bookletId: 60
+        },
+        {
+          ...legacyResponse, id: 9, unitId: 602, bookletId: 60, unitName: 'LEGACY-OTHER'
+        },
+        {
+          ...legacyResponse, id: 10, unitId: 701, bookletId: 70, unitName: 'UNIT-REPLAY', scoreV2: 6
+        }
+      ])
     };
     const service = createService({
       responseRepository: {
@@ -2693,7 +2732,9 @@ describe('CodingItemMatrixExportService', () => {
       },
       workspaceFilesService: {
         getUnitVariableMap: jest.fn().mockResolvedValue(new Map([
-          ['UNIT-REPLAY-ALIAS', new Set(['answer_1'])]
+          ['UNIT-REPLAY-ALIAS', new Set(['answer_1'])],
+          ['OTHER-CANONICAL', new Set(['answer_1'])],
+          ['UNIT-REPLAY', new Set(['answer_1'])]
         ]))
       }
     });
@@ -2703,15 +2744,36 @@ describe('CodingItemMatrixExportService', () => {
         getResponseValuesForRows: (
           workspaceId: number,
           rows: Array<{ bookletId: number }>,
-          selectedVersion: 'v2'
+          selectedVersion: 'v2',
+          designs: ReadonlyMap<string, ItemDatasetBookletDesign>
         ) => Promise<Map<number, Map<string, { score: number | null }>>>;
       }
-    ).getResponseValuesForRows(7, [{ bookletId: 10 }], 'v2');
+    ).getResponseValuesForRows(
+      7,
+      [10, 20, 30, 40, 50, 60, 70].map(bookletId => ({ bookletId })),
+      'v2',
+      new Map([['BOOKLET-1', {
+        units: new Map([
+          ['UNIT-REPLAY-ALIAS', { unitId: 'UNIT-REPLAY-ALIAS', order: 0, testletKey: '0:T1' }],
+          ['OTHER-CANONICAL', { unitId: 'OTHER-CANONICAL', order: 1, testletKey: '0:T1' }]
+        ])
+      }]])
+    );
 
     expect(
       values.get(10)?.get('UNIT-REPLAY-ALIAS\u001Fanswer_1')?.score
     ).toBe(3);
-    expect(values.get(10)?.has('UNIT-REPLAY\u001Fanswer_1')).toBe(false);
+    expect(values.get(10)?.has('LEGACY-REPLAY\u001Fanswer_1')).toBe(false);
+    expect(values.has(20)).toBe(false);
+    expect(values.get(30)?.get('UNIT-REPLAY-ALIAS\u001Fanswer_1')?.score).toBe(9);
+    expect(values.get(40)?.get('OTHER-CANONICAL\u001Fanswer_1')?.score).toBe(7);
+    expect(values.get(40)?.has('UNIT-REPLAY-ALIAS\u001Fanswer_1')).toBe(false);
+    expect(values.get(50)?.get('UNIT-REPLAY-ALIAS\u001Fanswer_1')?.score).toBe(5);
+    expect(values.get(60)?.get('UNIT-REPLAY-ALIAS\u001Fanswer_1')).toEqual({
+      code: null, score: null, status: null, failureReason: 'unresolved-cell'
+    });
+    expect(values.get(70)?.get('UNIT-REPLAY-ALIAS\u001Fanswer_1')?.score).toBe(6);
+    expect(values.get(70)?.has('UNIT-REPLAY\u001Fanswer_1')).toBe(false);
     expect(queryBuilder.addSelect).toHaveBeenCalledWith(
       'unit.alias',
       'unitAlias'
@@ -2756,6 +2818,107 @@ describe('CodingItemMatrixExportService', () => {
       select: ['file_id', 'data'],
       order: { file_id: 'ASC' }
     });
+  });
+
+  it('resolves aliases within each booklet and keeps canonical booklet references', async () => {
+    const aliases = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue([
+        { bookletName: 'Booklet-1', unitName: 'UNIT', unitAlias: 'UNIT-ALIAS' },
+        { bookletName: 'Booklet-1', unitName: 'FIRST', unitAlias: 'SHARED' },
+        { bookletName: 'Booklet-1', unitName: 'SECOND', unitAlias: 'SHARED' },
+        { bookletName: 'Booklet-2', unitName: 'SECOND', unitAlias: 'SHARED' },
+        { bookletName: 'Booklet-2', unitName: 'UNIT', unitAlias: 'CANONICAL' },
+        { bookletName: 'Booklet-2', unitName: 'LEGACY', unitAlias: 'CANONICAL' }
+      ])
+    };
+    const service = createService({
+      fileUploadRepository: {
+        find: jest.fn().mockResolvedValue([{
+          file_id: 'Booklet-1',
+          data: '<Booklet><Testlet id="T"><Unit id="UNIT-ALIAS"/><Unit id="SHARED"/></Testlet></Booklet>'
+        }, {
+          file_id: 'Booklet-2',
+          data: '<Booklet><Testlet id="T"><Unit id="CANONICAL"/><Unit id="SHARED"/></Testlet></Booklet>'
+        }])
+      },
+      unitRepository: { createQueryBuilder: jest.fn().mockReturnValue(aliases) },
+      workspaceFilesService: {
+        getUnitVariableMap: jest.fn().mockResolvedValue(
+          new Map(['UNIT', 'FIRST', 'SECOND', 'CANONICAL'].map(id => [id, new Set()]))
+        )
+      }
+    });
+    const designs = await (service as never as {
+      getBookletDesigns: (workspaceId: number) => Promise<Map<string, ItemDatasetBookletDesign>>;
+    }).getBookletDesigns(7);
+    const first = designs.get('BOOKLET-1');
+    expect(first?.units.get('UNIT')).toMatchObject({ unitId: 'UNIT', order: 0, testletKey: '0:T' });
+    expect(first?.units.has('FIRST')).toBe(false);
+    expect(first?.units.has('SECOND')).toBe(false);
+    expect(first?.ambiguousUnitPositions).toEqual(new Set(['FIRST', 'SECOND']));
+
+    const second = designs.get('BOOKLET-2');
+    expect(second?.units.has('UNIT')).toBe(false);
+    expect(second?.units.get('CANONICAL')).toMatchObject({ unitId: 'CANONICAL', order: 0 });
+    expect(second?.units.get('SECOND')).toMatchObject({ unitId: 'SECOND', order: 1 });
+  });
+
+  it.each([false, true])('diagnoses multiple positions regardless of import order (reversed=%s)', async reversed => {
+    const imported = [
+      { bookletName: 'Booklet-1', unitName: 'UNIT1', unitAlias: 'FIRST' },
+      { bookletName: 'Booklet-1', unitName: 'UNIT1', unitAlias: 'SECOND' }
+    ];
+    const aliases = {
+      innerJoin: jest.fn().mockReturnThis(),
+      select: jest.fn().mockReturnThis(),
+      addSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      distinct: jest.fn().mockReturnThis(),
+      getRawMany: jest.fn().mockResolvedValue(reversed ? [...imported].reverse() : imported)
+    };
+    const service = createService({
+      fileUploadRepository: {
+        find: jest.fn().mockResolvedValue([{
+          file_id: 'Booklet-1',
+          data: '<Booklet><Testlet id="T1"><Unit id="FIRST"/></Testlet><Testlet id="T2"><Unit id="SECOND"/></Testlet></Booklet>'
+        }])
+      },
+      unitRepository: { createQueryBuilder: jest.fn().mockReturnValue(aliases) },
+      workspaceFilesService: {
+        getUnitVariableMap: jest.fn().mockResolvedValue(new Map([['UNIT1', new Set(['VAR1'])]]))
+      }
+    });
+    const warn = jest.spyOn(Logger.prototype, 'warn').mockImplementation(() => undefined);
+    try {
+      const designs = await (service as never as {
+        getBookletDesigns: (workspaceId: number) => Promise<Map<string, ItemDatasetBookletDesign>>;
+      }).getBookletDesigns(7);
+      const design = designs.get('BOOKLET-1')!;
+      expect(design.units.has('UNIT1')).toBe(false);
+      expect(design.ambiguousUnitPositions).toEqual(new Set(['UNIT1']));
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining("Unit 'UNIT1' has multiple positions"));
+
+      const resolver = new ItemDatasetCellResolver();
+      const [cell] = resolver.resolve(
+        [column('1')],
+        design,
+        new Map(),
+        profile,
+        new Map(),
+        { notReachedScope: 'testlet' }
+      );
+      expect(cell).toMatchObject({ state: 'error', failureReason: 'unresolved-cell' });
+      expect(() => resolver.getExportValue(cell, 'code')).toThrow('unresolved-cell');
+    } finally {
+      warn.mockRestore();
+    }
   });
 
   it('removes testlet-specific exclusions from the effective booklet design', async () => {

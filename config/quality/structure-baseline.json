@@ -156,14 +156,6 @@
         }
       }
     },
-    "apps/backend/src/app/admin/workspace/workspace-files.controller.ts": {
-      "file": {},
-      "functions": {
-        "class WorkspaceFilesController#1/method downloadWorkspaceFilesAsZip#1": {
-          "max-lines-per-function": 114
-        }
-      }
-    },
     "apps/backend/src/app/admin/workspace/workspace-test-center.controller.ts": {
       "file": {},
       "functions": {
@@ -448,12 +440,12 @@
     },
     "apps/backend/src/app/database/services/coding/coding-item-matrix-export.service.ts": {
       "file": {
-        "max-lines": 908
+        "max-lines": 891
       },
       "functions": {
         "class CodingItemMatrixExportService#1/method resolveRows#1": {
           "max-depth": 5,
-          "max-lines-per-function": 108
+          "max-lines-per-function": 105
         }
       }
     },
@@ -564,7 +556,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts": {
       "file": {
-        "max-lines": 1411
+        "max-lines": 1370
       },
       "functions": {
         "class CodingListStreamService#1/method getCodingListCsvStream#1": {
@@ -575,20 +567,16 @@
           "max-depth": 5
         },
         "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1": {
-          "max-lines-per-function": 136
-        },
-        "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1/anonymous:82241e3fa72e5245#1": {
-          "max-depth": 5,
-          "max-lines-per-function": 108
+          "max-lines-per-function": 115
         },
         "class CodingListStreamService#1/method processJsonExport#1": {
           "complexity": 25,
           "max-depth": 5
         },
         "class CodingListStreamService#1/method writeCodingResultsByVersionGeoGebraZipToStream#1": {
-          "complexity": 28,
+          "complexity": 27,
           "max-depth": 6,
-          "max-lines-per-function": 196
+          "max-lines-per-function": 191
         }
       }
     },
@@ -801,11 +789,8 @@
       "file": {},
       "functions": {
         "class ItemDatasetCellResolver#1/method resolveDerivedState#1": {
-          "complexity": 27,
-          "max-lines-per-function": 153
-        },
-        "class ItemDatasetCellResolver#1/method resolveIncrementally#1": {
-          "max-lines-per-function": 105
+          "complexity": 26,
+          "max-lines-per-function": 110
         },
         "class ItemDatasetCellResolver#1/method resolveInitialCell#1": {
           "complexity": 26
@@ -995,7 +980,7 @@
     },
     "apps/backend/src/app/database/services/test-results/test-results-query.service.ts": {
       "file": {
-        "max-lines": 1066
+        "max-lines": 1053
       },
       "functions": {
         "class TestResultsQueryService#1/method findBookletLogsByUnitId#1": {
@@ -1011,7 +996,7 @@
           "max-lines-per-function": 162
         },
         "class TestResultsQueryService#1/method quickSearchTestResults#1": {
-          "max-lines-per-function": 170
+          "max-lines-per-function": 157
         }
       }
     },
@@ -1111,29 +1096,21 @@
     },
     "apps/backend/src/app/database/services/validation/workspace-response-validation.service.ts": {
       "file": {
-        "max-lines": 1504
+        "max-lines": 1185
       },
       "functions": {
         "class WorkspaceResponseValidationService#1/method deleteAllInvalidResponsesUnlocked#1": {
           "max-depth": 5
         },
-        "class WorkspaceResponseValidationService#1/method validateDuplicateResponses#1": {
-          "complexity": 36,
-          "max-lines-per-function": 192
-        },
-        "class WorkspaceResponseValidationService#1/method validateResponseStatus#1": {
-          "complexity": 25,
+        "class WorkspaceResponseValidationService#1/method validateVariables#1": {
+          "complexity": 32,
+          "max-depth": 5,
           "max-lines-per-function": 169
         },
-        "class WorkspaceResponseValidationService#1/method validateVariables#1": {
-          "complexity": 44,
-          "max-depth": 5,
-          "max-lines-per-function": 281
-        },
         "class WorkspaceResponseValidationService#1/method validateVariableTypes#1": {
-          "complexity": 51,
+          "complexity": 39,
           "max-depth": 6,
-          "max-lines-per-function": 289
+          "max-lines-per-function": 180
         }
       }
     },
@@ -1413,7 +1390,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
       "file": {
-        "max-lines": 1244
+        "max-lines": 1242
       },
       "functions": {
         "class CodingJobBackendService#1/method mapApiCodingJob#1": {
@@ -1497,7 +1474,7 @@
     },
     "apps/frontend/src/app/shared/services/test-result/test-result.service.ts": {
       "file": {
-        "max-lines": 817
+        "max-lines": 815
       },
       "functions": {}
     },
@@ -1539,7 +1516,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
       "file": {
-        "max-lines": 1371
+        "max-lines": 1295
       },
       "functions": {
         "class TestFilesComponent#1/method handleValidationResponse#1": {

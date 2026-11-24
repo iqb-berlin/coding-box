@@ -36,11 +36,6 @@
       {{ 'ws-settings.show-processes' | translate }}
     </button>
     }
-    @if (isDownloadingAllFiles()) {
-    <mat-progress-bar class="download-progress-bar" [mode]="isBusyProgressIndeterminate() ? 'indeterminate' : 'determinate'"
-      [value]="busyProgressValue()">
-    </mat-progress-bar>
-    }
     }
   </div>
   }

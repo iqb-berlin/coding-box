@@ -1,3 +1,4 @@
+import { NgTemplateOutlet } from '@angular/common';
 import {
   Component, DestroyRef, OnInit, inject, signal,
   computed, ChangeDetectionStrategy
@@ -27,7 +28,7 @@ interface WsAdminNavLink {
   standalone: true,
   templateUrl: './ws-admin.component.html',
   styleUrls: ['./ws-admin.component.scss'],
-  imports: [MatTabNav,
+  imports: [NgTemplateOutlet, MatTabNav,
     MatTabLink,
     RouterLinkActive,
     RouterLink,
