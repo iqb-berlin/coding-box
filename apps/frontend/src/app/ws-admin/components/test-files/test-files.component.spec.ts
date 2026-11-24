@@ -185,11 +185,15 @@ describe('TestFilesComponent', () => {
 
   it('keeps the process button hidden during a synchronous Content Pool overwrite', () => {
     component.contentPoolSettings.set({ enabled: true, baseUrl: 'https://pool.example', hasApplicationToken: true });
-    dialog.open.mockReturnValueOnce({ afterClosed: () => of({
-      success: true,
-      acpId: 'acp',
-      result: { total: 1, uploaded: 0, failed: 0, conflicts: [{ fileId: 'ID', filename: 'unit.xml' }] }
-    }) } as MatDialogRef<unknown>).mockReturnValueOnce({
+    dialog.open.mockReturnValueOnce({
+      afterClosed: () => of({
+        success: true,
+        acpId: 'acp',
+        result: {
+          total: 1, uploaded: 0, failed: 0, conflicts: [{ fileId: 'ID', filename: 'unit.xml' }]
+        }
+      })
+    } as MatDialogRef<unknown>).mockReturnValueOnce({
       afterClosed: () => of({ overwrite: true, overwriteFileIds: ['ID'] })
     } as MatDialogRef<unknown>);
     fixture.detectChanges();

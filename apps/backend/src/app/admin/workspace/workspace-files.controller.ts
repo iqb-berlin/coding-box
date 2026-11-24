@@ -321,7 +321,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    if (!files || files.length === 0) {
+    if (!Array.isArray(files) || files.length === 0) {
       throw new BadRequestException('At least one file must be uploaded.');
     }
 

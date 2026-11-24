@@ -260,7 +260,9 @@ describe('ProcessOverviewComponent', () => {
         id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 50, timestamp: 100
       };
       const previous = { ...active, id: 'previous', status: 'completed' as const };
-      const job = { ...active, id: 'job', queueName: 'data-export', timestamp: 90 };
+      const job = {
+        ...active, id: 'job', queueName: 'data-export', timestamp: 90
+      };
       const completed: ProcessDto = { ...active, status: 'completed', progress: 100 };
       processesService.getProcesses.mockClear().mockReturnValueOnce(of([previous, job])).mockReturnValueOnce(of([completed, job]));
       processesService.getFileUpload.mockReturnValueOnce(pending);
