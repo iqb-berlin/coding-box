@@ -286,11 +286,10 @@ describe('TestTakers validation after workflow extraction', () => {
   const makeValidation = () => {
     const files = { find: jest.fn().mockResolvedValue([{ data: xml }]) };
     const persons = { find: jest.fn().mockResolvedValue([]), countBy: jest.fn().mockResolvedValue(0) };
-    const unitsQuery = { innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) };
-    const units = { createQueryBuilder: jest.fn(() => unitsQuery) };
-    const responses = { count: jest.fn().mockResolvedValue(0) };
+    const responses = { existsBy: jest.fn().mockResolvedValue(false) };
+    const service = new WorkspaceTestTakersValidationService(files as never, persons as never, responses as never);
     return {
-      files, persons, units, unitsQuery, responses, service: new WorkspaceTestTakersValidationService(files as never, persons as never, units as never, responses as never)
+      files, persons, responses, service
     };
   };
 
@@ -342,9 +341,7 @@ describe('TestTakers validation after workflow extraction', () => {
 
   it('paginates only eligible groups while reporting totals and progress for all groups', async () => {
     const f = makeValidation();
-    f.persons.find.mockResolvedValueOnce([{ id: 10 }]).mockResolvedValueOnce([]);
-    f.unitsQuery.getMany.mockResolvedValueOnce([{ id: 100 }]);
-    f.responses.count.mockResolvedValueOnce(2);
+    f.responses.existsBy.mockResolvedValueOnce(true);
     const progress = jest.fn();
     await expect(f.service.validateGroupResponses(7, 2, 1, progress)).resolves.toEqual({
       testTakersFound: true,
@@ -355,24 +352,12 @@ describe('TestTakers validation after workflow extraction', () => {
       page: 2,
       limit: 1
     });
-    expect(f.persons.find.mock.calls).toEqual([
-      [{ where: { workspace_id: 7, group: 'G1', consider: true } }],
-      [{ where: { workspace_id: 7, group: 'G2', consider: true } }]
+    expect(f.persons.find).not.toHaveBeenCalled();
+    expect(f.responses.existsBy.mock.calls).toEqual([
+      [{ unit: { booklet: { person: { workspace_id: 7, group: 'G1', consider: true } } } }],
+      [{ unit: { booklet: { person: { workspace_id: 7, group: 'G2', consider: true } } } }]
     ]);
     expect(progress.mock.calls).toEqual([[10], [20], [40], [67], [95]]);
-    expect(f.responses.count).toHaveBeenCalledTimes(1);
-  });
-
-  it('retains 1000-ID query batches for persons and responses', async () => {
-    const f = makeValidation();
-    f.files.find.mockResolvedValue([{ data: '<TestTakers><Group id="G"><Login mode="run-hot-return"/></Group></TestTakers>' }]);
-    f.persons.find.mockResolvedValue(Array.from({ length: 1001 }, (_, id) => ({ id })));
-    f.unitsQuery.getMany.mockResolvedValueOnce(Array.from({ length: 1000 }, (_, id) => ({ id }))).mockResolvedValueOnce([{ id: 1000 }]);
-    f.responses.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-    await expect(f.service.validateGroupResponses(7)).resolves.toEqual(expect.objectContaining({ allGroupsHaveResponses: true }));
-    expect(f.unitsQuery.where.mock.calls[0][1].personIdsBatch).toHaveLength(1000);
-    expect(f.unitsQuery.where.mock.calls[1][1].personIdsBatch).toEqual([1000]);
-    expect(f.responses.count).toHaveBeenCalledTimes(2);
   });
 
   it('preserves early empty results without normalizing requested pagination', async () => {

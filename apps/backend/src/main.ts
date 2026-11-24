@@ -100,7 +100,7 @@ async function bootstrap() {
   app.use(json({ limit: '50mb' }));
   app.setGlobalPrefix(globalPrefix);
   app.enableCors({
-    exposedHeaders: [REQUEST_ID_HEADER, 'Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset']
+    exposedHeaders: [REQUEST_ID_HEADER, 'Retry-After', 'X-RateLimit-Limit', 'X-RateLimit-Remaining', 'X-RateLimit-Reset', 'X-Archive-Range', 'X-Archive-Id']
   });
 
   // Enable Swagger-UI

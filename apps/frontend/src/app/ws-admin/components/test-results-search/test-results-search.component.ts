@@ -177,6 +177,10 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
     return this.results.totals[kind] || 0;
   }
 
+  protected hasMore(kind: QuickSearchResultKind): boolean {
+    return kind === 'response' && this.results.hasMoreResponses === true;
+  }
+
   protected getVisibleCount(): number {
     return this.typeOptions
       .map(option => this.getVisibleResults(option.kind).length)
@@ -271,6 +275,7 @@ export class TestResultsSearchComponent implements OnInit, OnDestroy {
           } as const;
           this.results[field[kind]] = result[field[kind]];
           this.results.totals[kind] = result.totals[kind];
+          if (kind === 'response') this.results.hasMoreResponses = result.hasMoreResponses;
           this.changeDetectorRef.markForCheck();
         },
         error: () => {

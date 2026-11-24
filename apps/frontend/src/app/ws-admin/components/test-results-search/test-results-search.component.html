@@ -26,7 +26,7 @@
         <mat-icon>{{ option.icon }}</mat-icon>
         <span>{{ option.label }}</span>
         @if (hasSearched && !loadingKinds.has(option.kind) && !failedKinds.has(option.kind) && isKindSelected(option.kind)) {
-        <span class="type-count">{{ getTotal(option.kind) }}</span>
+        <span class="type-count">{{ getTotal(option.kind) }}{{ hasMore(option.kind) ? '+' : '' }}</span>
         }
       </button>
       }
@@ -65,7 +65,11 @@
             <span>{{ option.label }}</span>
           </div>
           <span>
-            {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
+            @if (hasMore(option.kind)) {
+              {{ 'ui-text.test-results-search.preview-count' | translate: { count: getVisibleResults(option.kind).length } }}
+            } @else {
+              {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
+            }
           </span>
         </div>
 

@@ -107,6 +107,7 @@
   },
   "export-toast": {
     "title": "Datenexport",
+    "download-failed": "Exportdatei konnte nicht heruntergeladen werden. Versuchen Sie es erneut.",
     "download": "Herunterladen",
     "remove": "Entfernen",
     "clear-all": "Alle löschen",
@@ -595,6 +596,7 @@
     }
   },
   "ws-admin": {
+    "workspace-navigation": "Arbeitsbereichsnavigation",
     "diagnostics-history": {
       "title": "Gespeicherte Itemmatrix-Diagnosen",
       "description": "Vollständige Fehlerlisten bleiben auch nach Ablauf oder Entfernen der Exportaufträge erhalten. Die Zelldiagnose enthält Personenkennungen und die genaue Position jeder betroffenen Zelle.",
@@ -4624,7 +4626,7 @@
       "overwrite-failed": "Fehler beim Überschreiben der Dateien.",
       "upload-failed": "Fehler beim Hochladen der Dateien.",
       "file-types-required": "Keine Dateitypen ausgewählt.",
-      "zip-download-success": "ZIP-Datei wurde erfolgreich heruntergeladen.",
+      "zip-download-started": "ZIP-Download gestartet. Den Fortschritt sehen Sie in den Downloads Ihres Browsers.",
       "zip-download-failed": "Fehler beim Herunterladen der ZIP-Datei.",
       "no-test-takers-title": "Keine Testtaker gefunden",
       "create-test-takers-question": "Es wurden keine Testtaker-Dateien gefunden. Möchten Sie eine automatisch generierte Testtaker-Datei erstellen?",
@@ -4641,8 +4643,7 @@
       "size-1mb-to-10mb": "1MB - 10MB",
       "size-over-10mb": "> 10MB",
       "content-pool-upload-result": "Content-Pool-Upload Ergebnis",
-      "loading-list": "Dateiliste wird geladen...",
-      "empty-zip-response": "Leere ZIP-Antwort erhalten."
+      "loading-list": "Dateiliste wird geladen..."
     },
     "test-results-delete-preview-dialog": {
       "scope": "Betroffener Bereich",
@@ -4928,6 +4929,7 @@
       "minimum-search-length": "Geben Sie mindestens {{MIN_SEARCH_LENGTH}} Zeichen ein.",
       "no-matches": "Keine Treffer gefunden.",
       "result-count": "{{value1}} von {{value2}}",
+      "preview-count": "{{count}} Treffer in der Vorschau, weitere vorhanden",
       "open-browser": "Im Ergebnisbrowser öffnen",
       "start-replay": "Replay starten",
       "replay-unavailable": "Für diesen Treffer ist kein Replay verfügbar."

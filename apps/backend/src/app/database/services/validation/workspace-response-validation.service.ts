@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, Raw, Repository } from 'typeorm';
 import { parseStringPromise } from 'xml2js';
 import * as cheerio from 'cheerio';
 
@@ -26,6 +26,7 @@ import {
   statusNumberToString
 } from '../../utils/response-status-converter';
 import { withWorkspaceTestResultsMutationLock } from '../shared/workspace-test-results-lock.util';
+import { InvalidVariablePage } from './invalid-variable-page';
 
 export type ResponseDeletionAuditContext = Pick<RecordAuditJournalEventInput, 'actorUserId' | 'jobId'>;
 
@@ -35,6 +36,16 @@ interface UnitVariableDefinitions {
   noValueAliases: Set<string>;
   noValueIds: Set<string>;
 }
+
+interface ValidationExclusions {
+  globalIgnoredUnits: string[];
+  ignoredBooklets: string[];
+  testletIgnoredUnits: { bookletId: string; unitId: string }[];
+}
+
+const VALIDATION_BATCH_SIZE = 1000;
+const DUPLICATE_PERSON_BATCH_SIZE = 64;
+type ValidationProgress = (progress: number) => void | Promise<void>;
 
 @Injectable()
 export class WorkspaceResponseValidationService {
@@ -183,11 +194,7 @@ export class WorkspaceResponseValidationService {
     return sorted[0]?.responseId ?? null;
   }
 
-  private async resolveExclusionsForValidation(workspaceId: number): Promise<{
-    globalIgnoredUnits: string[];
-    ignoredBooklets: string[];
-    testletIgnoredUnits: { bookletId: string; unitId: string }[];
-  }> {
+  private async resolveExclusionsForValidation(workspaceId: number): Promise<ValidationExclusions> {
     const workspace = await this.workspaceRepository.findOne({
       where: { id: workspaceId }
     });
@@ -262,15 +269,14 @@ export class WorkspaceResponseValidationService {
   }
 
   private async filterUnitsByExclusions(
-    workspaceId: number,
     units: Unit[],
-    batchSize: number = 1000
+    exclusions: ValidationExclusions,
+    booklets?: Booklet[]
   ): Promise<Unit[]> {
     if (units.length === 0) {
       return units;
     }
 
-    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
     const ignoredUnits = new Set(
       (exclusions.globalIgnoredUnits || []).map(
         WorkspaceResponseValidationService.normalizeUnitKey
@@ -292,27 +298,12 @@ export class WorkspaceResponseValidationService {
     const bookletNameById = new Map<number, string>();
 
     if (hasBookletBasedExclusions) {
-      const bookletIds = Array.from(
-        new Set(
-          units
-            .map(unit => unit.bookletid)
-            .filter((id): id is number => typeof id === 'number')
-        )
-      );
-
-      for (let i = 0; i < bookletIds.length; i += batchSize) {
-        const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
-        const bookletsBatch = await this.bookletRepository.find({
-          where: { id: In(bookletIdsBatch) }
-        });
-        bookletsBatch.forEach(booklet => {
-          bookletNameById.set(
-            booklet.id,
-            WorkspaceResponseValidationService.normalizeExclusionKey(
-              booklet.bookletinfo?.name
-            )
-          );
-        });
+      const validationBooklets = booklets ?? await this.loadValidationBooklets(units);
+      for (const booklet of validationBooklets) {
+        bookletNameById.set(
+          booklet.id,
+          WorkspaceResponseValidationService.normalizeExclusionKey(booklet.bookletinfo?.name)
+        );
       }
     }
 
@@ -340,11 +331,94 @@ export class WorkspaceResponseValidationService {
     });
   }
 
+  private async loadValidationBooklets(units: Unit[]): Promise<Booklet[]> {
+    const bookletIds = [...new Set(units.map(unit => unit.bookletid))];
+    const booklets: Booklet[] = [];
+    for (let i = 0; i < bookletIds.length; i += VALIDATION_BATCH_SIZE) {
+      const batch = await this.bookletRepository.find({
+        where: { id: In(bookletIds.slice(i, i + VALIDATION_BATCH_SIZE)) },
+        select: { id: true, bookletinfo: { id: true, name: true } },
+        relations: { bookletinfo: true },
+        loadEagerRelations: false
+      });
+      booklets.push(...batch);
+    }
+    return booklets;
+  }
+
+  private async loadValidationUnits(
+    workspaceId: number,
+    onProgress?: ValidationProgress
+  ): Promise<Map<number, Unit>> {
+    const persons = await this.personsRepository.find({
+      where: { workspace_id: workspaceId, consider: true },
+      select: { id: true },
+      order: { id: 'ASC' }
+    });
+    const personIds = persons.map(person => person.id);
+    const units: Unit[] = [];
+
+    for (let i = 0; i < personIds.length; i += VALIDATION_BATCH_SIZE) {
+      const batch = await this.unitRepository
+        .createQueryBuilder('unit')
+        .select(['unit.id', 'unit.name', 'unit.bookletid'])
+        .innerJoin('unit.booklet', 'booklet')
+        .where('booklet.personid IN (:...personIdsBatch)', {
+          personIdsBatch: personIds.slice(i, i + VALIDATION_BATCH_SIZE)
+        })
+        .orderBy('unit.id', 'ASC')
+        .getMany();
+      units.push(...batch);
+    }
+
+    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
+    const includedUnits = await this.filterUnitsByExclusions(units, exclusions);
+    await onProgress?.(60);
+    return new Map(includedUnits.map(unit => [unit.id, unit]));
+  }
+
+  private async* readValidationResponses(
+    unitIds: number[],
+    onProgress?: ValidationProgress
+  ): AsyncGenerator<ResponseEntity> {
+    for (let i = 0; i < unitIds.length; i += VALIDATION_BATCH_SIZE) {
+      const batch = unitIds.slice(i, i + VALIDATION_BATCH_SIZE);
+      let cursor: ResponseEntity | undefined;
+      for (;;) {
+        // Lead with unitid so PostgreSQL can page through the unit index.
+        const afterUnitId = cursor?.unitid ?? 0;
+        const unitid = In(batch.filter(id => id >= afterUnitId));
+        const where = cursor ? {
+          unitid,
+          id: Raw(column => `("unitid", ${column}) > (:unitId, :responseId)`, {
+            unitId: cursor.unitid,
+            responseId: cursor.id
+          })
+        } : { unitid };
+        const responses = await this.responseRepository.find({
+          select: {
+            id: true, unitid: true, variableid: true, value: true, status: true, subform: true
+          },
+          where,
+          order: { unitid: 'ASC', id: 'ASC' },
+          take: VALIDATION_BATCH_SIZE
+        });
+        for (const response of responses) {
+          yield response;
+        }
+        if (responses.length < VALIDATION_BATCH_SIZE) break;
+        cursor = responses[responses.length - 1];
+      }
+      const fraction = Math.min(i + VALIDATION_BATCH_SIZE, unitIds.length) / unitIds.length;
+      await onProgress?.(60 + Math.floor(fraction * 35));
+    }
+  }
+
   async validateVariables(
     workspaceId: number,
     page: number = 1,
     limit: number = 10,
-    onProgress?: (progress: number) => void
+    onProgress?: ValidationProgress
   ): Promise<{
     data: InvalidVariableDto[];
     total: number;
@@ -368,7 +442,7 @@ export class WorkspaceResponseValidationService {
       };
     }
 
-    if (onProgress) onProgress(15);
+    await onProgress?.(15);
 
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
@@ -439,145 +513,19 @@ export class WorkspaceResponseValidationService {
       }
     }
 
-    if (onProgress) onProgress(25);
+    await onProgress?.(25);
 
-    const invalidVariables: InvalidVariableDto[] = [];
-
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    if (onProgress) onProgress(35);
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (onProgress) onProgress(45);
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    allUnits = await this.filterUnitsByExclusions(
-      workspaceId,
-      allUnits,
-      batchSize
-    );
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(
-        `No unit IDs found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit']
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (onProgress) onProgress(60);
-
-    if (allResponses.length === 0) {
-      this.logger.warn(
-        `No responses found for units in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit,
-        summary: emptySummary
-      };
-    }
-
-    const totalResponses = allResponses.length;
-    let processedResponses = 0;
+    const units = await this.loadValidationUnits(workspaceId, onProgress);
+    const invalidVariables = new InvalidVariablePage(page, limit);
+    let hasResponses = false;
     const summary: VariableValidationSummaryDto = {
       unitFileNotFound: 0,
       variableNotDefinedInUnit: 0
     };
 
-    for (const response of allResponses) {
-      processedResponses += 1;
-      if (processedResponses % 100 === 0 && onProgress) {
-        onProgress(60 + Math.floor((processedResponses / totalResponses) * 35));
-      }
-      const unit = response.unit;
+    for await (const response of this.readValidationResponses([...units.keys()], onProgress)) {
+      hasResponses = true;
+      const unit = units.get(response.unitid);
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
         continue;
@@ -601,7 +549,7 @@ export class WorkspaceResponseValidationService {
 
       if (!unitVariables.has(unitKey)) {
         summary.unitFileNotFound += 1;
-        invalidVariables.push({
+        invalidVariables.add({
           fileName: `${unitName}`,
           variableId: variableId,
           value,
@@ -633,7 +581,7 @@ export class WorkspaceResponseValidationService {
         }
 
         summary.variableNotDefinedInUnit += 1;
-        invalidVariables.push({
+        invalidVariables.add({
           fileName: `${unitName}`,
           variableId: variableId,
           value,
@@ -644,20 +592,11 @@ export class WorkspaceResponseValidationService {
       }
     }
 
-    const validPage = Math.max(1, page);
-    const validLimit =
-      limit === Number.MAX_SAFE_INTEGER ?
-        limit :
-        Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
     return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit,
+      data: invalidVariables.data,
+      total: invalidVariables.total,
+      page: hasResponses ? invalidVariables.page : page,
+      limit: hasResponses ? invalidVariables.limit : limit,
       summary
     };
   }
@@ -666,7 +605,7 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10,
-    onProgress?: (progress: number) => void
+    onProgress?: ValidationProgress
   ): Promise<{
     data: InvalidVariableDto[];
     total: number;
@@ -676,14 +615,11 @@ export class WorkspaceResponseValidationService {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
-        data: [],
-        total: 0,
-        page,
-        limit
+        data: [], total: 0, page, limit
       };
     }
 
-    if (onProgress) onProgress(10);
+    await onProgress?.(10);
 
     const unitFiles = await this.filesRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' }
@@ -749,135 +685,15 @@ export class WorkspaceResponseValidationService {
       }
     }
 
-    if (onProgress) onProgress(30);
+    await onProgress?.(30);
 
-    const invalidVariables: InvalidVariableDto[] = [];
+    const units = await this.loadValidationUnits(workspaceId, onProgress);
+    const invalidVariables = new InvalidVariablePage(page, limit);
+    let hasResponses = false;
 
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
-
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    if (onProgress) onProgress(40);
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (onProgress) onProgress(50);
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    allUnits = await this.filterUnitsByExclusions(
-      workspaceId,
-      allUnits,
-      batchSize
-    );
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(
-        `No unit IDs found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit']
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (onProgress) onProgress(65);
-
-    if (allResponses.length === 0) {
-      this.logger.warn(
-        `No responses found for units in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const totalResponses = allResponses.length;
-    let processedResponses = 0;
-
-    for (const response of allResponses) {
-      processedResponses += 1;
-      if (processedResponses % 100 === 0 && onProgress) {
-        onProgress(65 + Math.floor((processedResponses / totalResponses) * 30));
-      }
-      const unit = response.unit;
+    for await (const response of this.readValidationResponses([...units.keys()], onProgress)) {
+      hasResponses = true;
+      const unit = units.get(response.unitid);
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
         continue;
@@ -912,7 +728,7 @@ export class WorkspaceResponseValidationService {
 
       if (isMissingValue) {
         if (!isNullable && !isProcessStatus) {
-          invalidVariables.push({
+          invalidVariables.add({
             fileName: `${unitName}`,
             variableId: variableId,
             value: value,
@@ -928,7 +744,7 @@ export class WorkspaceResponseValidationService {
         try {
           const parsedValue = JSON.parse(value);
           if (!Array.isArray(parsedValue)) {
-            invalidVariables.push({
+            invalidVariables.add({
               fileName: `${unitName}`,
               variableId: variableId,
               value: value,
@@ -944,7 +760,7 @@ export class WorkspaceResponseValidationService {
             element => !this.isValidValueForType(String(element), expectedType)
           );
           if (invalidElement !== undefined) {
-            invalidVariables.push({
+            invalidVariables.add({
               fileName: `${unitName}`,
               variableId: variableId,
               value: value,
@@ -955,7 +771,7 @@ export class WorkspaceResponseValidationService {
           }
           continue;
         } catch (e) {
-          invalidVariables.push({
+          invalidVariables.add({
             fileName: `${unitName}`,
             variableId: variableId,
             value: value,
@@ -969,7 +785,7 @@ export class WorkspaceResponseValidationService {
       }
 
       if (!this.isValidValueForType(value, expectedType)) {
-        invalidVariables.push({
+        invalidVariables.add({
           fileName: `${unitName}`,
           variableId: variableId,
           value: value,
@@ -980,20 +796,11 @@ export class WorkspaceResponseValidationService {
       }
     }
 
-    const validPage = Math.max(1, page);
-    const validLimit =
-      limit === Number.MAX_SAFE_INTEGER ?
-        limit :
-        Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
     return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit
+      data: invalidVariables.data,
+      total: invalidVariables.total,
+      page: hasResponses ? invalidVariables.page : page,
+      limit: hasResponses ? invalidVariables.limit : limit
     };
   }
 
@@ -1001,230 +808,155 @@ export class WorkspaceResponseValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10,
-    onProgress?: (progress: number) => void
+    onProgress?: ValidationProgress
   ): Promise<DuplicateResponsesResultDto> {
     if (!workspaceId) {
       this.logger.error(
         'Workspace ID is required for validateDuplicateResponses'
       );
       return {
-        data: [],
-        total: 0,
-        page,
-        limit
+        data: [], total: 0, page, limit
       };
     }
 
-    if (onProgress) onProgress(10);
+    await onProgress?.(10);
 
     const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
+      where: { workspace_id: workspaceId, consider: true },
+      select: {
+        id: true, login: true, code: true, group: true
+      },
+      order: { id: 'ASC' }
     });
 
+    await onProgress?.(20);
     if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
       return {
-        data: [],
-        total: 0,
-        page,
-        limit
+        data: [], total: 0, page, limit
       };
     }
 
-    if (onProgress) onProgress(20);
-
-    const personIds = persons.map(person => person.id);
-    const personMap = new Map(persons.map(person => [person.id, person]));
-
-    const booklets = await this.bookletRepository.find({
-      where: { personid: In(personIds) },
-      relations: ['bookletinfo']
-    });
-
-    if (booklets.length === 0) {
-      this.logger.warn(
-        `No booklets found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    if (onProgress) onProgress(35);
-
-    const bookletMap = new Map(
-      booklets.map(booklet => [booklet.id, booklet])
-    );
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-    const bookletIds = booklets.map(booklet => booklet.id);
-
-    for (let i = 0; i < bookletIds.length; i += batchSize) {
-      const bookletIdsBatch = bookletIds.slice(i, i + batchSize);
-      const unitsBatch = await this.unitRepository.find({
-        where: { bookletid: In(bookletIdsBatch) }
-      });
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (onProgress) onProgress(50);
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for booklets in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    allUnits = await this.filterUnitsByExclusions(
-      workspaceId,
-      allUnits,
-      batchSize
-    );
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for booklets in workspace ${workspaceId} after exclusion filtering`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-    const unitMap = new Map(allUnits.map(unit => [unit.id, unit]));
-
-    let allResponses: ResponseEntity[] = [];
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) }
-      });
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (onProgress) onProgress(70);
-
-    if (allResponses.length === 0) {
-      this.logger.warn(
-        `No responses found for units in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const totalResponses = allResponses.length;
-    let processedResponses = 0;
-    const responseGroups = new Map<string, ResponseEntity[]>();
-    for (const response of allResponses) {
-      processedResponses += 1;
-      if (processedResponses % 100 === 0 && onProgress) {
-        onProgress(70 + Math.floor((processedResponses / totalResponses) * 25));
-      }
-      const unit = unitMap.get(response.unitid);
-      if (!unit) continue;
-      const booklet = bookletMap.get(unit.bookletid);
-      if (!booklet) continue;
-      const person = personMap.get(booklet.personid);
-      if (!person) continue;
-
-      const key = `${unit.name}|${response.variableid}|${response.subform || ''}|${person.login}|${person.code || ''}|${person.group || ''}`;
-      if (!responseGroups.has(key)) {
-        responseGroups.set(key, []);
-      }
-      responseGroups.get(key)?.push(response);
-    }
-
-    const duplicateResponses: Array<
-    DuplicateResponseDto & { subform: string }
-    > = [];
-    for (const [, responses] of responseGroups.entries()) {
-      if (responses.length > 1) {
-        const firstResponse = responses[0];
-        const unit = unitMap.get(firstResponse.unitid);
-
-        if (!unit) {
-          this.logger.warn(`Unit not found for response ${firstResponse.id}`);
-          continue;
-        }
-
-        const booklet = bookletMap.get(unit.bookletid);
-        if (!booklet) {
-          this.logger.warn(`Booklet not found for unit ${unit.id}`);
-          continue;
-        }
-
-        const person = personMap.get(booklet.personid);
-        if (!person) {
-          this.logger.warn(`Person not found for booklet ${booklet.id}`);
-          continue;
-        }
-
-        const bookletName = booklet.bookletinfo?.name || 'Unknown';
-
-        duplicateResponses.push({
-          unitName: unit.name,
-          unitId: unit.id,
-          variableId: firstResponse.variableid,
-          subform: firstResponse.subform || '',
-          bookletName,
-          testTakerLogin: person.login,
-          testTakerCode: person.code,
-          testTakerGroup: person.group,
-          duplicates: responses.map(response => ({
-            responseId: response.id,
-            value: response.value || '',
-            status: statusNumberToString(response.status) || 'UNSET'
-          }))
-        });
-      }
-    }
-
-    duplicateResponses.sort((a, b) => {
+    const exclusions = await this.resolveExclusionsForValidation(workspaceId);
+    const duplicateResponses: DuplicateResponseDto[] = [];
+    const validPage = Math.max(1, page);
+    const validLimit = limit === Number.MAX_SAFE_INTEGER ?
+      limit : Math.min(Math.max(1, limit), 1000);
+    const startIndex = (validPage - 1) * validLimit;
+    const endIndex = startIndex + validLimit;
+    const compare = (a: DuplicateResponseDto, b: DuplicateResponseDto): number => {
       if (a.unitName !== b.unitName) {
         return a.unitName.localeCompare(b.unitName);
       }
       return a.variableId.localeCompare(b.variableId);
-    });
+    };
+    let hasResponses = false;
+    let total = 0;
+    // The workspace's person identity is unique. Keep all booklets of each
+    // person together so matching responses in different units can still be found.
+    for (let i = 0; i < persons.length; i += DUPLICATE_PERSON_BATCH_SIZE) {
+      const batch = persons.slice(i, i + DUPLICATE_PERSON_BATCH_SIZE);
+      const result = await this.findDuplicateResponseBatch(batch, exclusions);
+      hasResponses ||= result.hasResponses;
+      total += result.duplicates.length;
+      for (const duplicate of result.duplicates) {
+        duplicateResponses.push(duplicate);
+      }
+      if (duplicateResponses.length > endIndex) {
+        duplicateResponses.sort(compare);
+        duplicateResponses.splice(endIndex);
+      }
+      const fraction = Math.min(i + DUPLICATE_PERSON_BATCH_SIZE, persons.length) / persons.length;
+      await onProgress?.(20 + Math.floor(fraction * 75));
+    }
 
-    const validPage = Math.max(1, page);
-    const validLimit =
-      limit === Number.MAX_SAFE_INTEGER ?
-        limit :
-        Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = duplicateResponses.slice(startIndex, endIndex);
+    if (!hasResponses) {
+      return {
+        data: [], total: 0, page, limit
+      };
+    }
 
+    duplicateResponses.sort(compare);
     return {
-      data: paginatedData,
-      total: duplicateResponses.length,
+      data: duplicateResponses.slice(startIndex, endIndex),
+      total,
       page: validPage,
       limit: validLimit
     };
+  }
+
+  private async findDuplicateResponseBatch(
+    persons: Persons[],
+    exclusions: ValidationExclusions
+  ): Promise<{ duplicates: DuplicateResponseDto[]; hasResponses: boolean }> {
+    const personsById = new Map(persons.map(person => [person.id, person]));
+    const booklets = await this.bookletRepository.find({
+      where: { personid: In([...personsById.keys()]) },
+      select: { id: true, personid: true, bookletinfo: { id: true, name: true } },
+      relations: { bookletinfo: true },
+      loadEagerRelations: false
+    });
+    const bookletsById = new Map(booklets.map(booklet => [booklet.id, booklet]));
+    const units: Unit[] = [];
+    const bookletIds = [...bookletsById.keys()];
+    for (let i = 0; i < bookletIds.length; i += VALIDATION_BATCH_SIZE) {
+      const batch = await this.unitRepository.find({
+        where: { bookletid: In(bookletIds.slice(i, i + VALIDATION_BATCH_SIZE)) },
+        select: { id: true, name: true, bookletid: true },
+        order: { id: 'ASC' }
+      });
+      units.push(...batch);
+    }
+
+    const includedUnits = await this.filterUnitsByExclusions(units, exclusions, booklets);
+    const unitsById = new Map(includedUnits.map(unit => [unit.id, unit]));
+    const groups = new Map<string, ResponseEntity[]>();
+    let hasResponses = false;
+    for await (const response of this.readValidationResponses([...unitsById.keys()])) {
+      hasResponses = true;
+      const unit = unitsById.get(response.unitid);
+      const booklet = unit && bookletsById.get(unit.bookletid);
+      if (!unit || !booklet) continue;
+      const key = JSON.stringify([booklet.personid, unit.name, response.variableid, response.subform || '']);
+      const group = groups.get(key);
+      if (group) {
+        group.push(response);
+      } else {
+        groups.set(key, [response]);
+      }
+    }
+
+    const duplicates: DuplicateResponseDto[] = [];
+    for (const responses of groups.values()) {
+      if (responses.length < 2) continue;
+      const [first] = responses;
+      const unit = unitsById.get(first.unitid);
+      const booklet = unit && bookletsById.get(unit.bookletid);
+      const person = booklet && personsById.get(booklet.personid);
+      if (!unit || !booklet || !person) continue;
+      duplicates.push({
+        unitName: unit.name,
+        unitId: unit.id,
+        variableId: first.variableid,
+        subform: first.subform || '',
+        bookletName: booklet.bookletinfo?.name || 'Unknown',
+        testTakerLogin: person.login,
+        testTakerCode: person.code,
+        testTakerGroup: person.group,
+        duplicates: responses.map(response => ({
+          responseId: response.id,
+          value: response.value || '',
+          status: statusNumberToString(response.status) || 'UNSET'
+        }))
+      });
+    }
+    return { duplicates, hasResponses };
   }
 
   async validateResponseStatus(
     workspaceId: number,
     page: number = 1,
     limit: number = 10,
-    onProgress?: (progress: number) => void
+    onProgress?: ValidationProgress
   ): Promise<{
     data: InvalidVariableDto[];
     total: number;
@@ -1234,14 +966,11 @@ export class WorkspaceResponseValidationService {
     if (!workspaceId) {
       this.logger.error('Workspace ID is required');
       return {
-        data: [],
-        total: 0,
-        page,
-        limit
+        data: [], total: 0, page, limit
       };
     }
 
-    if (onProgress) onProgress(10);
+    await onProgress?.(10);
 
     const validStatusValues = [
       'VALUE_CHANGED',
@@ -1252,132 +981,13 @@ export class WorkspaceResponseValidationService {
       'CODING_COMPLETE'
     ];
 
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, consider: true }
-    });
+    const units = await this.loadValidationUnits(workspaceId, onProgress);
+    const invalidVariables = new InvalidVariablePage(page, limit);
+    let hasResponses = false;
 
-    if (persons.length === 0) {
-      this.logger.warn(`No persons found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    if (onProgress) onProgress(20);
-
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(`No person IDs found for workspace ${workspaceId}`);
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      const unitsBatch = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', { personIdsBatch })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (onProgress) onProgress(35);
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    allUnits = await this.filterUnitsByExclusions(
-      workspaceId,
-      allUnits,
-      batchSize
-    );
-
-    if (allUnits.length === 0) {
-      this.logger.warn(
-        `No units found for persons in workspace ${workspaceId} after exclusion filtering`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(
-        `No unit IDs found for persons in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    let allResponses: ResponseEntity[] = [];
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responsesBatch = await this.responseRepository.find({
-        where: { unitid: In(unitIdsBatch) },
-        relations: ['unit']
-      });
-
-      allResponses = [...allResponses, ...responsesBatch];
-    }
-
-    if (onProgress) onProgress(60);
-
-    if (allResponses.length === 0) {
-      this.logger.warn(
-        `No responses found for units in workspace ${workspaceId}`
-      );
-      return {
-        data: [],
-        total: 0,
-        page,
-        limit
-      };
-    }
-
-    const totalResponses = allResponses.length;
-    let processedResponses = 0;
-    const invalidVariables: InvalidVariableDto[] = [];
-
-    for (const response of allResponses) {
-      processedResponses += 1;
-      if (processedResponses % 100 === 0 && onProgress) {
-        onProgress(60 + Math.floor((processedResponses / totalResponses) * 40));
-      }
-      const unit = response.unit;
+    for await (const response of this.readValidationResponses([...units.keys()], onProgress)) {
+      hasResponses = true;
+      const unit = units.get(response.unitid);
       if (!unit) {
         this.logger.warn(`Response ${response.id} has no associated unit`);
         continue;
@@ -1394,7 +1004,7 @@ export class WorkspaceResponseValidationService {
       const status = statusNumberToString(response.status);
 
       if (!status || !validStatusValues.includes(status)) {
-        invalidVariables.push({
+        invalidVariables.add({
           fileName: `${unitName}`,
           variableId: variableId,
           value: response.value || '',
@@ -1404,20 +1014,11 @@ export class WorkspaceResponseValidationService {
       }
     }
 
-    const validPage = Math.max(1, page);
-    const validLimit =
-      limit === Number.MAX_SAFE_INTEGER ?
-        limit :
-        Math.min(Math.max(1, limit), 1000);
-    const startIndex = (validPage - 1) * validLimit;
-    const endIndex = startIndex + validLimit;
-    const paginatedData = invalidVariables.slice(startIndex, endIndex);
-
     return {
-      data: paginatedData,
-      total: invalidVariables.length,
-      page: validPage,
-      limit: validLimit
+      data: invalidVariables.data,
+      total: invalidVariables.total,
+      page: hasResponses ? invalidVariables.page : page,
+      limit: hasResponses ? invalidVariables.limit : limit
     };
   }
 

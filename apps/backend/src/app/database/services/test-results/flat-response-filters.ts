@@ -74,9 +74,9 @@ export function normalizeFlatResponseFilters(options: Omit<FlatResponseOptions, 
 
 export type FlatResponseFilters = ReturnType<typeof normalizeFlatResponseFilters>;
 type ResponseQuery = SelectQueryBuilder<ResponseEntity>;
-type QueryPurpose = 'rows' | 'count' | 'options';
+type QueryPurpose = 'responses' | 'options';
 
-export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
+export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose = 'responses'): void {
   if (purpose === 'options') {
     applyFilterOptionText(qb, filters);
   } else {
@@ -121,15 +121,15 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
     );
   }
   if (tags) {
-    if (purpose !== 'count') {
+    if (purpose === 'options') {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     } else {
       qb.andWhere(
         `EXISTS (
           SELECT 1
-          FROM unit_tag count_unit_tag
-          WHERE count_unit_tag."unitId" = unit.id
-            AND count_unit_tag.tag ILIKE :tags
+          FROM unit_tag matching_tag
+          WHERE matching_tag."unitId" = unit.id
+            AND matching_tag.tag ILIKE :tags
         )`,
         { tags: `%${tags}%` }
       );

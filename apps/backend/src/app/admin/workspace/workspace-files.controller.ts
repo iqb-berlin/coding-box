@@ -15,7 +15,7 @@ import {
   UploadedFiles,
   Put,
   ParseIntPipe, Req,
-  ParseBoolPipe
+  ParseBoolPipe, DefaultValuePipe, Res, Next
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -28,9 +28,11 @@ import {
   ApiParam,
   ApiTags,
   ApiBadRequestResponse,
+  ApiQuery,
   getSchemaPath
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
+import type { NextFunction, Request, Response } from 'express';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { FilesInListDto } from '../../../../../../api-dto/files/files-in-list.dto';
@@ -45,10 +47,32 @@ import { CodingStatisticsService, CodingValidationService } from '../../database
 import { toRegexSearchException } from '../../utils/regex-search.util';
 import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
 
+import { WorkspaceZipDownload } from './workspace-zip-download';
+import { workspaceDownloadPath } from './workspace-download-ticket';
+
+const MAX_FILE_TYPES = 100;
+const MAX_ZIP_SIZE = 500 * 1024 * 1024;
+
+function readZipFileTypes(fileTypes?: string[]): string[] {
+  if (!fileTypes) return [];
+  if (!Array.isArray(fileTypes)) {
+    throw new BadRequestException('File types must be an array of strings.');
+  }
+  if (fileTypes.length > MAX_FILE_TYPES) {
+    throw new BadRequestException(`Maximum ${MAX_FILE_TYPES} file types allowed.`);
+  }
+  const requestedTypes = fileTypes.filter(type => typeof type === 'string' && type.trim().length > 0);
+  if (!requestedTypes.length && fileTypes.length > 0) {
+    throw new BadRequestException('All file types must be non-empty strings.');
+  }
+  return requestedTypes;
+}
+
 @ApiTags('Admin Workspace Files')
 @Controller('admin/workspace')
 export class WorkspaceFilesController {
   private readonly logger = new Logger(WorkspaceFilesController.name);
+  private readonly zipDownload = new WorkspaceZipDownload();
 
   constructor(
     private readonly workspaceFilesService: WorkspaceFilesService,
@@ -385,76 +409,40 @@ export class WorkspaceFilesController {
     description: 'ID of the workspace'
   })
   @ApiOkResponse({
-    description: 'ZIP file created successfully',
+    description: 'ZIP file or segment with X-Archive-Range and X-Archive-Id headers',
     schema: {
       type: 'string',
       format: 'binary'
     }
   })
+  @ApiQuery({ name: 'segmented', required: false, type: Boolean })
+  @ApiQuery({ name: 'prepare', required: false, type: Boolean })
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or request body'
   })
   async downloadWorkspaceFilesAsZip(
-    @Param('workspace_id') workspaceId: string,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() request: Request,
+    @Res({ passthrough: true }) response: Response,
+    @Query('segmented', new DefaultValuePipe(false), ParseBoolPipe) segmented: boolean,
+    @Query('prepare', new DefaultValuePipe(false), ParseBoolPipe) prepare: boolean,
     @ValidatedBody('WorkspaceFilesController_downloadWorkspaceFilesAsZip', true) body?: RequestBody<'WorkspaceFilesController_downloadWorkspaceFilesAsZip'>
-  ): Promise<StreamableFile> {
-    const startTime = Date.now();
-    const MAX_ZIP_SIZE = 500 * 1024 * 1024; // 500MB limit
-    const MAX_FILE_TYPES = 100;
-
-    // Validate and parse workspace ID
-    const parsedWorkspaceId = parseInt(workspaceId, 10);
-    if (
-      !workspaceId ||
-      Number.isNaN(parsedWorkspaceId) ||
-      parsedWorkspaceId <= 0
-    ) {
-      this.logger.warn(`Invalid workspace ID provided: ${workspaceId} `);
+  ): Promise<StreamableFile | { id: string }> {
+    if (workspaceId <= 0) {
       throw new BadRequestException('Workspace ID must be a positive integer.');
     }
-    const workspaceIdNum = parsedWorkspaceId;
-
-    // Validate and sanitize file types
-    let requestedTypes: string[] = [];
-    if (body?.fileTypes) {
-      if (!Array.isArray(body.fileTypes)) {
-        this.logger.warn(`Invalid fileTypes format for workspace ${workspaceId}`);
-        throw new BadRequestException('fileTypes must be an array of strings.');
-      }
-
-      if (body.fileTypes.length > MAX_FILE_TYPES) {
-        this.logger.warn(
-          `Too many file types requested for workspace ${workspaceId}: ${body.fileTypes.length} `
-        );
-        throw new BadRequestException(
-          `Maximum ${MAX_FILE_TYPES} file types allowed.`
-        );
-      }
-
-      // Validate each file type is a non-empty string
-      requestedTypes = body.fileTypes.filter(
-        (type): type is string => typeof type === 'string' && type.trim().length > 0
-      );
-
-      if (requestedTypes.length === 0 && body.fileTypes.length > 0) {
-        this.logger.warn(
-          `Invalid file types provided for workspace ${workspaceIdNum}`
-        );
-        throw new BadRequestException(
-          'All file types must be non-empty strings.'
-        );
-      }
-    }
+    const startTime = Date.now();
+    const requestedTypes = readZipFileTypes(body?.fileTypes);
 
     let zipBuffer: Buffer;
     try {
       this.logger.log(
-        `Starting ZIP download for workspace ${workspaceIdNum} with ${requestedTypes.length} file types`
+        `Starting ZIP download for workspace ${workspaceId} with ${requestedTypes.length} file types`
       );
 
       zipBuffer =
         await this.workspaceFilesService.downloadWorkspaceFilesAsZip(
-          workspaceIdNum,
+          workspaceId,
           requestedTypes.length > 0 ? requestedTypes : undefined
         );
     } catch (error) {
@@ -463,7 +451,7 @@ export class WorkspaceFilesController {
         error instanceof Error ? error.message : String(error);
       const errorStack = error instanceof Error ? error.stack : undefined;
       this.logger.error(
-        ` Error creating ZIP file for workspace ${workspaceIdNum} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
+        ` Error creating ZIP file for workspace ${workspaceId} after ${duration} ms: ${errorMessage}${errorStack ? `\n${errorStack}` : ''
         } `
       );
 
@@ -474,7 +462,7 @@ export class WorkspaceFilesController {
     // Validate ZIP buffer outside try/catch
     if (!zipBuffer || zipBuffer.length === 0) {
       this.logger.error(
-        `Empty ZIP buffer generated for workspace ${workspaceIdNum}`
+        `Empty ZIP buffer generated for workspace ${workspaceId}`
       );
       throw new InternalServerErrorException(
         'No files available to download.'
@@ -483,22 +471,52 @@ export class WorkspaceFilesController {
 
     if (zipBuffer.length > MAX_ZIP_SIZE) {
       this.logger.error(
-        `ZIP file exceeds maximum size for workspace ${workspaceIdNum}: ${zipBuffer.length} bytes`
+        `ZIP file exceeds maximum size for workspace ${workspaceId}: ${zipBuffer.length} bytes`
       );
       throw new InternalServerErrorException(
         'ZIP file is too large. Please select fewer file types.'
       );
     }
 
-    const duration = Date.now() - startTime;
     this.logger.log(
-      `ZIP download completed for workspace ${workspaceIdNum} in ${duration} ms(${zipBuffer.length} bytes)`
+      `ZIP download completed for workspace ${workspaceId} in ${Date.now() - startTime} ms(${zipBuffer.length} bytes)`
     );
 
-    return new StreamableFile(zipBuffer, {
-      type: 'application/zip',
-      disposition: `attachment; filename = "workspace-${workspaceIdNum}-files.zip"`
-    });
+    if (prepare) {
+      return this.zipDownload.prepare(workspaceId, zipBuffer, workspaceDownloadPath(request), response);
+    }
+    return this.zipDownload.start(workspaceId, zipBuffer, segmented, response);
+  }
+
+  @Get(':workspace_id/files/download-zip/:archiveId/download')
+  @ApiOperation({ summary: 'Download a prepared workspace ZIP using its download cookie' })
+  downloadPreparedWorkspaceZip(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('archiveId') archiveId: string,
+    @Req() request: Request,
+    @Res() response: Response,
+    @Next() next: NextFunction
+  ): void {
+    this.zipDownload.download(workspaceId, archiveId, workspaceDownloadPath(request), request.get('cookie'), response, next);
+  }
+
+  @Get(':workspace_id/files/download-zip/:archiveId')
+  @ApiTags('admin workspace')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  @ApiOperation({ summary: 'Download the next segment of a workspace ZIP' })
+  @ApiQuery({ name: 'offset', required: true, type: Number })
+  @ApiOkResponse({
+    description: 'ZIP segment with X-Archive-Range and X-Archive-Id headers',
+    schema: { type: 'string', format: 'binary' }
+  })
+  downloadWorkspaceZipSegment(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('archiveId') archiveId: string,
+    @Query('offset', ParseIntPipe) offset: number,
+    @Res({ passthrough: true }) response: Response
+  ): StreamableFile {
+    return this.zipDownload.segment(workspaceId, archiveId, offset, response);
   }
 
   @Get(':workspace_id/files/ignored-units')

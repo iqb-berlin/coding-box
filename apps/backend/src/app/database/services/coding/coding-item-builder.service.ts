@@ -31,7 +31,7 @@ export interface CodingItem {
 
 export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
 
-export interface CodingItemVersionRow {
+export interface CodingListResponseRow {
   id: number;
   unitKey: string;
   unitAlias: string | null;
@@ -40,8 +40,11 @@ export interface CodingItemVersionRow {
   personGroup: string | null;
   bookletName: string | null;
   variableId: string;
-  value: string | null;
   statusV1: number | null;
+}
+
+export interface CodingItemVersionRow extends CodingListResponseRow {
+  value: string | null;
   codeV1: number | null;
   scoreV1: number | null;
   statusV2: number | null;
@@ -114,31 +117,41 @@ export class CodingItemBuilderService {
     workspaceId: number,
     variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<CodingItem | null> {
+    const unit = response.unit;
+    const booklet = unit?.booklet;
+    if (!unit || !booklet) return null;
+    return this.buildCodingItemFromRow({
+      id: response.id,
+      unitKey: unit.name,
+      unitAlias: unit.alias,
+      personLogin: booklet.person?.login ?? null,
+      personCode: booklet.person?.code ?? null,
+      personGroup: booklet.person?.group ?? null,
+      bookletName: booklet.bookletinfo?.name ?? null,
+      variableId: response.variableid,
+      statusV1: response.status_v1
+    }, authToken, serverUrl, workspaceId, variableAnchorMaps);
+  }
+
+  async buildCodingItemFromRow(
+    row: CodingListResponseRow,
+    authToken: string,
+    serverUrl: string,
+    workspaceId: number,
+    variableAnchorMaps?: CodingVariableAnchorMaps,
+    snapshotPage?: string
+  ): Promise<CodingItem | null> {
     try {
-      const unit = response.unit;
-      if (!unit) return null;
+      const unitKey = row.unitKey || '';
+      const variableId = row.variableId || '';
 
-      const booklet = unit.booklet;
-      if (!booklet) return null;
+      const variablePage = snapshotPage ?? await this.loadVariablePage(unitKey, variableId, workspaceId);
 
-      const person = booklet.person;
-      const bookletInfo = booklet.bookletinfo;
-
-      const unitKey = unit.name || '';
-      const variableId = response.variableid || '';
-
-      // Load variable page mapping
-      const variablePageMap = await this.fileCacheService.loadVoudData(
-        unitKey,
-        workspaceId
-      );
-      const variablePage = variablePageMap.get(variableId) || '0';
-
-      const loginName = person?.login || '';
-      const loginCode = person?.code || '';
-      const loginGroup = person?.group || '';
-      const bookletId = bookletInfo?.name || '';
-      const unitAlias = unit.alias || '';
+      const loginName = row.personLogin || '';
+      const loginCode = row.personCode || '';
+      const loginGroup = row.personGroup || '';
+      const bookletId = row.bookletName || '';
+      const unitAlias = row.unitAlias || '';
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
@@ -169,12 +182,12 @@ export class CodingItemBuilderService {
         variable_id: variableId,
         variable_page: variablePage,
         variable_anchor: variableAnchor,
-        status_v1: this.formatStatus(response.status_v1),
+        status_v1: this.formatStatus(row.statusV1),
         url
       };
     } catch (error) {
       this.logger.error(
-        `Error building coding item for response ${response.id}: ${getErrorMessage(error)}`
+        `Error building coding item for response ${row.id}: ${getErrorMessage(error)}`
       );
       return null;
     }
@@ -308,7 +321,8 @@ export class CodingItemBuilderService {
     includeResponseValues: boolean = true,
     includeGeoGebraResponseValues: boolean = false,
     variableAnchorMaps?: CodingVariableAnchorMaps,
-    resolvedValues?: CodingItemVersionExportValues
+    resolvedValues?: CodingItemVersionExportValues,
+    snapshotPage?: string
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
@@ -318,11 +332,7 @@ export class CodingItemBuilderService {
         return null;
       }
 
-      const variablePageMap = await this.fileCacheService.loadVoudData(
-        unitKey,
-        workspaceId
-      );
-      const variablePage = variablePageMap.get(variableId) || '0';
+      const variablePage = snapshotPage ?? await this.loadVariablePage(unitKey, variableId, workspaceId);
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
@@ -334,18 +344,6 @@ export class CodingItemBuilderService {
       const loginCode = row.personCode || '';
       const loginGroup = row.personGroup || '';
       const bookletId = row.bookletName || '';
-      const url = generateReplayUrl({
-        serverUrl,
-        loginName,
-        loginCode,
-        loginGroup,
-        bookletId,
-        unitId: unitKey,
-        variablePage,
-        variableAnchor,
-        authToken,
-        workspaceId: authToken ? undefined : workspaceId
-      });
 
       const baseItem: CodingItem & Record<string, unknown> = {
         unit_key: unitKey,
@@ -390,7 +388,18 @@ export class CodingItemBuilderService {
       }
 
       if (includeReplayUrls) {
-        baseItem.url = url;
+        baseItem.url = generateReplayUrl({
+          serverUrl,
+          loginName,
+          loginCode,
+          loginGroup,
+          bookletId,
+          unitId: unitKey,
+          variablePage,
+          variableAnchor,
+          authToken,
+          workspaceId: authToken ? undefined : workspaceId
+        });
       }
 
       return baseItem;
@@ -452,6 +461,11 @@ export class CodingItemBuilderService {
     ];
   }
 
+  private async loadVariablePage(unitName: string, variableId: string, workspaceId: number): Promise<string> {
+    const pages = await this.fileCacheService.loadVoudData(unitName, workspaceId);
+    return pages.get(variableId) || '0';
+  }
+
   private async resolveVariableAnchor(
     workspaceId: number,
     unitName: string,
@@ -459,7 +473,8 @@ export class CodingItemBuilderService {
     variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<string> {
     if (variableAnchorMaps) {
-      return variableAnchorMaps.get(unitName)?.get(variableId) || variableId;
+      const anchors = variableAnchorMaps.get(unitName) ?? variableAnchorMaps.get(unitName.trim());
+      return anchors?.get(variableId) || variableId;
     }
 
     return this.replayAnchorService ?
