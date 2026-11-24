@@ -52,6 +52,7 @@ import { FileValidationProgressFacade, ValidationProgressStep } from './file-val
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
+import { openWorkspaceProcessOverview } from '../process-overview/process-overview.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { AppService } from '../../../core/services/app.service';
@@ -681,13 +682,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private showUploadSummary(result: TestFilesUploadResultDto): void {
-    const conflicts = result.conflicts || [];
-    const conflictInfo =
-      conflicts.length > 0 ? `, Konflikte: ${conflicts.length}` : '';
-    const failedCount =
-      result.failedFiles && result.failedFiles.length > 0 ?
-        deduplicateTestFilesUploadFailedFiles(result.failedFiles).length :
-        result.failed;
+    const conflictCount = result.conflicts?.length ?? 0;
+    const conflictInfo = conflictCount ? `, Konflikte: ${conflictCount}` : '';
+    const failedCount = deduplicateTestFilesUploadFailedFiles(result.failedFiles).length || result.failed;
     this.snackBar.open(
       this.uiTranslate('ui-text.test-files.upload-complete', { uploaded: result.uploaded, failedCount: failedCount, conflictInfo: conflictInfo }),
       'OK',
@@ -800,6 +797,10 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         this.onUploadSuccess();
       }
     });
+  }
+
+  protected openProcessOverview(): void {
+    openWorkspaceProcessOverview(this.dialog, { workspaceId: this.appService.selectedWorkspaceId, autoRefresh: true });
   }
 
   onFileSelected(target: EventTarget | null): void {

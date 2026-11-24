@@ -1,7 +1,9 @@
 describe('zoneless test-file upload', () => {
-  it('shows the upload result and refreshes the file list', () => {
+  it('shows active upload progress, the upload result and the refreshed file list', () => {
     const filename = 'zoneless-upload.vomd';
     let uploaded = false;
+    let uploadGateId = '';
+    let processRequests = 0;
 
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -20,19 +22,36 @@ describe('zoneless test-file upload', () => {
         fileTypes: uploaded ? ['vomd'] : []
       });
     }).as('files');
-    cy.intercept('POST', '**/api/admin/workspace/5/upload?overwriteExisting=false',
-      (request) => {
+    cy.task<{ id: string; url: string }>('deferred:create', {
+      body: {
+        total: 1,
+        uploaded: 1,
+        failed: 0,
+        uploadedFiles: [{ fileId: '17', filename, fileType: 'vomd' }],
+        failedFiles: [],
+        conflicts: []
+      }
+    }).then(gate => {
+      uploadGateId = gate.id;
+      cy.intercept('POST', '**/api/admin/workspace/5/upload?overwriteExisting=false', request => {
         expect(request.headers['content-type']).to.contain('multipart/form-data');
-        uploaded = true;
-        request.reply({
-          total: 1,
-          uploaded: 1,
-          failed: 0,
-          uploadedFiles: [{ fileId: '17', filename, fileType: 'vomd' }],
-          failedFiles: [],
-          conflicts: []
-        });
+        request.url = gate.url;
+        request.continue();
       }).as('upload');
+    });
+    cy.intercept('GET', '**/api/admin/workspace/5/processes', request => {
+      const transferring = processRequests === 0;
+      processRequests += 1;
+      request.reply({
+        body: [{
+          id: transferring ? 'previous-upload' : 'active-upload',
+          queueName: 'test-files-upload',
+          status: transferring ? 'completed' : 'active',
+          progress: transferring ? 100 : 50,
+          timestamp: Date.now(), data: { fileCount: 1 }
+        }]
+      });
+    }).as('processes');
 
     cy.visit('/');
     cy.wait('@authData');
@@ -45,6 +64,20 @@ describe('zoneless test-file upload', () => {
       fileName: filename,
       mimeType: 'application/xml'
     }, { force: true });
+    cy.get('coding-box-test-files .busy-overlay').contains('button', 'Prozesse anzeigen').click();
+    cy.wait('@processes');
+    cy.wait('@processes');
+    cy.get('coding-box-process-overview-dialog').within(() => {
+      cy.contains('tr', 'Testdatei-Upload').within(() => {
+        cy.contains('50 %').should('be.visible');
+        cy.get('button').should('be.disabled');
+      });
+      cy.contains('button', 'Schließen').click();
+    });
+    cy.then(() => {
+      uploaded = true;
+      return cy.task('deferred:release', uploadGateId);
+    });
     cy.wait('@upload');
     cy.get('coding-box-test-files-upload-result-dialog')
       .should('contain.text', 'Erfolgreich: 1')

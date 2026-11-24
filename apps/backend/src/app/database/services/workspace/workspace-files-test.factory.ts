@@ -1,4 +1,5 @@
 import { Repository } from 'typeorm';
+import Redis from 'ioredis';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
@@ -20,6 +21,7 @@ import { WorkspaceFileFreshnessService } from './workspace-file-freshness.servic
 import { WorkspaceFileQueryService } from './workspace-file-query.service';
 import { WorkspaceFileMutationService } from './workspace-file-mutation.service';
 import { WorkspaceFileUploadService } from './workspace-file-upload.service';
+import { WorkspaceFileUploadProcessService } from './workspace-file-upload-process.service';
 import { WorkspaceXmlFileUploadService } from './workspace-xml-file-upload.service';
 import { WorkspaceResourceFileUploadService } from './workspace-resource-file-upload.service';
 import { WorkspaceTestcenterFileImportService } from './workspace-testcenter-file-import.service';
@@ -44,13 +46,17 @@ export function createWorkspaceFilesService(
   metadata: WorkspaceFileMetadataService,
   codingFreshness?: CodingFreshnessService,
   codingCache?: CodingFileCacheService,
-  processCache?: CodingProcessCacheInvalidator
+  processCache?: CodingProcessCacheInvalidator,
+  statusRedis: Pick<Redis, 'on' | 'eval'> = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) }
 ): WorkspaceFilesService {
   const caches = new WorkspaceFileCacheService(metadata, cache, results, codingCache, processCache);
   const freshness = new WorkspaceFileFreshnessService(codingFreshness);
   const xml = new WorkspaceXmlFileUploadService(files, schema, parsing);
   const resources = new WorkspaceResourceFileUploadService(files, parsing, freshness);
-  const uploads = new WorkspaceFileUploadService(files, xml, resources, storage, caches, statistics);
+  const uploadProcess = new WorkspaceFileUploadProcessService({ duplicate: () => statusRedis } as unknown as Redis);
+  const uploads = new WorkspaceFileUploadService(
+    files, xml, resources, storage, caches, statistics, uploadProcess
+  );
   const mutations = new WorkspaceFileMutationService(files, caches, statistics);
   const testcenter = new WorkspaceTestcenterFileImportService(files, parsing, freshness, caches);
   const testTakers = new WorkspaceTestTakersValidationService(files, persons, units, responses);

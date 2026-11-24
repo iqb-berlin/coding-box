@@ -1,4 +1,4 @@
-import { Subscription } from 'rxjs';
+import { Subscription, timer } from 'rxjs';
 import {
   Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -24,6 +24,9 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialo
 
 type ProcessStatus = ProcessDto['status'];
 type ProcessActionKind = 'cancel' | 'pause' | 'remove';
+type ProcessOverviewData = { workspaceId: number; autoRefresh?: boolean };
+
+const PROCESS_REFRESH_INTERVAL_MS = 2000;
 
 interface ProcessStatusPresentation {
   labelKey: string;
@@ -118,6 +121,10 @@ const QUEUE_PRESENTATIONS: Record<string, QueuePresentation> = {
     labelKey: 'process-overview.queues.test-results-upload.label',
     descriptionKey: 'process-overview.queues.test-results-upload.description'
   },
+  'test-files-upload': {
+    labelKey: 'ui-text.process-overview.test-files-upload',
+    descriptionKey: 'ui-text.process-overview.test-files-upload-description'
+  },
   'codebook-generation': {
     labelKey: 'process-overview.queues.codebook-generation.label',
     descriptionKey: 'process-overview.queues.codebook-generation.description'
@@ -156,6 +163,9 @@ const DETAIL_LABEL_KEYS: Record<string, string> = {
   operation: 'process-overview.details.operation',
   acpId: 'process-overview.details.acpId',
   fileCount: 'process-overview.details.fileCount',
+  uploadedFileCount: 'ui-text.process-overview.uploaded-file-count',
+  failedFileCount: 'ui-text.process-overview.failed-file-count',
+  conflictCount: 'ui-text.process-overview.conflict-count',
   taskId: 'process-overview.details.taskId',
   resultType: 'process-overview.details.resultType',
   overwriteExisting: 'process-overview.details.overwriteExisting',
@@ -257,7 +267,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
+  data: ProcessOverviewData = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
   processes = new MatTableDataSource<ProcessDto>([]);
@@ -276,10 +286,15 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   readonly paginator = viewChild.required(MatPaginator);
 
   ngOnInit(): void {
+    this.setupFilterPredicate();
     if (this.workspaceId) {
       this.loadProcesses();
+      if (this.data.autoRefresh) {
+        timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS)
+          .pipe(takeUntilDestroyed(this.destroyRef))
+          .subscribe(() => this.loadProcesses(false));
+      }
     }
-    this.setupFilterPredicate();
   }
 
   ngAfterViewInit() {
@@ -329,11 +344,13 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.applyFilter();
   }
 
-  loadProcesses(): void {
+  loadProcesses(showLoading = true): void {
+    if (!this.workspaceId || (!showLoading && this.loadRequest && !this.loadRequest.closed)) return;
     this.loadRequest?.unsubscribe();
-    if (!this.workspaceId) return;
-    this.isLoading.set(true);
-    this.loadFailed.set(false);
+    if (showLoading) {
+      this.isLoading.set(true);
+      this.loadFailed.set(false);
+    }
     this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
@@ -341,7 +358,8 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
           .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
         this.lastLoadedAt.set(Date.now());
         this.isLoading.set(false);
-        this.applyFilter();
+        this.loadFailed.set(false);
+        if (showLoading) this.applyFilter();
       },
       error: () => {
         this.loadFailed.set(true);
@@ -577,5 +595,16 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private getDetailOrder(key: string): number {
     const index = DETAIL_ORDER.indexOf(key);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  }
+}
+
+export function openWorkspaceProcessOverview(dialog: MatDialog, data: ProcessOverviewData): void {
+  if (data.workspaceId) {
+    dialog.open(ProcessOverviewComponent, {
+      width: '1200px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      data
+    });
   }
 }

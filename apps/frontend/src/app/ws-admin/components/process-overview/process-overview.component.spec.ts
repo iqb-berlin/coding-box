@@ -63,7 +63,7 @@ describe('ProcessOverviewComponent', () => {
       'process-overview': {
         title: 'Zentrale Prozess-Übersicht',
         refresh: 'Aktualisieren',
-        'no-data': 'Keine Prozesse in der Warteschlange.',
+        'no-data': 'Keine Prozesse vorhanden.',
         'no-filter-data': 'Keine Prozesse für die aktuellen Filter.',
         'confirm-content': 'Möchten Sie den Prozess "{{queue}}" (ID: {{id}}) wirklich {{action}}?',
         filters: {
@@ -247,6 +247,40 @@ describe('ProcessOverviewComponent', () => {
     await fixture.whenStable();
 
     expect(fixture.nativeElement.querySelector('.loading-overlay')).toBeNull();
+  });
+
+  it('refreshes the upload overview without overlapping requests and stops on close', () => {
+    jest.useFakeTimers();
+    try {
+      const pending = new Subject<ProcessDto[]>();
+      const active: ProcessDto = {
+        id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 50, timestamp: 100
+      };
+      const completed: ProcessDto = { ...active, status: 'completed', progress: 100 };
+      processesService.getProcesses.mockClear()
+        .mockReturnValueOnce(of([]))
+        .mockReturnValueOnce(pending)
+        .mockReturnValueOnce(of([completed]));
+      component.data.autoRefresh = true;
+      component.ngOnInit();
+      expect(component.processes.data).toEqual([]);
+
+      jest.advanceTimersByTime(6000);
+      expect(processesService.getProcesses).toHaveBeenCalledTimes(2);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('.loading-overlay')).toBeNull();
+      pending.next([active]);
+      pending.complete();
+      expect(component.processes.data).toEqual([active]);
+
+      jest.advanceTimersByTime(2000);
+      expect(component.processes.data).toEqual([completed]);
+      fixture.destroy();
+      jest.advanceTimersByTime(4000);
+      expect(processesService.getProcesses).toHaveBeenCalledTimes(3);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('uses precise action semantics for active and inactive jobs', () => {
