@@ -8,7 +8,6 @@ import {
 import { mapCodeForExport } from '../../../utils/coding-utils';
 import { generateReplayUrl } from '../../../utils/replay-url.util';
 import { CodingFileCacheService } from './coding-file-cache.service';
-import type { LRUCache } from '../shared/lru-cache';
 import {
   extractGeoGebraBase64,
   suppressedGeoGebraValuePlaceholder
@@ -31,7 +30,6 @@ export interface CodingItem {
 }
 
 export type CodingVariableAnchorMaps = Map<string, Map<string, string>>;
-export type CodingVariablePageCache = LRUCache<Map<string, string>>;
 
 export interface CodingListResponseRow {
   id: number;
@@ -140,18 +138,14 @@ export class CodingItemBuilderService {
     authToken: string,
     serverUrl: string,
     workspaceId: number,
-    variableAnchorMaps?: CodingVariableAnchorMaps
+    variableAnchorMaps?: CodingVariableAnchorMaps,
+    snapshotPage?: string
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
       const variableId = row.variableId || '';
 
-      // Load variable page mapping
-      const variablePageMap = await this.fileCacheService.loadVoudData(
-        unitKey,
-        workspaceId
-      );
-      const variablePage = variablePageMap.get(variableId) || '0';
+      const variablePage = snapshotPage ?? await this.loadVariablePage(unitKey, variableId, workspaceId);
 
       const loginName = row.personLogin || '';
       const loginCode = row.personCode || '';
@@ -328,7 +322,7 @@ export class CodingItemBuilderService {
     includeGeoGebraResponseValues: boolean = false,
     variableAnchorMaps?: CodingVariableAnchorMaps,
     resolvedValues?: CodingItemVersionExportValues,
-    variablePageCache?: CodingVariablePageCache
+    snapshotPage?: string
   ): Promise<CodingItem | null> {
     try {
       const unitKey = row.unitKey || '';
@@ -338,8 +332,7 @@ export class CodingItemBuilderService {
         return null;
       }
 
-      const variablePageMap = await this.loadVariablePages(unitKey, workspaceId, variablePageCache);
-      const variablePage = variablePageMap.get(variableId) || '0';
+      const variablePage = snapshotPage ?? await this.loadVariablePage(unitKey, variableId, workspaceId);
       const variableAnchor = await this.resolveVariableAnchor(
         workspaceId,
         unitKey,
@@ -468,17 +461,9 @@ export class CodingItemBuilderService {
     ];
   }
 
-  private async loadVariablePages(
-    unitName: string,
-    workspaceId: number,
-    cache?: CodingVariablePageCache
-  ): Promise<Map<string, string>> {
-    const cachedPages = cache?.get(unitName);
-    if (cachedPages) return cachedPages;
-
+  private async loadVariablePage(unitName: string, variableId: string, workspaceId: number): Promise<string> {
     const pages = await this.fileCacheService.loadVoudData(unitName, workspaceId);
-    cache?.set(unitName, pages);
-    return pages;
+    return pages.get(variableId) || '0';
   }
 
   private async resolveVariableAnchor(
@@ -488,7 +473,8 @@ export class CodingItemBuilderService {
     variableAnchorMaps?: CodingVariableAnchorMaps
   ): Promise<string> {
     if (variableAnchorMaps) {
-      return variableAnchorMaps.get(unitName)?.get(variableId) || variableId;
+      const anchors = variableAnchorMaps.get(unitName) ?? variableAnchorMaps.get(unitName.trim());
+      return anchors?.get(variableId) || variableId;
     }
 
     return this.replayAnchorService ?

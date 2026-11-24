@@ -103,8 +103,8 @@ describe('CodingListStreamService', () => {
     scoreV3: null
   });
 
-  async function* versionedBatches(...batches: CodingItemVersionRow[][]): AsyncGenerator<CodingItemVersionRow[]> {
-    yield* batches;
+  async function* versionedBatches(...batches: CodingItemVersionRow[][]) {
+    for (const rows of batches) yield { rows, resolvePage: async () => '1' };
   }
 
   beforeEach(async () => {
@@ -148,6 +148,7 @@ describe('CodingListStreamService', () => {
     } as unknown as jest.Mocked<ConfigService>;
 
     mockReplayAnchorService = {
+      getWorkspaceVariableAnchorMaps: jest.fn().mockResolvedValue(new Map()),
       getVariableAnchorMaps: jest.fn().mockResolvedValue(new Map())
     } as unknown as jest.Mocked<CodingReplayAnchorService>;
     mockWorkspaceFilesService = {
@@ -331,7 +332,7 @@ describe('CodingListStreamService', () => {
       const rows = Array.from({ length: 250 }, (_, index) => createMockVersionRow(index + 1));
       mockResponseFilterService.readVersionedResponseBatches.mockImplementationOnce(async function* trackBatchClosure() {
         try {
-          yield rows;
+          yield { rows, resolvePage: async () => '1' };
         } finally {
           closeBatches();
         }
@@ -517,7 +518,7 @@ describe('CodingListStreamService', () => {
         false,
         expect.any(Map),
         { v1: { code: '', score: '' } },
-        expect.objectContaining({ get: expect.any(Function), set: expect.any(Function) })
+        '1'
       );
     });
 
@@ -582,7 +583,7 @@ describe('CodingListStreamService', () => {
         false,
         expect.any(Map),
         { v1: { code: '', score: '' } },
-        expect.objectContaining({ get: expect.any(Function), set: expect.any(Function) })
+        '1'
       );
     });
 

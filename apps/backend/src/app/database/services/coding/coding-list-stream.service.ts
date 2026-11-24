@@ -20,7 +20,6 @@ import {
   CodingItemBuilderService,
   CodingItem,
   CodingVariableAnchorMaps,
-  CodingVariablePageCache,
   CodingItemVersionRow,
   CodingListResponseRow,
   CodingItemVersionExportValues
@@ -33,7 +32,6 @@ import {
   decodeGeoGebraValue
 } from './geogebra-export.util';
 import { ResponseEntity } from '../../entities/response.entity';
-import { LRUCache } from '../shared/lru-cache';
 import { Setting } from '../../entities/setting.entity';
 import { CodingReplayAnchorService } from './coding-replay-anchor.service';
 import {
@@ -95,7 +93,6 @@ export class CodingListStreamService {
   private static readonly defaultCodingListExportBatchSize = 500;
   private static readonly defaultVersionedExportBatchSize = 250;
   private static readonly exportYieldEveryRows = 50;
-  private static readonly exportPageMapCacheSize = 1024;
   private static readonly versionedProgressEveryRows = 500;
   private static readonly versionedProgressEveryMs = 1000;
 
@@ -142,7 +139,7 @@ export class CodingListStreamService {
     includeGeoGebraResponseValues: boolean,
     variableAnchorMaps: CodingVariableAnchorMaps,
     exportProfile: ResolvedMissingsProfile,
-    variablePageCache?: CodingVariablePageCache
+    variablePage?: string
   ): Promise<CodingItem | null> {
     const resolvedValues: CodingItemVersionExportValues =
       resolveVersionedExportValues(row, version, exportProfile);
@@ -157,7 +154,7 @@ export class CodingListStreamService {
       includeGeoGebraResponseValues,
       variableAnchorMaps,
       resolvedValues,
-      variablePageCache
+      variablePage
     );
   }
 
@@ -692,16 +689,13 @@ export class CodingListStreamService {
     );
     await checkCancellation?.();
     const batchSize = this.getCodingListExportBatchSize();
-    const knownAnchors: CodingVariableAnchorMaps = new Map();
+    const variableAnchorMaps = await this.replayAnchorService?.getWorkspaceVariableAnchorMaps(workspace_id) ?? new Map();
     let totalWritten = 0;
 
-    for await (const responses of this.responseFilterService.readCodingListResponseBatches(
+    for await (const { rows: responses, resolvePage } of this.responseFilterService.readCodingListResponseBatches(
       workspace_id, batchSize, filterOptions
     )) {
       await checkCancellation?.();
-      const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
-        responses, workspace_id, knownAnchors, checkCancellation
-      );
 
       for (let responseIndex = 0; responseIndex < responses.length; responseIndex += 1) {
         if (this.shouldYieldExportRow(responseIndex)) {
@@ -717,7 +711,8 @@ export class CodingListStreamService {
           authToken!,
           serverUrl!,
           workspace_id,
-          variableAnchorMaps
+          variableAnchorMaps,
+          await resolvePage(response.unitKey, response.variableId)
         );
         if (item) {
           worksheet.addRow(item).commit();
@@ -932,8 +927,7 @@ export class CodingListStreamService {
       try {
         await checkTransfer();
         const batchSize = this.getVersionedExportBatchSize();
-        const knownAnchors: CodingVariableAnchorMaps = new Map();
-        const pageCache = new LRUCache<Map<string, string>>(CodingListStreamService.exportPageMapCacheSize);
+        const variableAnchorMaps = await this.replayAnchorService?.getWorkspaceVariableAnchorMaps(workspace_id) ?? new Map();
         let totalWritten = 0;
         const versionExportOptions = this.getVersionedResponseFilterOptions(version);
         await progressCallback?.(0, { phase: 'counting' });
@@ -955,16 +949,10 @@ export class CodingListStreamService {
         const reportProgress = (endOfBatch = false) => this.reportRowBasedProgress(
           progressCallback, totalWritten, totalRows, progressState, endOfBatch
         );
-        for await (const rows of this.responseFilterService.readVersionedResponseBatches(
+        for await (const { rows, resolvePage } of this.responseFilterService.readVersionedResponseBatches(
           workspace_id, batchSize, versionExportOptions, includeResponseValues
         )) {
           await checkTransfer();
-          const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
-            rows,
-            workspace_id,
-            knownAnchors,
-            checkTransfer
-          );
 
           for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
             if (this.shouldYieldExportRow(rowIndex)) {
@@ -984,7 +972,7 @@ export class CodingListStreamService {
               includeGeoGebraResponseValues,
               variableAnchorMaps,
               exportProfile,
-              pageCache
+              await resolvePage(row.unitKey, row.variableId)
             );
 
             if (item === null) continue;

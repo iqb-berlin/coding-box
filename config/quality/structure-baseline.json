@@ -556,7 +556,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts": {
       "file": {
-        "max-lines": 1382
+        "max-lines": 1370
       },
       "functions": {
         "class CodingListStreamService#1/method getCodingListCsvStream#1": {
@@ -567,7 +567,7 @@
           "max-depth": 5
         },
         "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1": {
-          "max-lines-per-function": 122
+          "max-lines-per-function": 115
         },
         "class CodingListStreamService#1/method processJsonExport#1": {
           "complexity": 25,

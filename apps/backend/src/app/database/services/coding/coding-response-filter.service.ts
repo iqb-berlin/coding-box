@@ -29,6 +29,11 @@ import { getBaseCodingSourceKeys, getCodingDependencyVariables, mergeCodingVaria
 
 import { readPostgresQueryBatches } from '../shared/postgres-query-batches.util';
 
+interface CodingExportBatch<Row> {
+  rows: Row[];
+  resolvePage: (unitName: string, variableId: string) => Promise<string>;
+}
+
 type RawNumericValue = number | string | null;
 
 interface RawCodingItemVersionRow extends Omit<CodingItemVersionRow,
@@ -395,9 +400,9 @@ export class CodingResponseFilterService {
     workspaceId: number,
     batchSize: number,
     options: ResponseFilterOptions
-  ): AsyncGenerator<CodingListResponseRow[]> {
+  ): AsyncGenerator<CodingExportBatch<CodingListResponseRow>> {
     const query = this.selectCodingListRows(await this.createBatchQueryBuilder(workspaceId, options));
-    yield* this.readExportBatches<CodingListResponseRow>(query, batchSize);
+    yield* this.readExportBatches<CodingListResponseRow>(query, batchSize, workspaceId);
   }
 
   async* readVersionedResponseBatches(
@@ -405,18 +410,25 @@ export class CodingResponseFilterService {
     batchSize: number,
     options: ResponseFilterOptions,
     includeResponseValues: boolean
-  ): AsyncGenerator<CodingItemVersionRow[]> {
+  ): AsyncGenerator<CodingExportBatch<CodingItemVersionRow>> {
     const query = this.selectVersionedRows(await this.createBatchQueryBuilder(workspaceId, options), includeResponseValues);
-    for await (const rows of this.readExportBatches<RawCodingItemVersionRow>(query, batchSize)) {
-      yield rows.map(row => this.normalizeVersionedRow(row));
+    for await (const { rows, resolvePage } of this.readExportBatches<RawCodingItemVersionRow>(query, batchSize, workspaceId)) {
+      yield { rows: rows.map(row => this.normalizeVersionedRow(row)), resolvePage };
     }
   }
 
-  private readExportBatches<T extends object>(query: SelectQueryBuilder<ResponseEntity>, batchSize: number): AsyncGenerator<T[]> {
-    // The export consumes the entire cursor. Plan for total cost instead of the first few rows.
-    return readPostgresQueryBatches<T>(query, Math.min(batchSize, 10000), async manager => {
+  private async* readExportBatches<T extends object>(
+    query: SelectQueryBuilder<ResponseEntity>, batchSize: number, workspaceId: number
+  ): AsyncGenerator<CodingExportBatch<T>> {
+    let resolvePage: CodingExportBatch<T>['resolvePage'];
+    const batches = readPostgresQueryBatches<T>(query, Math.min(batchSize, 10000), async manager => {
+      // The export consumes the entire cursor. Plan for total cost instead of the first few rows.
       await manager.query('SET LOCAL cursor_tuple_fraction = 1');
+      resolvePage = this.fileCacheService.createSnapshotPageResolver(workspaceId, manager);
     });
+    for await (const rows of batches) {
+      yield { rows, resolvePage: resolvePage! };
+    }
   }
 
   private selectCodingListRows(query: SelectQueryBuilder<ResponseEntity>): SelectQueryBuilder<ResponseEntity> {
