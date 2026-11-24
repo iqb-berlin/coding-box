@@ -250,12 +250,12 @@ export class WorkspaceFileFreshnessService {
       return undefined;
     }
 
-    const impact = this.getCodingSchemeFreshnessImpact(previousData, nextData);
-    if (!impact.autoCodingChanged && !impact.manualCodingChanged) {
-      return undefined;
-    }
-
     try {
+      const impact = this.getCodingSchemeFreshnessImpact(previousData, nextData);
+      if (!impact.autoCodingChanged && !impact.manualCodingChanged) {
+        return undefined;
+      }
+
       const scope = {
         autoCodingSchemeRefs: impact.autoCodingChanged ? [unitName] : [],
         manualCodingSchemeRefs: impact.manualCodingChanged ? [unitName] : []

@@ -399,7 +399,7 @@ export class WorkspaceFilesService {
   }
 
   async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
-    return this.caches.invalidateWorkspaceFileCaches(workspaceId);
+    await this.caches.invalidateWorkspaceFileCaches(workspaceId);
   }
 
   async readMetadataFile(workspaceId: number, fileId: number): Promise<FileDownloadDto> {

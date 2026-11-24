@@ -261,7 +261,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
   };
   const mockWorkspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true)
   };
   const mockWorkspaceFileParsingService = {
     extractUnitInfo: jest.fn().mockResolvedValue({
@@ -282,9 +282,9 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       mockWorkspaceFileParsingService as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10],
+      { delete: jest.fn().mockResolvedValue(true) } as unknown as CtorParams[10],
       mockWorkspaceTestResultsService as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never),
+      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn().mockResolvedValue(true) } as unknown as CtorParams[10]) as never, (undefined) as never),
       mockCodingFreshnessService as unknown as CtorParams[13],
       undefined,
       undefined
@@ -582,13 +582,8 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     mockFileUploadRepository.createQueryBuilder.mockReturnValueOnce(conflictQueryBuilder);
     mockFileUploadRepository.find.mockResolvedValue([]);
     const invalidateSpy = jest
-      .spyOn(
-        fileCaches(service) as unknown as {
-          invalidateWorkspaceFileCaches: (workspaceId: number) => Promise<void>;
-        },
-        'invalidateWorkspaceFileCaches'
-      )
-      .mockResolvedValue(undefined);
+      .spyOn(fileCaches(service), 'invalidateWorkspaceFileCaches')
+      .mockResolvedValue(true);
 
     await service.testCenterImport([
       {

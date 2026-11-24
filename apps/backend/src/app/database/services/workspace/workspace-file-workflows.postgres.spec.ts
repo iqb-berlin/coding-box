@@ -106,8 +106,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const results = new WorkspaceTestResultsService(
       {} as never, resultsCache, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
     );
-    // Only unused response-validation/queue paths are omitted; persistence, freshness,
-    // XML validation, file metadata and every cache operation exercised here are real.
+    // Only unused response-validation and queue dependencies are omitted.
     files = createWorkspaceFilesService(
       repository, db.getRepository(ResponseEntity), {} as never, {} as never, statistics, new WorkspaceXmlSchemaValidationService(repository), new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache, results, metadata, freshness, new CodingFileCacheService(repository)
     );
@@ -277,7 +276,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const entry = {
       workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
     };
-    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1 });
+    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1, failed: 0, issues: undefined });
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['VAR'])]]));
     expect(await files.testCenterImport([{ ...entry, data: unitXml('NEW') }])).toMatchObject({ uploaded: 0, conflicts: [{ fileId: 'UNIT' }] });
     expect(await files.testCenterImport([{ ...entry, data: unitXml('NEW') }], ['UNIT'])).toMatchObject({ uploaded: 1 });
@@ -285,6 +284,54 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(stored).toMatchObject({ file_id_normalized: 'UNIT', coding_scheme_ref_normalized: 'SCHEME' });
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
   });
+
+  it('keeps committed Testcenter files and invalidates caches when one freshness calculation fails', async () => {
+    const { workspace, unit } = await fixture();
+    await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
+    const sentinel = `${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`;
+    await cache.set(sentinel, { stale: true });
+    const vocs = (id: string, data: string) => ({
+      workspace_id: workspace, file_id: id, filename: id, file_type: 'Resource', file_size: Buffer.byteLength(data), data
+    });
+    const malformed = vocs('BROKEN.VOCS', JSON.stringify({ variableCodings: [null] }));
+    const valid = vocs('SCHEME.VOCS', scheme());
+    const result = await files.testCenterImport([malformed, valid]);
+    expect(result).toMatchObject({
+      uploaded: 2,
+      failed: 0,
+      issues: [{ level: 'warning', category: 'coding_freshness', fileName: malformed.file_id }]
+    });
+    const repository = db.getRepository(FileUpload);
+    for (const entry of [malformed, valid]) {
+      expect(await repository.findOneByOrFail({ workspace_id: workspace, file_id: entry.file_id })).toMatchObject({ data: entry.data });
+    }
+    expect(await db.getRepository(CodingUnitFreshness).findOneBy({ workspace_id: workspace, unit_id: unit, version: 'v1' }))
+      .toMatchObject({ state: 'STALE', reason: 'CODING_SCHEME_CHANGED' });
+    expect(await cache.get(sentinel)).toBeNull();
+  });
+
+  it.each([':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX])(
+    'reports a committed Testcenter file when deleting the %s cache returns false',
+    async failedKeyPart => {
+      const { workspace } = await fixture();
+      const deleteKey = cache.delete.bind(cache);
+      jest.spyOn(cache, 'delete').mockImplementation(key => (
+        key.includes(failedKeyPart) ? Promise.resolve(false) : deleteKey(key)
+      ));
+      const entry = {
+        workspace_id: workspace, file_id: 'A.VOUD', filename: 'a.voud', file_type: 'Resource', file_size: 2, data: '{}'
+      };
+      const result = await files.testCenterImport([entry]);
+      expect(result).toMatchObject({
+        uploaded: 1,
+        failed: 0,
+        uploadedFiles: [{ fileId: entry.file_id }],
+        issues: [{ level: 'warning', category: 'other' }]
+      });
+      expect(await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace, file_id: entry.file_id })).toMatchObject({ data: entry.data });
+      expect(cache.delete).toHaveBeenCalledWith(`${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`);
+    }
+  );
 
   it('rolls back a failed Testcenter import and retries it with the same overwrite permissions', async () => {
     const { workspace } = await fixture();

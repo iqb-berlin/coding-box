@@ -22,19 +22,22 @@ export class WorkspaceFileCacheService {
     @Optional() @Inject(CODING_PROCESS_CACHE_INVALIDATOR) private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator
   ) {}
 
-  async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
-    await Promise.all([
+  async invalidateWorkspaceFileCaches(workspaceId: number): Promise<boolean> {
+    const [metadata, exclusions] = await Promise.all([
       this.fileMetadata.invalidateMetadataCache(workspaceId),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);
-    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-      workspaceId
-    );
+    const stats = await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     this.codingFileCacheService?.clearCaches();
     this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
+    if (!metadata || !exclusions || !stats) {
+      this.logger.warn(`Incomplete workspace file cache invalidation for workspace ${workspaceId}`);
+      return false;
+    }
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );
+    return true;
   }
 
   async invalidateResponseDeletionCaches(workspaceId: number): Promise<void> {

@@ -52,8 +52,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
 
   private readonly logger = new Logger(WorkspaceFileMetadataService.name);
 
-  private readonly detailedUnitCacheLogging =
-    process.env.DEBUG_UNIT_CACHE === 'true';
+  private readonly detailedUnitCacheLogging = process.env.DEBUG_UNIT_CACHE === 'true';
 
   private readonly unitVariableCacheVersion = 'v2';
 
@@ -1526,10 +1525,11 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
     return undefined;
   }
 
-  async invalidateMetadataCache(workspaceId: number): Promise<void> {
-    await Promise.all([
+  async invalidateMetadataCache(workspaceId: number): Promise<boolean> {
+    const deletions = [
       'unit_variables', 'intended_incomplete', 'training_required', 'derived_variables',
       'derived_variables_by_source', 'derived_variable_metadata_complete', 'manual_instruction_variables'
-    ].map(type => this.cacheService.delete(this.getCacheKey(workspaceId, type))));
+    ].map(type => this.cacheService.delete(this.getCacheKey(workspaceId, type)));
+    return (await Promise.all(deletions)).every(Boolean);
   }
 }

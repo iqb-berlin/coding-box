@@ -63,9 +63,9 @@ function fixture() {
     upsert: jest.fn(),
     createQueryBuilder: jest.fn()
   };
-  const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); }) };
-  const cache = { delete: jest.fn(async () => { events.push('exclusion'); }) };
-  const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); }) };
+  const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); return true; }) };
+  const cache = { delete: jest.fn(async () => { events.push('exclusion'); return true; }) };
+  const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); return true; }) };
   const statistics = {
     invalidateCache: jest.fn(async () => { events.push('statistics'); }),
     invalidateIncompleteVariablesCache: jest.fn(async () => { events.push('incomplete'); })
@@ -278,6 +278,14 @@ describe('workspace file workflow boundaries', () => {
     const result = await f.service.testCenterImport([{ workspace_id: 7, file_id: 'A', filename: 'a.xml' }]);
     expect(result).toMatchObject({ uploaded: 1, failed: 0, issues: [{ level: 'warning', category: 'other' }] });
     expect(f.events.slice(-2)).toEqual(['unlock', 'release']);
+  });
+
+  it('clears the remaining caches and releases the lock when Redis deletion returns false', async () => {
+    const f = fixture();
+    f.cache.delete.mockResolvedValueOnce(false);
+    const result = await f.service.testCenterImport([{ workspace_id: 7, file_id: 'A', filename: 'a.xml' }]);
+    expect(result).toMatchObject({ uploaded: 1, failed: 0, issues: [{ level: 'warning', category: 'other' }] });
+    expect(f.events.slice(-5)).toEqual(['stats', 'coding-cache', 'process-cache', 'unlock', 'release']);
   });
 
   it('rejects files from different workspaces before writing any of them', async () => {
