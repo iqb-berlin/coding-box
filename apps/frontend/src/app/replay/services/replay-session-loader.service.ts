@@ -1,10 +1,7 @@
 import { HttpErrorResponse } from '@angular/common/http';
 import { DestroyRef, Injectable, inject } from '@angular/core';
 import { firstValueFrom, ReplaySubject, takeUntil } from 'rxjs';
-import {
-  CodingJobBackendService,
-  CodingJobUnitDto
-} from '../../coding/services/coding-job-backend.service';
+import { CodingJobBackendService } from '../../coding/services/coding-job-backend.service';
 import type {
   ReplayCodingSessionDto,
   ReplayCodingSessionUnitDto
@@ -206,13 +203,14 @@ export class ReplaySessionLoaderService {
 
   private createUnitsData(
     codingJobId: number,
-    units: Array<ReplayCodingSessionUnitDto | CodingJobUnitDto>
+    units: ReplayCodingSessionUnitDto[]
   ): UnitsReplay {
     return {
       id: codingJobId,
       name: `Coding-Job: ${codingJobId}`,
       units: units.map((unit, index) => ({
-        id: index,
+        id: unit.responseId ?? index,
+        progressResponseId: unit.progressResponseId,
         name: unit.unitName,
         alias: unit.unitAlias,
         bookletId: 0,

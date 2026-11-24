@@ -11,7 +11,7 @@ export function isDisplayedGeoGebraResponse(
 }
 
 export function hasGeoGebraConstruction(value: string | null): boolean {
-  if (!value || !(value.startsWith('UEsD') || /^data:/i.test(value))) return false;
+  if (!value || !/^\s*(?:UEsD|data:)/i.test(value)) return false;
   const archive = decodeGeoGebraValue(value);
   if (!archive) return false;
   try {

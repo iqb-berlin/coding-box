@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not } from 'typeorm';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { sortUnitsContinuous, sortUnitsAlternating, getLatestCode } from '../../../utils/coding-utils';
+import { jobUnitProgressKeys } from './coding-progress-key.util';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -113,8 +114,9 @@ export class CodingJobReplayService {
       }
     };
 
+    const { keyFor } = jobUnitProgressKeys(codingJobUnits);
     codingJobUnits.forEach(unit => {
-      const compositeKey = this.query.getCodingJobUnitProgressKey(unit);
+      const compositeKey = keyFor(unit);
 
       if (unit.is_open) {
         progressMap[`${compositeKey}:open`] = {
@@ -156,9 +158,10 @@ export class CodingJobReplayService {
   ): Record<string, string> {
     const notesMap: Record<string, string> = {};
 
+    const { keyFor } = jobUnitProgressKeys(codingJobUnits);
     codingJobUnits.forEach(unit => {
       if (unit.notes) {
-        const compositeKey = this.query.getCodingJobUnitProgressKey(unit);
+        const compositeKey = keyFor(unit);
         notesMap[compositeKey] = unit.notes;
       }
     });
@@ -276,6 +279,7 @@ export class CodingJobReplayService {
     );
     const units: ReplayCodingSessionUnitDto[] = navigationUnits.map(unit => ({
       responseId: unit.responseId,
+      progressResponseId: unit.progressResponseId,
       unitName: unit.unitName,
       unitAlias: unit.unitAlias,
       variableId: unit.variableId,
@@ -433,10 +437,9 @@ export class CodingJobReplayService {
         visibleCodingJobUnitsForContext
       );
 
+    const { responseIdFor } = jobUnitProgressKeys(visibleCodingJobUnitsForContext);
     return sortedUnits.map(unit => {
-      const otherCoders = Array.from(
-        otherCodersMap.get(unit.response_id) || []
-      );
+      const otherCoders = Array.from(otherCodersMap.get(unit.response_id) || []);
       const variablePage =
         variablePageMaps.get(unit.unit_name)?.get(unit.variable_id) || '0';
       const variableAnchor =
@@ -444,6 +447,7 @@ export class CodingJobReplayService {
         unit.variable_anchor;
       return {
         responseId: unit.response_id,
+        progressResponseId: responseIdFor(unit),
         unitName: unit.unit_name,
         unitAlias: unit.unit_alias,
         variableId: unit.variable_id,

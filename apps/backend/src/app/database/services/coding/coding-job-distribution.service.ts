@@ -606,8 +606,7 @@ export class CodingJobDistributionService {
       responses,
       assignedResponseIds: effectiveAssignedResponseIds
     } = this.aggregation.deduplicateSlimResponsesForManualCoding(
-      allItemResponses,
-      assignedResponseIds
+      allItemResponses, assignedResponseIds, isDerivedResponse
     );
     const filteredResponses: SlimResponse[] = [];
     const caseStatusesByResponseId = new Map<number, DistributionVariableUsageCaseStatus>();

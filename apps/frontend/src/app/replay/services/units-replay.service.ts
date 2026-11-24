@@ -41,6 +41,7 @@ export interface BundleContext {
 }
 
 export interface UnitsReplayUnit {
+  progressResponseId?: number;
   id: number;
   name: string;
   alias: string | null;

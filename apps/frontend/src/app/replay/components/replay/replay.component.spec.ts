@@ -848,6 +848,21 @@ describe('ReplayComponent', () => {
     component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
+    const units = {
+      id: 77,
+      name: 'job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 42,
+        name: 'unit-123',
+        alias: null,
+        bookletId: 0,
+        variableId: 'VAR1',
+        progressResponseId: 42
+      }]
+    };
+    component.unitsData.set(units);
+
     component.onNotesChanged('note');
     await Promise.resolve();
 
@@ -857,7 +872,8 @@ describe('ReplayComponent', () => {
       'unit-123',
       'VAR1',
       'note',
-      null
+      units,
+      42
     );
   });
 

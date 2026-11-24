@@ -29,6 +29,7 @@ export function decideReplayNavigationStrategy(
 
 export function findReplayUnitIndex(units: readonly UnitsReplayUnit[], target: UnitsReplayUnit): number {
   return units.findIndex(unit => (
+    unit.progressResponseId === target.progressResponseId &&
     unit.name === target.name &&
     (unit.testPerson ?? '') === (target.testPerson ?? '') &&
     unit.variableId === target.variableId

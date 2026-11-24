@@ -9,6 +9,7 @@ import {
   SelectQueryBuilder
 } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
+import { jobProgressKey } from '../../../../../../../api-dto/coding/coding-progress-key';
 import { JournalService } from '../shared/journal.service';
 import { readEntityBatchesById } from '../shared/postgres-query-batches.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -22,10 +23,6 @@ import {
   getAggregationVariableKey,
   toAggregationCandidate
 } from './aggregation-metrics.util';
-import {
-  formatCodingTestPerson,
-  generateCodingProgressKey
-} from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
@@ -180,19 +177,9 @@ export class CodingResultsService {
       const openIssueReviewResponseIds = new Set(
         await this.codingJobService.getOpenCodingIssueReviewResponseIds(codingJobId)
       );
-      const getProgressKeyForUnit = (unit: typeof codingJobUnits[number]) => {
-        const testPerson = formatCodingTestPerson({
-          login: unit.personLogin,
-          code: unit.personCode,
-          group: unit.personGroup || undefined,
-          booklet: unit.bookletName
-        });
-
-        return generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
-      };
       const unitRequiresIssueReview = (unit: typeof codingJobUnits[number]) => (
         openIssueReviewResponseIds.has(unit.responseId) ||
-        this.requiresCodingIssueReview(codingProgress[getProgressKeyForUnit(unit)])
+        this.requiresCodingIssueReview(codingProgress[jobProgressKey(unit)])
       );
       const reviewResponseIds = new Set(codingJobUnits
         .filter(unitRequiresIssueReview)
@@ -228,7 +215,7 @@ export class CodingResultsService {
       let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const progressKey = getProgressKeyForUnit(unit);
+        const progressKey = jobProgressKey(unit);
         const progress = codingProgress[progressKey];
 
         if (unitRequiresIssueReview(unit)) {

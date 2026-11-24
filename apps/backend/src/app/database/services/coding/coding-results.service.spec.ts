@@ -289,6 +289,24 @@ describe('CodingResultsService', () => {
     );
   });
 
+  it('applies distinct saved codes to repeated cases in the same job', async () => {
+    const [unit] = await codingJobService.getCodingJobUnits(10);
+    codingJobService.getCodingJobUnits.mockResolvedValueOnce([41, 42].map(id => ({
+      ...unit, responseId: id, progressResponseId: id
+    })));
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'response:41::person@code@booklet::booklet::UNIT::VAR': {
+        id: 1, score: 0, code: '1', label: 'First'
+      },
+      'response:42::person@code@booklet::booklet::UNIT::VAR': {
+        id: 2, score: 1, code: '2', label: 'Second'
+      }
+    });
+    await expect(service.applyCodingResults(17, 10)).resolves.toMatchObject({ success: true });
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(ResponseEntity, 41, expect.objectContaining({ code_v2: 1 }));
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(ResponseEntity, 42, expect.objectContaining({ code_v2: 2 }));
+  });
+
   it('resolves manually selected MIR missing from the coding job profile', async () => {
     codingJobService.getCodingJobById.mockResolvedValueOnce({
       id: 10,

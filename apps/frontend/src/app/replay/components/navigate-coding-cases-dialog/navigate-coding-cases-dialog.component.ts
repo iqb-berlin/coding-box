@@ -66,7 +66,8 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
         const comments = this.data.codingService.getNotes(
           unit.testPerson || this.data.testPerson,
           unit.name,
-          unit.variableId
+          unit.variableId,
+          unit.progressResponseId
         );
         const codingIssue = this.getCodingIssue(unit);
         const testPerson = unit.testPerson || this.data.testPerson;
@@ -92,7 +93,8 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
     const compositeKey = this.data.codingService.generateCompositeKey(
       unit.testPerson || this.data.testPerson,
       unit.name,
-      unit.variableId
+      unit.variableId,
+      unit.progressResponseId
     );
 
     const selectedCode = this.data.codingService.selectedCodes.get(compositeKey);
@@ -114,7 +116,8 @@ export class NavigateCodingCasesDialogComponent implements OnInit {
     const compositeKey = this.data.codingService.generateCompositeKey(
       unit.testPerson || this.data.testPerson,
       unit.name,
-      unit.variableId
+      unit.variableId,
+      unit.progressResponseId
     );
 
     const selectedCode = this.data.codingService.selectedCodes.get(compositeKey);

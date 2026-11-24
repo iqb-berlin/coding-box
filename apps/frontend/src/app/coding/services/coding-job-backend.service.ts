@@ -19,7 +19,7 @@ import type {
 } from '../../../../../../api-dto/coding/job-refresh.dto';
 import type { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import type { PsychometricDomainCandidatesDto } from '../../../../../../api-dto/coding/psychometric-discrimination.dto';
-import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
+import type { ReplayCodingSessionDto, ReplayCodingSessionUnitDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 import type {
   BackgroundExportRequest,
   ExportJobStatusResponseDto,
@@ -34,23 +34,10 @@ import {
   Variable,
   VariableBundle
 } from '../models/coding-job.model';
-import type { BundleContext } from '../../replay/services/units-replay.service';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { withReplayAttemptHeader } from '../../replay/utils/replay-request-correlation';
 
-export interface CodingJobUnitDto {
-  responseId: number;
-  unitName: string;
-  unitAlias: string | null;
-  variableId: string;
-  variableAnchor: string;
-  variablePage: string;
-  bookletName: string;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  variableBundleId: number | null;
-  bundleContext: BundleContext | null;
+export interface CodingJobUnitDto extends ReplayCodingSessionUnitDto {
   isDoubleCoded: boolean;
   otherCoders: string[];
 }
@@ -803,6 +790,7 @@ export class CodingJobBackendService {
     workspaceId: number,
     codingJobId: number,
     progressData: {
+      responseId?: number;
       testPerson: string;
       unitId: string;
       variableId: string;
@@ -859,6 +847,7 @@ export class CodingJobBackendService {
     workspaceId: number,
     codingJobId: number,
     notesData: {
+      responseId?: number;
       testPerson: string;
       unitId: string;
       variableId: string;

@@ -60,6 +60,31 @@ describe('ReplayCodingService', () => {
     service = TestBed.inject(ReplayCodingService);
   });
 
+  it('keeps repeated job rows independent when coding, saving notes and resuming', async () => {
+    service.codingJobId = 5;
+    codingJobBackendServiceMock.saveCodingProgress.mockReturnValue(of({} as CodingJob));
+    codingJobBackendServiceMock.saveCodingNotes.mockReturnValue(of({} as CodingJob));
+    const person = 'login@code@booklet';
+    const units = [41, 42].map(id => ({
+      id, progressResponseId: id, name: 'UNIT', alias: null, variableId: 'drawing', testPerson: person, bookletId: 0
+    }));
+    const replay = {
+      id: 5, name: 'job', units, currentUnitIndex: 0
+    };
+    await service.handleCodeSelected({
+      variableId: 'drawing', code: { id: 7, label: 'edited' } as never, codingIssueOption: null
+    }, person, 'UNIT', 1, replay, 42);
+    await service.saveNotes(1, person, 'UNIT', 'drawing', 'reset', replay, 42);
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenCalledWith(1, 5, expect.objectContaining({ responseId: 42 }));
+    expect(codingJobBackendServiceMock.saveCodingNotes).toHaveBeenCalledWith(1, 5, expect.objectContaining({ responseId: 42 }));
+    expect(service.getCompletedCount(replay)).toBe(1);
+    expect(service.isUnitCoded(units[0])).toBe(false);
+    expect(service.getNotes(person, 'UNIT', 'drawing', 41)).toBe('');
+    expect(service.getNotes(person, 'UNIT', 'drawing', 42)).toBe('reset');
+    await service.saveAllCodingProgress(1, 5);
+    expect(codingJobBackendServiceMock.saveCodingProgress).toHaveBeenLastCalledWith(1, 5, expect.objectContaining({ responseId: 42 }));
+  });
+
   describe('reactive coding state readers', () => {
     it('invalidates derived notes when local drafts change or are cleared', () => {
       const notes = computed(() => service.getNotes('p1', 'u1', 'v1'));

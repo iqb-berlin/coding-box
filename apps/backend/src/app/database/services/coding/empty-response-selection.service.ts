@@ -3,7 +3,6 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { EntityManager, Repository, WhereExpressionBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { readEntityBatchesById } from '../shared/postgres-query-batches.util';
-import { createGeoGebraValueCondition } from '../test-results/test-results.util';
 import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   getManualCodingScopeKey,
@@ -29,7 +28,8 @@ export function addEmptyResponseCandidateValueConditions(
     '(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)',
     { whitespaces: ' \r\n\t', emptyString: '', emptyArrayString: '[]' }
   );
-  query.orWhere(`response.status = :displayedResponseStatus AND ${createGeoGebraValueCondition('response')}`, { displayedResponseStatus });
+  // The decoder checks the prefix, whitespace and ZIP entry. Every accepted encoding contains this signature.
+  query.orWhere("response.status = :displayedResponseStatus AND response.value LIKE '%UEsD%'", { displayedResponseStatus });
 
   Array.from(derivedVariableMap).forEach(([unitName, variableIds], index) => {
     if (variableIds.size === 0) return;
@@ -162,13 +162,22 @@ export class EmptyResponseSelectionService {
       const sourceResponsesByKey = await this.readDerivedSources(chunk, manager);
 
       chunk.forEach(plan => {
-        const resolvedSources = Array.from(plan.sourceVariableIds).map(variableId => (
-          sourceResponsesByKey.get(
-            this.getUnitResponseKey(plan.response.unitid, variableId, plan.response.subform)
-          )
-        ));
-        const allSourcesExistExactlyOnce = resolvedSources.every(
-          (source): source is EmptyResponseSource => source !== undefined && source !== null
+        const { unitid, subform } = plan.response;
+        let hasLocalSource = !subform;
+        const resolvedSources = Array.from(plan.sourceVariableIds, variableId => {
+          const local = sourceResponsesByKey.get(this.getUnitResponseKey(unitid, variableId, subform));
+          const global = sourceResponsesByKey.get(this.getUnitResponseKey(unitid, variableId, null));
+          if (local !== undefined) {
+            hasLocalSource = true;
+            if (subform && global !== undefined &&
+                (local?.isEmpty !== global?.isEmpty || local?.statusV1 !== global?.statusV1)) return null;
+            return local;
+          }
+          return global;
+        });
+        // A named target needs at least one local source to acquire its subform in the autocoder.
+        const allSourcesExistExactlyOnce = hasLocalSource && resolvedSources.every(
+          (source): source is EmptyResponseSource => source != null
         );
 
         if (
@@ -200,7 +209,7 @@ export class EmptyResponseSelectionService {
           CAST(:sourceUnitIds AS int[]), CAST(:sourceVariableIds AS text[]), CAST(:sourceSubforms AS text[])
         ) requested(unitid, variableid, subform)
         WHERE requested.unitid = source.unitid AND requested.variableid = source.variableid
-          AND requested.subform = COALESCE(source.subform, '')
+          AND (requested.subform = source.subform OR COALESCE(source.subform, '') = '')
       )`, {
         sourceUnitIds: sourcesToRead.map(source => source.unitId),
         sourceVariableIds: sourcesToRead.map(source => source.variableId),

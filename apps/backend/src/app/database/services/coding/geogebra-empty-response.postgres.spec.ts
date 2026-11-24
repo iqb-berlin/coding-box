@@ -28,6 +28,7 @@ import { AutocoderEngineService } from './autocoder-engine.service';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 import type { FileCodingAnalysis } from './coding-analysis-cache-key.util';
 import { readCodingAnalysisResult } from './coding-analysis-result-store';
+import { CodingJobAggregationService } from './coding-job-aggregation.service';
 import { CodingJobResponsesService } from './coding-job-responses.service';
 import { CodingResultsService } from './coding-results.service';
 import { EmptyResponseSelectionService } from './empty-response-selection.service';
@@ -69,7 +70,7 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     )));
     module = await Test.createTestingModule({
       providers: [PersonPersistenceService, CodingResultsService, EmptyResponseSelectionService,
-        CodingAnalysisProcessor, CodingJobResponsesService, CodingAggregationPeerService]
+        CodingAnalysisProcessor, CodingJobResponsesService, CodingAggregationPeerService, CodingJobAggregationService]
     }).useMocker(token => {
       if (repositories.has(token as string)) return repositories.get(token as string);
       if (token === CacheService) return { publishIfMarkerMatches: publishAnalysis };
@@ -253,6 +254,15 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     const unnamedBase = await storeResponse(unit, value);
     const unnamedTarget = await storeResponse(unit, value, 'VALUE_CHANGED', 'judgement', '');
 
+    const candidates = await module.get(CodingJobResponsesService).getSlimResponsesForVariables(
+      workspace.id, [{ unitName: 'GEOGEBRA', variableId: 'judgement' }]
+    );
+    const selected = module.get(CodingJobAggregationService).deduplicateSlimResponsesForManualCoding(
+      candidates, new Set([viewedTarget.id]), () => true
+    );
+    expect(selected.responses.map(row => row.id)).toEqual([viewedTarget.id, resetTarget.id, unmatchedTarget.id, unnamedTarget.id]);
+    expect(selected.assignedResponseIds).toEqual(new Set([viewedTarget.id]));
+
     const preview = await analyzeEmptyResponses();
     const expectedIds = [viewedBase.id, unnamedBase.id, viewedTarget.id, unnamedTarget.id];
     expect(preview.items.map(row => [row.responseId, row.value])).toEqual(expectedIds.map(id => [id, null]));
@@ -263,6 +273,66 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
       workspace.id, [{ unitName: 'GEOGEBRA', variableId: 'judgement' }]
     );
     expect(jobs.map(row => row.id)).toEqual([resetTarget.id, unmatchedTarget.id]);
+  });
+
+  it('reads global and local leaf sources for a named SUM_SCORE target', async () => {
+    const unit = await createUnit(await createBooklet('mixed-scope'));
+    const value = geometryValue(0);
+    metadata.derivedVariableMap.set(unit.name, new Set(['target']));
+    for (const id of ['global', 'local']) {
+      metadata.derivedVariablesBySourceMap.set(getManualCodingScopeKey(unit.name, id), new Set(['target']));
+    }
+    const inputs = [
+      { id: 'global', status: 'DISPLAYED' as const, value },
+      {
+        id: 'local', status: 'DISPLAYED' as const, value, subform: 'A'
+      },
+      {
+        id: 'local', status: 'VALUE_CHANGED' as const, value, subform: 'B'
+      }
+    ];
+    const scheme: VariableCodingData[] = ['global', 'local'].map(id => ({
+      id,
+      sourceType: 'BASE',
+      sourceParameters: { processing: ['TAKE_DISPLAYED_AS_VALUE_CHANGED'] },
+      codes: [{ id: 0, type: 'RESIDUAL_AUTO', score: 0 }]
+    }));
+    scheme.push({
+      id: 'target',
+      sourceType: 'SUM_SCORE',
+      deriveSources: ['local', 'global'],
+      codes: [{
+        id: 1, type: 'FULL_CREDIT', score: 1, ruleSets: []
+      }]
+    });
+    const results = new AutocoderEngineService().codeAutocoderResponses(inputs, scheme);
+    for (const input of inputs) {
+      const source = await storeResponse(unit, value, input.status, input.id, input.subform);
+      const coded = results.find(row => row.id === input.id && row.subform === input.subform)!;
+      await db.manager.update(ResponseEntity, source.id, { status_v1: statusStringToNumber(coded.status) });
+    }
+    const targets = results.filter(row => row.id === 'target' && row.subform);
+    expect(targets.map(row => [row.subform, row.status, row.value])).toEqual([
+      ['A', 'CODING_INCOMPLETE', 0], ['B', 'CODING_INCOMPLETE', 0]
+    ]);
+    const ids: number[] = [];
+    for (const target of targets) {
+      ids.push((await storeResponse(unit, String(target.value), 'VALUE_CHANGED', target.id, target.subform)).id);
+    }
+    expect((await analyzeEmptyResponses()).items.map(row => row.responseId)).toEqual([ids[0]]);
+    await expect(module.get(CodingResultsService).applyEmptyResponseCoding(workspace.id)).resolves.toMatchObject({ updatedCount: 1 });
+    expect((await db.manager.findOneByOrFail(ResponseEntity, { id: ids[1] })).status_v2).toBeNull();
+  });
+
+  it('recognizes displayed archives and data URIs after leading whitespace in preview and update', async () => {
+    const unit = await createUnit(await createBooklet('whitespace'));
+    const drawing = geometryValue(0);
+    const raw = await storeResponse(unit, `\r\n ${drawing}`);
+    const uri = await storeResponse(unit, `\u00a0\tdata:application/zip;base64,${drawing}`);
+    const edited = await storeResponse(unit, `\n${drawing}`, 'VALUE_CHANGED');
+    expect((await analyzeEmptyResponses()).items.map(row => row.responseId)).toEqual([raw.id, uri.id]);
+    await expect(module.get(CodingResultsService).applyEmptyResponseCoding(workspace.id)).resolves.toMatchObject({ updatedCount: 2 });
+    expect((await db.manager.findOneByOrFail(ResponseEntity, { id: edited.id })).status_v2).toBeNull();
   });
 
   it('counts only fully uncoded V2 responses as writable and preserves partial and legacy codings', async () => {

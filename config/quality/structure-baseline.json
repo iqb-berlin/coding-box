@@ -456,7 +456,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-distribution.service.ts": {
       "file": {
-        "max-lines": 2193
+        "max-lines": 2192
       },
       "functions": {
         "class CodingJobDistributionService#1/method buildDistributionPlan#1": {
@@ -495,7 +495,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-query.service.ts": {
       "file": {
-        "max-lines": 1178
+        "max-lines": 1170
       },
       "functions": {
         "class CodingJobQueryService#1/method getCodingJobIssueSummariesByJobIds#1": {
@@ -640,13 +640,13 @@
     },
     "apps/backend/src/app/database/services/coding/coding-results.service.ts": {
       "file": {
-        "max-lines": 855
+        "max-lines": 843
       },
       "functions": {
         "class CodingResultsService#1/method applyCodingResultsInPool#1": {
           "complexity": 53,
           "max-depth": 8,
-          "max-lines-per-function": 464
+          "max-lines-per-function": 455
         }
       }
     },
@@ -1243,17 +1243,14 @@
     },
     "apps/backend/src/app/wsg-admin/coding-job/coding-job.controller.ts": {
       "file": {
-        "max-lines": 1459
+        "max-lines": 1437
       },
       "functions": {
         "class WsgCodingJobController#1/method getCodingJobReplaySession#1": {
-          "max-lines-per-function": 185
+          "max-lines-per-function": 175
         },
         "class WsgCodingJobController#1/method getCodingJobs#1": {
           "max-lines-per-function": 177
-        },
-        "class WsgCodingJobController#1/method getCodingJobUnits#1": {
-          "max-lines-per-function": 106
         }
       }
     },
@@ -1311,7 +1308,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component.ts": {
       "file": {
-        "max-lines": 827
+        "max-lines": 816
       },
       "functions": {}
     },
@@ -1384,7 +1381,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-job-backend.service.ts": {
       "file": {
-        "max-lines": 1242
+        "max-lines": 1231
       },
       "functions": {
         "class CodingJobBackendService#1/method mapApiCodingJob#1": {
@@ -1427,7 +1424,7 @@
       },
       "functions": {
         "class ReplayComponent#1/method onKeyDown#1": {
-          "complexity": 31
+          "complexity": 30
         }
       }
     },
@@ -1445,7 +1442,7 @@
     },
     "apps/frontend/src/app/replay/services/replay-coding.service.ts": {
       "file": {
-        "max-lines": 1139
+        "max-lines": 1111
       },
       "functions": {}
     },

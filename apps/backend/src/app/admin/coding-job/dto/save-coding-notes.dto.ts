@@ -2,6 +2,8 @@ import { ApiProperty } from '@nestjs/swagger';
 import {
   IsBoolean,
   IsOptional,
+  IsInt,
+  Min,
   IsString
 } from 'class-validator';
 
@@ -12,6 +14,12 @@ export class SaveCodingNotesDto {
   })
   @IsString()
   testPerson: string;
+
+  @ApiProperty({ description: 'Response ID for cases sharing the same person, booklet, unit and variable', required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  responseId?: number;
 
   @ApiProperty({
     description: 'Unit name',

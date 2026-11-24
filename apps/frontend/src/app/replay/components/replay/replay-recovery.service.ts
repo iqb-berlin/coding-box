@@ -1,4 +1,5 @@
 import { DestroyRef, Injectable, inject } from '@angular/core';
+import { parseCodingProgressKey } from '../../../../../../../api-dto/coding/coding-progress-key';
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { ReplayCodingRecoverySnapshot, ReplayCodingService, SavedCode } from '../../services/replay-coding.service';
 import { UnitsReplay } from '../../services/units-replay.service';
@@ -123,7 +124,7 @@ export class ReplayRecoveryService {
     let notified = false;
 
     selectedCodes.forEach((selectedCode, compositeKey) => {
-      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      const keyParts = parseCodingProgressKey(compositeKey);
       if (!keyParts) {
         return;
       }
@@ -144,7 +145,7 @@ export class ReplayRecoveryService {
     });
 
     notesByCompositeKey.forEach((notes, compositeKey) => {
-      const keyParts = this.parseRecoveryCompositeKey(compositeKey);
+      const keyParts = parseCodingProgressKey(compositeKey);
       if (!keyParts) {
         return;
       }
@@ -173,18 +174,5 @@ export class ReplayRecoveryService {
       }
     });
     return selectedCodes;
-  }
-
-  private parseRecoveryCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
-    const parts = compositeKey.split('::');
-    if (parts.length < 4) {
-      return null;
-    }
-
-    return {
-      testPerson: parts[0],
-      unitId: parts[2],
-      variableId: parts[3]
-    };
   }
 }

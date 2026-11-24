@@ -14,6 +14,7 @@ import {
 } from '../../models/coding-interfaces';
 import { findVariableCodingByPublicId } from '../../coding/utils/coding-scheme.util';
 import { UnitsReplay, UnitsReplayUnit } from './units-replay.service';
+import { codingProgressKeyForResponse, parseCodingProgressKey } from '../../../../../../api-dto/coding/coding-progress-key';
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
 
 export interface SavedCode {
@@ -379,7 +380,7 @@ export class ReplayCodingService implements OnDestroy {
 
     const progressSaves = Array.from(this.latestRequestedSelectionByKey.entries())
       .map(([compositeKey, selectedCode]) => {
-        const keyParts = this.parseCompositeKey(compositeKey);
+        const keyParts = parseCodingProgressKey(compositeKey);
         if (!keyParts) {
           return Promise.resolve();
         }
@@ -392,13 +393,14 @@ export class ReplayCodingService implements OnDestroy {
           keyParts.testPerson,
           keyParts.unitId,
           keyParts.variableId,
-          selectedCode
+          selectedCode,
+          keyParts.responseId
         );
       });
 
     const noteSaves = Array.from(this.notes.entries())
       .map(([compositeKey, notes]) => {
-        const keyParts = this.parseCompositeKey(compositeKey);
+        const keyParts = parseCodingProgressKey(compositeKey);
         if (!keyParts) {
           return Promise.resolve();
         }
@@ -408,7 +410,8 @@ export class ReplayCodingService implements OnDestroy {
           keyParts.unitId,
           keyParts.variableId,
           notes,
-          unitsData
+          unitsData,
+          keyParts.responseId
         );
       });
 
@@ -594,7 +597,8 @@ export class ReplayCodingService implements OnDestroy {
     testPerson: string,
     unitId: string,
     variableId: string,
-    selectedCode: SavedCode | null
+    selectedCode: SavedCode | null,
+    responseId?: number
   ): Promise<void> {
     if (!jobId || !workspaceId) return;
     if (this.isReviewMode) return;
@@ -602,7 +606,7 @@ export class ReplayCodingService implements OnDestroy {
     const contextSnapshot = this.captureCodingContext();
     const authToken = this.authToken;
     const authTokenArg: [string] | [] = authToken ? [authToken] : [];
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     const saveFailureKey = this.getSaveFailureKey('progress', compositeKey);
     await this.enqueueRowMutation(compositeKey, async () => {
       try {
@@ -632,6 +636,7 @@ export class ReplayCodingService implements OnDestroy {
             testPerson,
             unitId,
             variableId,
+            ...(responseId === undefined ? {} : { responseId }),
             selectedCode: backendSelectedCode,
             ...(this.isCodingIssueReviewMode ? {
               issueReview: true,
@@ -660,24 +665,11 @@ export class ReplayCodingService implements OnDestroy {
     const savePromises: Promise<void>[] = [];
 
     for (const [compositeKey, selectedCode] of this.selectedCodes) {
-      const parts = compositeKey.split('::');
-      if (parts.length >= 4) {
-        const testPerson = parts[0];
-        const unitId = parts[2];
-        const variableId = parts[3];
-
-        if (this.isSelectedCodePersistable(compositeKey, selectedCode)) {
-          savePromises.push(
-            this.saveCodingProgress(
-              workspaceId,
-              jobId,
-              testPerson,
-              unitId,
-              variableId,
-              selectedCode
-            )
-          );
-        }
+      const row = parseCodingProgressKey(compositeKey);
+      if (row && this.isSelectedCodePersistable(compositeKey, selectedCode)) {
+        savePromises.push(this.saveCodingProgress(
+          workspaceId, jobId, row.testPerson, row.unitId, row.variableId, selectedCode, row.responseId
+        ));
       }
     }
 
@@ -704,18 +696,19 @@ export class ReplayCodingService implements OnDestroy {
     testPerson: string,
     unitId: string,
     workspaceId: number,
-    unitsData: UnitsReplay | null
+    unitsData: UnitsReplay | null,
+    responseId?: number
   ): Promise<SavedCode | null> {
     if (this.isReviewMode) return null;
 
     const contextSnapshot = this.captureCodingContext();
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, event.variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, event.variableId, responseId);
     const revision = this.nextSelectionRevision(compositeKey);
 
     if (event.code === null && event.codingIssueOption === null) {
       this.latestRequestedSelectionByKey.set(compositeKey, null);
       if (this.codingJobId) {
-        await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, null);
+        await this.saveCodingProgress(workspaceId, this.codingJobId, testPerson, unitId, event.variableId, null, responseId);
       }
       if (this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
         this.selectedCodes.delete(compositeKey);
@@ -751,7 +744,8 @@ export class ReplayCodingService implements OnDestroy {
           testPerson,
           unitId,
           event.variableId,
-          normalizedCode
+          normalizedCode,
+          responseId
         );
       }
       if (!this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
@@ -780,7 +774,8 @@ export class ReplayCodingService implements OnDestroy {
           testPerson,
           unitId,
           event.variableId,
-          normalizedCode
+          normalizedCode,
+          responseId
         );
       }
       if (!this.shouldApplySelectionMutation(compositeKey, revision, contextSnapshot)) {
@@ -795,7 +790,7 @@ export class ReplayCodingService implements OnDestroy {
     return normalizedCode;
   }
 
-  generateCompositeKey(testPerson: string, unitId: string, variableId: string): string {
+  generateCompositeKey(testPerson: string, unitId: string, variableId: string, responseId?: number): string {
     const normalizedTestPerson = this.normalizeCodingTestPerson(testPerson);
     let bookletId = 'default';
     if (normalizedTestPerson) {
@@ -805,20 +800,7 @@ export class ReplayCodingService implements OnDestroy {
       }
     }
 
-    return `${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`;
-  }
-
-  private parseCompositeKey(compositeKey: string): { testPerson: string; unitId: string; variableId: string } | null {
-    const parts = compositeKey.split('::');
-    if (parts.length < 4) {
-      return null;
-    }
-
-    return {
-      testPerson: parts[0],
-      unitId: parts[2],
-      variableId: parts[3]
-    };
+    return codingProgressKeyForResponse(`${normalizedTestPerson}::${bookletId}::${unitId}::${variableId}`, responseId);
   }
 
   private normalizeCodingTestPerson(testPerson: string): string {
@@ -841,17 +823,7 @@ export class ReplayCodingService implements OnDestroy {
 
   getCompletedCount(unitsData: UnitsReplay | null): number {
     if (!unitsData) return 0;
-    return unitsData.units.filter((unit: UnitsReplayUnit) => {
-      if (unit.variableId) {
-        const compositeKey = this.generateCompositeKey(
-          unit.testPerson || '',
-          unit.name || '',
-          unit.variableId
-        );
-        return this.isUnitCodedByCompositeKey(compositeKey);
-      }
-      return false;
-    }).length;
+    return unitsData.units.filter(unit => this.isUnitCoded(unit)).length;
   }
 
   getOpenCount(unitsData: UnitsReplay | null = null): number {
@@ -863,7 +835,8 @@ export class ReplayCodingService implements OnDestroy {
       const compositeKey = this.generateCompositeKey(
         unit.testPerson || '',
         unit.name || '',
-        unit.variableId
+        unit.variableId,
+        unit.progressResponseId
       );
       return this.openUnitKeys.has(compositeKey);
     }).length;
@@ -874,28 +847,28 @@ export class ReplayCodingService implements OnDestroy {
     return Math.round((this.getCompletedCount(unitsData) / unitsData.units.length) * 100);
   }
 
-  getPreSelectedCodeId(testPerson: string, unitId: string, variableId: string): number | null {
+  getPreSelectedCodeId(testPerson: string, unitId: string, variableId: string, responseId?: number): number | null {
     this.codingStateVersion();
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode ? selectedCode.id : null;
   }
 
-  getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string): number | null {
+  getPreSelectedCodingIssueOptionId(testPerson: string, unitId: string, variableId: string, responseId?: number): number | null {
     this.codingStateVersion();
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     const selectedCode = this.selectedCodes.get(compositeKey);
     return selectedCode && selectedCode.codingIssueOption ? selectedCode.codingIssueOption : null;
   }
 
-  getNotes(testPerson: string, unitId: string, variableId: string): string {
+  getNotes(testPerson: string, unitId: string, variableId: string, responseId?: number): string {
     this.codingStateVersion();
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     return this.notes.get(compositeKey) || '';
   }
 
-  updateLocalNotes(testPerson: string, unitId: string, variableId: string, notes: string): void {
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+  updateLocalNotes(testPerson: string, unitId: string, variableId: string, notes: string, responseId?: number): void {
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     if (notes.trim()) {
       this.notes.set(compositeKey, notes);
     } else {
@@ -910,7 +883,8 @@ export class ReplayCodingService implements OnDestroy {
     unitId: string,
     variableId: string,
     notes: string,
-    unitsData: UnitsReplay | null = null
+    unitsData: UnitsReplay | null = null,
+    responseId?: number
   ): Promise<void> {
     const jobId = this.codingJobId;
     const authToken = this.authToken;
@@ -918,19 +892,19 @@ export class ReplayCodingService implements OnDestroy {
     const contextSnapshot = this.captureCodingContext();
     if (this.isReviewMode) return;
 
-    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId);
+    const compositeKey = this.generateCompositeKey(testPerson, unitId, variableId, responseId);
     const selectionRevisionAtStart = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const saveFailureKey = this.getSaveFailureKey('notes', compositeKey);
     const trimmedNotes = notes.trim();
     if (!jobId || !workspaceId) {
-      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+      this.updateLocalNotes(testPerson, unitId, variableId, notes, responseId);
       return;
     }
 
     // Show the latest keystroke immediately. Earlier queued saves must never
     // write their captured note text back over a newer local draft.
     if (this.isCurrentCodingContext(contextSnapshot)) {
-      this.updateLocalNotes(testPerson, unitId, variableId, notes);
+      this.updateLocalNotes(testPerson, unitId, variableId, notes, responseId);
     }
 
     const noteMutation = this.enqueueRowMutation(compositeKey, async () => {
@@ -940,6 +914,7 @@ export class ReplayCodingService implements OnDestroy {
             testPerson,
             unitId,
             variableId,
+            ...(responseId === undefined ? {} : { responseId }),
             notes: trimmedNotes || undefined,
             ...(this.isCodingIssueReviewMode ? { issueReview: true } : {})
           }, ...authTokenArg)
@@ -971,7 +946,8 @@ export class ReplayCodingService implements OnDestroy {
         unitId,
         variableId,
         compositeKey,
-        selectionRevisionAtStart
+        selectionRevisionAtStart,
+        responseId
       );
       if (unitsData) {
         this.checkCodingJobCompletion(unitsData);
@@ -1089,24 +1065,7 @@ export class ReplayCodingService implements OnDestroy {
   findNextUncodedUnitIndex(unitsData: UnitsReplay | null, fromIndex: number = 0): number {
     if (!unitsData) return -1;
 
-    for (let i = fromIndex; i < unitsData.units.length; i++) {
-      const unit: UnitsReplayUnit = unitsData.units[i];
-
-      if (unit.variableId) {
-        const compositeKey = this.generateCompositeKey(
-          unit.testPerson || '',
-          unit.name,
-          unit.variableId
-        );
-
-        if (!this.isUnitCodedByCompositeKey(compositeKey)) {
-          return i;
-        }
-      }
-    }
-
-    // If no uncoded units found from fromIndex, return -1
-    return -1;
+    return unitsData.units.findIndex((unit, index) => index >= fromIndex && !!unit.variableId && !this.isUnitCoded(unit));
   }
 
   isUnitCoded(unit: UnitsReplayUnit): boolean {
@@ -1115,7 +1074,8 @@ export class ReplayCodingService implements OnDestroy {
     const compositeKey = this.generateCompositeKey(
       unit.testPerson || '',
       unit.name,
-      unit.variableId
+      unit.variableId,
+      unit.progressResponseId
     );
 
     return this.isUnitCodedByCompositeKey(compositeKey);
@@ -1128,7 +1088,8 @@ export class ReplayCodingService implements OnDestroy {
     const compositeKey = this.generateCompositeKey(
       unit.testPerson || '',
       unit.name,
-      unit.variableId
+      unit.variableId,
+      unit.progressResponseId
     );
 
     return this.rowMutationChains.has(compositeKey);
@@ -1155,7 +1116,8 @@ export class ReplayCodingService implements OnDestroy {
     testPerson: string,
     unitId: string,
     variableId: string,
-    selectedCode: SavedCode
+    selectedCode: SavedCode,
+    responseId?: number
   ): Promise<void> {
     if (!this.isSelectedCodePersistable(compositeKey, selectedCode)) return;
     // A new-code-needed choice requires a saved note. The pending note save
@@ -1168,7 +1130,8 @@ export class ReplayCodingService implements OnDestroy {
       testPerson,
       unitId,
       variableId,
-      selectedCode
+      selectedCode,
+      responseId
     );
   }
 
@@ -1188,7 +1151,8 @@ export class ReplayCodingService implements OnDestroy {
     unitId: string,
     variableId: string,
     compositeKey: string,
-    selectionRevisionAtStart: number
+    selectionRevisionAtStart: number,
+    responseId?: number
   ): Promise<void> {
     const latestSelectionRevision = this.latestSelectionRevisionByKey.get(compositeKey) ?? 0;
     const didSelectionChange = latestSelectionRevision !== selectionRevisionAtStart;
@@ -1216,7 +1180,8 @@ export class ReplayCodingService implements OnDestroy {
       testPerson,
       unitId,
       variableId,
-      selectedCodeToSave
+      selectedCodeToSave,
+      responseId
     );
   }
 

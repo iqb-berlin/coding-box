@@ -63,7 +63,23 @@ import { SaveCodingProgressDto } from '../../admin/coding-job/dto/save-coding-pr
 import { SaveCodingNotesDto } from '../../admin/coding-job/dto/save-coding-notes.dto';
 import { TransferCodingCasesDto } from '../../admin/coding-job/dto/transfer-coding-cases.dto';
 import { TransferCodingCasesResultDto } from '../../admin/coding-job/dto/transfer-coding-cases-result.dto';
+import type { CodingJobNavigationUnit } from '../../database/services/coding/coding-job.types';
 import type { ReplayCodingSessionDto } from '../../../../../../api-dto/coding/replay-coding-session.dto';
+
+const navigationUnitProperties = {
+  responseId: { type: 'number' },
+  progressResponseId: { type: 'number', description: 'Disambiguates the progress key for repeated cases' },
+  unitName: { type: 'string' },
+  unitAlias: { type: 'string', nullable: true },
+  variableId: { type: 'string' },
+  variableAnchor: { type: 'string' },
+  variablePage: { type: 'string' },
+  bookletName: { type: 'string' },
+  personLogin: { type: 'string' },
+  personCode: { type: 'string' },
+  personGroup: { type: 'string' },
+  variableBundleId: { type: 'number', nullable: true }
+} as const;
 
 @ApiTags('WSG Admin Coding Jobs')
 @Controller('wsg-admin/workspace/:workspace_id/coding-job')
@@ -1270,17 +1286,7 @@ export class WsgCodingJobController {
               'bundleContext'
             ],
             properties: {
-              responseId: { type: 'number' },
-              unitName: { type: 'string' },
-              unitAlias: { type: 'string', nullable: true },
-              variableId: { type: 'string' },
-              variableAnchor: { type: 'string' },
-              variablePage: { type: 'string' },
-              bookletName: { type: 'string' },
-              personLogin: { type: 'string' },
-              personCode: { type: 'string' },
-              personGroup: { type: 'string' },
-              variableBundleId: { type: 'number', nullable: true },
+              ...navigationUnitProperties,
               bundleContext: {
                 type: 'object',
                 nullable: true,
@@ -1432,17 +1438,7 @@ export class WsgCodingJobController {
       items: {
         type: 'object',
         properties: {
-          responseId: { type: 'number' },
-          unitName: { type: 'string' },
-          unitAlias: { type: 'string' },
-          variableId: { type: 'string' },
-          variableAnchor: { type: 'string' },
-          variablePage: { type: 'string' },
-          bookletName: { type: 'string' },
-          personLogin: { type: 'string' },
-          personCode: { type: 'string' },
-          personGroup: { type: 'string' },
-          variableBundleId: { type: 'number', nullable: true },
+          ...navigationUnitProperties,
           bundleContext: {
             type: 'object',
             nullable: true,
@@ -1488,24 +1484,7 @@ export class WsgCodingJobController {
     @Param('id', ParseIntPipe) id: number,
     @Req() req: Request,
     @Query('onlyOpen', new ParseBoolPipe({ optional: true })) onlyOpen?: boolean
-  ): Promise<
-    Array<{
-      responseId: number;
-      unitName: string;
-      unitAlias: string | null;
-      variableId: string;
-      variableAnchor: string;
-      variablePage: string;
-      bookletName: string;
-      personLogin: string;
-      personCode: string;
-      personGroup: string;
-      variableBundleId: number | null;
-      bundleContext: unknown | null;
-      isDoubleCoded: boolean;
-      otherCoders: string[];
-    }>
-  > {
+  ): Promise<CodingJobNavigationUnit[]> {
     await this.assertCodingJobAccess(workspaceId, id, req);
     await this.codingJobService.getCodingJob(id, workspaceId);
     return this.codingJobService.getCodingJobUnits(id, onlyOpen === true);

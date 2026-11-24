@@ -1,7 +1,7 @@
 import { createHash } from 'crypto';
 import { AggregationSummaryDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
 import type { ResponseEntity } from '../../entities/response.entity';
-import { isDisplayedGeoGebraResponse } from './geogebra-response.util';
+import { hasGeoGebraConstruction, isDisplayedGeoGebraResponse } from './geogebra-response.util';
 
 export type AggregationMatchingFlag =
   | 'NO_AGGREGATION'
@@ -238,8 +238,11 @@ export function buildAggregationPeerKeys<T extends AggregationSourceResponse>(
 }
 
 export function getManualCodingDeduplicationKey(
-  response: ManualCodingDeduplicationResponse
+  response: ManualCodingDeduplicationResponse,
+  isDerived = false
 ): string {
+  // A copied construction cannot tell us whether its source was edited.
+  if (isDerived && hasGeoGebraConstruction(response.value)) return `derived-geogebra:${response.responseId}`;
   const valueHash = createHash('sha1').update(response.value || '').digest('hex');
   const valueKey = isDisplayedGeoGebraResponse(response) ? `${valueHash}:displayed-geogebra` : valueHash;
   return [
@@ -253,13 +256,20 @@ export function getManualCodingDeduplicationKey(
   ].join('::');
 }
 
+export function manualCodingKeyForVariables(derivedVariables: Map<string, Set<string>>) {
+  return (response: ManualCodingDeduplicationResponse) => getManualCodingDeduplicationKey(
+    response, isDerivedAggregationVariable(derivedVariables, response.unitName, response.variableId)
+  );
+}
+
 export function deduplicateManualCodingResponses<T extends ManualCodingDeduplicationResponse>(
-  responses: T[]
+  responses: T[],
+  keyFor: (response: NoInfer<T>) => string = getManualCodingDeduplicationKey
 ): T[] {
   const dedupedByPersonValue = new Map<string, T>();
 
   for (const response of responses) {
-    const key = getManualCodingDeduplicationKey(response);
+    const key = keyFor(response);
     const existing = dedupedByPersonValue.get(key);
     if (!existing || response.responseId < existing.responseId) {
       dedupedByPersonValue.set(key, response);
@@ -277,30 +287,31 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
   derivedVariableMap: Map<string, Set<string>>,
   activeResponseIds?: ReadonlySet<number>
 ): EffectiveManualCodingCaseCounts {
+  const keyFor = manualCodingKeyForVariables(derivedVariableMap);
   const assignedDeduplicationKeys = new Set(
     responses
       .filter(response => assignedResponseIds.has(response.responseId))
-      .map(response => getManualCodingDeduplicationKey(response))
+      .map(keyFor)
   );
-  const dedupedResponses = deduplicateManualCodingResponses(responses);
+  const dedupedResponses = deduplicateManualCodingResponses(responses, keyFor);
   const assignedDedupedResponseIds = new Set(
     dedupedResponses
       .filter(response => (
         assignedResponseIds.has(response.responseId) ||
-        assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+        assignedDeduplicationKeys.has(keyFor(response))
       ))
       .map(response => response.responseId)
   );
   const activeDeduplicationKeys = activeResponseIds ? new Set(
     responses
       .filter(response => activeResponseIds.has(response.responseId))
-      .map(response => getManualCodingDeduplicationKey(response))
+      .map(keyFor)
   ) : null;
   const activeDedupedResponseIds = activeResponseIds ? new Set(
     dedupedResponses
       .filter(response => (
         activeResponseIds.has(response.responseId) ||
-        activeDeduplicationKeys?.has(getManualCodingDeduplicationKey(response))
+        activeDeduplicationKeys?.has(keyFor(response))
       ))
       .map(response => response.responseId)
   ) : null;

@@ -124,6 +124,37 @@ describe('Replay responsibilities without Zone.js', () => {
     frame().should('contain.text', 'Answer A');
   });
 
+  it('keeps two responses with the same person, unit and variable independently editable', () => {
+    const firstKey = 'response:41::personA@code@booklet::booklet::UNIT::VAR1';
+    cy.intercept('GET', '**/coding-job/77/replay-session*', { body: {
+      units: [41, 42].map(responseId => ({
+        responseId, progressResponseId: responseId, unitName: 'UNIT', unitAlias: 'Unit', variableId: 'VAR1',
+        variablePage: '0', personLogin: 'personA', personCode: 'code', bookletName: 'booklet'
+      })),
+      progress: { [firstKey]: { id: 1, label: 'Correct' } }, notes: { [firstKey]: 'Viewed' },
+      job: { status: 'active', allowComments: true }, serverTimings: {}
+    } });
+    cy.intercept('PUT', '**/coding-job/77/status', { body: {} });
+    cy.intercept('POST', '**/coding-job/77/progress', { body: {} }).as('saveCase');
+    cy.intercept('POST', '**/coding-job/77/notes', request => {
+      if (request.body.notes === 'Reset') request.alias = 'saveCaseNotes';
+      request.reply({ body: {} });
+    });
+    cy.visit(`/#/replay/personA@code@booklet/UNIT/0?workspaceId=5&codingJobId=77&mode=coding&auth=${token(true)}`);
+    cy.wait('@response');
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector textarea').should('have.value', '').type('Reset').blur();
+    cy.wait('@saveCaseNotes').its('request.body').should('include', { responseId: 42, notes: 'Reset' });
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('not.have.class', 'selected').click();
+    cy.wait('@saveCase').its('request.body').should('include', { variableId: 'VAR1', responseId: 42 });
+    cy.get('.completion-overlay .close-button').click();
+    cy.get('coding-box-code-selector .prev-button').click();
+    cy.get('coding-box-code-selector .current-position').should('have.text', '1');
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Viewed');
+  });
+
   it('restores unsaved coding notes and the selected case before loading the player', () => {
     cy.intercept('GET', '**/coding-job/77/replay-session*', { body: {
       units: units.slice(0, 2).map(unit => ({ unitName: 'UNIT', unitAlias: 'Unit', variableId: unit.variableId,

@@ -28,7 +28,7 @@ import {
 import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   buildAggregationGroups,
-  deduplicateManualCodingResponses
+  deduplicateManualCodingResponses, manualCodingKeyForVariables
 } from './aggregation-metrics.util';
 import {
   CoderTrainingResponse, TrainingBundleConfig, TrainingPackage, TrainingResponseIdsMap, TrainingVariableConfig
@@ -525,7 +525,7 @@ export class CoderTrainingSelectionService {
         }
       }
 
-      const dedupedResponses = deduplicateManualCodingResponses(transformedResponses);
+      const dedupedResponses = deduplicateManualCodingResponses(transformedResponses, manualCodingKeyForVariables(derivedVariableSets));
       if (dedupedResponses.length !== transformedResponses.length) {
         this.logger.debug(`Removed ${transformedResponses.length - dedupedResponses.length} duplicate responses for unit ${unitId}, variable ${variableId}.`);
       }
