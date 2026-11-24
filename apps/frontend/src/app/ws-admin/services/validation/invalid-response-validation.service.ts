@@ -1,0 +1,101 @@
+import { Observable } from 'rxjs';
+import { switchMap, tap } from 'rxjs/operators';
+import { BaseValidationService } from './base-validation.service';
+import {
+  InvalidVariableDto,
+  VariableValidationSummaryDto
+} from '../../../../../../../api-dto/files/variable-validation.dto';
+import { ValidationTaskDto } from '../../../models/validation-task.dto';
+
+export interface InvalidResponsePage {
+  data: InvalidVariableDto[];
+  total: number;
+  page: number;
+  limit: number;
+  summary?: VariableValidationSummaryDto;
+}
+
+export abstract class InvalidResponseValidationService extends BaseValidationService<InvalidResponsePage> {
+  protected abstract override readonly validationType: 'variables' | 'variableTypes' | 'responseStatus';
+  protected abstract loadPage(workspaceId: number, page: number, limit: number): Observable<InvalidResponsePage>;
+
+  /**
+   * Deletes selected invalid variable responses
+   */
+  deleteSelected(responseIds: number[]): Observable<void> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService
+      .createDeleteResponsesTask(workspaceId, responseIds)
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
+      );
+  }
+
+  /**
+   * Deletes all invalid variable responses
+   */
+  deleteAll(): Observable<void> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.validationService
+      .createDeleteAllResponsesTask(
+        workspaceId,
+        this.validationType
+      )
+      .pipe(
+        tap((task: ValidationTaskDto) => this.storeTaskId(task, workspaceId)),
+        switchMap((task: ValidationTaskDto) => this.trackMutation(task, workspaceId))
+      );
+  }
+
+  /**
+   * Gets the current validation status
+   */
+  getValidationStatus(): 'not-run' | 'running' | 'success' | 'failed' {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const taskIds = this.validationTaskStateService.getAllTaskIds(workspaceId);
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
+
+    if (taskIds[this.validationType]) {
+      return 'running';
+    }
+
+    return results[this.validationType]?.status || 'not-run';
+  }
+
+  /**
+   * Fetches a specific page of validation results using the direct API (no task creation).
+   * Used for pagination after the initial validation has been run.
+   */
+  fetchPage(
+    page: number = 1,
+    limit: number = 10
+  ): Observable<InvalidResponsePage> {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    return this.loadPage(workspaceId, page, limit)
+      .pipe(tap(result => this.saveResult(result, workspaceId)));
+  }
+
+  /**
+   * Calculates the validation status based on the result
+   */
+  protected calculateStatus(
+    result: InvalidResponsePage
+  ): 'success' | 'failed' | 'not-run' {
+    return result.total > 0 ? 'failed' : 'success';
+  }
+
+  /**
+   * Gets the cached validation result
+   */
+  getCachedResult(): InvalidResponsePage | null {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    const results =
+      this.validationTaskStateService.getAllValidationResults(workspaceId);
+    return (
+      (results[this.validationType]?.details as unknown as InvalidResponsePage) ||
+      null
+    );
+  }
+}

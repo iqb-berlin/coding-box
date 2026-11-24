@@ -1,9 +1,9 @@
 import {
   Controller, Get, Param, Post, Query, Req, UseGuards, Logger, BadRequestException, NotFoundException, ParseEnumPipe, Res,
-  ParseBoolPipe
+  ParseBoolPipe, applyDecorators
 } from '@nestjs/common';
 import {
-  ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiQuery, ApiTags
+  ApiNotFoundResponse, ApiOkResponse, ApiParam, ApiQuery, ApiTags, SchemaObject
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -91,6 +91,131 @@ type DistributedCodingJobsResponse = DistributionCalculationResponse & {
     caseCount: number;
   }>;
 };
+
+const distributionResponseProperties = {
+  distribution: {
+    type: 'object',
+    description: 'Case distribution matrix',
+    additionalProperties: {
+      type: 'object',
+      additionalProperties: { type: 'number' }
+    }
+  },
+  distributionByCoderId: {
+    type: 'object',
+    description: 'Case distribution matrix keyed by coder ID',
+    additionalProperties: {
+      type: 'object',
+      additionalProperties: { type: 'number' }
+    }
+  },
+  doubleCodingInfo: {
+    type: 'object',
+    description: 'Double coding information',
+    additionalProperties: {
+      type: 'object',
+      properties: {
+        totalCases: { type: 'number' },
+        distinctCases: { type: 'number' },
+        codingTasksTotal: { type: 'number' },
+        doubleCodedCases: { type: 'number' },
+        singleCodedCasesAssigned: { type: 'number' },
+        doubleCodedCasesPerCoder: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        },
+        doubleCodedCasesPerCoderId: {
+          type: 'object',
+          additionalProperties: { type: 'number' }
+        }
+      }
+    }
+  },
+  aggregationInfo: {
+    type: 'object',
+    additionalProperties: {
+      type: 'object',
+      properties: {
+        uniqueCases: { type: 'number' },
+        totalResponses: { type: 'number' }
+      }
+    }
+  },
+  matchingFlags: {
+    type: 'array',
+    items: { type: 'string' }
+  },
+  warnings: {
+    type: 'array',
+    items: { type: 'object' }
+  },
+  pairDistribution: {
+    type: 'object',
+    additionalProperties: { type: 'number' }
+  },
+  tasksPerCoder: {
+    type: 'object',
+    additionalProperties: { type: 'number' }
+  },
+  coderWeights: {
+    type: 'object',
+    additionalProperties: { type: 'number' }
+  }
+} satisfies Record<string, SchemaObject>;
+
+function ApiKappaFilters(scope: 'statistics' | 'export') {
+  return applyDecorators(
+    ApiQuery({
+      name: 'coderIds',
+      required: false,
+      description: `Limit ${scope} to one or more coder IDs (comma-separated or repeated query parameters)`,
+      type: String
+    }),
+    ApiQuery({
+      name: 'coderTrainingIds',
+      required: false,
+      description: `Limit ${scope} to one or more coder training IDs (comma-separated or repeated query parameters)`,
+      type: String
+    }),
+    ApiQuery({
+      name: 'jobDefinitionIds',
+      required: false,
+      description: `Limit ${scope} to one or more job definition IDs (comma-separated or repeated query parameters)`,
+      type: String
+    }),
+    ApiQuery({
+      name: 'excludeTrainings',
+      required: false,
+      description: 'Exclude coder training jobs (default: true)',
+      type: Boolean
+    }),
+    ApiQuery({
+      name: 'variableId',
+      required: false,
+      description: 'Filter by variable ID',
+      type: String
+    }),
+    ApiQuery({
+      name: 'unitName',
+      required: false,
+      description: 'Filter by unit name',
+      type: String
+    }),
+    ApiQuery({
+      name: 'level',
+      required: false,
+      enum: ['code', 'score'],
+      description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
+      type: String
+    }),
+    ApiQuery({
+      name: 'weightedMean',
+      required: false,
+      description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
+      type: Boolean
+    })
+  );
+}
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -1030,55 +1155,7 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiQuery({
-    name: 'weightedMean',
-    required: false,
-    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'level',
-    required: false,
-    enum: ['code', 'score'],
-    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
-    type: String
-  })
-  @ApiQuery({
-    name: 'unitName',
-    required: false,
-    description: 'Filter by unit name',
-    type: String
-  })
-  @ApiQuery({
-    name: 'variableId',
-    required: false,
-    description: 'Filter by variable ID',
-    type: String
-  })
-  @ApiQuery({
-    name: 'excludeTrainings',
-    required: false,
-    description: 'Exclude coder training jobs (default: true)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'jobDefinitionIds',
-    required: false,
-    description: 'Limit statistics to one or more job definition IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderTrainingIds',
-    required: false,
-    description: 'Limit statistics to one or more coder training IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderIds',
-    required: false,
-    description: 'Limit statistics to one or more coder IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
+  @ApiKappaFilters('statistics')
   @ApiOkResponse({
     description:
       "Cohen's Kappa statistics for double-coded variables with workspace summary.",
@@ -1224,55 +1301,7 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiQuery({
-    name: 'weightedMean',
-    required: false,
-    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'level',
-    required: false,
-    enum: ['code', 'score'],
-    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
-    type: String
-  })
-  @ApiQuery({
-    name: 'unitName',
-    required: false,
-    description: 'Filter by unit name',
-    type: String
-  })
-  @ApiQuery({
-    name: 'variableId',
-    required: false,
-    description: 'Filter by variable ID',
-    type: String
-  })
-  @ApiQuery({
-    name: 'excludeTrainings',
-    required: false,
-    description: 'Exclude coder training jobs (default: true)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'jobDefinitionIds',
-    required: false,
-    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderTrainingIds',
-    required: false,
-    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderIds',
-    required: false,
-    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
+  @ApiKappaFilters('export')
   @ApiOkResponse({
     description: "Cohen's Kappa coder-pair details exported as CSV.",
     content: {
@@ -1333,55 +1362,7 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiQuery({
-    name: 'weightedMean',
-    required: false,
-    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'level',
-    required: false,
-    enum: ['code', 'score'],
-    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
-    type: String
-  })
-  @ApiQuery({
-    name: 'unitName',
-    required: false,
-    description: 'Filter by unit name',
-    type: String
-  })
-  @ApiQuery({
-    name: 'variableId',
-    required: false,
-    description: 'Filter by variable ID',
-    type: String
-  })
-  @ApiQuery({
-    name: 'excludeTrainings',
-    required: false,
-    description: 'Exclude coder training jobs (default: true)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'jobDefinitionIds',
-    required: false,
-    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderTrainingIds',
-    required: false,
-    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderIds',
-    required: false,
-    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
+  @ApiKappaFilters('export')
   @ApiOkResponse({
     description: "Cohen's Kappa variable summary exported as CSV.",
     content: {
@@ -1442,55 +1423,7 @@ export class WorkspaceCodingStatisticsController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
-  @ApiQuery({
-    name: 'weightedMean',
-    required: false,
-    description: 'Use weighted mean (default: true, matching R eatPrep implementation)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'level',
-    required: false,
-    enum: ['code', 'score'],
-    description: 'Calculation level: code for code-level kappa (default), score for score-level kappa',
-    type: String
-  })
-  @ApiQuery({
-    name: 'unitName',
-    required: false,
-    description: 'Filter by unit name',
-    type: String
-  })
-  @ApiQuery({
-    name: 'variableId',
-    required: false,
-    description: 'Filter by variable ID',
-    type: String
-  })
-  @ApiQuery({
-    name: 'excludeTrainings',
-    required: false,
-    description: 'Exclude coder training jobs (default: true)',
-    type: Boolean
-  })
-  @ApiQuery({
-    name: 'jobDefinitionIds',
-    required: false,
-    description: 'Limit export to one or more job definition IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderTrainingIds',
-    required: false,
-    description: 'Limit export to one or more coder training IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
-  @ApiQuery({
-    name: 'coderIds',
-    required: false,
-    description: 'Limit export to one or more coder IDs (comma-separated or repeated query parameters)',
-    type: String
-  })
+  @ApiKappaFilters('export')
   @ApiQuery({
     name: 'authToken',
     required: false,
@@ -1730,74 +1663,7 @@ export class WorkspaceCodingStatisticsController {
     schema: {
       type: 'object',
       properties: {
-        distribution: {
-          type: 'object',
-          description: 'Case distribution matrix',
-          additionalProperties: {
-            type: 'object',
-            additionalProperties: { type: 'number' }
-          }
-        },
-        distributionByCoderId: {
-          type: 'object',
-          description: 'Case distribution matrix keyed by coder ID',
-          additionalProperties: {
-            type: 'object',
-            additionalProperties: { type: 'number' }
-          }
-        },
-        doubleCodingInfo: {
-          type: 'object',
-          description: 'Double coding information',
-          additionalProperties: {
-            type: 'object',
-            properties: {
-              totalCases: { type: 'number' },
-              distinctCases: { type: 'number' },
-              codingTasksTotal: { type: 'number' },
-              doubleCodedCases: { type: 'number' },
-              singleCodedCasesAssigned: { type: 'number' },
-              doubleCodedCasesPerCoder: {
-                type: 'object',
-                additionalProperties: { type: 'number' }
-              },
-              doubleCodedCasesPerCoderId: {
-                type: 'object',
-                additionalProperties: { type: 'number' }
-              }
-            }
-          }
-        },
-        aggregationInfo: {
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            properties: {
-              uniqueCases: { type: 'number' },
-              totalResponses: { type: 'number' }
-            }
-          }
-        },
-        matchingFlags: {
-          type: 'array',
-          items: { type: 'string' }
-        },
-        warnings: {
-          type: 'array',
-          items: { type: 'object' }
-        },
-        pairDistribution: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        },
-        tasksPerCoder: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        },
-        coderWeights: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        }
+        ...distributionResponseProperties
       }
     }
   })
@@ -1839,74 +1705,7 @@ export class WorkspaceCodingStatisticsController {
         success: { type: 'boolean' },
         jobsCreated: { type: 'number' },
         message: { type: 'string' },
-        distribution: {
-          type: 'object',
-          description: 'Case distribution matrix',
-          additionalProperties: {
-            type: 'object',
-            additionalProperties: { type: 'number' }
-          }
-        },
-        distributionByCoderId: {
-          type: 'object',
-          description: 'Case distribution matrix keyed by coder ID',
-          additionalProperties: {
-            type: 'object',
-            additionalProperties: { type: 'number' }
-          }
-        },
-        doubleCodingInfo: {
-          type: 'object',
-          description: 'Double coding information',
-          additionalProperties: {
-            type: 'object',
-            properties: {
-              totalCases: { type: 'number' },
-              distinctCases: { type: 'number' },
-              codingTasksTotal: { type: 'number' },
-              doubleCodedCases: { type: 'number' },
-              singleCodedCasesAssigned: { type: 'number' },
-              doubleCodedCasesPerCoder: {
-                type: 'object',
-                additionalProperties: { type: 'number' }
-              },
-              doubleCodedCasesPerCoderId: {
-                type: 'object',
-                additionalProperties: { type: 'number' }
-              }
-            }
-          }
-        },
-        aggregationInfo: {
-          type: 'object',
-          additionalProperties: {
-            type: 'object',
-            properties: {
-              uniqueCases: { type: 'number' },
-              totalResponses: { type: 'number' }
-            }
-          }
-        },
-        matchingFlags: {
-          type: 'array',
-          items: { type: 'string' }
-        },
-        warnings: {
-          type: 'array',
-          items: { type: 'object' }
-        },
-        pairDistribution: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        },
-        tasksPerCoder: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        },
-        coderWeights: {
-          type: 'object',
-          additionalProperties: { type: 'number' }
-        },
+        ...distributionResponseProperties,
         jobs: {
           type: 'array',
           items: {

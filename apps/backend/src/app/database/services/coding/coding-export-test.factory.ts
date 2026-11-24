@@ -34,12 +34,12 @@ export function createCodingExportService(responseRepository: Repository<Respons
   workspaceExclusionService: WorkspaceExclusionService,
   missingsProfilesService?: MissingsProfilesService,
   replayAnchorService?: CodingReplayAnchorService): CodingExportService {
-  const query = new CodingExportQueryService(responseRepository, codingJobUnitRepository, coderTrainingDiscussionResultRepository, userRepository, codingListService, workspaceExclusionService);
+  const query = new CodingExportQueryService(responseRepository, codingJobUnitRepository, coderTrainingDiscussionResultRepository, userRepository, codingListService, workspaceExclusionService, codingJobRepository);
   const formatting = new CodingExportFormattingService(missingsProfilesService);
   const replay = new CodingExportReplayService(codingListService, replayAnchorService);
   const downloads = new CodingExportDownloadService(codingListService);
-  const rows = new CodingAggregatedRowsExportService(responseRepository, codingJobRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting, replay);
-  const columns = new CodingAggregatedColumnsExportService(responseRepository, codingJobRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting);
+  const rows = new CodingAggregatedRowsExportService(responseRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting, replay);
+  const columns = new CodingAggregatedColumnsExportService(responseRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting);
   const aggregated = new CodingAggregatedExportService(responseRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting, replay, rows, columns);
   const byCoder = new CodingCoderExportService(responseRepository, codingJobRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting, replay);
   const byVariable = new CodingVariableExportService(responseRepository, codingJobUnitRepository, workspaceExclusionService, query, formatting, replay);
