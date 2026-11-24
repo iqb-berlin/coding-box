@@ -1,4 +1,6 @@
-import { Injectable, Logger, Optional } from '@nestjs/common';
+import {
+  ConflictException, Injectable, Logger, Optional
+} from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { MoreThan, Repository } from 'typeorm';
@@ -285,6 +287,10 @@ export class ResponseCacheSchedulerService {
       await this.cacheService.set(cacheKey, response);
       this.logger.debug(`Cached response: workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}`);
     } catch (error) {
+      if (error instanceof ConflictException) {
+        this.logger.debug(`Skipping ambiguous replay until reimport: workspace=${workspaceId}, unitId=${unitId}`);
+        return;
+      }
       this.logger.error(`Error fetching response for caching: ${getErrorMessage(error)}`, getErrorStack(error));
       if (retries > 0) {
         this.logger.warn(`Retrying cache operation for workspace=${workspaceId}, testPerson=${connector}, unitId=${unitId}. Retries left: ${retries}`);

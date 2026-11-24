@@ -191,7 +191,7 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     return {
       unit,
       imported,
-      replay: (id: number) => module.get(TestResultsReplayService)
+      replay: (id?: number) => module.get(TestResultsReplayService)
         .findUnitResponse(workspace.id, `chunks@test@synthetic@chunks-${workspace.id}`, unit.name, id)
     };
   }
@@ -204,15 +204,66 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     content: JSON.stringify([{ id: variable, value, status: 'VALUE_CHANGED' }])
   });
 
-  it.each([false, true])('keeps independent player parts in coding replay (legacy import: %s)', async legacy => {
+  it('keeps the shared reason in A and uses the local override in B', async () => {
     const { unit, replay } = await importReplayChunks([
+      replayChunk('drawing-A', 'A', 'drawing', 'first', 1),
+      replayChunk('drawing-B', 'B', 'drawing', 'second', 2),
+      replayChunk('0-details', '', 'reason', 'shared reason', 3),
+      replayChunk('details-B', 'B', 'reason', 'B only', 4)
+    ]);
+    const drawings = await db.manager.findBy(ResponseEntity, { unitid: unit.id, variableid: 'drawing' });
+    expect(drawings).toHaveLength(2);
+    for (const drawing of drawings) {
+      const { responses } = await replay(drawing.id);
+      const expectedReason = drawing.subform === 'A' ? ['0-details', 'shared reason'] : ['details-B', 'B only'];
+      expect(responses.map(chunk => [chunk.id, JSON.parse(chunk.content)[0].value]).sort())
+        .toEqual([[`drawing-${drawing.subform}`, drawing.value], expectedReason].sort());
+    }
+  });
+
+  it('keeps a local legacy reason out of form A after its scope is restored', async () => {
+    const { unit, imported, replay } = await importReplayChunks([
+      replayChunk('part-A', 'A', 'drawing', 'drawing A', 1),
+      replayChunk('B', 'B', 'reason', 'B only', 2)
+    ]);
+    await db.manager.update(ResponseEntity, { unitid: unit.id }, { source_chunk_key: null, chunk_has_subform: null });
+    const target = await db.manager.findOneByOrFail(ResponseEntity, { unitid: unit.id, subform: 'A' });
+    await expect(replay(target.id)).rejects.toMatchObject({ status: 409 });
+    await module.get(PersonPersistenceService).processSubforms(imported, unit, 'merge');
+    expect((await replay(target.id)).responses.map(chunk => chunk.id)).toEqual(['part-A']);
+  });
+
+  it('requires a reimport when legacy drawing chunks are named after the opposite subform', async () => {
+    const { unit, imported, replay } = await importReplayChunks([
+      replayChunk('B', 'A', 'drawing', 'drawing A', 1),
+      replayChunk('A', 'B', 'drawing', 'drawing B', 2)
+    ]);
+    await db.manager.update(ResponseEntity, { unitid: unit.id }, { source_chunk_key: null, chunk_has_subform: null });
+    const targets = await db.manager.findBy(ResponseEntity, { unitid: unit.id });
+    expect(targets).toHaveLength(2);
+    await expect(replay()).rejects.toMatchObject({ status: 409 });
+    for (const target of targets) {
+      await expect(replay(target.id)).rejects.toMatchObject({ status: 409 });
+    }
+    await module.get(PersonPersistenceService).processSubforms(imported, unit, 'merge');
+    for (const target of targets) {
+      const { responses } = await replay(target.id);
+      expect(responses.map(chunk => [chunk.id, JSON.parse(chunk.content)[0].value]))
+        .toEqual([[target.subform === 'A' ? 'B' : 'A', target.value]]);
+    }
+  });
+
+  it.each([false, true])('keeps independent player parts in coding replay (legacy import: %s)', async legacy => {
+    const { unit, imported, replay } = await importReplayChunks([
       replayChunk('drawing-part', '', 'drawing', 'A', 1),
       replayChunk('reason-part', '', 'reason', 'because', 2)
     ]);
+    const selected = await db.manager.findOneByOrFail(ResponseEntity, { unitid: unit.id, variableid: 'drawing' });
     if (legacy) {
       await db.manager.update(ResponseEntity, { unitid: unit.id }, { source_chunk_key: null, chunk_has_subform: null });
+      await expect(replay(selected.id)).rejects.toMatchObject({ status: 409 });
+      await module.get(PersonPersistenceService).processSubforms(imported, unit, 'merge');
     }
-    const selected = await db.manager.findOneByOrFail(ResponseEntity, { unitid: unit.id, variableid: 'drawing' });
     const result = await replay(selected.id);
     expect(result.responses.map(part => [part.id, JSON.parse(part.content)[0].value]).sort()).toEqual([
       ['drawing-part', 'A'], ['reason-part', 'because']
@@ -267,6 +318,9 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     const note = await storeResponse(unit, 'edited', 'VALUE_CHANGED', 'note', 'B');
     const target = await storeResponse(unit, '0', 'VALUE_CHANGED', 'sum', 'B');
     await db.manager.update(ResponseEntity, target.id, { is_autocoder_generated: true });
+    for (const drawing of [first, second]) {
+      await db.manager.update(ResponseEntity, drawing.id, { source_chunk_key: drawing.subform, chunk_has_subform: true });
+    }
     const replay = module.get(TestResultsReplayService);
     for (const [index, responseId] of [first.id, target.id].entries()) {
       const result = await replay.findUnitResponse(workspace.id, connector, unit.name, responseId);
@@ -280,6 +334,7 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
       ]));
     }
     const sameScope = await storeResponse(unit, geometryValue(3), 'VALUE_CHANGED', 'drawing', 'A');
+    await db.manager.update(ResponseEntity, sameScope.id, { source_chunk_key: 'A', chunk_has_subform: true });
     const refreshed = await replay.findUnitResponse(workspace.id, connector, unit.name, sameScope.id);
     expect(refreshed.subformResponseIds).toEqual([sameScope.id]);
     expect(JSON.parse(refreshed.responses.find(chunk => chunk.id === 'A')!.content)[0].value).toBe(sameScope.value);

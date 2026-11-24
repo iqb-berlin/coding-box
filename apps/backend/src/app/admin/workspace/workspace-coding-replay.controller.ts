@@ -15,6 +15,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import {
+  ApiConflictResponse,
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiParam,
@@ -138,6 +139,7 @@ export class WorkspaceCodingReplayController {
     description: 'A required replay resource was not found.',
     type: ReplayErrorDto
   })
+  @ApiConflictResponse({ description: 'The original response import is required to resolve an ambiguous player chunk.' })
   @ApiServiceUnavailableResponse({ description: 'The optional PostgreSQL connection deadline was exceeded.' })
   async getReplayPayload(
     @WorkspaceId() workspaceId: number,
@@ -255,6 +257,7 @@ export class WorkspaceCodingReplayController {
     description: 'A required replay response resource was not found.',
     type: ReplayErrorDto
   })
+  @ApiConflictResponse({ description: 'The original response import is required to resolve an ambiguous player chunk.' })
   @ApiServiceUnavailableResponse({ description: 'The optional PostgreSQL connection deadline was exceeded.' })
   async getReplayResponse(
     @WorkspaceId() workspaceId: number,

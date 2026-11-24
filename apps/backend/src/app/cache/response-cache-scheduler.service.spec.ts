@@ -1,4 +1,4 @@
-import { Logger } from '@nestjs/common';
+import { ConflictException, Logger } from '@nestjs/common';
 import { MoreThan } from 'typeorm';
 import { ResponseCacheSchedulerService } from './response-cache-scheduler.service';
 
@@ -122,8 +122,16 @@ describe('ResponseCacheSchedulerService', () => {
       'UNIT-ALIAS'
     );
     expect(cacheService.exists).toHaveBeenCalledTimes(4);
-    expect(cacheService.exists).toHaveBeenCalledWith('responses:47:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v8');
+    expect(cacheService.exists).toHaveBeenCalledWith('responses:47:login-a@code-a@group-a@BOOKLET-A:UNIT-NAME:v9');
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledTimes(4);
+  });
+
+  it('skips ambiguous replay data during warmup and still caches the other responses', async () => {
+    const { service, workspaceTestResultsService, cacheService } = createService();
+    workspaceTestResultsService.findUnitResponse.mockRejectedValueOnce(new ConflictException());
+    await service.cacheAllResponses();
+    expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledTimes(4);
+    expect(cacheService.set).toHaveBeenCalledTimes(3);
   });
 
   it('projects only warmup columns and caches each page before loading the next one', async () => {
@@ -146,7 +154,7 @@ describe('ResponseCacheSchedulerService', () => {
     const firstUnitPage = Array.from({ length: 500 }, (_, i) => ({
       ...unit, id: i + 501, alias: unit.name
     }));
-    const cachedKeys = new Set(['responses:47:login-a@code-a@BOOKLET-A:ALREADY-CACHED:v8']);
+    const cachedKeys = new Set(['responses:47:login-a@code-a@BOOKLET-A:ALREADY-CACHED:v9']);
     cacheService.exists.mockImplementation(async key => cachedKeys.has(key));
     cacheService.set.mockImplementation(async key => {
       cachedKeys.add(key);

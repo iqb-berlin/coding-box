@@ -994,14 +994,6 @@
         }
       }
     },
-    "apps/backend/src/app/database/services/test-results/test-results-replay.service.ts": {
-      "file": {},
-      "functions": {
-        "class TestResultsReplayService#1/method findUnitResponse#1": {
-          "max-lines-per-function": 106
-        }
-      }
-    },
     "apps/backend/src/app/database/services/test-results/test-results-search.service.ts": {
       "file": {},
       "functions": {
