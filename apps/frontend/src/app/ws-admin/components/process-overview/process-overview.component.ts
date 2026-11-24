@@ -263,6 +263,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   processes = new MatTableDataSource<ProcessDto>([]);
   protected displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
   protected readonly isLoading = signal(false);
+  protected readonly loadFailed = signal(false);
   readonly lastLoadedAt = signal(Date.now());
 
   // Filter properties
@@ -332,6 +333,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.loadRequest?.unsubscribe();
     if (!this.workspaceId) return;
     this.isLoading.set(true);
+    this.loadFailed.set(false);
     this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
@@ -342,11 +344,7 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
         this.applyFilter();
       },
       error: () => {
-        this.snackBar.open(
-          this.translateService.instant('process-overview.messages.load-error'),
-          this.translateService.instant('close'),
-          { duration: 3000 }
-        );
+        this.loadFailed.set(true);
         this.isLoading.set(false);
       }
     });

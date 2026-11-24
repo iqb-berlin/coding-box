@@ -1,7 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
-import { Observable } from 'rxjs';
+import {
+  Observable, catchError, of, throwError
+} from 'rxjs';
 import { SERVER_URL } from '../../../injection-tokens';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 
 export interface TestResultExportJob {
   jobId: string;
@@ -81,6 +84,13 @@ export class TestResultBackendService {
   getExportTestResultsJobs(workspaceId: number): Observable<TestResultExportJob[]> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs`;
     return this.http.get<TestResultExportJob[]>(url, {});
+  }
+
+  getExportTestResultsJob(workspaceId: number, jobId: string): Observable<TestResultExportJob | null> {
+    const url = `${this.serverUrl}admin/workspace/${workspaceId}/results/export/jobs/${encodeURIComponent(jobId)}`;
+    return this.http.get<TestResultExportJob>(url, { context: suppressGlobalHttpErrorContext() }).pipe(
+      catchError(error => (error.status === 404 ? of(null) : throwError(() => error)))
+    );
   }
 
   downloadExportTestResultsJob(

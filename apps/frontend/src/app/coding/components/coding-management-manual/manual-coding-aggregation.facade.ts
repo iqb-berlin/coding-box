@@ -303,7 +303,7 @@ export class ManualCodingAggregationFacade {
 
     // Filter groups that meet the threshold
     const groupsMeetingThreshold = responseAnalysisValue.duplicateValues.groups.filter(
-      group => group.occurrences.length >= this.duplicateAggregationThreshold()
+      group => (group.occurrenceCount ?? group.occurrences.length) >= this.duplicateAggregationThreshold()
     );
 
     if (groupsMeetingThreshold.length === 0) {
@@ -317,7 +317,7 @@ export class ManualCodingAggregationFacade {
     }
 
     const totalResponsesInGroups = groupsMeetingThreshold.reduce(
-      (sum, group) => sum + group.occurrences.length,
+      (sum, group) => sum + (group.occurrenceCount ?? group.occurrences.length),
       0
     );
 

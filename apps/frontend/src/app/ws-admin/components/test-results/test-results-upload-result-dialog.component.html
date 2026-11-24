@@ -42,6 +42,14 @@
       </div>
     </div>
     }
+    @if (hasMissingCodingFreshness()) {
+    <div class="section" role="status">
+      {{ 'ui-text.test-results-upload-result-dialog.coding-freshness-unavailable' | translate }}
+      <button mat-button type="button" (click)="retryCodingContext()" [disabled]="isReloadingCodingContext()">
+        {{ 'ui-text.test-results-upload-result-dialog.retry-coding-freshness' | translate }}
+      </button>
+    </div>
+    }
     @if (hasCodingFreshnessWarning) {
     <div class="section coding-freshness-section">
       <div class="freshness-header">

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
@@ -22,10 +22,10 @@ export class WorkspaceTestTakersValidationService {
 
   async validateTestTakers(
     workspaceId: number,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void | Promise<void>
   ): Promise<TestTakersValidationDto> {
     try {
-      if (onProgress) onProgress(10);
+      await onProgress?.(10);
       const testTakers = await this.fileUploadRepository.find({
         where: {
           workspace_id: workspaceId,
@@ -46,39 +46,53 @@ export class WorkspaceTestTakersValidationService {
         };
       }
 
-      if (onProgress) onProgress(30);
+      await onProgress?.(30);
 
       const {
         testTakerLogins, totalGroups, totalLogins, totalBookletCodes
       } = this.collectLogins(testTakers);
 
-      if (onProgress) onProgress(60);
+      const loginsByGroup = new Map<string, Set<string>>();
+      for (const { group, login } of testTakerLogins) {
+        const logins = loginsByGroup.get(group) ?? new Set<string>();
+        logins.add(login);
+        loginsByGroup.set(group, logins);
+      }
 
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
+      await onProgress?.(60);
+      const personScope = { workspace_id: workspaceId, consider: true };
+      const totalPersons = await this.personsRepository.countBy(personScope);
+      const pageSize = 500;
       const missingPersons: MissingPersonDto[] = [];
-      const totalPersons = persons.length;
       let processedPersons = 0;
+      let afterId: number | undefined;
 
-      for (const person of persons) {
-        processedPersons += 1;
-        if (processedPersons % 50 === 0 && onProgress) {
-          onProgress(60 + Math.floor((processedPersons / totalPersons) * 35));
-        }
-        const found = testTakerLogins.some(
-          login => login.group === person.group && login.login === person.login
-        );
+      while (true) {
+        const persons = await this.personsRepository.find({
+          select: {
+            id: true, group: true, login: true, code: true
+          },
+          where: afterId === undefined ? personScope : { ...personScope, id: MoreThan(afterId) },
+          order: { id: 'ASC' },
+          take: pageSize
+        });
 
-        if (!found) {
-          missingPersons.push({
-            group: person.group,
-            login: person.login,
-            code: person.code,
-            reason: 'Person not found in TestTakers XML'
-          });
+        for (const person of persons) {
+          if (!loginsByGroup.get(person.group)?.has(person.login)) {
+            missingPersons.push({
+              group: person.group,
+              login: person.login,
+              code: person.code,
+              reason: 'Person not found in TestTakers XML'
+            });
+          }
         }
+        processedPersons += persons.length;
+        if (totalPersons > 0) {
+          await onProgress?.(60 + Math.floor(Math.min(processedPersons / totalPersons, 1) * 35));
+        }
+        if (persons.length < pageSize) break;
+        afterId = persons[persons.length - 1].id;
       }
 
       return {

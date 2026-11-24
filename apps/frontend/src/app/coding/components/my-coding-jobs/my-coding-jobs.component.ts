@@ -43,7 +43,7 @@ import { ActivatedRoute } from '@angular/router';
 import {
   debounceTime, distinctUntilChanged, forkJoin, Subject, Subscription
 } from 'rxjs';
-import { map } from 'rxjs/operators';
+import { finalize, map } from 'rxjs/operators';
 import { GermanPaginatorIntl } from '../../../shared/services/german-paginator-intl.service';
 import { AppService } from '../../../core/services/app.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
@@ -446,6 +446,9 @@ implements OnInit, OnDestroy, OnChanges {
   }
 
   startCodingJob(job: CodingJob): void {
+    const replayWindow = window.open('about:blank', '_blank');
+    if (replayWindow) replayWindow.opener = null;
+    let replayOpened = false;
     const startingMessage = this.translateService.instant(
       'coding.my-coding-jobs.starting-job',
       { name: job.name }
@@ -462,10 +465,15 @@ implements OnInit, OnDestroy, OnChanges {
       ) :
       this.codingJobBackendService.startCodingJob(job.workspace_id, job.id);
 
-    replayRequest.pipe(takeUntilDestroyed(this.destroyRef))
+    replayRequest.pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => {
+        loadingSnack.dismiss();
+        if (!replayOpened && replayWindow && !replayWindow.closed) replayWindow.close();
+      })
+    )
       .subscribe({
         next: result => {
-          loadingSnack.dismiss();
           if (!result || result.total === 0) {
             const noResponsesMessage = this.translateService.instant(
               'coding.my-coding-jobs.no-matching-responses'
@@ -495,7 +503,12 @@ implements OnInit, OnDestroy, OnChanges {
             }
           );
 
-          window.open(replayUrl, '_blank');
+          if (!replayWindow || replayWindow.closed) {
+            this.offerReplayInCurrentTab(replayUrl);
+            return;
+          }
+          replayWindow.location.replace(replayUrl);
+          replayOpened = true;
           const preparedMessage = this.translateService.instant(
             'coding.my-coding-jobs.preparing-replay',
             { count: result.total }
@@ -507,7 +520,6 @@ implements OnInit, OnDestroy, OnChanges {
           );
         },
         error: () => {
-          loadingSnack.dismiss();
           const errorMessage = this.translateService.instant(
             'coding.my-coding-jobs.error-starting-job'
           );
@@ -518,6 +530,13 @@ implements OnInit, OnDestroy, OnChanges {
           );
         }
       });
+  }
+
+  private offerReplayInCurrentTab(replayUrl: string): void {
+    this.snackBar.open(
+      this.translateService.instant('ui-text.my-coding-jobs.replay-blocked'),
+      this.translateService.instant('ui-text.my-coding-jobs.open-replay-in-current-tab')
+    ).onAction().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => window.location.assign(replayUrl));
   }
 
   getStartCodingJobLabel(job: CodingJob): string {

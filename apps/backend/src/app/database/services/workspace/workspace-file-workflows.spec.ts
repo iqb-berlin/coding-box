@@ -1,5 +1,6 @@
 import { ConflictException, Logger } from '@nestjs/common';
 import AdmZip = require('adm-zip');
+import { MoreThan } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -284,7 +285,7 @@ describe('TestTakers validation after workflow extraction', () => {
   </TestTakers>`;
   const makeValidation = () => {
     const files = { find: jest.fn().mockResolvedValue([{ data: xml }]) };
-    const persons = { find: jest.fn().mockResolvedValue([]) };
+    const persons = { find: jest.fn().mockResolvedValue([]), countBy: jest.fn().mockResolvedValue(0) };
     const unitsQuery = { innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) };
     const units = { createQueryBuilder: jest.fn(() => unitsQuery) };
     const responses = { count: jest.fn().mockResolvedValue(0) };
@@ -296,6 +297,7 @@ describe('TestTakers validation after workflow extraction', () => {
   it('counts all groups, only accepted login modes and nonempty booklet codes', async () => {
     const f = makeValidation();
     f.persons.find.mockResolvedValue([{ group: 'G1', login: 'L1', code: 'a' }, { group: 'G3', login: 'ignored', code: 'b' }]);
+    f.persons.countBy.mockResolvedValue(2);
     const progress = jest.fn();
     await expect(f.service.validateTestTakers(7, progress)).resolves.toEqual({
       testTakersFound: true,
@@ -306,8 +308,36 @@ describe('TestTakers validation after workflow extraction', () => {
         group: 'G3', login: 'ignored', code: 'b', reason: 'Person not found in TestTakers XML'
       }]
     });
-    expect(progress.mock.calls).toEqual([[10], [30], [60]]);
-    expect(f.persons.find).toHaveBeenCalledWith({ where: { workspace_id: 7, consider: true } });
+    expect(progress.mock.calls).toEqual([[10], [30], [60], [95]]);
+    expect(f.persons.find).toHaveBeenCalledWith({
+      select: {
+        id: true, group: true, login: true, code: true
+      },
+      where: { workspace_id: 7, consider: true },
+      order: { id: 'ASC' },
+      take: 500
+    });
+  });
+
+  it('reads person identifiers in bounded pages without selecting booklet raw data', async () => {
+    const f = makeValidation();
+    f.persons.countBy.mockResolvedValue(501);
+    f.persons.find
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, i) => ({ id: i + 1, group: 'G1', login: 'L1' })))
+      .mockResolvedValueOnce([{
+        id: 501, group: 'other', login: 'L1', code: 'missing'
+      }]);
+    await expect(f.service.validateTestTakers(7)).resolves.toMatchObject({
+      missingPersons: [expect.objectContaining({ code: 'missing' })]
+    });
+    expect(f.persons.find).toHaveBeenNthCalledWith(2, {
+      select: {
+        id: true, group: true, login: true, code: true
+      },
+      where: { workspace_id: 7, consider: true, id: MoreThan(500) },
+      order: { id: 'ASC' },
+      take: 500
+    });
   });
 
   it('paginates only eligible groups while reporting totals and progress for all groups', async () => {

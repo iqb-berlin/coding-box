@@ -122,6 +122,66 @@ describe('Zoneless manual preparation workflows', () => {
     });
   }
 
+  it('shows the full duplicate count with five occurrence previews', () => {
+    setup();
+    let started = false;
+    cy.intercept('POST', '**/api/admin/workspace/5/coding/response-analysis', request => {
+      started = true;
+      request.reply({ statusCode: 201 });
+    }).as('startDuplicateAnalysis');
+    cy.intercept('GET', '**/api/admin/workspace/5/coding/response-analysis?*', request => {
+      expect(request.query.occurrencesLimit).to.equal('5');
+      if (!started) {
+        request.reply({ body: {
+          needsCalculation: true,
+          isCalculating: false,
+          emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+          duplicateValues: { total: 0, totalResponses: 0, isAggregationApplied: false, groups: [] },
+          aggregationSummary: {
+            duplicateGroups: 0, duplicateResponses: 0, rawCases: 0,
+            collapsedCases: 0, effectiveCases: 0, threshold: 2, aggregationActive: true
+          },
+          matchingFlags: []
+        } });
+        return;
+      }
+      request.reply({ body: {
+        emptyResponses: { total: 0, totalUncoded: 0, items: [] },
+        duplicateValues: {
+          total: 1,
+          totalResponses: 100000,
+          isAggregationApplied: false,
+          groups: [{
+            unitName: 'UNIT_A',
+            variableId: 'VAR_1',
+            normalizedValue: 'antwort',
+            occurrenceCount: 100000,
+            occurrences: Array.from({ length: 5 }, (_, index) => ({
+              responseId: index + 1, personLogin: `person-${index + 1}`, bookletName: 'TESTHEFT'
+            }))
+          }]
+        },
+        aggregationSummary: {
+          duplicateGroups: 1, duplicateResponses: 100000, rawCases: 100000,
+          collapsedCases: 99999, effectiveCases: 1, threshold: 2, aggregationActive: true
+        },
+        matchingFlags: [],
+        analysisTimestamp: '2026-11-23T10:00:00Z'
+      } });
+    }).as('duplicatePreview');
+    openManual();
+    cy.contains('.manual-coding-tabs [role="tab"]', 'Vorbereitung').click();
+    cy.contains('.response-analysis-section button', 'Analyse starten').should('be.visible');
+    cy.get('.aggregation-impact').should('not.exist');
+    cy.get('.analysis-stale-note').should('not.exist');
+    cy.contains('.response-analysis-section button', 'Analyse starten').click();
+    cy.wait(['@startDuplicateAnalysis', '@duplicatePreview']);
+    cy.get('button[aria-controls="duplicate-values-details"]').click();
+    cy.get('#duplicate-values-details .occurrence-count').should('contain.text', '(100000x)');
+    cy.get('#duplicate-values-details .occurrence-list li:not(.more-occurrences)').should('have.length', 5);
+    cy.get('#duplicate-values-details .more-occurrences').should('contain.text', '+99995');
+  });
+
   it('keeps extracted view styles scoped and preserves the job-definition notice styling', () => {
     setup();
     openManual();

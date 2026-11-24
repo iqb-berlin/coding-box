@@ -41,6 +41,7 @@ import {
 import { CodingBackgroundJobsService } from '../../services/coding-background-jobs.service';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
 import { TestPersonCodingJobResultDialogComponent } from '../test-person-coding-job-result-dialog/test-person-coding-job-result-dialog.component';
 
@@ -110,6 +111,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   ];
 
   protected readonly isLoading = signal(false);
+  protected readonly isStartingCoding = signal(false);
 
   currentPage = 1;
   pageSize = 20;
@@ -141,6 +143,9 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
   private lastNotifiedCompletedJobId: string | null = null;
 
   ngOnInit(): void {
+    this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.stopJobStatusPolling();
+    });
     const initialAutoCoderRun = this.initialAutoCoderRun();
     if (initialAutoCoderRun) {
       this.autoCoderRun = initialAutoCoderRun;
@@ -266,10 +271,12 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     }
 
     this.isLoading.set(true);
+    this.isStartingCoding.set(true);
 
     this.testPersonCodingService
       .codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
       .pipe(
+        takeUntilWorkspaceChanged(this.appService),
         tap(result => {
           if (result && result.jobId) {
             this.activeJobId.set(result.jobId);
@@ -320,6 +327,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
           return of(null);
         }),
         finalize(() => {
+          this.isStartingCoding.set(false);
           this.isLoading.set(false);
         }),
         takeUntilDestroyed(this.destroyRef)
@@ -349,7 +357,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     const requestId = this.jobStatusRequestId;
     this.testPersonCodingService
       .getJobStatus(workspaceId, jobId)
-      .pipe(takeUntilDestroyed(this.destroyRef))
+      .pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe(status => {
         if (this.activeJobId() !== jobId || this.workspaceId !== workspaceId ||
           generation !== this.jobStatusPollingGeneration ||

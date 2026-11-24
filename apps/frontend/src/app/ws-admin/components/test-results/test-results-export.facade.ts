@@ -1,12 +1,13 @@
 import {
-  DestroyRef, Injectable, inject, signal
+  DestroyRef, Injectable, computed, inject, signal
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import {
-  Subscription, timer, exhaustMap, map, takeWhile, finalize
+  Subscription, timer, exhaustMap, takeWhile, finalize
 } from 'rxjs';
+import { retryTransientStatus } from '../../../shared/utils/retry-transient-status';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultBackendService, TestResultExportJob } from '../../../shared/services/test-result/test-result-backend.service';
@@ -41,23 +42,33 @@ export class TestResultsExportFacade {
   private readonly exportTypeInProgressState = signal<'test-results' | 'test-logs' | null>(null);
   readonly exportTypeInProgress = this.exportTypeInProgressState.asReadonly();
 
+  private readonly completedJobs = signal<TestResultExportJob[]>([]);
+
   constructor() {
     let workspaceId = this.appService.selectedWorkspaceId;
     this.appService.selectedWorkspaceId$?.pipe(takeUntilDestroyed()).subscribe(id => {
-      if (id !== workspaceId) { this.resetExportState(); workspaceId = id; }
+      if (id !== workspaceId) {
+        this.resetExportState();
+        this.completedJobs.set([]);
+        workspaceId = id;
+      }
     });
     this.destroyRef.onDestroy(() => this.stopExportStatusPolling());
   }
 
   openExportDialog(): void {
+    this.checkExistingExportJobs();
     const dialogRef = this.dialog.open(TestResultsExportDialogComponent, {
       width: '500px',
       data: {
-        isExporting: this.isExporting(),
-        exportTypeInProgress: this.exportTypeInProgress(),
-        exportJobStatus: this.exportJobStatus(),
-        exportJobProgress: this.exportJobProgress(),
-        exportJobId: this.exportJobId()
+        state: computed(() => ({
+          isExporting: this.isExporting(),
+          exportTypeInProgress: this.exportTypeInProgress(),
+          exportJobStatus: this.exportJobStatus(),
+          exportJobProgress: this.exportJobProgress(),
+          exportJobId: this.exportJobId(),
+          completedJobs: this.completedJobs()
+        }))
       }
     });
 
@@ -93,6 +104,9 @@ export class TestResultsExportFacade {
         this.recoveryRequest?.unsubscribe();
         this.stopExportStatusPolling();
         const generation = this.exportGeneration;
+        this.exportJobIdState.set(null);
+        this.exportJobProgressState.set(0);
+        this.exportJobStatusState.set('waiting');
         const filters = {
           groupNames:
             result.groupNames && result.groupNames.length > 0 ?
@@ -133,7 +147,7 @@ export class TestResultsExportFacade {
           next: response => {
             if (generation !== this.exportGeneration) return;
             this.exportJobIdState.set(response.jobId);
-            this.exportJobStatusState.set('active');
+            this.exportJobStatusState.set('waiting');
             this.snackBar.open(
               this.uiTranslate('ui-text.test-results-export.started'),
               'OK',
@@ -155,13 +169,13 @@ export class TestResultsExportFacade {
   }
 
   checkExistingExportJobs(): void {
+    const workspaceId = this.appService.selectedWorkspaceId;
+    if (!workspaceId) return;
+
     this.recoveryRequest?.unsubscribe();
     const generation = this.exportGeneration;
-    if (!this.appService.selectedWorkspaceId) {
-      return;
-    }
     this.recoveryRequest = this.testResultBackendService
-      .getExportTestResultsJobs(this.appService.selectedWorkspaceId).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
+      .getExportTestResultsJobs(workspaceId).pipe(retryTransientStatus(), takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
       .subscribe({
         next: (jobs: TestResultExportJob[]) => {
           if (generation !== this.exportGeneration) return;
@@ -169,19 +183,27 @@ export class TestResultsExportFacade {
             (j: TestResultExportJob) => j.exportType === 'test-results' ||
               j.exportType === 'test-logs'
           );
-          // Find the most recent active job only (not completed jobs)
-          const activeJob = relevantJobs.find(
+          this.completedJobs.set(relevantJobs.filter(job => job.status === 'completed'));
+          if ((this.pollSubscription && !this.pollSubscription.closed) || (this.isExporting() && !this.exportJobId())) return;
+          const activeJobs = relevantJobs.filter(
             (j: TestResultExportJob) => j.status === 'active' ||
               j.status === 'waiting' ||
-              j.status === 'delayed'
+              j.status === 'delayed' || j.status === 'prioritized'
           );
+          const activeJob = activeJobs.find(job => job.jobId === this.exportJobId()) ?? activeJobs[0];
           if (activeJob) {
+            this.exportJobStatusState.set(activeJob.status);
+            this.exportJobProgressState.set(activeJob.progress);
             this.exportJobIdState.set(activeJob.jobId);
             this.isExportingState.set(true);
             this.exportTypeInProgressState.set(activeJob.exportType as 'test-results' | 'test-logs');
             this.pollExportJobStatus(activeJob.jobId);
+          } else if (this.isExporting()) {
+            this.stopExportStatusPolling();
+            this.isExportingState.set(false);
           }
-        }
+        },
+        error: () => this.showStatusLoadError()
       });
   }
 
@@ -190,8 +212,7 @@ export class TestResultsExportFacade {
     const workspaceId = this.appService.selectedWorkspaceId;
     if (!workspaceId) return;
     this.pollSubscription = timer(2000, 2000).pipe(
-      exhaustMap(() => this.testResultBackendService.getExportTestResultsJobs(workspaceId)),
-      map(jobs => jobs.find(job => job.jobId === jobId)),
+      exhaustMap(() => this.testResultBackendService.getExportTestResultsJob(workspaceId, jobId).pipe(retryTransientStatus())),
       takeWhile(job => !!job && !['completed', 'failed', 'cancelled'].includes(job.status), true),
       takeUntilWorkspaceChanged(this.appService, workspaceId),
       takeUntilDestroyed(this.destroyRef)
@@ -201,6 +222,8 @@ export class TestResultsExportFacade {
         this.exportJobStatusState.set(job.status);
         this.exportJobProgressState.set(job.progress);
         if (job.status === 'completed') {
+          this.recoveryRequest?.unsubscribe();
+          this.completedJobs.update(jobs => [job, ...jobs.filter(entry => entry.jobId !== jobId)]);
           this.isExportingState.set(false);
           const ref = this.snackBar.open(this.uiTranslate('ui-text.test-results-export.completed'), 'Herunterladen', { duration: 10000 });
           ref.onAction().pipe(takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef))
@@ -213,8 +236,15 @@ export class TestResultsExportFacade {
           this.snackBar.open(this.uiTranslate('ui-text.test-results-export.cancelled'), 'OK', { duration: 3000 });
         }
       },
-      error: () => this.resetExportState()
+      error: () => {
+        this.isExportingState.set(false);
+        this.showStatusLoadError();
+      }
     });
+  }
+
+  private showStatusLoadError(): void {
+    this.snackBar.open(this.uiTranslate('ui-text.test-results-export.status-load-failed'), undefined, { duration: 5000 });
   }
 
   cancelExportJob(jobId?: string | null): void {
@@ -272,22 +302,11 @@ export class TestResultsExportFacade {
           const link = document.createElement('a');
           link.href = url;
           const datePart = new Date().toISOString().split('T')[0];
-          const suffix =
-            this.exportTypeInProgress() === 'test-logs' ? 'logs' : 'results';
+          const exportType = this.completedJobs().find(job => job.jobId === jobId)?.exportType ?? this.exportTypeInProgress();
+          const suffix = exportType === 'test-logs' ? 'logs' : 'results';
           link.download = `workspace-${workspaceId}-${suffix}-${datePart}.csv`;
           link.click();
           window.URL.revokeObjectURL(url);
-
-          // Hide the download button after successful download
-          if (!this.exportJobId() || jobId === this.exportJobId()) this.resetExportState();
-
-          // Delete the job from the server
-          this.testResultBackendService
-            .deleteTestResultExportJob(
-              workspaceId,
-              jobId
-            ).pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
-            .subscribe();
         },
         error: () => {
           this.snackBar.open(

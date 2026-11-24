@@ -205,7 +205,7 @@ export class WorkspaceFilesService {
 
   async validateTestTakers(
     workspaceId: number,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void | Promise<void>
   ): Promise<TestTakersValidationDto> {
     return this.testTakers.validateTestTakers(workspaceId, onProgress);
   }

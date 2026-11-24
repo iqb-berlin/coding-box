@@ -4,7 +4,7 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar, MatSnackBarModule } from '@angular/material/snack-bar';
 import { OverlayContainer } from '@angular/cdk/overlay';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
 import { GermanTranslationsTestingModule, translateGerman } from '../../../../testing/german-translations';
 import { TestPersonCodingComponent } from './test-person-coding.component';
 import {
@@ -24,7 +24,8 @@ describe('Test person coding delayed responses without Zone.js', () => {
   let coding: Subject<{ jobId: string; message: string }>;
   let testPersons: Subject<string[]>;
   let service: jest.Mocked<Partial<TestPersonCodingService>>;
-  const appService = { selectedWorkspaceId: 1 };
+  const workspaceChanges = new Subject<number>();
+  const appService = { selectedWorkspaceId: 1, selectedWorkspaceId$: workspaceChanges.asObservable() };
   const snackBar = { open: jest.fn() };
 
   beforeEach(async () => {
@@ -106,10 +107,17 @@ describe('Test person coding delayed responses without Zone.js', () => {
     await fixture.whenStable();
     const codeAll = element().querySelector('.button-container button:last-child') as HTMLButtonElement;
     expect(codeAll.disabled).toBe(true);
+    expect(element().querySelector('.job-status-card')?.textContent).toContain(
+      translateGerman('ui-text.autocoder.checking-start')
+    );
     coding.next({ jobId: 'submitted-job', message: 'started' });
     coding.complete();
     await fixture.whenStable();
     expect(codeAll.disabled).toBe(false);
+    expect(element().querySelector('.job-status-card')?.textContent).toContain('Auftrags-ID: submitted-job');
+    expect(element().querySelector('.job-status-card')?.textContent).toContain(
+      translateGerman('ui-text.autocoder.loading-job-status')
+    );
     status.next({ status: 'processing', progress: 61, groupNames: 'delayed-group' });
     await fixture.whenStable();
     expect(element().querySelector('.job-status-card')?.textContent).toContain('61%');
@@ -149,6 +157,9 @@ describe('Test person coding delayed responses without Zone.js', () => {
   it('ignores a delayed status from the previous workspace', async () => {
     fixture.componentInstance.startJobStatusPolling('old-workspace-job');
     appService.selectedWorkspaceId = 2;
+    workspaceChanges.next(2);
+    await fixture.whenStable();
+    expect(element().querySelector('.job-status-card')).toBeNull();
     status.next({ status: 'completed', progress: 100 });
     await fixture.whenStable();
     expect(service.notifyAutoCodingCompleted).not.toHaveBeenCalled();
@@ -288,7 +299,7 @@ describe('Test person coding terminal feedback without Zone.js', () => {
       providers: [
         provideZonelessChangeDetection(),
         { provide: TestPersonCodingService, useValue: service },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: EMPTY } },
         { provide: TestResultService, useValue: {} },
         { provide: BackendMessageTranslatorService, useValue: { translateMessage: (message: string) => message } },
         { provide: MatDialog, useValue: { open: jest.fn() } }

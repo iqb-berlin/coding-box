@@ -436,7 +436,6 @@ describe('JobQueueService', () => {
     await expect(service.getTestPersonCodingJobs(1)).resolves.toHaveLength(1);
     await expect(service.getExportJobs(1)).resolves.toHaveLength(1);
     await expect(service.getVariableAnalysisJobs(1)).resolves.toHaveLength(1);
-    await expect(service.getActiveCodingAnalysisJob(1)).resolves.toHaveProperty('id', 'job-1');
     await expect(service.getActiveResetCodingVersionJob(1)).resolves.toHaveProperty('id', 'job-1');
   });
 
@@ -455,6 +454,40 @@ describe('JobQueueService', () => {
       workspaceId: 1,
       exportType: 'test-results'
     });
+  });
+
+  it('finds the queued response analysis that owns the run marker', async () => {
+    const scope = { workspaceId: 1, cacheKey: 'analysis-key' };
+    const stale = createJob({ ...scope, runId: 'stale' }, 'active');
+    const replacement = createJob({ ...scope, runId: 'current' });
+    queues[8].getJobs.mockResolvedValue([stale, replacement]);
+
+    await expect(service.getActiveCodingAnalysisJob(1, scope.cacheKey, null)).resolves.toBeNull();
+    await expect(service.getActiveCodingAnalysisJob(1, scope.cacheKey, 'current')).resolves.toBe(replacement);
+
+    const legacy = createJob(scope, 'active');
+    queues[8].getJobs.mockResolvedValue([stale, legacy]);
+    await expect(service.getActiveCodingAnalysisJob(1, scope.cacheKey, null)).resolves.toBe(legacy);
+  });
+
+  it('removes expired completed CSV jobs across pages and keeps recent and unrelated exports', async () => {
+    const retained = createJob({ exportType: 'item-matrix' }, 'completed');
+    const recent = { ...createJob({ exportType: 'test-results' }, 'completed'), finishedOn: 200 };
+    const expired = Array.from({ length: 101 }, (_, index) => (
+      createJob({ exportType: index % 2 ? 'test-logs' : 'test-results' }, 'completed')
+    ));
+    const history = [retained, ...expired, recent];
+    queues[2].getJobs.mockImplementation(async (_states, start, end) => (
+      history.filter(job => !job.remove.mock.calls.length).slice(start, end + 1)
+    ));
+
+    await service.removeExpiredCsvExportJobs(200);
+
+    expect(queues[2].getJobs).toHaveBeenNthCalledWith(1, ['completed'], 0, 99, true);
+    expect(queues[2].getJobs).toHaveBeenNthCalledWith(2, ['completed'], 1, 100, true);
+    expired.forEach(job => expect(job.remove).toHaveBeenCalledTimes(1));
+    expect(retained.remove).not.toHaveBeenCalled();
+    expect(recent.remove).not.toHaveBeenCalled();
   });
 
   it('covers all registered process overview queues', async () => {

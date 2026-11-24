@@ -66,4 +66,24 @@ describe('TestResultBackendService', () => {
       req.flush({ success: true, message: 'cancelled' });
     });
   });
+
+  it('requests the status of only the selected export', () => {
+    const result = jest.fn();
+    const job = {
+      jobId: 'job-1', status: 'active', progress: 25, exportType: 'test-results', createdAt: 100
+    };
+    service.getExportTestResultsJob(1, 'job-1').subscribe(result);
+    const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/results/export/jobs/job-1`);
+    expect(req.request.method).toBe('GET');
+    req.flush(job);
+    expect(result).toHaveBeenCalledWith(job);
+  });
+
+  it('reports an unavailable export as missing', () => {
+    const result = jest.fn();
+    service.getExportTestResultsJob(1, 'job-1').subscribe(result);
+    httpMock.expectOne(`${mockServerUrl}admin/workspace/1/results/export/jobs/job-1`)
+      .flush({}, { status: 404, statusText: 'Not found' });
+    expect(result).toHaveBeenCalledWith(null);
+  });
 });

@@ -24,8 +24,12 @@ export interface EmptyResponseSelectionContext {
   sourceVariablesByDerivedKey: Map<string, Set<string>>;
 }
 
+type EmptyResponseCandidate = Pick<ResponseEntity, 'id' | 'unitid' | 'variableid' | 'status_v1' | 'value'> & {
+  unit?: { name: string };
+};
+
 interface DerivedCandidatePlan {
-  response: ResponseEntity;
+  response: EmptyResponseCandidate;
   sourceVariableIds: Set<string>;
 }
 
@@ -86,16 +90,16 @@ export class EmptyResponseSelectionService {
     }
   }
 
-  async filterEffectivelyEmptyResponses(
-    responses: ResponseEntity[],
+  async filterEffectivelyEmptyResponses<T extends EmptyResponseCandidate>(
+    responses: T[],
     context: EmptyResponseSelectionContext,
     manager?: EntityManager
-  ): Promise<ResponseEntity[]> {
+  ): Promise<T[]> {
     if (!context.metadataAvailable) {
       return [];
     }
 
-    const selectedById = new Map<number, ResponseEntity>();
+    const selectedIds = new Set<number>();
     const derivedPlans: DerivedCandidatePlan[] = [];
 
     responses.forEach(response => {
@@ -110,7 +114,7 @@ export class EmptyResponseSelectionService {
         response.variableid
       )) {
         if (!isAggregatableValue(response.value)) {
-          selectedById.set(response.id, response);
+          selectedIds.add(response.id);
         }
         return;
       }
@@ -168,16 +172,16 @@ export class EmptyResponseSelectionService {
           allSourcesExistExactlyOnce &&
           this.isDerivedResponseEffectivelyEmpty(plan.response, resolvedSources)
         ) {
-          selectedById.set(plan.response.id, plan.response);
+          selectedIds.add(plan.response.id);
         }
       });
     }
 
-    return responses.filter(response => selectedById.has(response.id));
+    return responses.filter(response => selectedIds.has(response.id));
   }
 
   private isDerivedResponseEffectivelyEmpty(
-    target: ResponseEntity,
+    target: EmptyResponseCandidate,
     sources: ResponseEntity[]
   ): boolean {
     const allSourcesEmpty = sources.every(

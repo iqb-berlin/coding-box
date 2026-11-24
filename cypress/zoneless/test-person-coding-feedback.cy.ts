@@ -98,6 +98,9 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
         .scrollIntoView().should('be.enabled').click({ scrollBehavior: false });
       cy.wait('@startJob');
       cy.wrap(null).should(() => { expect(statusRequested).to.equal(true); });
+      cy.get('@dialog').find('.job-status-card')
+        .should('contain.text', `Auftrags-ID: ${jobId}`)
+        .and('contain.text', 'Der aktuelle Status wird geladen.');
       cy.then(() => { terminalListEnabled = true; });
       cy.get('@dialog').find('.jobs-actions button')
         .scrollIntoView().should('be.enabled').click({ scrollBehavior: false });

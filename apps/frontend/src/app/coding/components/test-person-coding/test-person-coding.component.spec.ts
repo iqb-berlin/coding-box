@@ -2,7 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule } from '@ngx-translate/core';
-import { of } from 'rxjs';
+import { EMPTY, of } from 'rxjs';
 import { AppService } from '../../../core/services/app.service';
 import { TestResultService } from '../../../shared/services/test-result/test-result.service';
 import { BackendMessageTranslatorService } from '../../services/backend-message-translator.service';
@@ -45,7 +45,7 @@ describe('TestPersonCodingComponent', () => {
         },
         {
           provide: AppService,
-          useValue: { selectedWorkspaceId: 1 }
+          useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: EMPTY }
         },
         {
           provide: TestResultService,

@@ -13,6 +13,7 @@ import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-
 import { overviewProgress, sanitizeJobData } from './job-queue-overview';
 import { ContentPoolJobData, ContentPoolJobResult, validateContentPoolJobData } from '../admin/content-pool/content-pool-job';
 import { requireJobId, withQueueJobId, jobMatchesWorkspace } from './job-queue.util';
+import { listWorkspaceExportJobs, removeExpiredCsvExportJobs } from './data-export-queue-jobs';
 import { addCodingResetPreviewJob, ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -24,6 +25,7 @@ import {
 } from '../../../../../api-dto/coding/codebook-content-setting';
 import { BackgroundExportRequest } from '../../../../../api-dto/coding/export-request.dto';
 import { AutoCoderRun, requireAutoCoderRun } from './auto-coder-run.util';
+import { readValidationTaskRecovery, validationTaskJobId } from './validation-task-queue-state';
 
 export type { ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 
@@ -641,10 +643,8 @@ export class JobQueueService {
     queue: Queue,
     matchFn: (data: T) => boolean
   ): Promise<Job<T> | undefined> {
-    const jobs = (await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed'])).filter(
-      Boolean
-    );
-    return jobs.find(job => job.data && matchFn(job.data));
+    const jobs = await queue.getJobs(['active', 'waiting', 'prioritized', 'delayed']);
+    return jobs.find(job => job?.data && matchFn(job.data));
   }
 
   async addTestPersonCodingJob(
@@ -880,17 +880,11 @@ export class JobQueueService {
   }
 
   async getExportJobs(workspaceId: number): Promise<Job<ExportJobData>[]> {
-    this.logger.log(`Fetching all export jobs for workspace ${workspaceId}`);
-    const jobs = await this.dataExportQueue.getJobs([
-      'completed',
-      'failed',
-      'active',
-      'waiting',
-      'prioritized',
-      'delayed'
-    ]);
-    this.logger.log(`Found ${jobs.length} export jobs in total`);
-    return jobs.filter(job => jobMatchesWorkspace(job, workspaceId));
+    return listWorkspaceExportJobs(this.dataExportQueue, workspaceId);
+  }
+
+  async removeExpiredCsvExportJobs(expiresBefore: number): Promise<void> {
+    await removeExpiredCsvExportJobs(this.dataExportQueue, expiresBefore, message => this.logger.warn(message));
   }
 
   createExportJobCancellationSignal(jobId: string): AbortSignal {
@@ -1091,7 +1085,13 @@ export class JobQueueService {
       );
     }
     this.logger.log(`Adding validation task job for task ${data.taskId}`);
-    return this.validationTaskQueue.add('validation-task', data, withQueueJobId(options));
+    return this.validationTaskQueue.add('validation-task', data, {
+      ...options, jobId: validationTaskJobId(data.taskId)
+    });
+  }
+
+  getValidationTaskRecovery(taskIds: number[]) {
+    return readValidationTaskRecovery(this.validationTaskQueue, taskIds);
   }
 
   async getValidationTaskJob(
@@ -1117,17 +1117,12 @@ export class JobQueueService {
   }
 
   async getActiveCodingAnalysisJob(
-    workspaceId: number
+    workspaceId: number, cacheKey: string, runId: string | null
   ): Promise<Job<CodingAnalysisJobData> | null> {
-    const jobs = await this.responseAnalysisQueue.getJobs([
-      'active',
-      'waiting',
-      'prioritized',
-      'delayed'
-    ]);
-    return (
-      jobs.find(job => jobMatchesWorkspace(job, workspaceId)) || null
-    );
+    const job = await this.findActiveJob<CodingAnalysisJobData>(this.responseAnalysisQueue, data => (
+      Number(data.workspaceId) === workspaceId && data.cacheKey === cacheKey && (data.runId ?? null) === runId
+    ));
+    return job ?? null;
   }
 
   async addVariableAnalysisJob(

@@ -42,8 +42,8 @@
           [mode]="activeTask()?.progress ? 'determinate' : 'indeterminate'"
           [value]="activeTask()?.progress"
         ></mat-spinner>
-        <p class="loading-text">
-          {{ 'ui-text.test-takers-validation-panel.running' | translate }}
+        <p class="loading-text" role="status">
+          {{ activeTask()?.progress_message || ('ui-text.test-takers-validation-panel.running' | translate) }}
           @if (activeTask()?.progress) {
             ({{ activeTask()?.progress }}%)
           }
