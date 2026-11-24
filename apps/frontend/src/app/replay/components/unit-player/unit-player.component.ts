@@ -15,6 +15,7 @@ import { FileService } from '../../../shared/services/file/file.service';
 import type { ReplayUnitResponse } from '../../services/replay-backend.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { PageData } from '../../models/page-data.model';
+import { getPlayerApiVersion, getReplayDisplayConfig, ReplayStateNotification } from '../../utils/replay-player-protocol';
 import { normalizeMathTextReplayDataParts } from '../../utils/replay-data-parts-normalization';
 import {
   PreparedReplayUnitDefinition,
@@ -364,32 +365,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       .subscribe((m: MessageEvent) => {
         const msgData = m.data;
         const msgType = msgData.type;
-        if ((msgType !== undefined) && (msgType !== null) && (m.source === this.iFrameElement?.contentWindow)) {
-          const isUnitSessionNotification = [
-            'vo.FromPlayer.StartedNotification', 'vopStateChangedNotification',
-            'vo.FromPlayer.ChangedDataTransfer', 'vopRuntimeErrorNotification'
-          ].includes(msgType);
-          if (isUnitSessionNotification && this.sessionId && msgData.sessionId !== this.sessionId) {
-            return;
-          }
+        if (this.isCurrentPlayerMessage(m)) {
           switch (msgType) {
             case 'vopReadyNotification':
             case 'player':
             case 'vo.FromPlayer.ReadyNotification': {
-              // Check if the message type is relevant
-              if (msgType === 'vopReadyNotification' || msgType === 'player') {
-                // Extract the major version number from metadata or API version
-                const majorVersionMatch =
-                  msgData.metadata?.specVersion.match(/\d+/) ??
-                  msgData.apiVersion?.match(/\d+/) ??
-                  msgData.specVersion?.match(/\d+/);
-                this.playerApiVersion = majorVersionMatch && majorVersionMatch.length > 0 ?
-                  Number(majorVersionMatch[0]) :
-                  2;
-              } else {
-                this.playerApiVersion = 1;
-              }
-
+              this.playerApiVersion = getPlayerApiVersion(msgData);
               this.postMessageTarget = m.source as Window;
               this.playerReady.emit();
               this.sendUnitData();
@@ -405,29 +386,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             case 'vopStateChangedNotification':
-              if (this.hasPresentationStarted(
-                msgData.playerState?.validPages,
-                msgData.playerState?.currentPage,
-                msgData.unitState?.presentationProgress
-              )) {
-                this.confirmUnitDefinitionStarted();
-              }
-              if (msgData.playerState) {
-                const pages = msgData.playerState.validPages;
-                const current = msgData.playerState.currentPage?.toString() || '';
-                const pageIds = this.getValidPagesAsIds(pages);
-                this.setPageList(pageIds, msgData.playerState.currentPage);
-                this.validPages.next({ pages: pageIds || [], current });
-              }
-              if (msgData.unitState) {
-                if (msgData.unitState.dataParts) {
-                  this.responses = Object.values(msgData.unitState.dataParts)
-                    .map((dp: unknown) => JSON.parse(dp as string));
-                }
-                this.setPresentationStatus(msgData.unitState.presentationProgress);
-                this.setResponsesStatus(msgData.unitState.responseProgress);
-              }
-              this.notifyResponseVisible();
+              this.handlePlayerStateChange(msgData);
               break;
 
             case 'vo.FromPlayer.ChangedDataTransfer':
@@ -477,11 +436,11 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
               break;
 
             case 'vopWindowFocusChangedNotification':
-              this.setFocusStatus(msgData.hasFocus);
+              if (this.playerApiVersion < 7) this.setFocusStatus(msgData.hasFocus);
               break;
 
             case 'vopRuntimeErrorNotification':
-              if (ASSET_RUNTIME_ERROR_CODES.has(msgData.code)) {
+              if (typeof msgData.code === 'string' && ASSET_RUNTIME_ERROR_CODES.has(msgData.code.toLowerCase().replace(/_/g, '-'))) {
                 this.retryWithOriginalUnitDefinition();
               }
               break;
@@ -491,6 +450,32 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
           }
         }
       });
+  }
+
+  private isCurrentPlayerMessage(event: MessageEvent): boolean {
+    if (event.source !== this.iFrameElement?.contentWindow) return false;
+    const sessionScoped = [
+      'vo.FromPlayer.StartedNotification', 'vopStateChangedNotification',
+      'vo.FromPlayer.ChangedDataTransfer', 'vopRuntimeErrorNotification'
+    ].includes(event.data.type);
+    return !sessionScoped || !this.sessionId || event.data.sessionId === this.sessionId;
+  }
+
+  private handlePlayerStateChange({ playerState, unitState }: ReplayStateNotification): void {
+    if (this.hasPresentationStarted(playerState?.validPages, playerState?.currentPage, unitState?.presentationProgress)) {
+      this.confirmUnitDefinitionStarted();
+    }
+    if (playerState) {
+      const pages = this.getValidPagesAsIds(playerState.validPages);
+      this.setPageList(pages, playerState.currentPage);
+      this.validPages.next({ pages: pages || [], current: playerState.currentPage?.toString() || '' });
+    }
+    if (unitState?.dataParts) {
+      this.responses = Object.values(unitState.dataParts).map(part => JSON.parse(part));
+    }
+    if (unitState?.presentationProgress !== undefined) this.setPresentationStatus(unitState.presentationProgress);
+    if (unitState?.responseProgress !== undefined) this.setResponsesStatus(unitState.responseProgress);
+    this.notifyResponseVisible();
   }
 
   async sendUnitData() {
@@ -536,20 +521,19 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       const dataParts = this.dataParts ?
         normalizeMathTextReplayDataParts(this.dataParts, this.preparedUnitDefinition?.definition) :
         this.dataParts;
+      const initialProgress = this.playerApiVersion >= 7 ? 'NONE' : 'none';
       this.isLoaded.next(true);
       Object.assign(postMessageData, {
         type: 'vopStartCommand',
         unitState: {
           dataParts,
-          presentationProgress: 'none',
-          responseProgress: 'none'
+          presentationProgress: initialProgress,
+          responseProgress: initialProgress
         },
         playerConfig: {
-          stateReportPolicy: 'eager',
-          ...(this.printMode() ? { pagingMode: 'concat-scroll' } : { pagingMode: 'buttons' }),
+          ...getReplayDisplayConfig(this.playerApiVersion, this.printMode()),
           directDownloadUrl: this.fileService.getDirectDownloadLink(),
-          startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || '',
-          ...(this.printMode() ? { printMode: 'on' } : {})
+          startPage: this.pageId() || this.unitResponses()?.unit_state?.CURRENT_PAGE_ID || ''
         }
       });
     }
@@ -596,7 +580,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
 
   private hasPresentationStarted(pages?: unknown, currentPage?: string | number | null, progress?: string): boolean {
     // Initial/log-only state reports do not prove startup; progress also covers units without visible pages.
-    return progress === 'some' || progress === 'complete' || progress === 'yes' ||
+    return ['some', 'complete', 'yes'].includes(String(progress).toLowerCase()) ||
       (currentPage !== undefined && currentPage !== null &&
         !!this.getValidPagesAsIds(pages)?.includes(currentPage.toString()));
   }
@@ -698,7 +682,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       some: 'some'
     };
 
-    this.presentationProgress = statusMapping[status] || 'none';
+    this.presentationProgress = statusMapping[String(status).toLowerCase()] || 'none';
   }
 
   setResponsesStatus(status: string): void {
@@ -709,7 +693,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       some: 'some'
     };
 
-    this.responseProgress = statusMap[status] || 'none';
+    this.responseProgress = statusMap[String(status).toLowerCase()] || 'none';
   }
 
   setFocusStatus(status: boolean): void {
