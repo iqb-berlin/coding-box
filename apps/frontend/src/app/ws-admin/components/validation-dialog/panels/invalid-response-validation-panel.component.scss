@@ -1,0 +1,63 @@
+.validation-result {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+  padding: 8px 16px;
+  border-radius: 4px;
+  font-weight: 500;
+}
+
+.validation-success {
+  background-color: rgba(76, 175, 80, 0.1);
+  color: #4caf50;
+  border: 1px solid #4caf50;
+}
+
+.validation-error {
+  background-color: rgba(244, 67, 54, 0.1);
+  color: #f44336;
+  border: 1px solid #f44336;
+}
+
+.validation-result mat-icon {
+  margin-right: 8px;
+}
+
+.validation-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 12px;
+}
+
+.validation-summary span {
+  padding: 2px 8px;
+  border: 1px solid rgba(0, 0, 0, 0.12);
+  border-radius: 999px;
+  font-size: 12px;
+  line-height: 18px;
+}
+
+.loading-container {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+}
+
+.loading-text {
+  margin-left: 8px;
+}
+
+.actions-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.validation-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}

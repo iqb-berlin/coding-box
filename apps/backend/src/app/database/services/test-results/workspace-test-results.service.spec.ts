@@ -892,7 +892,10 @@ describe('WorkspaceTestResultsService', () => {
 
       const filterOptions = new TestResultsFilterOptionsService(responseRepository, dataSource, workspaceExclusionService);
       const result = await filterOptions.findFlatResponseFilterOptions(1, {
-        responseValue: 'needle'
+        responseValue: 'needle',
+        unit: '"quoted"',
+        longLoading: 'yes',
+        sessionIds: '42'
       });
 
       expect(qb.where).toHaveBeenCalledWith(
@@ -913,6 +916,15 @@ describe('WorkspaceTestResultsService', () => {
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
       );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: '%"quoted"%' });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('FROM unitlog ul_started'),
+        { longLoadingThresholdMs: 5000 }
+      );
+      const filterSql = qb.andWhere.mock.calls.map(([condition]) => condition).join('\n');
+      expect(filterSql).not.toContain('s.loadcompletems');
+      expect(filterSql).not.toContain('s.id IN (:...sessionIds)');
 
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(

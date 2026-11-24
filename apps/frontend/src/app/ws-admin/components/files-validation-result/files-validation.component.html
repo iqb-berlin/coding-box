@@ -883,366 +883,103 @@
               </div>
             </div>
           </div>
-          <!-- Schemes Section -->
-          <div class="validation-card">
-            <h3>
-              <mat-icon class="section-icon">schema</mat-icon>
-              {{ 'ui-text.files-validation.coding-schemes' | translate }}
-            </h3>
-            <p class="status-row">
-              {{ 'error.details_status' | translate }}
-              @if (val.schemes.complete) {
-              <span class="status-complete">
-                <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.complete' | translate }}
-                @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
-                }
-              </span>
-              }
-              @if (!val.schemes.complete) {
-              <span class="status-incomplete"
-                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
-                <mat-icon class="status-icon">error</mat-icon>
-                @if (val.schemes.missing && val.schemes.missing.length > 0) {
-                {{ 'ui-text.files-validation.missing-coding-schemes-status' | translate }}
-                } @else {
-                {{ 'double-coded-review.decision.status-incomplete' | translate }}
-                }
-              </span>
-              }
-            </p>
-            <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemes')"
-                role="button"
-                tabindex="0"
-                (keydown.enter)="onActionKeydown($event)"
-                (keydown.space)="onActionKeydown($event)">
-                <mat-icon class="files-icon">list</mat-icon>
-                <span>
-                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.schemes.files.length), existingCount: (val.schemes.existingCount), missingCount: (val.schemes.missingCount) } }}
-                </span>
-                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemes') ? 'expand_less' :
-                  'expand_more' }}</mat-icon>
-              </p>
-              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemes')">
-                <ul>
-                  @for (file of val.schemes.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                    <div class="file-item-header">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (!file.exists && val.schemes.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
-                    <span class="file-name">
-                      (
-                      @for (u of relatedUnits.preview; track u) {
-                      <button mat-button type="button" (click)="openUnitInfo(u)">
-                        {{ u }}
-                      </button>
-                      }
-                      @if (relatedUnits.remaining > 0) {
-                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
-                                      'Betroffene Aufgaben (Kodierschema)',
-                                      relatedUnits.all,
-                                      openUnitInfo.bind(this)
-                                    )">
-                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
-                      </button>
-                      }
-                      )
-                    </span>
-                    }
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if ((file.schemaWarnings || []).length > 0) {
-                    <mat-icon class="file-status-icon schema-warning-icon"
-                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
-                      warning
-                    </mat-icon>
-                    }
-                    @if (file.exists) {
-                    <button mat-icon-button class="file-action-button" (click)="openSchemeFile(file.filename)"
-                      [matTooltip]="'coding-management.tooltips.show-coding-schema' | translate" [attr.aria-label]="('coding-management.tooltips.show-coding-schema' | translate)">
-                      <mat-icon>schema</mat-icon>
-                    </button>
-                    }
-                    </div>
-                  </li>
+          @for (card of unitFileCards; track card.key) {
+            @let section = val[card.key];
+            <div class="validation-card">
+              <h3>
+                <mat-icon class="section-icon">{{ card.icon }}</mat-icon>
+                {{ card.title | translate }}
+              </h3>
+              <p class="status-row">
+                {{ 'error.details_status' | translate }}
+                @if (section.complete) {
+                <span class="status-complete">
+                  <mat-icon class="status-icon">check_circle</mat-icon>
+                  {{ 'ui-text.files-validation.complete' | translate }}
+                  @if (val.units.missing && val.units.missing.length > 0) {
+                  <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
                   }
-                </ul>
+                </span>
+                }
+                @if (!section.complete) {
+                <span class="status-incomplete"
+                  [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
+                  <mat-icon class="status-icon">error</mat-icon>
+                  @if (section.missing && section.missing.length > 0) {
+                  {{ card.missing | translate }}
+                  } @else {
+                  {{ 'double-coded-review.decision.status-incomplete' | translate }}
+                  }
+                </span>
+                }
+              </p>
+              <div class="files-list-container">
+                <p class="files-header" (click)="toggleFilesList(val.testTaker, card.key)"
+                  role="button"
+                  tabindex="0"
+                  (keydown.enter)="onActionKeydown($event)"
+                  (keydown.space)="onActionKeydown($event)">
+                  <mat-icon class="files-icon">list</mat-icon>
+                  <span>
+                    {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (section.files.length), existingCount: (section.existingCount), missingCount: (section.missingCount) } }}
+                  </span>
+                  <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, card.key) ? 'expand_less' :
+                    'expand_more' }}</mat-icon>
+                </p>
+                <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, card.key)">
+                  <ul>
+                    @for (file of section.files; track file) {
+                    <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
+                      <div class="file-item-header">
+                      <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
+                      <span class="file-name">{{ file.filename }}</span>
+                      @if (!file.exists && section.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
+                      <span class="file-name">
+                        (
+                        @for (u of relatedUnits.preview; track u) {
+                        <button mat-button type="button" (click)="openUnitInfo(u)">
+                          {{ u }}
+                        </button>
+                        }
+                        @if (relatedUnits.remaining > 0) {
+                        <button mat-button type="button" (click)="openAffectedUnitsDialog(
+                                        card.affectedUnitsTitle,
+                                        relatedUnits.all,
+                                        openUnitInfo.bind(this)
+                                      )">
+                          {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
+                        </button>
+                        }
+                        )
+                      </span>
+                      }
+                      @if (file.schemaValid === false) {
+                      <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
+                        report_problem
+                      </mat-icon>
+                      }
+                      @if ((file.schemaWarnings || []).length > 0) {
+                      <mat-icon class="file-status-icon schema-warning-icon"
+                        matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
+                        warning
+                      </mat-icon>
+                      }
+                      @if (file.exists) {
+                        @if (card.actionLabel; as actionLabel) {
+                          <button mat-icon-button class="file-action-button" (click)="card.key === 'schemes' ? openSchemeFile(file.filename) : openDefinitionFile(file.filename)"
+                            [matTooltip]="actionLabel | translate" [attr.aria-label]="actionLabel | translate">
+                            <mat-icon>{{ card.icon }}</mat-icon>
+                          </button>
+                        }
+                      }
+                      </div>
+                    </li>
+                    }
+                  </ul>
+                </div>
               </div>
             </div>
-          </div>
-          <!-- Schemer Section -->
-          <div class="validation-card">
-            <h3>
-              <mat-icon class="section-icon">app_registration</mat-icon>
-              {{ 'ui-text.files-validation.schemer' | translate }}
-            </h3>
-            <p class="status-row">
-              {{ 'error.details_status' | translate }}
-              @if (val.schemer.complete) {
-              <span class="status-complete">
-                <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.complete' | translate }}
-                @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
-                }
-              </span>
-              }
-              @if (!val.schemer.complete) {
-              <span class="status-incomplete"
-                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
-                <mat-icon class="status-icon">error</mat-icon>
-                @if (val.schemer.missing && val.schemer.missing.length > 0) {
-                {{ 'ui-text.files-validation.missing-schemer-status' | translate }}
-                } @else {
-                {{ 'double-coded-review.decision.status-incomplete' | translate }}
-                }
-              </span>
-              }
-            </p>
-            <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'schemer')"
-                role="button"
-                tabindex="0"
-                (keydown.enter)="onActionKeydown($event)"
-                (keydown.space)="onActionKeydown($event)">
-                <mat-icon class="files-icon">list</mat-icon>
-                <span>
-                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.schemer.files.length), existingCount: (val.schemer.existingCount), missingCount: (val.schemer.missingCount) } }}
-                </span>
-                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'schemer') ? 'expand_less' :
-                  'expand_more' }}</mat-icon>
-              </p>
-              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'schemer')">
-                <ul>
-                  @for (file of val.schemer.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                    <div class="file-item-header">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (!file.exists && val.schemer.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
-                    <span class="file-name">
-                      (
-                      @for (u of relatedUnits.preview; track u) {
-                      <button mat-button type="button" (click)="openUnitInfo(u)">
-                        {{ u }}
-                      </button>
-                      }
-                      @if (relatedUnits.remaining > 0) {
-                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
-                                      'Betroffene Aufgaben (Schemer)',
-                                      relatedUnits.all,
-                                      openUnitInfo.bind(this)
-                                    )">
-                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
-                      </button>
-                      }
-                      )
-                    </span>
-                    }
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if ((file.schemaWarnings || []).length > 0) {
-                    <mat-icon class="file-status-icon schema-warning-icon"
-                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
-                      warning
-                    </mat-icon>
-                    }
-                    </div>
-                  </li>
-                  }
-                </ul>
-              </div>
-            </div>
-          </div>
-          <!-- Definitions Section -->
-          <div class="validation-card">
-            <h3>
-              <mat-icon class="section-icon">description</mat-icon>
-              {{ 'ui-text.files-validation.unit-definitions' | translate }}
-            </h3>
-            <p class="status-row">
-              {{ 'error.details_status' | translate }}
-              @if (val.definitions.complete) {
-              <span class="status-complete">
-                <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.complete' | translate }}
-                @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
-                }
-              </span>
-              }
-              @if (!val.definitions.complete) {
-              <span class="status-incomplete"
-                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
-                <mat-icon class="status-icon">error</mat-icon>
-                @if (val.definitions.missing && val.definitions.missing.length > 0) {
-                {{ 'ui-text.files-validation.missing-definitions-status' | translate }}
-                } @else {
-                {{ 'double-coded-review.decision.status-incomplete' | translate }}
-                }
-              </span>
-              }
-            </p>
-            <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'definitions')"
-                role="button"
-                tabindex="0"
-                (keydown.enter)="onActionKeydown($event)"
-                (keydown.space)="onActionKeydown($event)">
-                <mat-icon class="files-icon">list</mat-icon>
-                <span>
-                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.definitions.files.length), existingCount: (val.definitions.existingCount), missingCount: (val.definitions.missingCount) } }}
-                </span>
-                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'definitions') ? 'expand_less' :
-                  'expand_more' }}</mat-icon>
-              </p>
-              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'definitions')">
-                <ul>
-                  @for (file of val.definitions.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                    <div class="file-item-header">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (!file.exists && val.definitions.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
-                    <span class="file-name">
-                      (
-                      @for (u of relatedUnits.preview; track u) {
-                      <button mat-button type="button" (click)="openUnitInfo(u)">
-                        {{ u }}
-                      </button>
-                      }
-                      @if (relatedUnits.remaining > 0) {
-                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
-                                      'Betroffene Aufgaben (Definition)',
-                                      relatedUnits.all,
-                                      openUnitInfo.bind(this)
-                                    )">
-                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
-                      </button>
-                      }
-                      )
-                    </span>
-                    }
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if ((file.schemaWarnings || []).length > 0) {
-                    <mat-icon class="file-status-icon schema-warning-icon"
-                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
-                      warning
-                    </mat-icon>
-                    }
-                    @if (file.exists) {
-                    <button mat-icon-button class="file-action-button" (click)="openDefinitionFile(file.filename)"
-                      [matTooltip]="'ui-text.files-validation.show-definition' | translate" [attr.aria-label]="('ui-text.files-validation.show-definition' | translate)">
-                      <mat-icon>description</mat-icon>
-                    </button>
-                    }
-                    </div>
-                  </li>
-                  }
-                </ul>
-              </div>
-            </div>
-          </div>
-          <!-- Player Section -->
-          <div class="validation-card">
-            <h3>
-              <mat-icon class="section-icon">play_circle</mat-icon>
-              {{ 'ui-text.files-validation.players' | translate }}
-            </h3>
-            <p class="status-row">
-              {{ 'error.details_status' | translate }}
-              @if (val.player.complete) {
-              <span class="status-complete">
-                <mat-icon class="status-icon">check_circle</mat-icon>
-                {{ 'ui-text.files-validation.complete' | translate }}
-                @if (val.units.missing && val.units.missing.length > 0) {
-                <span class="status-note">{{ 'ui-text.files-validation.existing-units-hint' | translate }}</span>
-                }
-              </span>
-              }
-              @if (!val.player.complete) {
-              <span class="status-incomplete"
-                [matTooltip]="val.units.missing && val.units.missing.length > 0 ? 'Bezieht sich nur auf vorhandene Aufgaben' : ''">
-                <mat-icon class="status-icon">error</mat-icon>
-                @if (val.player.missing && val.player.missing.length > 0) {
-                {{ 'ui-text.files-validation.missing-players-status' | translate }}
-                } @else {
-                {{ 'double-coded-review.decision.status-incomplete' | translate }}
-                }
-              </span>
-              }
-            </p>
-            <div class="files-list-container">
-              <p class="files-header" (click)="toggleFilesList(val.testTaker, 'player')"
-                role="button"
-                tabindex="0"
-                (keydown.enter)="onActionKeydown($event)"
-                (keydown.space)="onActionKeydown($event)">
-                <mat-icon class="files-icon">list</mat-icon>
-                <span>
-                  {{ 'ui-text.files-validation.booklet-file-status' | translate: { length: (val.player.files.length), existingCount: (val.player.existingCount), missingCount: (val.player.missingCount) } }}
-                </span>
-                <mat-icon class="toggle-icon">{{ isFilesListExpanded(val.testTaker, 'player') ? 'expand_less' :
-                  'expand_more' }}</mat-icon>
-              </p>
-              <div class="files-list" [class.expanded]="isFilesListExpanded(val.testTaker, 'player')">
-                <ul>
-                  @for (file of val.player.files; track file) {
-                  <li [class.file-exists]="file.exists" [class.file-missing]="!file.exists">
-                    <div class="file-item-header">
-                    <mat-icon class="file-status-icon">{{ file.exists ? 'check_circle' : 'error' }}</mat-icon>
-                    <span class="file-name">{{ file.filename }}</span>
-                    @if (!file.exists && val.player.relatedEntitiesByMissingFile[file.filename]; as relatedUnits) {
-                    <span class="file-name">
-                      (
-                      @for (u of relatedUnits.preview; track u) {
-                      <button mat-button type="button" (click)="openUnitInfo(u)">
-                        {{ u }}
-                      </button>
-                      }
-                      @if (relatedUnits.remaining > 0) {
-                      <button mat-button type="button" (click)="openAffectedUnitsDialog(
-                                      'Betroffene Aufgaben (Player)',
-                                      relatedUnits.all,
-                                      openUnitInfo.bind(this)
-                                    )">
-                        {{ 'ui-text.files-validation.more' | translate: { remaining: (relatedUnits.remaining) } }}
-                      </button>
-                      }
-                      )
-                    </span>
-                    }
-                    @if (file.schemaValid === false) {
-                    <mat-icon class="file-status-icon" matTooltip="{{ (file.schemaErrors || []).join('\n') }}">
-                      report_problem
-                    </mat-icon>
-                    }
-                    @if ((file.schemaWarnings || []).length > 0) {
-                    <mat-icon class="file-status-icon schema-warning-icon"
-                      matTooltip="{{ (file.schemaWarnings || []).join('\n') }}">
-                      warning
-                    </mat-icon>
-                    }
-                    </div>
-                  </li>
-                  }
-                </ul>
-              </div>
-            </div>
-          </div>
+          }
           <!-- Metadata Section -->
           <div class="validation-card">
             <h3>

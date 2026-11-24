@@ -183,7 +183,7 @@
         "cypress/zoneless/test-results-view.cy.ts",
         "cypress/zoneless/info-dialogs.cy.ts",
         "cypress/auth/coding-session.cy.ts",
-        "apps/frontend/src/app/ws-admin/components/search-dialogs-onpush.zoneless.spec.ts",
+        "apps/frontend/src/app/ws-admin/components/test-results-search/test-results-search.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/variable-analysis-jobs-dialog/variable-analysis-jobs-dialog.component.zoneless.spec.ts",
         "apps/frontend/src/app/ws-admin/components/test-results/test-results-upload-result-dialog.component.spec.ts",
         "apps/frontend/src/app/ws-admin/services/test-results-upload-state.service.spec.ts",

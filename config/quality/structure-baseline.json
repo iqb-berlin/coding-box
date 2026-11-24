@@ -128,24 +128,9 @@
     },
     "apps/backend/src/app/admin/workspace/workspace-coding-statistics.controller.ts": {
       "file": {
-        "max-lines": 1894
+        "max-lines": 1691
       },
       "functions": {
-        "class WorkspaceCodingStatisticsController#1/method calculateDistribution#1": {
-          "max-lines-per-function": 103
-        },
-        "class WorkspaceCodingStatisticsController#1/method createDistributedCodingJobs#1": {
-          "max-lines-per-function": 121
-        },
-        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaStatisticsAsCsv#1": {
-          "max-lines-per-function": 107
-        },
-        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaStatisticsAsXlsx#1": {
-          "max-lines-per-function": 124
-        },
-        "class WorkspaceCodingStatisticsController#1/method exportCohensKappaSummaryAsCsv#1": {
-          "max-lines-per-function": 107
-        },
         "class WorkspaceCodingStatisticsController#1/method getAppliedResultsOverview#1": {
           "max-lines-per-function": 119
         },
@@ -153,7 +138,7 @@
           "max-lines-per-function": 106
         },
         "class WorkspaceCodingStatisticsController#1/method getCohensKappaStatistics#1": {
-          "max-lines-per-function": 193
+          "max-lines-per-function": 145
         },
         "class WorkspaceCodingStatisticsController#1/method getVariableCoverageOverview#1": {
           "max-lines-per-function": 178
@@ -356,8 +341,8 @@
       "file": {},
       "functions": {
         "class CodingAggregatedColumnsExportService#1/method exportAggregatedNewColumnPerCoder#1": {
-          "complexity": 81,
-          "max-lines-per-function": 367
+          "complexity": 69,
+          "max-lines-per-function": 316
         }
       }
     },
@@ -365,9 +350,9 @@
       "file": {},
       "functions": {
         "class CodingAggregatedExportService#1/method exportCodingResultsAggregated#1": {
-          "complexity": 73,
+          "complexity": 67,
           "max-depth": 5,
-          "max-lines-per-function": 401
+          "max-lines-per-function": 375
         }
       }
     },
@@ -375,9 +360,9 @@
       "file": {},
       "functions": {
         "class CodingAggregatedRowsExportService#1/method exportAggregatedNewRowPerVariable#1": {
-          "complexity": 92,
+          "complexity": 80,
           "max-depth": 5,
-          "max-lines-per-function": 395
+          "max-lines-per-function": 344
         },
         "class CodingAggregatedRowsExportService#1/method exportAggregatedNewRowPerVariable#1/anonymous:e6219d941f002821#1": {
           "complexity": 24
@@ -579,24 +564,15 @@
     },
     "apps/backend/src/app/database/services/coding/coding-list-stream.service.ts": {
       "file": {
-        "max-lines": 1537
+        "max-lines": 1411
       },
       "functions": {
-        "class CodingListStreamService#1/method getCodingListAsExcel#1": {
-          "complexity": 26,
-          "max-depth": 5,
-          "max-lines-per-function": 122
-        },
         "class CodingListStreamService#1/method getCodingListCsvStream#1": {
           "max-lines-per-function": 109
         },
         "class CodingListStreamService#1/method getCodingListCsvStream#1/anonymous:dbcef9d16a51eac2#1": {
           "complexity": 30,
           "max-depth": 5
-        },
-        "class CodingListStreamService#1/method getCodingResultsByVersionAsExcel#1": {
-          "complexity": 25,
-          "max-lines-per-function": 150
         },
         "class CodingListStreamService#1/method getCodingResultsByVersionCsvStream#1": {
           "max-lines-per-function": 136
@@ -608,15 +584,6 @@
         "class CodingListStreamService#1/method processJsonExport#1": {
           "complexity": 25,
           "max-depth": 5
-        },
-        "class CodingListStreamService#1/method writeCodingListExcelToFile#1": {
-          "complexity": 27,
-          "max-depth": 5,
-          "max-lines-per-function": 124
-        },
-        "class CodingListStreamService#1/method writeCodingResultsByVersionExcelToFile#1": {
-          "complexity": 26,
-          "max-lines-per-function": 152
         },
         "class CodingListStreamService#1/method writeCodingResultsByVersionGeoGebraZipToStream#1": {
           "complexity": 28,
@@ -1001,8 +968,7 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "complexity": 56,
-          "max-lines-per-function": 476
+          "max-lines-per-function": 201
         }
       }
     },

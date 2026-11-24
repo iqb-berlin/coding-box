@@ -1,6 +1,7 @@
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource } from 'typeorm';
 import { TestResultsResponsesService } from './test-results-responses.service';
+import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
@@ -24,6 +25,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   const schema = `flat_response_filters_${process.pid}_${Date.now()}`;
   let db: DataSource;
   let service: TestResultsResponsesService;
+  let optionsService: TestResultsFilterOptionsService;
 
   beforeAll(async () => {
     db = new DataSource({
@@ -85,12 +87,15 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (101, 1, 'Firefox', 'Linux', '1920x1080', 100), (102, 1, 'Chrome', 'Windows', '1280x720', 100),
         (201, 2, 'Firefox', 'Mac', '1920x1080', 100), (301, 3, 'Chrome', 'Linux', '1920x1080', 100),
         (401, 4, 'Firefox', 'Windows', '1920x1080', 100), (501, 5, 'Safari', 'Linux', '1920x1080', 100);
+      INSERT INTO "${schema}".unitlog (id, unitid, key, ts) VALUES
+        (1, 2, 'STARTED', 1000), (2, 2, 'ENDED', 2000);
     `);
     const exclusions = createMock<WorkspaceExclusionService>({
       resolveExclusionsForQueries: async () => ({ globalIgnoredUnits: ['IGNORED'], ignoredBooklets: [], testletIgnoredUnits: [] })
     });
     const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusions);
     service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusions, anomalies);
+    optionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusions);
   });
 
   afterAll(async () => {
@@ -145,6 +150,21 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const rows = await expectResponses({ tags: 'review' }, [1, 2, 3, 4, 5]);
     expect(rows[0].tags.sort()).toEqual(['review-alpha', 'review-beta']);
     await expectResponses({ tags: 'review', page: 3, limit: 2 }, [5], 5);
+  });
+
+  it('keeps options scoped by unit loading and duration while listing alternative sessions', async () => {
+    const result = await optionsService.findFlatResponseFilterOptions(42, {
+      longLoading: 'yes',
+      longLoadingThresholdMs: 50,
+      processingDurations: 'Kurz',
+      processingDurationThresholdMs: 60000,
+      sessionIds: '999'
+    });
+
+    expect(result.booklets).toEqual(['BOOKLET_B']);
+    expect(result.units).toEqual(['UNIT_B']);
+    expect(result.sessionIds).toEqual(['201']);
+    expect(result.processingDurations).toEqual(['Kurz']);
   });
 
   it('combines value, duration, session and tag filters in the real queries', async () => {

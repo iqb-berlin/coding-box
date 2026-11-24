@@ -432,112 +432,32 @@ export class CodingJobFreshnessService {
     );
   }
 
-  async markCodingJobsStaleForAddedUnitIds(
+  markCodingJobsStaleForAddedUnitIds(
     workspaceId: number,
     unitIds: number[],
     reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
     status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source'
   ): Promise<void> {
-    const ids = uniquePositiveIds(unitIds);
-    if (ids.length === 0) {
-      return;
-    }
-
-    await this.connection.query(
-      `
-        WITH added_responses AS (
-          SELECT
-            response.id AS response_id,
-            unit.name AS unit_name,
-            response.variableid AS variable_id,
-            CONCAT_WS('|', person.login, COALESCE(bookletinfo.name, ''), unit.name) AS unit_key
-          FROM response
-          INNER JOIN unit ON unit.id = response.unitid
-          INNER JOIN booklet ON booklet.id = unit.bookletid
-          LEFT JOIN bookletinfo ON bookletinfo.id = booklet.infoid
-          INNER JOIN persons person ON person.id = booklet.personid
-          WHERE person.workspace_id = $1
-            AND person.consider = true
-            AND response.unitid = ANY($2::int[])
-            AND response.is_autocoder_generated IS NOT TRUE
-        ),
-        matched_job_responses AS (
-          SELECT
-            coding_job.id AS coding_job_id,
-            added_responses.unit_key,
-            added_responses.response_id
-          FROM added_responses
-          INNER JOIN coding_job_variable
-            ON UPPER(coding_job_variable.unit_name) = UPPER(added_responses.unit_name)
-            AND coding_job_variable.variable_id = added_responses.variable_id
-          INNER JOIN coding_job
-            ON coding_job.id = coding_job_variable.coding_job_id
-          WHERE coding_job.workspace_id = $1
-            AND coding_job.training_id IS NULL
-            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
-          UNION
-          SELECT
-            coding_job.id AS coding_job_id,
-            added_responses.unit_key,
-            added_responses.response_id
-          FROM added_responses
-          INNER JOIN variable_bundle
-            ON variable_bundle.workspace_id = $1
-            AND EXISTS (
-              SELECT 1
-              FROM jsonb_array_elements(variable_bundle.variables) bundle_variable
-              WHERE UPPER(bundle_variable ->> 'unitName') = UPPER(added_responses.unit_name)
-                AND bundle_variable ->> 'variableId' = added_responses.variable_id
-              )
-          INNER JOIN coding_job_variable_bundle
-            ON coding_job_variable_bundle.variable_bundle_id = variable_bundle.id
-          INNER JOIN coding_job
-            ON coding_job.id = coding_job_variable_bundle.coding_job_id
-          WHERE coding_job.workspace_id = $1
-            AND coding_job.training_id IS NULL
-            AND ${getNonCodingIssueReviewJobSqlCondition('coding_job')}
-        ),
-        affected_jobs AS (
-          SELECT
-            coding_job_id,
-            COUNT(DISTINCT unit_key) AS affected_units,
-            COUNT(DISTINCT response_id) AS affected_responses
-          FROM matched_job_responses
-          GROUP BY coding_job_id
-        )
-        UPDATE coding_job
-        SET freshness_status = CASE
-              WHEN $3 = 'stale_source' OR coding_job.freshness_status = 'stale_source'
-                THEN 'stale_source'
-              WHEN coding_job.freshness_status = 'review_required' OR $3 = 'review_required'
-                THEN 'review_required'
-              ELSE $3
-            END,
-            freshness_reason = $4,
-            freshness_updated_at = now(),
-            freshness_affected_units = GREATEST(
-              COALESCE(coding_job.freshness_affected_units, 0),
-              affected_jobs.affected_units::int
-            ),
-            freshness_affected_responses = GREATEST(
-              COALESCE(coding_job.freshness_affected_responses, 0),
-              affected_jobs.affected_responses::int
-            ),
-            updated_at = now()
-        FROM affected_jobs
-        WHERE coding_job.id = affected_jobs.coding_job_id
-      `,
-      [workspaceId, ids, status, reason]
-    );
+    return this.markCodingJobsStaleForAddedIds(workspaceId, unitIds, 'unit', reason, status);
   }
 
-  async markCodingJobsStaleForAddedResponseIds(
+  markCodingJobsStaleForAddedResponseIds(
     workspaceId: number,
     responseIds: number[],
     reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
     status: Exclude<CodingJobFreshnessStatus, 'current'> = 'stale_source'
   ): Promise<void> {
-    const ids = uniquePositiveIds(responseIds);
+    return this.markCodingJobsStaleForAddedIds(workspaceId, responseIds, 'response', reason, status);
+  }
+
+  private async markCodingJobsStaleForAddedIds(
+    workspaceId: number,
+    sourceIds: number[],
+    source: 'unit' | 'response',
+    reason: Extract<CodingFreshnessReason, 'RESULT_ADDED'>,
+    status: Exclude<CodingJobFreshnessStatus, 'current'>
+  ): Promise<void> {
+    const ids = uniquePositiveIds(sourceIds);
     if (ids.length === 0) {
       return;
     }
@@ -557,7 +477,7 @@ export class CodingJobFreshnessService {
           INNER JOIN persons person ON person.id = booklet.personid
           WHERE person.workspace_id = $1
             AND person.consider = true
-            AND response.id = ANY($2::int[])
+            AND ${source === 'unit' ? 'response.unitid' : 'response.id'} = ANY($2::int[])
             AND response.is_autocoder_generated IS NOT TRUE
         ),
         matched_job_responses AS (
