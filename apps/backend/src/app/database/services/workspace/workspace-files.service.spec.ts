@@ -234,6 +234,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
   const mockFileUploadRepository = {
     create: jest.fn((value: unknown) => value),
+    insert: jest.fn(),
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
@@ -244,6 +245,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
           connect: jest.fn().mockResolvedValue(undefined),
           query: jest.fn().mockResolvedValue([{ locked: true }]),
           manager: {
+            transaction: jest.fn(work => work({ getRepository: () => mockFileUploadRepository })),
             getRepository: jest.fn(() => mockFileUploadRepository)
           },
           release: jest.fn().mockResolvedValue(undefined)
@@ -577,16 +579,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       andWhere: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([])
     };
-    const insertQueryBuilder = {
-      insert: jest.fn().mockReturnThis(),
-      into: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      orIgnore: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue(undefined)
-    };
-    mockFileUploadRepository.createQueryBuilder
-      .mockReturnValueOnce(conflictQueryBuilder)
-      .mockReturnValueOnce(insertQueryBuilder);
+    mockFileUploadRepository.createQueryBuilder.mockReturnValueOnce(conflictQueryBuilder);
     mockFileUploadRepository.find.mockResolvedValue([]);
     const invalidateSpy = jest
       .spyOn(
@@ -619,16 +612,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       andWhere: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([])
     };
-    const insertQueryBuilder = {
-      insert: jest.fn().mockReturnThis(),
-      into: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      orIgnore: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue(undefined)
-    };
-    mockFileUploadRepository.createQueryBuilder
-      .mockReturnValueOnce(conflictQueryBuilder)
-      .mockReturnValueOnce(insertQueryBuilder);
+    mockFileUploadRepository.createQueryBuilder.mockReturnValueOnce(conflictQueryBuilder);
 
     await service.testCenterImport([
       {
@@ -642,7 +626,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(mockWorkspaceFileParsingService.extractUnitInfo).toHaveBeenCalled();
-    expect(insertQueryBuilder.values).toHaveBeenCalledWith([
+    expect(mockFileUploadRepository.insert).toHaveBeenCalledWith([
       expect.objectContaining({
         file_id: 'UnitA',
         file_id_normalized: 'UNITA',

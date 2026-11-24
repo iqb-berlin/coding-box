@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import FileUpload, { StructuredFileData } from '../../entities/file_upload.entity';
 import { TestFilesUploadConflictDto, TestFilesUploadResultDto, TestFilesUploadUploadedDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
@@ -9,9 +9,7 @@ import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
 import { WorkspaceFileCacheService } from './workspace-file-cache.service';
 import { WorkspaceFileFreshnessService } from './workspace-file-freshness.service';
-import {
-  toFileWriteData, withNormalizedFileLookupFields, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
-} from './workspace-file-write.util';
+import { toFileWriteData, withNormalizedFileLookupFields } from './workspace-file-write.util';
 
 @Injectable()
 export class WorkspaceTestcenterFileImportService {
@@ -95,108 +93,105 @@ export class WorkspaceTestcenterFileImportService {
     entries: Record<string, unknown>[],
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
-    const workspaceId = Number(
-      (entries[0] as { workspace_id?: unknown } | undefined)?.workspace_id
-    );
-    if (Number.isInteger(workspaceId) && workspaceId > 0) {
-      return withWorkspaceFilesMutationLock(
-        this.fileUploadRepository.manager.connection,
-        workspaceId,
-        queryRunner => this.testCenterImportUnlocked(
-          entries,
-          overwriteFileIds,
-          getWorkspaceFilesMutationContext(queryRunner)
-        )
-      );
+    if (!entries.length) {
+      return {
+        total: 0, uploaded: 0, failed: 0, uploadedFiles: []
+      };
     }
-    return this.testCenterImportUnlocked(entries, overwriteFileIds);
+    const workspaceId = Number(entries[0]?.workspace_id);
+    if (!Number.isInteger(workspaceId) || workspaceId <= 0 ||
+      entries.some(entry => Number(entry?.workspace_id) !== workspaceId)) {
+      return this.importFailure(entries.length, new Error('Testcenter files must belong to a single valid workspace.'));
+    }
+    return withWorkspaceFilesMutationLock(
+      this.fileUploadRepository.manager.connection,
+      workspaceId,
+      runner => this.testCenterImportUnlocked(workspaceId, entries, overwriteFileIds, runner.manager)
+    );
   }
 
   private async testCenterImportUnlocked(
+    workspaceId: number,
     entries: Record<string, unknown>[],
-    overwriteFileIds?: string[],
-    mutationContext?: WorkspaceFilesMutationContext
+    overwriteFileIds: string[] | undefined,
+    manager: EntityManager
   ): Promise<TestFilesUploadResultDto> {
-    const fileUploadRepository =
-      mutationContext?.fileUploadRepository ?? this.fileUploadRepository;
+    let committed;
     try {
-      const normalized = await this.enrichTestCenterImportEntries(
-        Array.isArray(entries) ? entries : []
-      );
-      const workspaceId = Number(
-        (normalized[0] as { workspace_id?: unknown } | undefined)?.workspace_id
-      );
-
-      const {
-        attemptedFiles, insertableFiles, overwriteFiles, remainingConflicts, insertableEntries, overwriteEntries
-      } =
-        await this.planImport(normalized, workspaceId, overwriteFileIds, fileUploadRepository);
-      const changedCodingSchemes =
-        await this.freshness.collectCodingSchemeChangesForFreshness(
-          workspaceId,
-          [...insertableEntries, ...overwriteEntries],
-          fileUploadRepository
-        );
-
-      const registry = fileUploadRepository.create(insertableEntries);
-      if (registry.length > 0) {
-        await fileUploadRepository
-          .createQueryBuilder()
-          .insert()
-          .into(FileUpload)
-          .values(registry.map(entry => toFileWriteData(entry)))
-          .orIgnore()
-          .execute();
-      }
-
-      const overwriteRegistry = fileUploadRepository.create(
-        overwriteEntries.map(e => ({
-          ...(e as Record<string, unknown>),
-          created_at: new Date() as unknown as number
-        }))
-      );
-      if (overwriteRegistry.length > 0) {
-        await fileUploadRepository.upsert(overwriteRegistry.map(entry => toFileWriteData(entry)), [
-          'file_id',
-          'workspace_id'
-        ]);
-      }
-      const freshnessIssues = (await Promise.all(changedCodingSchemes.map(change => (
-        this.freshness.markCodingSchemeFreshnessAfterFileChange(
-          workspaceId,
-          change.fileId,
-          change.previousData,
-          change.nextData,
-          mutationContext?.manager
-        )
-      )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
-      if (registry.length > 0 || overwriteRegistry.length > 0) {
-        await this.caches.invalidateWorkspaceFileCaches(workspaceId);
-      }
-      return {
-        total: attemptedFiles.length,
-        uploaded: insertableFiles.length + overwriteFiles.length,
-        failed: 0,
-        uploadedFiles: [...insertableFiles, ...overwriteFiles],
-        conflicts: remainingConflicts.length ? remainingConflicts : undefined,
-        failedFiles: undefined,
-        issues: freshnessIssues.length ? freshnessIssues : undefined
-      };
+      const normalized = await this.enrichTestCenterImportEntries(entries);
+      committed = await manager.transaction(transaction => this.writeImport(
+        workspaceId, normalized, overwriteFileIds, transaction.getRepository(FileUpload)
+      ));
     } catch (error) {
-      this.logger.error('Error during test center import', error);
-      return {
-        total: Array.isArray(entries) ? entries.length : 0,
-        uploaded: 0,
-        failed: Array.isArray(entries) ? entries.length : 0,
-        uploadedFiles: [],
-        failedFiles: [
-          {
-            filename: 'Testcenter import',
-            reason: error instanceof Error ? error.message : 'Import failed'
-          }
-        ]
-      };
+      return this.importFailure(entries.length, error);
     }
+
+    // Freshness warnings describe committed files. Keep using the locked session until caches are invalidated.
+    const { result, changedCodingSchemes } = committed;
+    const issues = (await Promise.all(changedCodingSchemes.map(change => (
+      this.freshness.markCodingSchemeFreshnessAfterFileChange(
+        workspaceId, change.fileId, change.previousData, change.nextData, manager
+      )
+    )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
+    if (result.uploaded > 0) {
+      try {
+        await this.caches.invalidateWorkspaceFileCaches(workspaceId);
+      } catch (error) {
+        this.logger.error('Could not invalidate workspace caches after Testcenter import', error);
+        issues.push({
+          level: 'warning',
+          category: 'other',
+          message: 'Die Dateien wurden gespeichert, aber der Arbeitsbereichs-Cache konnte nicht aktualisiert werden.'
+        });
+      }
+    }
+    return { ...result, issues: issues.length ? issues : undefined };
+  }
+
+  private importFailure(total: number, error: unknown): TestFilesUploadResultDto {
+    this.logger.error('Error during test center import', error);
+    return {
+      total,
+      uploaded: 0,
+      failed: total,
+      uploadedFiles: [],
+      failedFiles: [{ filename: 'Testcenter import', reason: error instanceof Error ? error.message : 'Import failed' }]
+    };
+  }
+
+  private async writeImport(
+    workspaceId: number,
+    normalized: Record<string, unknown>[],
+    overwriteFileIds: string[] | undefined,
+    repository: Repository<FileUpload>
+  ) {
+    const {
+      attemptedFiles, insertableFiles, overwriteFiles, remainingConflicts, insertableEntries, overwriteEntries
+    } = await this.planImport(normalized, workspaceId, overwriteFileIds, repository);
+    const changedCodingSchemes = await this.freshness.collectCodingSchemeChangesForFreshness(
+      workspaceId, [...insertableEntries, ...overwriteEntries], repository
+    );
+
+    if (insertableEntries.length) {
+      await repository.insert(repository.create(insertableEntries).map(toFileWriteData));
+    }
+    if (overwriteEntries.length) {
+      const overwrites = repository.create(overwriteEntries.map(entry => ({
+        ...entry, created_at: new Date() as unknown as number
+      })));
+      await repository.upsert(overwrites.map(toFileWriteData), ['file_id', 'workspace_id']);
+    }
+    const uploadedFiles = [...insertableFiles, ...overwriteFiles];
+    return {
+      result: {
+        total: attemptedFiles.length,
+        uploaded: uploadedFiles.length,
+        failed: 0,
+        uploadedFiles,
+        conflicts: remainingConflicts.length ? remainingConflicts : undefined
+      },
+      changedCodingSchemes
+    };
   }
 
   private async planImport(normalized: Record<string, unknown>[], workspaceId: number, overwriteFileIds: string[] | undefined, fileUploadRepository: Repository<FileUpload>) {
@@ -230,8 +225,10 @@ export class WorkspaceTestcenterFileImportService {
         fileId: String((e as { file_id?: unknown }).file_id ?? ''),
         filename: String((e as { filename?: unknown }).filename ?? ''),
         fileType: String((e as { file_type?: unknown }).file_type ?? '')
-      }))
-      .filter(f => !!f.fileId && !!f.filename);
+      }));
+    if (attemptedFiles.some(file => !file.fileId || !file.filename)) {
+      throw new Error('Testcenter files must have a file ID and a filename.');
+    }
 
     const shouldOverwrite = (fileId: string): boolean => !!fileId && overwriteIdSet.has(fileId);
 

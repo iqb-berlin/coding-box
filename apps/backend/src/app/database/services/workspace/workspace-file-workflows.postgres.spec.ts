@@ -286,27 +286,51 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
   });
 
-  it('retains the existing partial-import result and stale cache after a later SQL write fails', async () => {
+  it('rolls back a failed Testcenter import and retries it with the same overwrite permissions', async () => {
     const { workspace } = await fixture();
-    await files.uploadTestFiles(workspace, [input('existing.voud', '{}')], false);
+    const existing = {
+      workspace_id: workspace, file_id: 'EXISTING.VOUD', filename: 'existing.voud', file_type: 'Resource', file_size: 2, data: '{}'
+    };
+    const protectedFile = { ...existing, file_id: 'PROTECTED.VOUD', filename: 'protected.voud' };
+    expect(await files.testCenterImport([existing, protectedFile])).toMatchObject({ uploaded: 2 });
+
+    const repository = db.getRepository(FileUpload);
+    const readFiles = () => repository.find({ where: { workspace_id: workspace }, order: { file_id: 'ASC' } });
+    const originalFiles = await readFiles();
     const sentinel = `${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`;
-    await cache.set(sentinel, { stale: true });
+    await cache.set(sentinel, { files: 2 });
+    const entries = [
+      { ...existing, file_id: 'NEW.VOUD', filename: 'new.voud' },
+      { ...existing, filename: 'reject.voud', data: 'changed' },
+      { ...protectedFile, data: 'unauthorized change' }
+    ];
+    const overwrite = [existing.file_id];
     await db.query("ALTER TABLE file_upload ADD CONSTRAINT reject_file_fixture CHECK (filename <> 'reject.voud')");
     try {
-      const result = await files.testCenterImport([
-        {
-          workspace_id: workspace, file_id: 'NEW.VOUD', filename: 'new.voud', file_type: 'Resource', file_size: 2, data: '{}'
-        },
-        {
-          workspace_id: workspace, file_id: 'EXISTING.VOUD', filename: 'reject.voud', file_type: 'Resource', file_size: 2, data: 'changed'
-        }
-      ], ['EXISTING.VOUD']);
-      expect(result).toMatchObject({ total: 2, uploaded: 0, failed: 2 });
-      expect(await countFiles(workspace)).toBe(2);
-      expect(await cache.get(sentinel)).toEqual({ stale: true });
+      expect(await files.testCenterImport(entries, overwrite)).toMatchObject({
+        total: 3,
+        uploaded: 0,
+        failed: 3,
+        uploadedFiles: [],
+        failedFiles: [{ reason: expect.stringContaining('reject_file_fixture') }]
+      });
+      expect(await readFiles()).toEqual(originalFiles);
+      expect(await cache.get(sentinel)).toEqual({ files: 2 });
     } finally { await db.query('ALTER TABLE file_upload DROP CONSTRAINT reject_file_fixture'); }
-    // The error path must have released its session advisory lock.
-    expect(await files.uploadTestFiles(workspace, [input('after.voud', '{}')], false)).toMatchObject({ uploaded: 1 });
+
+    expect(await files.testCenterImport(entries, overwrite)).toMatchObject({
+      total: 3,
+      uploaded: 2,
+      failed: 0,
+      uploadedFiles: [{ fileId: 'NEW.VOUD' }, { fileId: existing.file_id }],
+      conflicts: [{ fileId: protectedFile.file_id }]
+    });
+    expect(await readFiles()).toMatchObject([
+      { file_id: existing.file_id, filename: 'reject.voud', data: 'changed' },
+      { file_id: 'NEW.VOUD', filename: 'new.voud', data: '{}' },
+      originalFiles[1]
+    ]);
+    expect(await cache.get(sentinel)).toBeNull();
   });
 
   it('retains the existing HTML fallback overwrite after a real primary-write SQL failure', async () => {
