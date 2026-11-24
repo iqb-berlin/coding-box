@@ -1,5 +1,5 @@
 import {
-  Component, ElementRef, OnChanges, OnDestroy, OnInit, SimpleChanges, HostListener, inject, input, signal, computed, viewChild, afterRenderEffect, ChangeDetectionStrategy, DestroyRef
+  Component, OnChanges, OnDestroy, OnInit, SimpleChanges, HostListener, inject, input, signal, computed, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MatFormFieldModule } from '@angular/material/form-field';
@@ -30,11 +30,6 @@ import { AppService } from '../../../core/services/app.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
 import { ErrorMessages } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
-import {
-  scrollToElementByAlias,
-  highlightAspectSectionWithAnchor,
-  highlightBundleVariableMarkers
-} from '../../utils/dom-utils';
 import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
 import { CodeSelectorComponent } from '../../../coding/components/code-selector/code-selector.component';
@@ -53,11 +48,15 @@ import { CodeSelectedEvent } from '../../../models/coding-interfaces';
 import { ReplaySessionLoaderService } from '../../services/replay-session-loader.service';
 import { ReplayRecoveryContext, ReplayRecoveryDraft, ReplayRecoveryService } from './replay-recovery.service';
 import { ReplayPayloadFacade } from './replay-payload.facade';
+import { ReplayAnchorHighlightService } from './replay-anchor-highlight.service';
+import { ReplayPanelResizeDirective } from './replay-panel-resize.directive';
+import { ReplayWatermarkDirective } from './replay-watermark.directive';
 import { ReplayAuthSessionService } from './replay-auth-session.service';
 import { ReplayRouteSessionService } from './replay-route-session.service';
 import { ReplayAttemptContext } from '../../utils/replay-attempt-context';
 import {
   decideReplayNavigationStrategy,
+  findReplayUnitIndex,
   ReplayNavigationContext
 } from '../../utils/replay-navigation-strategy';
 
@@ -78,7 +77,7 @@ interface PendingReplayNotesCommit {
 @Component({
   host: { '(window:keydown)': 'onKeyDown($event)' },
   changeDetection: ChangeDetectionStrategy.OnPush,
-  providers: [ReplayCodingService, ReplaySessionLoaderService, ReplayAuthSessionService, ReplayRecoveryService, ReplayPayloadFacade, ReplayRouteSessionService],
+  providers: [ReplayCodingService, ReplaySessionLoaderService, ReplayAuthSessionService, ReplayRecoveryService, ReplayPayloadFacade, ReplayRouteSessionService, ReplayAnchorHighlightService],
   selector: 'coding-box-replay',
   imports: [
     MatFormFieldModule,
@@ -90,6 +89,8 @@ interface PendingReplayNotesCommit {
     ReactiveFormsModule,
     TranslateModule,
     UnitPlayerComponent,
+    ReplayPanelResizeDirective,
+    ReplayWatermarkDirective,
     SpinnerComponent,
     FormsModule,
     UnitsReplayComponent,
@@ -133,7 +134,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly isCodingIssueReviewMode = signal<boolean>(false);
   readonly currentUnitIndex = signal<number>(0);
   readonly totalUnits = signal<number>(0);
-  protected readonly isWatermarkTruncated = signal<boolean>(false);
   private readonly replayAuth = inject(ReplayAuthSessionService);
 
   private get authToken(): string { return this.replayAuth.token; }
@@ -155,24 +155,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private replayRecoveryRestorePromise: Promise<void> | null = null;
   readonly unitPlayerComponent = viewChild(UnitPlayerComponent);
   readonly codeSelectorComponent = viewChild(CodeSelectorComponent);
-  readonly watermarkRef = viewChild<ElementRef<HTMLElement>>('watermark');
-  private readonly synchronizeWatermark = afterRenderEffect(() => this.setupWatermarkObserver());
 
   private replayAttempt = new ReplayAttemptContext();
   protected readonly reloadKey = signal<number>(0);
   readonly workspaceId = signal<number>(0);
   readonly originResponseId = signal<number | null>(null);
   protected readonly reviewCodeSelections = signal<ReviewCodeSelection[]>([]);
-  private watermarkObserver: ResizeObserver | null = null;
-  private watermarkCheckPending: boolean = false;
-  private anchorHighlightTimeout: ReturnType<typeof setTimeout> | null = null;
-  private anchorHighlightRunId = 0;
   private readonly replayPayload = inject(ReplayPayloadFacade);
+  private readonly anchorHighlight = inject(ReplayAnchorHighlightService);
 
   private appliedReplayContext: ReplayNavigationContext | null = null;
 
-  private readonly ANCHOR_HIGHLIGHT_RETRY_DELAY_MS = 100;
-  private readonly ANCHOR_HIGHLIGHT_MAX_ATTEMPTS = 40;
   private readonly REPLAY_NOTES_COMMIT_DEBOUNCE_MS = 750;
   private readonly REPLAY_NOTES_COMMIT_DEDUPE_MS = 1000;
   private readonly replayRecovery = inject(ReplayRecoveryService);
@@ -182,10 +175,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   // Resize handle state
   protected readonly codePanelWidth = signal<number>(350);
   protected readonly isResizing = signal<boolean>(false);
-  private resizeStartX: number = 0;
-  private resizeStartWidth: number = 0;
-  private readonly MIN_PANEL_WIDTH = 250;
-  private readonly MAX_PANEL_WIDTH_RATIO = 0.6;
 
   ngOnInit(): void {
     this.appService.selectedWorkspaceId$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(workspaceId => {
@@ -412,7 +401,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const attempt = this.beginReplayAttempt(performance.now());
     this.resetSnackBars();
     this.invalidateUnitPayloadRequests();
-    this.cancelPendingAnchorHighlight();
+    this.anchorHighlight.cancel();
     try {
       const query = await firstValueFrom(this.route.queryParams);
       if (!this.isCurrentRouterRun(runId)) return;
@@ -614,7 +603,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     context?: ReplayNavigationContext,
     replayAttempt: ReplayAttemptContext = this.replayAttempt
   ) {
-    this.cancelPendingAnchorHighlight();
+    this.anchorHighlight.cancel();
     this.player.set(unitData.player[0].data);
     this.unitDef.set(unitData.unitDef[0].data);
     this.reloadKey.update(value => value + 1);
@@ -756,7 +745,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   onResponseVisible(): void {
-    this.scheduleAnchorHighlight();
+    this.anchorHighlight.show({
+      player: this.unitPlayerComponent,
+      anchor: this.anchor,
+      page: this.page,
+      currentUnit: () => {
+        const unitsData = this.unitsData();
+        return unitsData?.units[unitsData.currentUnitIndex];
+      }
+    });
 
     const replayAttempt = this.replayAttempt;
     if (!replayAttempt.tryFinalizeStatistics()) {
@@ -881,95 +878,68 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
 
   private async applyUnitChanged(unit: UnitsReplayUnit): Promise<void> {
     if (!unit) return;
-    this.cancelPendingAnchorHighlight();
-    const replayAttempt = this.beginReplayAttempt(performance.now());
-    const unitAny = unit as unknown as {
-      name: string;
-      testPerson?: string;
-      variableId?: string;
-      variableAnchor?: string;
-      variablePage?: string;
-    };
-    const incomingTestPerson = unitAny.testPerson;
 
-    if (typeof unitAny.variableId === 'string' && unitAny.variableId.length > 0) {
-      this.anchor.set(unitAny.variableAnchor || unitAny.variableId);
-      this.codingService.currentVariableId = unitAny.variableId;
+    this.anchorHighlight.cancel();
+    const replayAttempt = this.beginReplayAttempt(performance.now());
+    this.selectNavigationUnit(unit);
+    const workspaceId = this.workspaceId() || this.getWorkspaceIdFromAuthToken(this.authToken);
+    const load = this.canLoadReplayWithCurrentAuth(workspaceId) ?
+      this.loadNavigationTarget(workspaceId, replayAttempt) :
+      true;
+    const applied = typeof load === 'boolean' ? load : await load;
+    if (applied && this.isCurrentReplayAttempt(replayAttempt)) this.updateNavigationIndex(unit);
+  }
+
+  private selectNavigationUnit(unit: UnitsReplayUnit): void {
+    if (typeof unit.variableId === 'string' && unit.variableId.length > 0) {
+      this.anchor.set(unit.variableAnchor || unit.variableId);
+      this.codingService.currentVariableId = unit.variableId;
     }
 
-    if (typeof unitAny.variablePage === 'string' && unitAny.variablePage.length > 0) {
-      this.page.set(unitAny.variablePage);
+    if (typeof unit.variablePage === 'string' && unit.variablePage.length > 0) {
+      this.page.set(unit.variablePage);
     } else if (this.isCodingMode()) {
       this.page.set('0');
     }
 
-    if (incomingTestPerson && incomingTestPerson !== this.testPerson()) {
-      this.setTestPerson(incomingTestPerson);
+    if (unit.testPerson && unit.testPerson !== this.testPerson()) {
+      this.setTestPerson(unit.testPerson);
     }
     this.unitId.set(unit.name);
+  }
 
-    let isCurrentUnitPayload = true;
-    const workspaceId = this.workspaceId() || this.getWorkspaceIdFromAuthToken(this.authToken);
-    if (this.canLoadReplayWithCurrentAuth(workspaceId)) {
-      const targetContext = {
-        workspaceId,
-        testPerson: this.testPerson(),
-        unitId: this.unitId()
-      };
-      const strategy = decideReplayNavigationStrategy(
-        this.appliedReplayContext,
-        targetContext
-      );
-
-      switch (strategy) {
-        case 'direct-page-navigation': {
-          const targetPage = this.page();
-          this.invalidateUnitPayloadRequests();
-          replayAttempt.startDirectPageNavigation();
-          if (targetPage && !this.unitPlayerComponent()?.navigateToPage(targetPage)) {
-            isCurrentUnitPayload = await this.loadAndApplyUnitData(
-              workspaceId,
-              this.getReplayRequestAuthToken()
-            );
-          }
-          break;
-        }
-        case 'load-responses':
-          isCurrentUnitPayload = await this.loadAndApplyReplayResponse(
-            workspaceId,
-            this.getReplayRequestAuthToken()
-          );
-          break;
-        case 'load-full-payload':
-          isCurrentUnitPayload = await this.loadAndApplyUnitData(
-            workspaceId,
-            this.getReplayRequestAuthToken()
-          );
-          break;
-        default:
-          throw new Error(`Unsupported replay navigation strategy: ${strategy}`);
+  private loadNavigationTarget(workspaceId: number, attempt: ReplayAttemptContext): boolean | Promise<boolean> {
+    const strategy = decideReplayNavigationStrategy(this.appliedReplayContext, {
+      workspaceId,
+      testPerson: this.testPerson(),
+      unitId: this.unitId()
+    });
+    switch (strategy) {
+      case 'direct-page-navigation': {
+        const page = this.page();
+        this.invalidateUnitPayloadRequests();
+        attempt.startDirectPageNavigation();
+        return !page || this.unitPlayerComponent()?.navigateToPage(page) ||
+          this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
       }
+      case 'load-responses':
+        return this.loadAndApplyReplayResponse(workspaceId, this.getReplayRequestAuthToken());
+      case 'load-full-payload':
+        return this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+      default:
+        throw new Error(`Unsupported replay navigation strategy: ${strategy}`);
     }
+  }
 
-    if (!isCurrentUnitPayload) {
-      return;
-    }
-
+  private updateNavigationIndex(unit: UnitsReplayUnit): void {
     const unitsData = this.unitsData();
-    if (unitsData) {
-      const newIndex = unitsData.units.findIndex(u => {
-        const uAny = u as unknown as { name: string; testPerson?: string; variableId?: string };
-        return uAny.name === unitAny.name && (uAny.testPerson ?? '') === (incomingTestPerson ?? '') && uAny.variableId === unitAny.variableId;
-      });
-      if (newIndex >= 0) {
-        this.unitsData.set({
-          ...unitsData,
-          currentUnitIndex: newIndex
-        });
+    if (!unitsData) return;
 
-        this.currentUnitIndex.set(newIndex + 1);
-      }
-    }
+    const currentUnitIndex = findReplayUnitIndex(unitsData.units, unit);
+    if (currentUnitIndex < 0) return;
+
+    this.unitsData.set({ ...unitsData, currentUnitIndex });
+    this.currentUnitIndex.set(currentUnitIndex + 1);
   }
 
   checkPageError(pageError: 'notInList' | 'notCurrent' | null): void {
@@ -991,7 +961,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   private resetUnitData(preserveCodingData = false) {
     this.replayRecovery.invalidate();
     this.invalidateUnitPayloadRequests();
-    this.cancelPendingAnchorHighlight();
+    this.anchorHighlight.cancel();
     this.unitId.set('');
     this.player.set('');
     this.unitDef.set('');
@@ -1057,92 +1027,9 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.sessionRecoverySubscription = null;
     this.replayNotesCommitSubscription = null;
     this.unregisterRecoveryProvider = null;
-    this.cancelPendingAnchorHighlight();
+    this.anchorHighlight.cancel();
     this.resetSnackBars();
-    this.watermarkObserver?.disconnect();
-    this.watermarkObserver = null;
     this.clearReplayNotesCommitDedupeTimeout();
-  }
-
-  private scheduleAnchorHighlight(): void {
-    if (!this.anchor()) {
-      return;
-    }
-
-    this.clearAnchorHighlightTimeout();
-    this.anchorHighlightRunId += 1;
-    const runId = this.anchorHighlightRunId;
-    this.tryHighlightAnchor(runId, 1);
-  }
-
-  private tryHighlightAnchor(runId: number, attempt: number): void {
-    const anchorSnapshot = this.anchor();
-
-    if (runId !== this.anchorHighlightRunId || !anchorSnapshot) {
-      return;
-    }
-
-    const iframe = this.unitPlayerComponent()?.hostingIframe()?.nativeElement as HTMLIFrameElement | undefined;
-    const highlightedElements = iframe ? highlightAspectSectionWithAnchor(iframe, anchorSnapshot) : [];
-    if (iframe) {
-      this.highlightCurrentBundleMarkers(iframe);
-    }
-
-    if (highlightedElements.length > 0 && iframe) {
-      scrollToElementByAlias(iframe, anchorSnapshot);
-      return;
-    }
-
-    if (attempt >= this.ANCHOR_HIGHLIGHT_MAX_ATTEMPTS) {
-      return;
-    }
-
-    this.anchorHighlightTimeout = setTimeout(() => {
-      this.tryHighlightAnchor(runId, attempt + 1);
-    }, this.ANCHOR_HIGHLIGHT_RETRY_DELAY_MS);
-  }
-
-  private cancelPendingAnchorHighlight(): void {
-    this.clearAnchorHighlightTimeout();
-    this.anchorHighlightRunId += 1;
-  }
-
-  private clearAnchorHighlightTimeout(): void {
-    if (this.anchorHighlightTimeout) {
-      clearTimeout(this.anchorHighlightTimeout);
-      this.anchorHighlightTimeout = null;
-    }
-  }
-
-  private getCurrentBundleMarkers(): Array<{ anchor: string; label: string; tooltip: string }> {
-    const unitsDataSnapshot = this.unitsData();
-
-    const currentUnit = unitsDataSnapshot?.units[unitsDataSnapshot.currentUnitIndex];
-    const bundleContext = currentUnit?.bundleContext;
-    if (!bundleContext || !this.page()) {
-      return [];
-    }
-
-    const label = this.translateService.instant('code-selector.bundle-auto-coded-label');
-    const tooltip = this.translateService.instant('code-selector.bundle-auto-coded-tooltip');
-
-    return bundleContext.variables
-      .filter(variable => (
-        variable.status === 'auto-coded' &&
-        variable.unitName === currentUnit.name &&
-        variable.variableAnchor &&
-        variable.variableAnchor !== this.anchor() &&
-        variable.variablePage === this.page()
-      ))
-      .map(variable => ({
-        anchor: variable.variableAnchor,
-        label,
-        tooltip
-      }));
-  }
-
-  private highlightCurrentBundleMarkers(iframe: HTMLIFrameElement): void {
-    highlightBundleVariableMarkers(iframe, this.getCurrentBundleMarkers());
   }
 
   async onCodeSelected(event: CodeSelectedEvent): Promise<void> {
@@ -1469,83 +1356,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       !this.isReviewMode()
     ) {
       this.codingService.pauseCodingJobOnUnload(this.workspaceId(), this.codingService.codingJobId);
-    }
-  }
-
-  // --- Resize handle ---
-  protected onResizeStart(event: MouseEvent): void {
-    event.preventDefault();
-    this.isResizing.set(true);
-    this.resizeStartX = event.clientX;
-    this.resizeStartWidth = this.codePanelWidth();
-  }
-
-  @HostListener('document:mousemove', ['$event'])
-  onResizeMove(event: MouseEvent): void {
-    if (!this.isResizing()) return;
-    const dx = this.resizeStartX - event.clientX; // dragging left = wider panel
-    const maxWidth = window.innerWidth * this.MAX_PANEL_WIDTH_RATIO;
-    this.codePanelWidth.set(Math.min(maxWidth, Math.max(this.MIN_PANEL_WIDTH, this.resizeStartWidth + dx)));
-    this.scheduleWatermarkCheck();
-  }
-
-  @HostListener('document:mouseup')
-  onResizeEnd(): void {
-    this.isResizing.set(false);
-  }
-
-  @HostListener('window:resize')
-  onWindowResize(): void {
-    this.scheduleWatermarkCheck();
-  }
-
-  private setupWatermarkObserver(): void {
-    this.watermarkObserver?.disconnect();
-    this.watermarkObserver = null;
-
-    const element = this.watermarkRef()?.nativeElement;
-    if (!element) {
-      this.isWatermarkTruncated.set(false);
-      return;
-    }
-
-    this.scheduleWatermarkCheck();
-
-    if (typeof ResizeObserver === 'undefined') {
-      return;
-    }
-
-    this.watermarkObserver = new ResizeObserver(() => {
-      this.scheduleWatermarkCheck();
-    });
-    this.watermarkObserver.observe(element);
-  }
-
-  private scheduleWatermarkCheck(): void {
-    if (this.watermarkCheckPending) return;
-    this.watermarkCheckPending = true;
-    const runCheck = () => {
-      this.watermarkCheckPending = false;
-      this.updateWatermarkTruncation();
-    };
-
-    if (typeof requestAnimationFrame === 'function') {
-      requestAnimationFrame(runCheck);
-    } else {
-      setTimeout(runCheck, 0);
-    }
-  }
-
-  private updateWatermarkTruncation(): void {
-    const element = this.watermarkRef()?.nativeElement;
-    if (!element) {
-      this.isWatermarkTruncated.set(false);
-      return;
-    }
-
-    const isTruncated = element.scrollWidth > element.clientWidth + 1;
-    if (this.isWatermarkTruncated() !== isTruncated) {
-      this.isWatermarkTruncated.set(isTruncated);
     }
   }
 

@@ -2,7 +2,9 @@
 @let responsesValue = responses();
 @let unitsDataValue = unitsData();
 <div class="replay-container" [class.print-mode]="isPrintMode()" [class.booklet-mode]="isCodingMode() || isBookletReplayMode()"
-  [class.resizing]="isResizing()">
+  [class.resizing]="isResizing()"
+  [codingBoxReplayPanelResize]="codePanelWidth()" #panelResize="replayPanelResize"
+  (widthChanged)="codePanelWidth.set($event)" (resizingChanged)="isResizing.set($event)">
   <coding-box-spinner [isLoaded]="isLoaded"></coding-box-spinner>
 
   @if (isCodingMode() || isBookletReplayMode()) {
@@ -25,11 +27,11 @@
       }
       @if (testPerson() && unitId()) {
       <div
-        #watermark
         class="watermark"
-        [class.truncated]="isWatermarkTruncated()"
+        [codingBoxReplayWatermark]="watermarkText()" [panelWidth]="codePanelWidth()" #watermark="replayWatermark"
+        [class.truncated]="watermark.isTruncated()"
         [matTooltip]="watermarkText()"
-        [matTooltipDisabled]="!isWatermarkTruncated()"
+        [matTooltipDisabled]="!watermark.isTruncated()"
         matTooltipPosition="above">
         {{ watermarkText() }}
       </div>
@@ -37,7 +39,7 @@
     </div>
 
     @if (isCodingMode() && hasCodingJobPanelContent()) {
-    <div class="resize-handle" (mousedown)="onResizeStart($event)"></div>
+    <div class="resize-handle" (mousedown)="panelResize.start($event)"></div>
     <div class="code-selector-container" [style.width.px]="codePanelWidth()" [style.min-width.px]="codePanelWidth()">
       @if (codingService.codingScheme && codingService.currentVariableId) {
       <coding-box-code-selector [codingScheme]="codingService.codingScheme" [variableId]="codingService.currentVariableId"

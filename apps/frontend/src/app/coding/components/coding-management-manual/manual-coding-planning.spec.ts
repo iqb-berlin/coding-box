@@ -1,5 +1,6 @@
 import { translateGerman } from '../../../../testing/german-translations';
 import { ManualCodingPlanning, ManualCodingPlanningState } from './manual-coding-planning';
+import { planManualCodingTabLoad } from './manual-coding-tab-load';
 
 const state = (changes: Partial<ManualCodingPlanningState> = {}): ManualCodingPlanningState => ({
   activeManualTab: 'planning',
@@ -57,5 +58,36 @@ describe('manual coding planning decisions', () => {
     const planning = new ManualCodingPlanning(input, translateGerman);
     expect(planning.getPlanningNextStepTargetTab()).toBe('execution');
     expect(input.canShowManualCompletionTab).toBe(false);
+  });
+});
+
+describe('manual coding tab load actions', () => {
+  const options = {
+    hasPlanningSnapshot: false,
+    deferStatusChecks: false,
+    refreshPlanning: true,
+    reloadCodingJobs: false
+  };
+
+  it('reuses cached data for preparation and planning', () => {
+    const cached = { ...options, hasPlanningSnapshot: true };
+    expect(planManualCodingTabLoad('preparation', cached)).toEqual([]);
+    expect(planManualCodingTabLoad('planning', cached)).toEqual([]);
+  });
+
+  it('loads uncached preparation and respects the refresh decisions for planning', () => {
+    expect(planManualCodingTabLoad('preparation', options)).toEqual(['response-analysis']);
+    expect(planManualCodingTabLoad('planning', options)).toEqual(['planning-bundle']);
+    expect(planManualCodingTabLoad('planning', { ...options, deferStatusChecks: true })).toEqual([]);
+    expect(planManualCodingTabLoad('planning', { ...options, refreshPlanning: false })).toEqual([]);
+  });
+
+  it('keeps jobs and statistics ordered and lets execution defer its status checks', () => {
+    expect(planManualCodingTabLoad('training', options)).toEqual(['reload-pending-jobs']);
+    expect(planManualCodingTabLoad('execution', options)).toEqual(['execution-statistics', 'reload-pending-jobs']);
+    expect(planManualCodingTabLoad('execution', {
+      ...options, deferStatusChecks: true, reloadCodingJobs: true
+    })).toEqual(['reload-jobs']);
+    expect(planManualCodingTabLoad('completion', options)).toEqual(['completion-statistics']);
   });
 });

@@ -1363,13 +1363,9 @@
     },
     "apps/frontend/src/app/coding/components/coding-management-manual/coding-management-manual.component.ts": {
       "file": {
-        "max-lines": 1358
+        "max-lines": 1316
       },
-      "functions": {
-        "class CodingManagementManualComponent#1/method loadManualTabData#1": {
-          "complexity": 25
-        }
-      }
+      "functions": {}
     },
     "apps/frontend/src/app/coding/components/coding-management-manual/manual-coding-import.facade.ts": {
       "file": {},
@@ -1387,9 +1383,6 @@
         },
         "class ManualCodingPlanning#1/method getPlanningStatusDescription#1": {
           "complexity": 40
-        },
-        "class ManualCodingPlanning#1/method getPlanningStatusState#1": {
-          "complexity": 30
         }
       }
     },
@@ -1459,12 +1452,9 @@
     },
     "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
       "file": {
-        "max-lines": 1398
+        "max-lines": 1237
       },
       "functions": {
-        "class ReplayComponent#1/method applyUnitChanged#1": {
-          "complexity": 21
-        },
         "class ReplayComponent#1/method onKeyDown#1": {
           "complexity": 31
         }

@@ -4,14 +4,13 @@ import { By } from '@angular/platform-browser';
 import { MatDialog, MatDialogRef } from '@angular/material/dialog';
 import { TranslateModule } from '@ngx-translate/core';
 import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
-import { BehaviorSubject, of, Subject } from 'rxjs';
+import { EMPTY, of, Subject } from 'rxjs';
 import { ExportCodingBookComponent } from './export-coding-book.component';
 import { CodingExportService } from '../../services/coding-export.service';
 import { CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
-import { ValidationStateService } from '../../services/validation-state.service';
 
 describe('shared codebook with zoneless change detection', () => {
   let fixture: ComponentFixture<ExportCodingBookComponent>;
@@ -34,9 +33,9 @@ describe('shared codebook with zoneless change detection', () => {
       imports: [ExportCodingBookComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => EMPTY } },
         { provide: MatDialog, useValue: { open: jest.fn() } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: EMPTY } },
         { provide: FileService, useValue: { getUnitsWithFileIds: () => units } },
         {
           provide: CodingJobBackendService,
@@ -46,15 +45,6 @@ describe('shared codebook with zoneless change detection', () => {
         {
           provide: CodingExportService,
           useValue: { startCodebookJob: start, getCodebookJobStatus: getStatus, downloadCodebookFile: downloadFile }
-        },
-        {
-          provide: ValidationStateService,
-          useValue: {
-            validationProgress$: of({ status: 'idle', progress: 0, message: '' }),
-            validationResults$: of(null),
-            getValidationProgress: () => ({ status: 'idle', progress: 0, message: '' }),
-            getValidationResults: () => null
-          }
         }
       ]
     }).compileComponents();
@@ -180,12 +170,11 @@ describe('Codebook export with delayed responses without Zone', () => {
     status = new Subject<JobStatus>();
     download = new Subject<Blob>();
     downloadCodebookFile = jest.fn(() => download);
-    const progress = new BehaviorSubject({ status: 'idle', progress: 0, message: '' });
     await TestBed.configureTestingModule({
       imports: [ExportCodingBookComponent, TranslateModule.forRoot()],
       providers: [
         provideZonelessChangeDetection(),
-        { provide: MatDialogRef, useValue: { close: jest.fn() } },
+        { provide: MatDialogRef, useValue: { close: jest.fn(), beforeClosed: () => EMPTY } },
         { provide: MatDialog, useValue: { open: jest.fn() } },
         {
           provide: CodingExportService,
@@ -198,16 +187,7 @@ describe('Codebook export with delayed responses without Zone', () => {
         { provide: CodingJobBackendService, useValue: { getJobDefinitions: () => of([]), getVariableBundles: () => of([]) } },
         { provide: MissingsProfileService, useValue: { getMissingsProfiles: () => of([]) } },
         { provide: FileService, useValue: { getUnitsWithFileIds: () => units } },
-        { provide: AppService, useValue: { selectedWorkspaceId: 1 } },
-        {
-          provide: ValidationStateService,
-          useValue: {
-            validationProgress$: progress,
-            validationResults$: of(null),
-            getValidationProgress: () => progress.value,
-            getValidationResults: () => null
-          }
-        }
+        { provide: AppService, useValue: { selectedWorkspaceId: 1, selectedWorkspaceId$: EMPTY } }
       ]
     }).compileComponents();
     fixture = TestBed.createComponent(ExportCodingBookComponent);
