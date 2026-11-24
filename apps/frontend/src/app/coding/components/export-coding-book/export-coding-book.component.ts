@@ -1,45 +1,39 @@
 import {
   ChangeDetectionStrategy,
-  ChangeDetectorRef,
+  computed,
+  DestroyRef,
   Component,
   OnInit,
-  OnDestroy,
   signal,
   inject
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { CodebookExportComponent } from '@iqb/ngx-coding-components/codebook-export';
 import type { CodebookExportConfig, UnitSelectionItem } from '@iqb/ngx-coding-components/codebook-models';
 import { DatePipe } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { MatDialog, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
-import { MatSelectModule } from '@angular/material/select';
 import { MatButtonModule } from '@angular/material/button';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatOptionModule } from '@angular/material/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatTooltipModule } from '@angular/material/tooltip';
-import { MatTableDataSource } from '@angular/material/table';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
-import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { Subject, Subscription, interval } from 'rxjs';
+import { TranslateModule } from '@ngx-translate/core';
 import {
-  debounceTime, distinctUntilChanged, exhaustMap, takeUntil
-} from 'rxjs/operators';
+  catchError, filter, of, take, takeUntil
+} from 'rxjs';
+import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
+import { CodebookExportJobFacade } from './codebook-export-job.facade';
 import {
   CodeBookContentSetting,
   CodebookTrainingRequirementFilter
 } from '../../../../../../../api-dto/coding/codebook-content-setting';
-import { CodingExportService } from '../../services/coding-export.service';
 import { CodingJobBackendService, JobDefinition } from '../../services/coding-job-backend.service';
 import { VariableBundle } from '../../models/coding-job.model';
 import { MissingsProfileService } from '../../services/missings-profile.service';
 import { FileService } from '../../../shared/services/file/file.service';
 import { AppService } from '../../../core/services/app.service';
-import { ValidationStateService, ValidationProgress } from '../../services/validation-state.service';
 import { getJobDefinitionDisplayLabel } from '../../utils/job-definition-display.util';
-import { ValidateCodingCompletenessResponseDto } from '../../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import {
-  CodebookJobDefinitionOption,
   CodebookJobDefinitionPickerDialogComponent,
   CodebookJobDefinitionPickerDialogData
 } from './codebook-job-definition-picker-dialog.component';
@@ -59,25 +53,18 @@ interface CodebookUnitOption {
   standalone: true,
   imports: [
     CodebookExportComponent,
-    FormsModule,
     MatDialogModule,
-    MatSelectModule,
     MatButtonModule,
-    MatFormFieldModule,
-    MatOptionModule,
     MatIconModule,
     MatTooltipModule,
     MatProgressBarModule,
     TranslateModule
   ],
-  providers: [DatePipe]
+  providers: [DatePipe, CodebookExportJobFacade]
 })
-export class ExportCodingBookComponent implements OnInit, OnDestroy {
+export class ExportCodingBookComponent implements OnInit {
   readonly unitList = signal<number[]>([]);
   readonly availableUnits = signal<CodebookUnitOption[]>([]);
-  dataSource = new MatTableDataSource<CodebookUnitOption>([]);
-  readonly filterValue = signal('');
-  filterTextChanged = new Subject<Event>();
   readonly isLoading = signal(false);
   readonly selectedMissingsProfile = signal<number>(0);
   readonly missingsProfiles = signal<
@@ -89,16 +76,10 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   readonly selectedJobDefinitionId = signal<number | null>(null);
   readonly availableJobDefinitions = signal<JobDefinition[]>([]);
-  readonly jobDefinitionOptions = signal<CodebookJobDefinitionOption[]>([]);
-  readonly selectedJobDefinitionLabel = signal('');
-  readonly selectedJobDefinitionSummary = signal('');
   readonly isLoadingJobDefinitions = signal(false);
   readonly selectedVariableBundleIds = signal<number[]>([]);
   readonly availableVariableBundles = signal<VariableBundle[]>([]);
-  readonly isLoadingVariableBundles = signal(false);
-  readonly workspaceChanges = signal(false);
-  displayedColumns: string[] = ['select', 'unitName'];
-  readonly contentOptions = signal<CodeBookContentSetting>({
+  private readonly draftOptions = signal<CodeBookContentSetting>({
     exportFormat: 'docx',
     missingsProfile: '',
     hasOnlyManualCoding: true,
@@ -114,127 +95,104 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     variableBundleIds: []
   });
 
-  // Initialize the shared form once; host filter and request updates must not reset user edits.
-  protected readonly initialContentOptions = this.contentOptions();
+  readonly contentOptions = computed(() => ({
+    ...this.draftOptions(),
+    jobDefinitionId: this.selectedJobDefinitionId(),
+    variableBundleIds: this.selectedVariableBundleIds()
+  }));
 
-  private destroy$ = new Subject<void>();
-  readonly validationResults = signal<ValidateCodingCompletenessResponseDto | null>(null);
-  readonly validationProgress = signal<ValidationProgress | null>(null);
-  readonly isValidating = signal(false);
-  readonly validationCacheKey = signal<string | null>(null);
-  readonly codebookJobId = signal<string | null>(null);
-  readonly codebookJobStatus = signal<'idle' | 'pending' | 'processing' | 'completed' | 'failed'>('idle');
-  readonly codebookJobProgress = signal(0);
-  readonly codebookJobError = signal<string | null>(null);
-  private codebookPollingSubscription: Subscription | null = null;
-  private readonly exportService = inject<CodingExportService>(CodingExportService);
+  // Snapshot the defaults so catalog and filter updates preserve edits in the shared form.
+  protected readonly initialContentOptions = this.draftOptions();
+  private readonly job = inject(CodebookExportJobFacade);
+  readonly jobState = this.job.state;
+  protected readonly isExportBusy = this.job.busy;
+  private readonly destroyRef = inject(DestroyRef);
   private readonly codingJobBackendService = inject<CodingJobBackendService>(CodingJobBackendService);
   private readonly missingsProfileService = inject<MissingsProfileService>(MissingsProfileService);
   private readonly fileService = inject<FileService>(FileService);
   private readonly appService = inject<AppService>(AppService);
   private readonly datePipe = inject<DatePipe>(DatePipe);
-  private readonly validationStateService = inject<ValidationStateService>(ValidationStateService);
-  private readonly translateService = inject<TranslateService>(TranslateService);
+  private readonly uiTranslate = injectUiTranslator();
   private readonly dialog = inject<MatDialog>(MatDialog);
   private readonly dialogRef = inject<MatDialogRef<ExportCodingBookComponent>>(MatDialogRef);
-  private readonly changeDetectorRef = inject<ChangeDetectorRef>(ChangeDetectorRef);
-  private sharedUnitsSource: CodebookUnitOption[] | null = null;
-  private sharedUnitsCache: UnitSelectionItem[] = [];
-  private profilesSource:
-  | {
-    id: number;
-    label: string;
-  }[]
-  | null = null;
+  private workspaceId = this.appService.selectedWorkspaceId;
+  private readonly closing$ = this.dialogRef.beforeClosed();
+  private closing = false;
 
-  private profilesCache: {
-    id: number;
-    label: string;
-  }[] = [];
+  protected readonly sharedUnits = computed<UnitSelectionItem[]>(() => this.availableUnits().map(unit => ({
+    unitId: unit.unitId,
+    key: this.formatUnitName(unit.unitKey),
+    unitName: this.formatUnitName(unit.unitName),
+    unitAlias: unit.unitAlias
+  })));
 
-  get sharedUnits(): UnitSelectionItem[] {
-    if (this.sharedUnitsSource !== this.availableUnits()) {
-      this.sharedUnitsSource = this.availableUnits();
-      this.sharedUnitsCache = this.availableUnits().map(unit => ({
-        unitId: unit.unitId,
-        key: unit.unitKey.replace(/\.vocs$/i, ''),
-        unitName: this.formatUnitName(unit.unitName),
-        unitAlias: unit.unitAlias
-      }));
-    }
-    return this.sharedUnitsCache;
-  }
+  protected readonly sharedMissingsProfiles = computed(() => this.missingsProfiles().filter(profile => profile.id !== 0));
+  protected readonly jobDefinitionOptions = computed(() => this.availableJobDefinitions().map(jobDefinition => {
+    const label = this.getJobDefinitionLabel(jobDefinition);
+    const meta = this.getJobDefinitionMeta(jobDefinition);
+    const bundleSummary = this.getJobDefinitionBundleSummary(jobDefinition);
+    return {
+      id: jobDefinition.id ?? 0,
+      jobDefinition,
+      label,
+      meta,
+      bundleSummary,
+      summary: [meta, bundleSummary].filter(Boolean).join(' · ')
+    };
+  }));
 
-  get sharedMissingsProfiles(): {
-    id: number;
-    label: string;
-  }[] {
-    if (this.profilesSource !== this.missingsProfiles()) {
-      this.profilesSource = this.missingsProfiles();
-      this.profilesCache = this.missingsProfiles().filter(profile => profile.id !== 0);
-    }
-    return this.profilesCache;
-  }
+  private readonly selectedJobDefinitionOption = computed(() => this.jobDefinitionOptions().find(
+    option => option.id === this.selectedJobDefinitionId()
+  ));
 
-  get isExportBusy(): boolean {
-    return this.codebookJobStatus() === 'pending' || this.codebookJobStatus() === 'processing';
-  }
+  protected readonly selectedJobDefinitionLabel = computed(() => this.selectedJobDefinitionOption()?.label ||
+    this.uiTranslate('coding.job-definition-all'));
+
+  protected readonly selectedJobDefinitionSummary = computed(() => this.selectedJobDefinitionOption()?.summary || '');
 
   onSharedExport(config: CodebookExportConfig): void {
-    if (this.isExportBusy) return;
+    if (this.closing || this.isExportBusy()) return;
     this.unitList.set([...config.selectedUnits]);
     this.selectedMissingsProfile.set(config.missingsProfileId);
-    this.contentOptions.set({ ...this.contentOptions(), ...config.contentOptions });
+    this.draftOptions.update(options => ({ ...options, ...config.contentOptions }));
     this.exportCodingBook();
   }
 
   closeDialog(): void {
+    this.closing = true;
     this.dialogRef.close(false);
   }
 
   ngOnInit(): void {
-    this.updateSelectedJobDefinitionDisplay();
-    this.workspaceChanges.set(this.checkWorkspaceChanges());
+    this.workspaceId = this.appService.selectedWorkspaceId;
+    this.closing$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
+      this.closing = true;
+    });
+    this.appService.selectedWorkspaceId$.pipe(
+      filter(workspaceId => workspaceId !== this.workspaceId),
+      take(1),
+      takeUntil(this.closing$),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => this.closeDialog());
     this.loadMissingsProfiles();
     this.loadJobDefinitions();
     this.loadVariableBundles();
     this.loadUnitsWithFileIds();
-    this.filterTextChanged
-      .pipe(debounceTime(300), distinctUntilChanged(), takeUntil(this.destroy$))
-      .subscribe(event => {
-        this.applyFilter(event);
-      });
-    this.validationStateService.validationProgress$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(progress => this.handleValidationProgress(progress));
-    this.handleValidationProgress(this.validationStateService.getValidationProgress());
-    this.validationStateService.validationResults$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(results => this.handleValidationResults(results));
-    this.handleValidationResults(this.validationStateService.getValidationResults());
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-    this.stopCodebookPolling();
-  }
-
-  applyFilter(event: Event): void {
-    const filterValue = (event.target as HTMLInputElement).value;
-    this.dataSource.filter = filterValue.trim().toLowerCase();
   }
 
   private loadUnitsWithFileIds(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
     if (workspaceId) {
       this.isLoading.set(true);
       this.fileService
         .getUnitsWithFileIds(workspaceId)
-        .pipe(takeUntil(this.destroy$))
+        .pipe(
+          takeUntilWorkspaceChanged(this.appService, workspaceId),
+          takeUntil(this.closing$),
+          takeUntilDestroyed(this.destroyRef)
+        )
         .subscribe({
           next: units => {
-            this.changeDetectorRef.markForCheck();
             if (units && units.length > 0) {
               this.availableUnits.set(
                 units.map((unit: { id: number; unitId: string; fileName: string; data: string }) => ({
@@ -245,36 +203,16 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
                   unitData: unit.data
                 }))
               );
-              this.dataSource.data = this.availableUnits();
-              this.dataSource.filterPredicate = (data, filter: string) => {
-                const formattedName = this.formatUnitName(data.unitName).toLowerCase();
-                return formattedName.includes(filter);
-              };
               this.unitList.set([]);
               this.applyQuickFilterUnitSelection();
             }
             this.isLoading.set(false);
           },
           error: () => {
-            this.changeDetectorRef.markForCheck();
             this.isLoading.set(false);
           }
         });
     }
-  }
-
-  toggleUnitSelection(unitId: number, isSelected: boolean): void {
-    if (isSelected) {
-      if (!this.unitList().includes(unitId)) {
-        this.unitList.set([...this.unitList(), unitId]);
-      }
-    } else {
-      this.unitList.set(this.unitList().filter(id => id !== unitId));
-    }
-  }
-
-  isUnitSelected(unitId: number): boolean {
-    return this.unitList().includes(unitId);
   }
 
   formatUnitName(unitName: string): string {
@@ -284,32 +222,17 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     return unitName;
   }
 
-  toggleAllUnits(isSelected: boolean): void {
-    if (isSelected) {
-      this.unitList.set(this.availableUnits().map(unit => unit.unitId));
-    } else {
-      this.unitList.set([]);
-    }
-  }
-
-  private checkWorkspaceChanges(): boolean {
-    return false;
-  }
-
   onTrainingRequirementChange(trainingRequirement: CodebookTrainingRequirementFilter): void {
-    this.contentOptions.update(current => ({ ...current, trainingRequirement: trainingRequirement }));
+    this.draftOptions.update(current => ({ ...current, trainingRequirement }));
   }
 
   onJobDefinitionFilterChange(jobDefinitionId: number | null): void {
     this.selectedJobDefinitionId.set(jobDefinitionId);
-    this.contentOptions.update(current => ({ ...current, jobDefinitionId: jobDefinitionId }));
-    this.updateSelectedJobDefinitionDisplay();
     this.applyQuickFilterUnitSelection();
   }
 
   onVariableBundleFilterChange(variableBundleIds: number[]): void {
     this.selectedVariableBundleIds.set(Array.isArray(variableBundleIds) ? variableBundleIds : []);
-    this.contentOptions.update(current => ({ ...current, variableBundleIds: this.selectedVariableBundleIds() }));
     this.applyQuickFilterUnitSelection();
   }
 
@@ -321,22 +244,26 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       options: this.jobDefinitionOptions(),
       selectedJobDefinitionId: this.selectedJobDefinitionId()
     };
-    this.dialog
-      .open(CodebookJobDefinitionPickerDialogComponent, {
-        width: '960px',
-        maxWidth: '94vw',
-        maxHeight: '88vh',
-        autoFocus: false,
-        data: dialogData
-      })
-      .afterClosed()
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(jobDefinitionId => {
-        this.changeDetectorRef.markForCheck();
-        if (jobDefinitionId !== undefined) {
-          this.onJobDefinitionFilterChange(jobDefinitionId);
-        }
-      });
+    const picker = this.dialog.open(CodebookJobDefinitionPickerDialogComponent, {
+      width: '960px',
+      maxWidth: '94vw',
+      maxHeight: '88vh',
+      autoFocus: false,
+      data: dialogData
+    });
+    this.closing$.pipe(
+      takeUntil(picker.afterClosed()),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(() => picker.close());
+    picker.afterClosed().pipe(
+      takeUntil(this.closing$),
+      takeUntilWorkspaceChanged(this.appService, this.workspaceId),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(jobDefinitionId => {
+      if (jobDefinitionId !== undefined) {
+        this.onJobDefinitionFilterChange(jobDefinitionId);
+      }
+    });
   }
 
   private getJobDefinitionLabel(jobDefinition: JobDefinition): string {
@@ -350,7 +277,7 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     const coderCount = jobDefinition.assignedCoders?.length || 0;
     const caseOrderingMode = this.getJobDefinitionCaseOrderingLabel(jobDefinition);
     const maxCases = jobDefinition.maxCodingCases ?
-      ` · ${this.translateService.instant('coding.job-definition-max-cases', {
+      ` · ${this.uiTranslate('coding.job-definition-max-cases', {
         count: jobDefinition.maxCodingCases
       })}` :
       '';
@@ -381,66 +308,63 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     const visibleNames = bundleNames.slice(0, 2).join(', ');
     const hiddenCount = bundleNames.length - 2;
     return hiddenCount > 0 ?
-      this.translateService.instant('coding.job-definition-bundles-more', { names: visibleNames, count: hiddenCount }) :
-      this.translateService.instant('coding.job-definition-bundles', { names: visibleNames });
+      this.uiTranslate('coding.job-definition-bundles-more', { names: visibleNames, count: hiddenCount }) :
+      this.uiTranslate('coding.job-definition-bundles', { names: visibleNames });
   }
 
   private loadJobDefinitions(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
     if (!workspaceId) {
       return;
     }
     this.isLoadingJobDefinitions.set(true);
     this.codingJobBackendService
       .getJobDefinitions(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntil(this.closing$),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe({
         next: jobDefinitions => {
-          this.changeDetectorRef.markForCheck();
           this.availableJobDefinitions.set(
             jobDefinitions
               .filter(jobDefinition => jobDefinition.id !== undefined)
               .sort((a, b) => (a.id ?? 0) - (b.id ?? 0))
           );
-          this.refreshJobDefinitionOptions();
           this.isLoadingJobDefinitions.set(false);
           this.applyQuickFilterUnitSelection();
         },
         error: () => {
-          this.changeDetectorRef.markForCheck();
           this.availableJobDefinitions.set([]);
-          this.refreshJobDefinitionOptions();
           this.isLoadingJobDefinitions.set(false);
         }
       });
   }
 
   private loadVariableBundles(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
     if (!workspaceId) {
       return;
     }
-    this.isLoadingVariableBundles.set(true);
     this.codingJobBackendService
       .getVariableBundles(workspaceId)
-      .pipe(takeUntil(this.destroy$))
+      .pipe(
+        takeUntilWorkspaceChanged(this.appService, workspaceId),
+        takeUntil(this.closing$),
+        takeUntilDestroyed(this.destroyRef)
+      )
       .subscribe({
         next: variableBundles => {
-          this.changeDetectorRef.markForCheck();
           this.availableVariableBundles.set(
             variableBundles
               .filter(variableBundle => variableBundle.id !== undefined)
               .sort((a, b) => a.name.localeCompare(b.name))
           );
-          this.refreshJobDefinitionOptions();
-          this.isLoadingVariableBundles.set(false);
           this.applyQuickFilterUnitSelection();
         },
         error: () => {
-          this.changeDetectorRef.markForCheck();
           this.availableVariableBundles.set([]);
-          this.refreshJobDefinitionOptions();
-          this.isLoadingVariableBundles.set(false);
         }
       });
   }
@@ -481,34 +405,6 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
       return undefined;
     }
     return this.availableJobDefinitions().find(jobDefinition => jobDefinition.id === this.selectedJobDefinitionId());
-  }
-
-  private refreshJobDefinitionOptions(): void {
-    this.jobDefinitionOptions.set(
-      this.availableJobDefinitions().map(jobDefinition => {
-        const label = this.getJobDefinitionLabel(jobDefinition);
-        const meta = this.getJobDefinitionMeta(jobDefinition);
-        const bundleSummary = this.getJobDefinitionBundleSummary(jobDefinition);
-        const summary = [meta, bundleSummary].filter(Boolean).join(' · ');
-        return {
-          id: jobDefinition.id ?? 0,
-          jobDefinition,
-          label,
-          meta,
-          bundleSummary,
-          summary
-        };
-      })
-    );
-    this.updateSelectedJobDefinitionDisplay();
-  }
-
-  private updateSelectedJobDefinitionDisplay(): void {
-    const selectedOption = this.jobDefinitionOptions().find(option => option.id === this.selectedJobDefinitionId());
-    this.selectedJobDefinitionLabel.set(
-      selectedOption?.label || this.translateService.instant('coding.job-definition-all')
-    );
-    this.selectedJobDefinitionSummary.set(selectedOption?.summary || '');
   }
 
   private getSelectedVariableBundles(): VariableBundle[] {
@@ -602,16 +498,16 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
 
   private getJobDefinitionStatusLabel(jobDefinition: JobDefinition): string {
     const status = jobDefinition.status || 'draft';
-    return this.translateService.instant(`coding-job-definition-dialog.status.definition.${status}`);
+    return this.uiTranslate(`coding-job-definition-dialog.status.definition.${status}`);
   }
 
   private getJobDefinitionCaseOrderingLabel(jobDefinition: JobDefinition): string {
     const caseOrderingMode = jobDefinition.caseOrderingMode || 'continuous';
-    return this.translateService.instant(`coding.job-definition-case-ordering-${caseOrderingMode}`);
+    return this.uiTranslate(`coding.job-definition-case-ordering-${caseOrderingMode}`);
   }
 
   private formatCount(count: number, singularKey: string, pluralKey: string): string {
-    return this.translateService.instant(count === 1 ? singularKey : pluralKey, { count });
+    return this.uiTranslate(count === 1 ? singularKey : pluralKey, { count });
   }
 
   private addVariableSelections(
@@ -673,29 +569,19 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
     }
   }
 
-  private handleValidationResults(results: ValidateCodingCompletenessResponseDto | null): void {
-    this.changeDetectorRef.markForCheck();
-    this.validationResults.set(results);
-    if (results) {
-      this.validationCacheKey.set(results.cacheKey || null);
-    }
-  }
-
-  private handleValidationProgress(progress: ValidationProgress): void {
-    this.changeDetectorRef.markForCheck();
-    this.validationProgress.set(progress);
-    this.isValidating.set(progress.status === 'loading' || progress.status === 'processing');
-  }
-
   private loadMissingsProfiles(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
+    const workspaceId = this.workspaceId;
     if (workspaceId) {
       this.missingsProfileService
         .getMissingsProfiles(workspaceId)
-        .pipe(takeUntil(this.destroy$))
+        .pipe(
+          takeUntilWorkspaceChanged(this.appService, workspaceId),
+          takeUntil(this.closing$),
+          takeUntilDestroyed(this.destroyRef),
+          catchError(() => of([]))
+        )
         .subscribe({
           next: profiles => {
-            this.changeDetectorRef.markForCheck();
             this.missingsProfiles.set([
               { id: 0, label: '' },
               ...profiles.map((profile: { label: string; id: number }) => ({
@@ -703,135 +589,41 @@ export class ExportCodingBookComponent implements OnInit, OnDestroy {
                 label: profile.label
               }))
             ]);
-            this.selectedMissingsProfile.set(0);
-            this.contentOptions.update(current => ({
-              ...current,
-              missingsProfile: this.selectedMissingsProfile().toString()
-            }));
-          },
-          error: () => {
-            this.changeDetectorRef.markForCheck();
-            // Error occurred while loading missings profiles
           }
         });
     }
   }
 
   exportCodingBook(): void {
-    if (this.isExportBusy) return;
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (!workspaceId) {
+    const workspaceId = this.workspaceId;
+    const units = this.unitList();
+    if (this.closing || this.isExportBusy() || !workspaceId || workspaceId !== this.appService.selectedWorkspaceId || units.length === 0) {
       return;
     }
-    if (this.unitList().length === 0) {
-      return;
-    }
-    this.contentOptions.update(current => ({
-      ...current,
-      missingsProfile: this.selectedMissingsProfile().toString()
-    }));
-    this.contentOptions.update(current => ({ ...current, jobDefinitionId: this.selectedJobDefinitionId() }));
-    this.contentOptions.update(current => ({ ...current, variableBundleIds: this.selectedVariableBundleIds() }));
-    this.codebookJobStatus.set('pending');
-    this.codebookJobProgress.set(0);
-    this.codebookJobError.set(null);
-    this.codebookJobId.set(null);
-    this.exportService
-      .startCodebookJob(workspaceId, this.contentOptions().missingsProfile, this.contentOptions(), this.unitList())
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: response => {
-          this.changeDetectorRef.markForCheck();
-          this.codebookJobId.set(response.jobId);
-          this.startCodebookPolling(workspaceId, response.jobId);
-        },
-        error: () => {
-          this.changeDetectorRef.markForCheck();
-          this.codebookJobStatus.set('failed');
-          this.codebookJobError.set('Failed to start codebook generation job');
-        }
-      });
+
+    this.job.start(workspaceId, [...units], {
+      ...this.contentOptions(),
+      missingsProfile: this.selectedMissingsProfile().toString(),
+      variableBundleIds: [...this.selectedVariableBundleIds()]
+    }, (file, format) => this.saveFile(file, format));
   }
 
-  private startCodebookPolling(workspaceId: number, jobId: string): void {
-    this.stopCodebookPolling();
-    this.codebookPollingSubscription = interval(1500)
-      .pipe(
-        exhaustMap(() => this.exportService.getCodebookJobStatus(workspaceId, jobId)),
-        takeUntil(this.destroy$)
-      )
-      .subscribe({
-        next: status => {
-          this.changeDetectorRef.markForCheck();
-          if (!status.status && status.error) {
-            this.codebookJobStatus.set('failed');
-            this.codebookJobError.set(status.error);
-            this.stopCodebookPolling();
-            return;
-          }
-          this.codebookJobProgress.set(status.progress || 0);
-          if (status.status === 'completed') {
-            this.codebookJobStatus.set('processing');
-            this.stopCodebookPolling();
-            this.downloadCodebookResult(workspaceId, jobId);
-          } else if (status.status === 'failed') {
-            this.codebookJobStatus.set('failed');
-            this.codebookJobError.set(status.error || 'Codebook generation failed');
-            this.stopCodebookPolling();
-          } else if (status.status === 'processing') {
-            this.codebookJobStatus.set('processing');
-          } else {
-            this.codebookJobStatus.set('pending');
-          }
-        },
-        error: () => {
-          this.changeDetectorRef.markForCheck();
-          this.codebookJobStatus.set('failed');
-          this.codebookJobError.set('Failed to get job status');
-          this.stopCodebookPolling();
-        }
-      });
-  }
-
-  private stopCodebookPolling(): void {
-    if (this.codebookPollingSubscription) {
-      this.codebookPollingSubscription.unsubscribe();
-      this.codebookPollingSubscription = null;
+  private saveFile(file: Blob, format: CodeBookContentSetting['exportFormat']): void {
+    const url = window.URL.createObjectURL(file);
+    const link = document.createElement('a');
+    const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
+    link.href = url;
+    link.download = `codebook_${timestamp}.${format.toLowerCase()}`;
+    document.body.appendChild(link);
+    try {
+      link.click();
+    } finally {
+      link.remove();
+      window.URL.revokeObjectURL(url);
     }
   }
 
-  private downloadCodebookResult(workspaceId: number, jobId: string): void {
-    this.exportService
-      .downloadCodebookFile(workspaceId, jobId)
-      .pipe(takeUntil(this.destroy$))
-      .subscribe({
-        next: blob => {
-          this.changeDetectorRef.markForCheck();
-          const url = window.URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          const timestamp = this.datePipe.transform(new Date(), 'yyyyMMdd_HHmmss');
-          const fileExtension = this.contentOptions().exportFormat.toLowerCase();
-          a.href = url;
-          a.download = `codebook_${timestamp}.${fileExtension}`;
-          document.body.appendChild(a);
-          a.click();
-          window.URL.revokeObjectURL(url);
-          document.body.removeChild(a);
-          this.codebookJobStatus.set('completed');
-        },
-        error: () => {
-          this.changeDetectorRef.markForCheck();
-          this.codebookJobStatus.set('failed');
-          this.codebookJobError.set('Failed to download codebook file');
-        }
-      });
-  }
-
-  resetCodebookJob(): void {
-    this.codebookJobId.set(null);
-    this.codebookJobStatus.set('idle');
-    this.codebookJobProgress.set(0);
-    this.codebookJobError.set(null);
-    this.stopCodebookPolling();
+  protected resetCodebookJob(): void {
+    this.job.reset();
   }
 }

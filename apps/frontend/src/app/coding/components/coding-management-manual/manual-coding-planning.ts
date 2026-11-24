@@ -55,7 +55,32 @@ export interface ManualCodingPlanningState {
 
 /** Pure planning decisions and their presentation, independent of requests and Angular. */
 export class ManualCodingPlanning {
-  constructor(private readonly state: ManualCodingPlanningState, private readonly translate: UiTranslator) {}
+  private readonly status: PlanningStatusState;
+
+  constructor(private readonly state: ManualCodingPlanningState, private readonly translate: UiTranslator) {
+    this.status = this.resolvePlanningStatus();
+  }
+
+  getPresentation() {
+    return {
+      status: {
+        className: this.getPlanningStatusClass(),
+        icon: this.getPlanningStatusIcon(),
+        title: this.getPlanningStatusTitle(),
+        description: this.getPlanningStatusDescription()
+      },
+      nextStep: {
+        icon: this.getPlanningNextStepIcon(),
+        title: this.getPlanningNextStepTitle(),
+        description: this.getPlanningNextStepDescription(),
+        actionLabel: this.getPlanningNextStepActionLabel(),
+        target: this.getPlanningNextStepTarget(),
+        refreshesPlanning: this.status === 'loading' ||
+          this.status === 'planning-data-required' ||
+          this.status === 'progress-unavailable'
+      }
+    };
+  }
 
   getPlanningStatusClass(): string {
     switch (this.getPlanningStatusState()) {
@@ -88,6 +113,10 @@ export class ManualCodingPlanning {
   }
 
   getPlanningStatusState(): PlanningStatusState {
+    return this.status;
+  }
+
+  private getPreparationStatus(): PlanningStatusState | null {
     if (this.state.activeManualTab !== 'planning' &&
       !this.state.hasLoadedPlanningDataBundle) {
       return 'not-checked';
@@ -105,11 +134,7 @@ export class ManualCodingPlanning {
       return 'preparation-required';
     }
 
-    if (this.state.hasManualCodeAvailabilityWarnings) {
-      return 'warning';
-    }
-
-    if (this.state.hasVariableCoverageConflicts) {
+    if (this.state.hasManualCodeAvailabilityWarnings || this.state.hasVariableCoverageConflicts) {
       return 'warning';
     }
 
@@ -117,6 +142,13 @@ export class ManualCodingPlanning {
         (this.state.caseCoverageOverview?.effectiveUnassignedCases || 0) > 0) {
       return 'planning-incomplete';
     }
+
+    return null;
+  }
+
+  private resolvePlanningStatus(): PlanningStatusState {
+    const preparationStatus = this.getPreparationStatus();
+    if (preparationStatus) return preparationStatus;
 
     if (this.state.isPlanningReady && this.state.hasActiveTrainingCodingJobs) {
       return 'training-ready';

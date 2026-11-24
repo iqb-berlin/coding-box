@@ -4310,13 +4310,7 @@
       "units-title": "Aufgaben im Testheft"
     },
     "booklet-search-dialog": {
-      "title": "Booklet Suche",
-      "booklet-name": "Booklet Name",
-      "name-placeholder": "Booklet Name eingeben...",
-      "empty": "Keine Booklets gefunden.",
-      "delete-failed": "Fehler beim Löschen des Booklets: {{value1}}",
-      "delete-all-title": "Alle Booklets löschen",
-      "delete-all-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefundenen Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+      "empty": "Keine Booklets gefunden."
     },
     "content-pool-import-dialog": {
       "title": "ACP aus Content Pool importieren",
@@ -4978,25 +4972,6 @@
       "schemer": "Schemer:",
       "scheme-type": "Scheme Type:",
       "coding-scheme": "Kodierungsschema"
-    },
-    "unit-search-dialog": {
-      "booklets-title": "Booklets suchen",
-      "search-booklet": "Booklet suchen",
-      "booklet-placeholder": "Geben Sie den Namen des Booklets ein...",
-      "delete-filtered-units": "Alle {{value1}} gefilterten Aufgaben löschen",
-      "delete-filtered-responses": "Alle {{value1}} gefilterten Antworten löschen",
-      "delete-filtered-booklets": "Alle {{value1}} gefilterten Booklets löschen",
-      "delete-unit-confirmation": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" ({{value2}}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
-      "unit-deleted": "Unit erfolgreich gelöscht. Unit ID: {{deletedUnit}}",
-      "unit-delete-failed": "Fehler beim Löschen der Unit: {{value1}}",
-      "response-deleted": "Antwort erfolgreich gelöscht. Antwort ID: {{deletedResponse}}",
-      "response-delete-failed": "Fehler beim Löschen der Antwort: {{value1}}",
-      "delete-units-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "units-deleted": "{{deletedCount}} Aufgaben erfolgreich gelöscht.",
-      "units-delete-failed": "Fehler beim Löschen der Aufgaben: {{value1}}",
-      "delete-responses-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "delete-booklets-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "no-alias": "ohne Alias"
     },
     "duplicate-responses-validation-panel": {
       "title": "Duplikate-Prüfung",

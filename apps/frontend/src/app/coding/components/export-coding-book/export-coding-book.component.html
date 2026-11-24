@@ -1,6 +1,6 @@
-<ngx-codebook-export [availableUnits]="sharedUnits" [missingsProfiles]="sharedMissingsProfiles"
+<ngx-codebook-export [availableUnits]="sharedUnits()" [missingsProfiles]="sharedMissingsProfiles()"
   [selectedUnitIds]="unitList()" [selectedMissingsProfileId]="selectedMissingsProfile()"
-  [showGroupColumn]="false" [defaultContentOptions]="initialContentOptions" [loading]="isLoading()" [busy]="isExportBusy"
+  [showGroupColumn]="false" [defaultContentOptions]="initialContentOptions" [loading]="isLoading()" [busy]="isExportBusy()"
   (selectionChanged)="unitList.set($event)" (exportRequested)="onSharedExport($event)" (cancel)="closeDialog()">
         <!-- Quick filters section -->
         <div codebookFilters class="settings-section">
@@ -54,34 +54,35 @@
 
 <div codebookStatus>
   <!-- Codebook generation progress -->
-  @if (codebookJobStatus() !== 'idle') {
+  @let job = jobState();
+  @if (job.status !== 'idle') {
     <div class="codebook-progress-section">
-      @if (codebookJobStatus() === 'pending' || codebookJobStatus() === 'processing') {
+      @if (job.status === 'pending' || job.status === 'processing') {
         <div class="progress-container">
           <div class="progress-header">
             <mat-icon class="spinning">hourglass_empty</mat-icon>
             <span class="progress-label">
               {{ 'coding.codebook-generating' | translate }}
             </span>
-            <span class="progress-percentage">{{ codebookJobProgress() }}%</span>
+            <span class="progress-percentage">{{ job.progress }}%</span>
           </div>
           <mat-progress-bar
             mode="determinate"
-            [value]="codebookJobProgress()"
+            [value]="job.progress"
             color="primary">
           </mat-progress-bar>
         </div>
       }
-      @if (codebookJobStatus() === 'completed') {
+      @if (job.status === 'completed') {
         <div class="progress-container completed">
           <mat-icon color="primary">check_circle</mat-icon>
           <span class="progress-label">{{ 'coding.codebook-completed' | translate }}</span>
         </div>
       }
-      @if (codebookJobStatus() === 'failed') {
+      @if (job.status === 'failed') {
         <div class="progress-container failed">
           <mat-icon color="warn">error</mat-icon>
-          <span class="progress-label">{{ codebookJobError() }}</span>
+          <span class="progress-label">{{ job.error }}</span>
           <button mat-icon-button (click)="resetCodebookJob()" [matTooltip]="'ui-text.export-coding-book.reset' | translate" [attr.aria-label]="'accessibility.actions.reset-codebook-job' | translate">
             <mat-icon>refresh</mat-icon>
           </button>

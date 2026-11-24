@@ -5,8 +5,8 @@ import { Request } from 'express';
 import {
   calculateModalValue, formatModalCandidates, getCurrentCoding, getCurrentManualCoding, getModalTieLabel, mapCodeForExport
 } from '../../../utils/coding-utils';
+import { buildTrainingManagerExportRows } from './training-discussion-export-rows';
 import { ResponseEntity } from '../../entities/response.entity';
-import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { applyResolvedExclusionsToQuery, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { toManualCodingVariablePairKey } from '../../utils/manual-coding-candidate.util';
@@ -24,8 +24,6 @@ export class CodingAggregatedRowsExportService {
   constructor(
     @InjectRepository(ResponseEntity)
     private responseRepository: Repository<ResponseEntity>,
-    @InjectRepository(CodingJob)
-    private codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobUnit)
     private codingJobUnitRepository: Repository<CodingJobUnit>,
     private workspaceExclusionService: WorkspaceExclusionService,
@@ -136,37 +134,9 @@ export class CodingAggregatedRowsExportService {
 
     const sortedVariables = Array.from(variableSet).sort();
 
-    const coderRecordsQuery = this.codingJobRepository.createQueryBuilder('cj')
-      .innerJoin('cj.codingJobCoders', 'cjc')
-      .innerJoin('cjc.user', 'user')
-      .select('user.username', 'userName')
-      .where('cj.workspace_id = :workspaceId', { workspaceId });
-
-    this.query.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
-    if (!coderTrainingIds?.length) {
-      coderRecordsQuery.andWhere('cj.training_id IS NULL');
-    }
-
-    const coderRecords = await coderRecordsQuery
-      .groupBy('user.username')
-      .getRawMany();
-
-    const allCoderNames = coderRecords.map(c => c.userName).sort();
-    if ((coderTrainingIds?.length || 0) > 0) {
-      const managerUsernames = await this.query.getTrainingManagerUsernames(workspaceId, coderTrainingIds);
-      managerUsernames.forEach(managerUsername => {
-        if (!allCoderNames.includes(managerUsername)) {
-          allCoderNames.push(managerUsername);
-        }
-      });
-      allCoderNames.sort();
-    }
-    const coderMapping = new Map<string, string>();
-    if (anonymizeCoders) {
-      allCoderNames.forEach((name, idx) => {
-        coderMapping.set(name, usePseudoCoders ? `Coder ${idx + 1}` : `Coder_${idx + 1}`);
-      });
-    }
+    const { allCoderNames, coderMapping } = await this.query.getAggregatedExportCoders(workspaceId, {
+      jobDefinitionIds, coderTrainingIds, coderIds, anonymizeCoders, usePseudoCoders
+    });
 
     // 3. Get all persons
     const personResultsQuery = this.responseRepository.createQueryBuilder('resp')
@@ -282,38 +252,7 @@ export class CodingAggregatedRowsExportService {
         ));
 
         const discussionResultMap = await this.query.getTrainingDiscussionResultsMap(workspaceId, coderTrainingIds, responseIds);
-        const managerRows: Record<string, unknown>[] = [];
-        const handledCases = new Set<string>();
-
-        for (const row of manualCoding) {
-          const trainingId = parseInt(row.trainingId, 10);
-          const responseId = parseInt(row.responseId, 10);
-          if (Number.isNaN(trainingId) || Number.isNaN(responseId)) continue;
-
-          const caseKey = `${trainingId}|${responseId}`;
-          if (handledCases.has(caseKey)) continue;
-          handledCases.add(caseKey);
-
-          const discussionResult = discussionResultMap.get(caseKey);
-          if (!discussionResult?.managerUsername) continue;
-
-          managerRows.push({
-            ...row,
-            username: discussionResult.managerUsername,
-            cju_code: discussionResult.code,
-            cju_score: discussionResult.score,
-            code_v1: null,
-            code_v2: null,
-            code_v3: null,
-            score_v1: null,
-            score_v2: null,
-            score_v3: null,
-            autocoder_invalidated_version: null,
-            notes: discussionResult.notes
-          });
-        }
-
-        manualCoding.push(...managerRows);
+        manualCoding.push(...buildTrainingManagerExportRows(manualCoding, discussionResultMap));
       }
 
       const autoCoding = (excludeAutoCoded || hasScopedJobFilters) ? [] : await this.responseRepository.createQueryBuilder('resp')

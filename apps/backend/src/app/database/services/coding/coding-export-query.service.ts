@@ -5,6 +5,7 @@ import {
 } from 'typeorm';
 import { CodingListService } from './coding-list.service';
 import { ResponseEntity } from '../../entities/response.entity';
+import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { CoderTrainingDiscussionResult } from '../../entities/coder-training-discussion-result.entity';
 import User from '../../entities/user.entity';
@@ -27,7 +28,9 @@ export class CodingExportQueryService {
     @InjectRepository(User)
     private userRepository: Repository<User>,
     private codingListService: CodingListService,
-    private workspaceExclusionService: WorkspaceExclusionService
+    private workspaceExclusionService: WorkspaceExclusionService,
+    @InjectRepository(CodingJob)
+    private readonly codingJobRepository: Repository<CodingJob>
   ) {}
 
   async getExclusionChecker(workspaceId: number): Promise<(bookletName: string, unitName: string) => boolean> {
@@ -266,6 +269,53 @@ export class CodingExportQueryService {
           .filter((managerUsername): managerUsername is string => !!managerUsername)
       )
     ).sort();
+  }
+
+  async getAggregatedExportCoders(
+    workspaceId: number,
+    options: {
+      jobDefinitionIds?: number[];
+      coderTrainingIds?: number[];
+      coderIds?: number[];
+      anonymizeCoders: boolean;
+      usePseudoCoders: boolean;
+    }
+  ): Promise<{ allCoderNames: string[]; coderMapping: Map<string, string> }> {
+    const {
+      jobDefinitionIds, coderTrainingIds, coderIds, anonymizeCoders, usePseudoCoders
+    } = options;
+    const coderRecordsQuery = this.codingJobRepository.createQueryBuilder('cj')
+      .innerJoin('cj.codingJobCoders', 'cjc')
+      .innerJoin('cjc.user', 'user')
+      .select('user.username', 'userName')
+      .where('cj.workspace_id = :workspaceId', { workspaceId });
+
+    this.applyJobFilters(coderRecordsQuery, jobDefinitionIds, coderTrainingIds, coderIds);
+    if (!coderTrainingIds?.length) {
+      coderRecordsQuery.andWhere('cj.training_id IS NULL');
+    }
+
+    const coderRecords = await coderRecordsQuery
+      .groupBy('user.username')
+      .getRawMany<{ userName: string }>();
+
+    const allCoderNames = coderRecords.map(c => c.userName).sort();
+    if ((coderTrainingIds?.length || 0) > 0) {
+      const managerUsernames = await this.getTrainingManagerUsernames(workspaceId, coderTrainingIds);
+      managerUsernames.forEach(managerUsername => {
+        if (!allCoderNames.includes(managerUsername)) {
+          allCoderNames.push(managerUsername);
+        }
+      });
+      allCoderNames.sort();
+    }
+    const coderMapping = new Map<string, string>();
+    if (anonymizeCoders) {
+      allCoderNames.forEach((name, idx) => {
+        coderMapping.set(name, usePseudoCoders ? `Coder ${idx + 1}` : `Coder_${idx + 1}`);
+      });
+    }
+    return { allCoderNames, coderMapping };
   }
 
   private normalizeFilterIds(ids?: number[]): number[] {

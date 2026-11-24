@@ -26,7 +26,7 @@ import { MatTooltipModule } from '@angular/material/tooltip';
 import { ActivatedRoute, Router } from '@angular/router';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import {
-  Subject, takeUntil
+  Subject, takeUntil, timer
 } from 'rxjs';
 import { completionReadinessTitle } from './manual-completion-readiness';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
@@ -62,8 +62,9 @@ import {
   isTrainingCodingJob
 } from './manual-coding-job-summary';
 import {
-  ManualCodingPlanning, ManualCodingTab, ManualFreshnessTarget, PlanningStatusState
+  ManualCodingPlanning, ManualCodingTab
 } from './manual-coding-planning';
+import { ManualCodingTabLoadAction, planManualCodingTabLoad } from './manual-coding-tab-load';
 import { ManualCodingPlanningFacade } from './manual-coding-planning.facade';
 import { ManualCodingSettingsFacade } from './manual-coding-settings.facade';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
@@ -92,9 +93,6 @@ import {
 } from '../../services/validation-state.service';
 
 import { CodingFreshnessSummaryItemDto } from '../../../../../../../api-dto/coding/coding-freshness.dto';
-import type {
-  ManualCodeAvailabilityWarningDto
-} from '../../../../../../../api-dto/coding/manual-code-availability.dto';
 import { MissingDto, MissingsProfilesDto } from '../../../../../../../api-dto/coding/missings-profiles.dto';
 import { UserBackendService } from '../../../shared/services/user/user-backend.service';
 import {
@@ -305,8 +303,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   protected readonly manualCodingScopeSummary = this.statistics.manualCodingScopeSummary;
   readonly manualCodeAvailabilityWarnings = this.statistics.manualCodeAvailabilityWarnings;
-  protected readonly showAllManualCodeAvailabilityWarnings = this.statistics.showAllManualCodeAvailabilityWarnings;
-  readonly manualCodeAvailabilityPreviewLimit = 5;
 
   readonly statusDistribution = this.statistics.statusDistribution;
 
@@ -342,33 +338,46 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   expectedCombinations: ExpectedCombinationDto[] = [];
 
-  private readonly planning = computed(() => new ManualCodingPlanning({
-    hasVariableCoverageConflicts: this.hasVariableCoverageConflicts(),
-    hasManualCodeAvailabilityWarnings: this.hasManualCodeAvailabilityWarnings(),
-    activeManualTab: this.activeManualTab,
-    hasLoadedPlanningDataBundle: this.hasLoadedPlanningDataBundle,
-    isPlanningStatusLoading: this.isPlanningStatusLoading(),
-    shouldRequirePlanningDataRefresh: this.shouldRequirePlanningDataRefresh(),
-    hasPreparationRefreshTarget: this.hasPreparationRefreshTarget(),
-    variableCoverageOverview: this.variableCoverageOverview(),
-    caseCoverageOverview: this.caseCoverageOverview(),
-    isPlanningReady: this.isPlanningReady(),
-    hasActiveTrainingCodingJobs: this.hasActiveTrainingCodingJobs(),
-    codingProgressOverview: this.codingProgressOverview(),
-    hasExecutionOpenWorkForFreshness: this.hasExecutionOpenWorkForFreshness(),
-    hasOpenDoubleCodingReviewConflicts: this.hasOpenDoubleCodingReviewConflicts(),
-    hasStaleSourceManualJobs: this.hasStaleSourceManualJobs(),
-    isCompletionComplete: this.isCompletionComplete(),
-    appliedResultsOverview: this.appliedResultsOverview(),
-    hasCompletionReadyWorkForFreshness: this.hasCompletionReadyWorkForFreshness(),
-    canShowManualCompletionTab: this.canShowManualCompletionTab(),
-    isResponseAnalysisOutdated: this.isResponseAnalysisOutdated(),
-    manualCodeAvailabilityWarningCount: this.manualCodeAvailabilityWarningCount(),
-    manualFreshnessJobSummary: this.manualFreshnessJobSummary,
-    openDoubleCodingConflictCount: this.openDoubleCodingConflictCount,
-    getAvailableCasesForNewJobs: this.getAvailableCasesForNewJobs(),
-    getUnavailableCasesForNewJobs: this.getUnavailableCasesForNewJobs()
-  }, this.uiTranslate));
+  readonly planningView = computed(() => {
+    const warnings = this.manualCodeAvailabilityWarnings();
+    const planning = new ManualCodingPlanning({
+      hasVariableCoverageConflicts: this.hasVariableCoverageConflicts(),
+      hasManualCodeAvailabilityWarnings: warnings.length > 0,
+      activeManualTab: this.activeManualTab,
+      hasLoadedPlanningDataBundle: this.hasLoadedPlanningDataBundle,
+      isPlanningStatusLoading: this.isPlanningStatusLoading(),
+      shouldRequirePlanningDataRefresh: this.shouldRequirePlanningDataRefresh(),
+      hasPreparationRefreshTarget: this.hasPreparationRefreshTarget(),
+      variableCoverageOverview: this.variableCoverageOverview(),
+      caseCoverageOverview: this.caseCoverageOverview(),
+      isPlanningReady: this.isPlanningReady(),
+      hasActiveTrainingCodingJobs: this.hasActiveTrainingCodingJobs(),
+      codingProgressOverview: this.codingProgressOverview(),
+      hasExecutionOpenWorkForFreshness: this.hasExecutionOpenWorkForFreshness(),
+      hasOpenDoubleCodingReviewConflicts: this.hasOpenDoubleCodingReviewConflicts(),
+      hasStaleSourceManualJobs: this.hasStaleSourceManualJobs(),
+      isCompletionComplete: this.isCompletionComplete(),
+      appliedResultsOverview: this.appliedResultsOverview(),
+      hasCompletionReadyWorkForFreshness: this.hasCompletionReadyWorkForFreshness(),
+      canShowManualCompletionTab: this.canShowManualCompletionTab(),
+      isResponseAnalysisOutdated: this.isResponseAnalysisOutdated(),
+      manualCodeAvailabilityWarningCount: warnings.length,
+      manualFreshnessJobSummary: this.manualFreshnessJobSummary,
+      openDoubleCodingConflictCount: this.openDoubleCodingConflictCount,
+      getAvailableCasesForNewJobs: this.getAvailableCasesForNewJobs(),
+      getUnavailableCasesForNewJobs: this.getUnavailableCasesForNewJobs()
+    }, this.uiTranslate);
+    const warningsExpanded = this.statistics.showAllManualCodeAvailabilityWarnings();
+    const warningPreviewLimit = 5;
+    return {
+      ...planning.getPresentation(),
+      warnings: {
+        visible: warningsExpanded ? warnings : warnings.slice(0, warningPreviewLimit),
+        expanded: warningsExpanded,
+        hiddenCount: Math.max(0, warnings.length - warningPreviewLimit)
+      }
+    };
+  });
 
   constructor() {
     this.refreshWorkflow.connect({
@@ -1045,41 +1054,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.completion.applyAllCompletedJobResults(() => this.canApplyCompletedJobResults());
   }
 
-  getPlanningStatusClass(): string { return this.planning().getPlanningStatusClass(); }
-
-  private getPlanningStatusState(): PlanningStatusState { return this.planning().getPlanningStatusState(); }
-
-  getPlanningStatusIcon(): string { return this.planning().getPlanningStatusIcon(); }
-
-  getPlanningStatusTitle(): string { return this.planning().getPlanningStatusTitle(); }
-
-  getPlanningStatusDescription(): string { return this.planning().getPlanningStatusDescription(); }
-
-  getPlanningNextStepTitle(): string { return this.planning().getPlanningNextStepTitle(); }
-
-  getPlanningNextStepDescription(): string { return this.planning().getPlanningNextStepDescription(); }
-
-  getPlanningNextStepActionLabel(): string { return this.planning().getPlanningNextStepActionLabel(); }
-
-  getPlanningNextStepTargetSection(): string { return this.planning().getPlanningNextStepTargetSection(); }
-
-  getPlanningNextStepTargetTab(): ManualCodingTab { return this.planning().getPlanningNextStepTargetTab(); }
-
-  private getPlanningNextStepTarget(): ManualFreshnessTarget { return this.planning().getPlanningNextStepTarget(); }
-
   performPlanningNextStep(): void {
-    const planningStatusState = this.getPlanningStatusState();
-    if (planningStatusState === 'loading' ||
-        planningStatusState === 'planning-data-required' ||
-        planningStatusState === 'progress-unavailable') {
+    if (this.planningView().nextStep.refreshesPlanning) {
       this.refreshManualCodingPlanning();
       return;
     }
 
     this.followManualFreshnessTarget();
   }
-
-  protected getPlanningNextStepIcon(): string { return this.planning().getPlanningNextStepIcon(); }
 
   get codingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
     const warnings = this.allCodingFreshnessWarnings();
@@ -1099,31 +1081,6 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
 
   get hasCodingFreshnessWarnings(): boolean {
     return this.codingFreshnessWarnings.length > 0;
-  }
-
-  readonly manualCodeAvailabilityWarningCount = computed<number>(() => this.manualCodeAvailabilityWarnings().length);
-
-  readonly hasManualCodeAvailabilityWarnings = computed<boolean>(() => this.manualCodeAvailabilityWarningCount() > 0);
-
-  protected readonly hiddenManualCodeAvailabilityWarningCount = computed<number>(() => Math.max(
-    0,
-    this.manualCodeAvailabilityWarningCount() -
-        this.manualCodeAvailabilityPreviewLimit
-  ));
-
-  protected readonly hasHiddenManualCodeAvailabilityWarnings = computed<boolean>(() => this.hiddenManualCodeAvailabilityWarningCount() > 0);
-
-  getManualCodeAvailabilityPreview(): ManualCodeAvailabilityWarningDto[] {
-    return this.manualCodeAvailabilityWarnings().slice(
-      0,
-      this.manualCodeAvailabilityPreviewLimit
-    );
-  }
-
-  protected getVisibleManualCodeAvailabilityWarnings(): ManualCodeAvailabilityWarningDto[] {
-    return this.showAllManualCodeAvailabilityWarnings() ?
-      this.manualCodeAvailabilityWarnings() :
-      this.getManualCodeAvailabilityPreview();
   }
 
   protected toggleManualCodeAvailabilityWarnings(): void {
@@ -1224,70 +1181,53 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
     this.settings.loadInitialSettings();
   }
 
-  private loadManualTabData(
-    tab: ManualCodingTab,
-    options: ManualCodingTabLoadOptions = {}
-  ): void {
-    if (!this.isManualTabAvailable(tab)) {
-      return;
-    }
+  private readonly manualTabLoadActions: Record<
+    ManualCodingTabLoadAction,
+    (tab: ManualCodingTab, scope: CodingJobsReloadScope, forceRefresh: boolean) => void
+  > = {
+    'response-analysis': () => this.loadResponseAnalysis(),
+    'planning-bundle': (_tab, _scope, forceRefresh) => this.loadPlanningDataBundle(forceRefresh),
+    'execution-statistics': () => {
+      this.loadCodingProgressOverview();
+      this.loadCaseCoverageOverview();
+      this.loadWorkspaceKappaSummary();
+    },
+    'completion-statistics': () => {
+      this.loadCodingIncompleteVariables();
+      this.loadCompletedJobsReadyForApply();
+    },
+    'reload-jobs': (tab, scope) => {
+      this.reloadCodingJobsList(scope);
+      this.schedulePendingCodingJobsReloadForTab(tab);
+    },
+    'reload-pending-jobs': tab => this.reloadPendingCodingJobsForTab(tab)
+  };
+
+  private loadManualTabData(tab: ManualCodingTab, options: ManualCodingTabLoadOptions = {}): void {
+    if (!this.isManualTabAvailable(tab)) return;
 
     this.renderedManualTabs.update(value => ({ ...value, [tab]: true }));
-    const reloadCodingJobs = options.reloadCodingJobs ?? false;
-    const codingJobsReloadScope = options.codingJobsReloadScope ?? 'active';
-    const forceRefresh = options.forceRefresh ?? false;
-    const deferStatusChecks = options.deferStatusChecks ?? false;
-    const hasPlanningDataSnapshot = !forceRefresh &&
-      this.restorePlanningDataBundleSnapshot();
-    const canUsePlanningDataSnapshot =
-      tab === 'preparation' || tab === 'planning';
+    const {
+      reloadCodingJobs = false,
+      codingJobsReloadScope = 'active',
+      forceRefresh = false,
+      deferStatusChecks = false
+    } = options;
+    const hasPlanningSnapshot = !forceRefresh && this.restorePlanningDataBundleSnapshot();
+    const canUsePlanningSnapshot = tab === 'preparation' || tab === 'planning';
     if (this.shouldSkipAutomaticManualTabLoad(forceRefresh, tab) &&
-      !(hasPlanningDataSnapshot && canUsePlanningDataSnapshot)) {
+      !(hasPlanningSnapshot && canUsePlanningSnapshot)) {
       return;
     }
 
     this.loadedManualTabData[tab] = true;
-
-    switch (tab) {
-      case 'preparation':
-        if (!hasPlanningDataSnapshot) {
-          this.loadResponseAnalysis();
-        }
-        return;
-      case 'planning':
-        if (!hasPlanningDataSnapshot && !deferStatusChecks &&
-          (forceRefresh || this.autoRefreshManualCodingJobs())) {
-          this.loadPlanningDataBundle(forceRefresh);
-        }
-        return;
-      case 'training':
-        if (reloadCodingJobs) {
-          this.reloadCodingJobsList(codingJobsReloadScope);
-          this.schedulePendingCodingJobsReloadForTab(tab);
-        } else {
-          this.reloadPendingCodingJobsForTab(tab);
-        }
-        return;
-      case 'execution':
-        if (!deferStatusChecks) {
-          this.loadCodingProgressOverview();
-          this.loadCaseCoverageOverview();
-          this.loadWorkspaceKappaSummary();
-        }
-        if (reloadCodingJobs) {
-          this.reloadCodingJobsList(codingJobsReloadScope);
-          this.schedulePendingCodingJobsReloadForTab(tab);
-        } else {
-          this.reloadPendingCodingJobsForTab(tab);
-        }
-        return;
-      case 'completion':
-        this.loadCodingIncompleteVariables();
-        this.loadCompletedJobsReadyForApply();
-        return;
-      default:
-        this.refreshAllStatistics();
-    }
+    const actions = planManualCodingTabLoad(tab, {
+      hasPlanningSnapshot,
+      deferStatusChecks,
+      refreshPlanning: forceRefresh || this.autoRefreshManualCodingJobs(),
+      reloadCodingJobs
+    });
+    actions.forEach(action => this.manualTabLoadActions[action](tab, codingJobsReloadScope, forceRefresh));
   }
 
   private loadPlanningDataBundle(forceRefresh: boolean): void { return this.planningData.loadPlanningDataBundle(forceRefresh); }
@@ -1419,14 +1359,14 @@ export class CodingManagementManualComponent implements OnInit, OnDestroy {
   }
 
   private followManualFreshnessTarget(): void {
-    const target = this.getPlanningNextStepTarget();
+    const { target } = this.planningView().nextStep;
     this.goToManualTab(target.tab, target.sectionId);
 
     if (target.action === 'double-coding-review') {
-      const workspaceId = this.appService.selectedWorkspaceId;
-      setTimeout(() => {
-        if (!this.destroyRef.destroyed && workspaceId === this.appService.selectedWorkspaceId) this.openDoubleCodedReviewDialog();
-      }, 0);
+      timer(0).pipe(
+        takeUntilWorkspaceChanged(this.appService),
+        takeUntilDestroyed(this.destroyRef)
+      ).subscribe(() => this.openDoubleCodedReviewDialog());
     }
   }
 

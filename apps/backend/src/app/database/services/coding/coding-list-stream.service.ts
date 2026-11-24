@@ -22,6 +22,7 @@ import {
   CodingVariableAnchorMaps,
   CodingVariablePageCache,
   CodingItemVersionRow,
+  CodingListResponseRow,
   CodingItemVersionExportValues
 } from './coding-item-builder.service';
 import { CodingFileCacheService } from './coding-file-cache.service';
@@ -57,6 +58,19 @@ type ExportProgressCallback = (
     totalRows?: number;
   }
 ) => Promise<void>;
+
+interface VersionedExcelRowsOptions {
+  workspaceId: number;
+  version: 'v1' | 'v2' | 'v3';
+  exportProfile: ResolvedMissingsProfile;
+  authToken?: string;
+  serverUrl?: string;
+  includeReplayUrls: boolean;
+  includeResponseValues: boolean;
+  includeGeoGebraResponseValues: boolean;
+  progressCallback?: ExportProgressCallback;
+  checkCancellation?: () => Promise<void>;
+}
 
 interface VersionedExportProgressState {
   lastReportedRows: number;
@@ -558,102 +572,8 @@ export class CodingListStreamService {
 
     const worksheet = workbook.addWorksheet('Coding List');
 
-    worksheet.columns = [
-      { header: 'unit_key', key: 'unit_key', width: 30 },
-      { header: 'unit_alias', key: 'unit_alias', width: 30 },
-      { header: 'person_login', key: 'person_login', width: 25 },
-      { header: 'person_code', key: 'person_code', width: 25 },
-      { header: 'person_group', key: 'person_group', width: 25 },
-      { header: 'booklet_name', key: 'booklet_name', width: 30 },
-      { header: 'variable_id', key: 'variable_id', width: 30 },
-      { header: 'variable_page', key: 'variable_page', width: 15 },
-      { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
-      { header: 'status_v1', key: 'status_v1', width: 20 },
-      { header: 'url', key: 'url', width: 60 }
-    ];
-
     try {
-      await checkCancellation?.();
-      const { filterOptions, trainingRequiredMap } =
-        await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
-      await checkCancellation?.();
-      const totalRows = await this.responseFilterService.countResponses(
-        workspace_id,
-        filterOptions
-      );
-      await checkCancellation?.();
-      const batchSize = this.getCodingListExportBatchSize();
-      let lastId = 0;
-      let totalWritten = 0;
-
-      let hasMoreRows = true;
-      while (hasMoreRows) {
-        await checkCancellation?.();
-        const responses = await this.responseFilterService.getResponsesBatch(
-          workspace_id,
-          lastId,
-          batchSize,
-          filterOptions
-        );
-        await checkCancellation?.();
-
-        if (!responses.length) {
-          hasMoreRows = false;
-          continue;
-        }
-
-        const variableAnchorMaps = await this.loadVariableAnchorMapsForResponses(
-          responses,
-          workspace_id,
-          checkCancellation
-        );
-
-        for (let responseIndex = 0; responseIndex < responses.length; responseIndex += 1) {
-          if (this.shouldYieldExportRow(responseIndex)) {
-            await checkCancellation?.();
-            await this.yieldToEventLoop();
-          }
-
-          const response = responses[responseIndex];
-          // Apply trainingRequired filter here
-          if (trainingRequired !== undefined && trainingRequiredMap) {
-            const unitKey = response.unit?.name || '';
-            const variableId = response.variableid || '';
-            const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
-            if (isRequired !== trainingRequired) {
-              continue;
-            }
-          }
-
-          const item = await this.itemBuilderService.buildCodingItem(
-            response,
-            authToken!,
-            serverUrl!,
-            workspace_id,
-            variableAnchorMaps
-          );
-          if (item) {
-            worksheet.addRow(item).commit();
-            totalWritten += 1;
-          }
-        }
-
-        // Force garbage collection hint after each batch
-        if (global.gc) {
-          global.gc();
-        }
-
-        lastId = responses[responses.length - 1].id;
-
-        if (progressCallback && totalRows > 0) {
-          const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
-          await progressCallback(percentage);
-        }
-
-        await this.yieldToEventLoop();
-      }
-
-      await checkCancellation?.();
+      const totalWritten = await this.writeCodingListRows(worksheet, workspace_id, authToken, serverUrl, progressCallback, trainingRequired, checkCancellation);
       this.logger.log(`Excel export finished. Rows written: ${totalWritten}`);
 
       // Set up promise to wait for stream completion BEFORE committing
@@ -706,80 +626,8 @@ export class CodingListStreamService {
     });
     const worksheet = workbook.addWorksheet('Coding List');
 
-    worksheet.columns = [
-      { header: 'unit_key', key: 'unit_key', width: 30 },
-      { header: 'unit_alias', key: 'unit_alias', width: 30 },
-      { header: 'person_login', key: 'person_login', width: 25 },
-      { header: 'person_code', key: 'person_code', width: 25 },
-      { header: 'person_group', key: 'person_group', width: 25 },
-      { header: 'booklet_name', key: 'booklet_name', width: 30 },
-      { header: 'variable_id', key: 'variable_id', width: 30 },
-      { header: 'variable_page', key: 'variable_page', width: 15 },
-      { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
-      { header: 'status_v1', key: 'status_v1', width: 20 },
-      { header: 'url', key: 'url', width: 60 }
-    ];
-
     try {
-      await checkCancellation?.();
-      const { filterOptions, trainingRequiredMap } =
-        await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
-      await checkCancellation?.();
-      const totalRows = await this.responseFilterService.countResponses(
-        workspace_id,
-        filterOptions
-      );
-      await checkCancellation?.();
-      const batchSize = this.getCodingListExportBatchSize();
-      const knownAnchors: CodingVariableAnchorMaps = new Map();
-      let totalWritten = 0;
-
-      for await (const responses of this.responseFilterService.readCodingListResponseBatches(
-        workspace_id, batchSize, filterOptions
-      )) {
-        await checkCancellation?.();
-        const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
-          responses, workspace_id, knownAnchors, checkCancellation
-        );
-
-        for (let responseIndex = 0; responseIndex < responses.length; responseIndex += 1) {
-          if (this.shouldYieldExportRow(responseIndex)) {
-            await checkCancellation?.();
-            await this.yieldToEventLoop();
-          }
-
-          const response = responses[responseIndex];
-          if (trainingRequired !== undefined && trainingRequiredMap) {
-            const unitKey = response.unitKey || '';
-            const variableId = response.variableId || '';
-            const isRequired = trainingRequiredMap.get(unitKey.toUpperCase())?.has(variableId) || false;
-            if (isRequired !== trainingRequired) {
-              continue;
-            }
-          }
-
-          const item = await this.itemBuilderService.buildCodingItemFromRow(
-            response,
-            authToken!,
-            serverUrl!,
-            workspace_id,
-            variableAnchorMaps
-          );
-          if (item) {
-            worksheet.addRow(item).commit();
-            totalWritten += 1;
-          }
-        }
-
-        if (progressCallback && totalRows > 0) {
-          const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
-          await progressCallback(percentage);
-        }
-
-        await this.yieldToEventLoop();
-      }
-
-      await checkCancellation?.();
+      const totalWritten = await this.writeCodingListRows(worksheet, workspace_id, authToken, serverUrl, progressCallback, trainingRequired, checkCancellation);
       await worksheet.commit();
       await workbook.commit();
       await streamComplete;
@@ -798,6 +646,95 @@ export class CodingListStreamService {
     } finally {
       this.fileCacheService.clearCaches();
     }
+  }
+
+  private matchesTrainingRequirement(
+    response: CodingListResponseRow,
+    trainingRequired: boolean | undefined,
+    trainingRequiredMap: Map<string, Set<string>> | null
+  ): boolean {
+    if (trainingRequired === undefined || !trainingRequiredMap) return true;
+    const unitKey = (response.unitKey || '').toUpperCase();
+    const isRequired = trainingRequiredMap.get(unitKey)?.has(response.variableId || '') ?? false;
+    return isRequired === trainingRequired;
+  }
+
+  private async writeCodingListRows(
+    worksheet: ExcelJS.Worksheet,
+    workspace_id: number,
+    authToken?: string,
+    serverUrl?: string,
+    progressCallback?: (percentage: number) => Promise<void>,
+    trainingRequired?: boolean,
+    checkCancellation?: () => Promise<void>
+  ): Promise<number> {
+    worksheet.columns = [
+      { header: 'unit_key', key: 'unit_key', width: 30 },
+      { header: 'unit_alias', key: 'unit_alias', width: 30 },
+      { header: 'person_login', key: 'person_login', width: 25 },
+      { header: 'person_code', key: 'person_code', width: 25 },
+      { header: 'person_group', key: 'person_group', width: 25 },
+      { header: 'booklet_name', key: 'booklet_name', width: 30 },
+      { header: 'variable_id', key: 'variable_id', width: 30 },
+      { header: 'variable_page', key: 'variable_page', width: 15 },
+      { header: 'variable_anchor', key: 'variable_anchor', width: 30 },
+      { header: 'status_v1', key: 'status_v1', width: 20 },
+      { header: 'url', key: 'url', width: 60 }
+    ];
+
+    await checkCancellation?.();
+    const { filterOptions, trainingRequiredMap } =
+      await this.getCodingListFilterContext(workspace_id, trainingRequired, checkCancellation);
+    await checkCancellation?.();
+    const totalRows = await this.responseFilterService.countResponses(
+      workspace_id,
+      filterOptions
+    );
+    await checkCancellation?.();
+    const batchSize = this.getCodingListExportBatchSize();
+    const knownAnchors: CodingVariableAnchorMaps = new Map();
+    let totalWritten = 0;
+
+    for await (const responses of this.responseFilterService.readCodingListResponseBatches(
+      workspace_id, batchSize, filterOptions
+    )) {
+      await checkCancellation?.();
+      const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
+        responses, workspace_id, knownAnchors, checkCancellation
+      );
+
+      for (let responseIndex = 0; responseIndex < responses.length; responseIndex += 1) {
+        if (this.shouldYieldExportRow(responseIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const response = responses[responseIndex];
+        if (!this.matchesTrainingRequirement(response, trainingRequired, trainingRequiredMap)) continue;
+
+        const item = await this.itemBuilderService.buildCodingItemFromRow(
+          response,
+          authToken!,
+          serverUrl!,
+          workspace_id,
+          variableAnchorMaps
+        );
+        if (item) {
+          worksheet.addRow(item).commit();
+          totalWritten += 1;
+        }
+      }
+
+      if (progressCallback && totalRows > 0) {
+        const percentage = Math.min(100, Math.round((totalWritten / totalRows) * 100));
+        await progressCallback(percentage);
+      }
+
+      await this.yieldToEventLoop();
+    }
+
+    await checkCancellation?.();
+    return totalWritten;
   }
 
   /**
@@ -1132,122 +1069,20 @@ export class CodingListStreamService {
 
     const worksheet = workbook.addWorksheet('Coding Results');
 
-    // Define headers based on version (include lower versions)
-    let headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
-
-    // Add URL column if replay URLs are included
-    if (includeReplayUrls) {
-      headers = [...headers, 'url'];
-    }
-
-    worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
-
-    const batchSize = this.getVersionedExportBatchSize();
-    const knownAnchors: CodingVariableAnchorMaps = new Map();
-    let lastId = 0;
-    let totalWritten = 0;
-
     try {
-      await checkCancellation?.();
-      const versionExportOptions = this.getVersionedResponseFilterOptions(version);
-      await progressCallback?.(0, { phase: 'counting' });
-      const totalRows = await this.countVersionedResponseRows(
-        workspace_id,
+      const totalWritten = await this.writeVersionedExcelRows(worksheet, {
+        workspaceId: workspace_id,
         version,
+        exportProfile,
+        authToken,
+        serverUrl,
+        includeReplayUrls,
+        includeResponseValues,
+        includeGeoGebraResponseValues,
+        progressCallback,
         checkCancellation
-      );
-      await progressCallback?.(totalRows > 0 ? 1 : 0, {
-        phase: 'writing',
-        processedRows: 0,
-        totalRows
       });
-      const progressState: VersionedExportProgressState = {
-        lastReportedRows: 0,
-        lastReportedAt: Date.now()
-      };
-
-      while (true) {
-        await checkCancellation?.();
-        const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
-          workspace_id,
-          lastId,
-          batchSize,
-          versionExportOptions,
-          includeResponseValues
-        );
-        await checkCancellation?.();
-
-        if (!rows.length) break;
-
-        const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
-          rows,
-          workspace_id,
-          knownAnchors,
-          checkCancellation
-        );
-
-        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-          if (this.shouldYieldExportRow(rowIndex)) {
-            await checkCancellation?.();
-            await this.yieldToEventLoop();
-          }
-
-          const row = rows[rowIndex];
-          const item = await this.buildVersionedExportItem(
-            row,
-            version,
-            authToken || '',
-            serverUrl || '',
-            workspace_id,
-            includeReplayUrls,
-            includeResponseValues,
-            includeGeoGebraResponseValues,
-            variableAnchorMaps,
-            exportProfile
-          );
-
-          if (item !== null) {
-            worksheet.addRow(item).commit(); // Commit each row immediately
-            totalWritten += 1;
-            await this.reportRowBasedProgress(
-              progressCallback,
-              totalWritten,
-              totalRows,
-              progressState
-            );
-          }
-        }
-
-        lastId = rows[rows.length - 1].id;
-
-        // Log progress every 10 batches
-        if (totalWritten % 10000 === 0) {
-          this.logger.log(
-            `Excel export progress for version ${version}: ${totalWritten} rows written`
-          );
-        }
-
-        await this.reportRowBasedProgress(
-          progressCallback,
-          totalWritten,
-          totalRows,
-          progressState,
-          true
-        );
-
-        await this.yieldToEventLoop();
-      }
-
-      await checkCancellation?.();
-      this.logger.log(
-        `Excel export completed for version ${version}. Rows written: ${totalWritten}`
-      );
-      await progressCallback?.(100, {
-        phase: 'finalizing',
-        processedRows: totalWritten,
-        totalRows
-      });
-
+      this.logger.log(`Excel export completed for version ${version}. Rows written: ${totalWritten}`);
       // Set up promise to wait for stream completion BEFORE committing
       const streamComplete = new Promise<void>((resolve, reject) => {
         stream.on('end', resolve);
@@ -1307,114 +1142,18 @@ export class CodingListStreamService {
     });
     const worksheet = workbook.addWorksheet('Coding Results');
 
-    let headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
-
-    if (includeReplayUrls) {
-      headers = [...headers, 'url'];
-    }
-
-    worksheet.columns = headers.map(h => ({ header: h, key: h, width: 20 }));
-
-    const batchSize = this.getVersionedExportBatchSize();
-    const knownAnchors: CodingVariableAnchorMaps = new Map();
-    let lastId = 0;
-    let totalWritten = 0;
-
     try {
-      await checkCancellation?.();
-      const versionExportOptions = this.getVersionedResponseFilterOptions(version);
-      await progressCallback?.(0, { phase: 'counting' });
-      const totalRows = await this.countVersionedResponseRows(
-        workspace_id,
+      const totalWritten = await this.writeVersionedExcelRows(worksheet, {
+        workspaceId: workspace_id,
         version,
+        exportProfile,
+        authToken,
+        serverUrl,
+        includeReplayUrls,
+        includeResponseValues,
+        includeGeoGebraResponseValues,
+        progressCallback,
         checkCancellation
-      );
-      await progressCallback?.(totalRows > 0 ? 1 : 0, {
-        phase: 'writing',
-        processedRows: 0,
-        totalRows
-      });
-      const progressState: VersionedExportProgressState = {
-        lastReportedRows: 0,
-        lastReportedAt: Date.now()
-      };
-
-      while (true) {
-        await checkCancellation?.();
-        const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
-          workspace_id,
-          lastId,
-          batchSize,
-          versionExportOptions,
-          includeResponseValues
-        );
-        await checkCancellation?.();
-
-        if (!rows.length) break;
-
-        const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
-          rows,
-          workspace_id,
-          knownAnchors,
-          checkCancellation
-        );
-
-        for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
-          if (this.shouldYieldExportRow(rowIndex)) {
-            await checkCancellation?.();
-            await this.yieldToEventLoop();
-          }
-
-          const row = rows[rowIndex];
-          const item = await this.buildVersionedExportItem(
-            row,
-            version,
-            authToken || '',
-            serverUrl || '',
-            workspace_id,
-            includeReplayUrls,
-            includeResponseValues,
-            includeGeoGebraResponseValues,
-            variableAnchorMaps,
-            exportProfile
-          );
-
-          if (item !== null) {
-            worksheet.addRow(item).commit();
-            totalWritten += 1;
-            await this.reportRowBasedProgress(
-              progressCallback,
-              totalWritten,
-              totalRows,
-              progressState
-            );
-          }
-        }
-
-        lastId = rows[rows.length - 1].id;
-
-        if (totalWritten % 10000 === 0) {
-          this.logger.log(
-            `Direct-to-file Excel export progress for version ${version}: ${totalWritten} rows written`
-          );
-        }
-
-        await this.reportRowBasedProgress(
-          progressCallback,
-          totalWritten,
-          totalRows,
-          progressState,
-          true
-        );
-
-        await this.yieldToEventLoop();
-      }
-
-      await checkCancellation?.();
-      await progressCallback?.(100, {
-        phase: 'finalizing',
-        processedRows: totalWritten,
-        totalRows
       });
       await worksheet.commit();
       await workbook.commit();
@@ -1438,6 +1177,117 @@ export class CodingListStreamService {
     } finally {
       this.fileCacheService.clearCaches();
     }
+  }
+
+  private async startVersionedExcelProgress({
+    workspaceId, version, progressCallback, checkCancellation
+  }: VersionedExcelRowsOptions): Promise<{ totalRows: number; progressState: VersionedExportProgressState }> {
+    await checkCancellation?.();
+    await progressCallback?.(0, { phase: 'counting' });
+    const totalRows = await this.countVersionedResponseRows(workspaceId, version, checkCancellation);
+    await progressCallback?.(totalRows > 0 ? 1 : 0, { phase: 'writing', processedRows: 0, totalRows });
+    return { totalRows, progressState: { lastReportedRows: 0, lastReportedAt: Date.now() } };
+  }
+
+  private async writeVersionedExcelRows(
+    worksheet: ExcelJS.Worksheet,
+    options: VersionedExcelRowsOptions
+  ): Promise<number> {
+    const {
+      workspaceId, version, exportProfile, authToken, serverUrl, includeReplayUrls,
+      includeResponseValues, includeGeoGebraResponseValues, progressCallback, checkCancellation
+    } = options;
+    const headers = this.itemBuilderService.getHeadersForVersion(version, includeResponseValues);
+    const columns = includeReplayUrls ? [...headers, 'url'] : headers;
+    worksheet.columns = columns.map(header => ({ header, key: header, width: 20 }));
+
+    const batchSize = this.getVersionedExportBatchSize();
+    const knownAnchors: CodingVariableAnchorMaps = new Map();
+    let lastId = 0;
+    let totalWritten = 0;
+
+    const versionExportOptions = this.getVersionedResponseFilterOptions(version);
+    const { totalRows, progressState } = await this.startVersionedExcelProgress(options);
+
+    while (true) {
+      await checkCancellation?.();
+      const rows = await this.responseFilterService.getVersionedResponsesBatchRaw(
+        workspaceId,
+        lastId,
+        batchSize,
+        versionExportOptions,
+        includeResponseValues
+      );
+      await checkCancellation?.();
+
+      if (!rows.length) break;
+
+      const variableAnchorMaps = await this.loadVariableAnchorMapsForVersionRows(
+        rows,
+        workspaceId,
+        knownAnchors,
+        checkCancellation
+      );
+
+      for (let rowIndex = 0; rowIndex < rows.length; rowIndex += 1) {
+        if (this.shouldYieldExportRow(rowIndex)) {
+          await checkCancellation?.();
+          await this.yieldToEventLoop();
+        }
+
+        const row = rows[rowIndex];
+        const item = await this.buildVersionedExportItem(
+          row,
+          version,
+          authToken || '',
+          serverUrl || '',
+          workspaceId,
+          includeReplayUrls,
+          includeResponseValues,
+          includeGeoGebraResponseValues,
+          variableAnchorMaps,
+          exportProfile
+        );
+
+        if (item !== null) {
+          worksheet.addRow(item).commit();
+          totalWritten += 1;
+          await this.reportRowBasedProgress(
+            progressCallback,
+            totalWritten,
+            totalRows,
+            progressState
+          );
+        }
+      }
+
+      lastId = rows[rows.length - 1].id;
+
+      // Log progress every 10 batches
+      if (totalWritten % 10000 === 0) {
+        this.logger.log(
+          `Excel export progress for version ${version}: ${totalWritten} rows written`
+        );
+      }
+
+      await this.reportRowBasedProgress(
+        progressCallback,
+        totalWritten,
+        totalRows,
+        progressState,
+        true
+      );
+
+      await this.yieldToEventLoop();
+    }
+
+    await checkCancellation?.();
+    await progressCallback?.(100, {
+      phase: 'finalizing',
+      processedRows: totalWritten,
+      totalRows
+    });
+    return totalWritten;
   }
 
   async getCodingResultsByVersionAsGeoGebraZip(

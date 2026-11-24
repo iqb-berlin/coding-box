@@ -63,7 +63,7 @@ describe('VariableTypesValidationPanelComponent', () => {
     expect(validateAction).toHaveBeenCalledTimes(1);
     pending.next(pageResult);
     pending.complete();
-    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.invalidVariables()).toEqual(rows);
     expect(component.errorCount()).toBe(1);
     expect(component.wasRun()).toBe(true);
     expect(component.isRunning()).toBe(false);
@@ -96,17 +96,17 @@ describe('VariableTypesValidationPanelComponent', () => {
     expect(component.isLoadingPage()).toBe(true);
     pending.next({ ...pageResult, page: 3, limit: 25 });
     pending.complete();
-    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.invalidVariables()).toEqual(rows);
     expect(component.currentPage()).toBe(3);
     expect(component.pageSize()).toBe(25);
     expect(component.isLoadingPage()).toBe(false);
   });
 
   it('keeps the current rows visible if a page request fails', () => {
-    component.invalidTypeVariables.set(rows);
+    component.invalidVariables.set(rows);
     service.fetchPage.mockReturnValue(throwError(() => new Error('page unavailable')));
     component.onPageChange({ pageIndex: 1, pageSize: 10, length: 20 });
-    expect(component.invalidTypeVariables()).toEqual(rows);
+    expect(component.invalidVariables()).toEqual(rows);
     expect(component.isLoadingPage()).toBe(false);
     expect(snackBar.open).toHaveBeenCalledWith(
       'Fehler beim Laden der Seite', 'Schließen', { duration: 5000 }
@@ -127,7 +127,7 @@ describe('VariableTypesValidationPanelComponent', () => {
     expect(component.selectedResponses().size).toBe(0);
     expect(component.isDeletingResponses()).toBe(false);
     expect(service.validate).toHaveBeenCalledTimes(1);
-    expect(component.invalidTypeVariables()).toEqual([]);
+    expect(component.invalidVariables()).toEqual([]);
     expect(component.errorCount()).toBe(0);
   });
 
@@ -144,12 +144,12 @@ describe('VariableTypesValidationPanelComponent', () => {
   it('shows cached validation errors and stops observing after destruction', () => {
     const cachedResult = new Subject<{ status: string; details: { error: string } }>();
     service.observeValidationResult.mockReturnValue(cachedResult.asObservable());
-    component.invalidTypeVariables.set(rows);
+    component.invalidVariables.set(rows);
     component.totalInvalid.set(1);
     component.ngOnInit();
     cachedResult.next({ status: 'failed', details: { error: 'Stored validation failure' } });
     expect(component.errorMessage()).toBe('Stored validation failure');
-    expect(component.invalidTypeVariables()).toEqual([]);
+    expect(component.invalidVariables()).toEqual([]);
     expect(component.errorCount()).toBe(0);
     component.ngOnDestroy();
     cachedResult.next({ status: 'failed', details: { error: 'Later failure' } });
