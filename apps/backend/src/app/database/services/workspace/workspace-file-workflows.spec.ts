@@ -163,6 +163,21 @@ describe('workspace file workflow boundaries', () => {
     expect(f.statusRedis.eval.mock.invocationCallOrder[1]).toBeLessThan(f.lockedFiles.upsert.mock.invocationCallOrder[25]);
   });
 
+  it('counts finished individual files while a ZIP in the same batch is still running', async () => {
+    const f = fixture();
+    const zip = new AdmZip();
+    for (let i = 0; i < 50; i += 1) zip.addFile(`entry-${i}.voud`, Buffer.from('{}'));
+    const files = [
+      ...Array.from({ length: 4 }, (_, i) => file(`single-${i}.voud`, '{}')),
+      file('archive.zip', zip.toBuffer(), 'application/zip')
+    ];
+
+    await expect(f.service.uploadTestFiles(7, files, false, undefined, { trackProgress: true }))
+      .resolves.toMatchObject({ uploaded: 54 });
+    const progress = f.statusRedis.eval.mock.calls.map(([, , , , snapshot]) => JSON.parse(snapshot).progress);
+    expect(progress).toEqual([0, 20, 40, 60, 80, 90, 99, 100]);
+  });
+
   it('imports files and releases the workspace lock while status commands are pending', async () => {
     const f = fixture();
     f.statusRedis.eval.mockReturnValue(new Promise(() => {}));

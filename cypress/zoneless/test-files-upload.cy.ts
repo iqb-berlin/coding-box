@@ -3,7 +3,6 @@ describe('zoneless test-file upload', () => {
     const filename = 'zoneless-upload.vomd';
     let uploaded = false;
     let uploadGateId = '';
-    let processRequests = 0;
 
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -40,18 +39,17 @@ describe('zoneless test-file upload', () => {
       }).as('upload');
     });
     cy.intercept('GET', '**/api/admin/workspace/5/processes', request => {
-      const transferring = processRequests === 0;
-      processRequests += 1;
-      request.reply({
-        body: [{
-          id: transferring ? 'previous-upload' : 'active-upload',
-          queueName: 'test-files-upload',
-          status: transferring ? 'completed' : 'active',
-          progress: transferring ? 100 : 50,
-          timestamp: Date.now(), data: { fileCount: 1 }
-        }]
-      });
+      request.reply([{
+        id: uploaded ? 'active-upload' : 'previous-upload', queueName: 'test-files-upload',
+        status: 'completed', progress: 100, timestamp: Date.now(), data: { fileCount: 1 }
+      }]);
     }).as('processes');
+    cy.intercept('GET', '**/api/admin/workspace/5/processes/test-files-upload', {
+      body: {
+        id: 'active-upload', queueName: 'test-files-upload', status: 'active',
+        progress: 50, timestamp: Date.now(), data: { fileCount: 1 }
+      }
+    }).as('uploadProgress');
 
     cy.visit('/');
     cy.wait('@authData');
@@ -66,13 +64,12 @@ describe('zoneless test-file upload', () => {
     }, { force: true });
     cy.get('coding-box-test-files .busy-overlay').contains('button', 'Prozesse anzeigen').click();
     cy.wait('@processes');
-    cy.wait('@processes');
+    cy.wait('@uploadProgress');
     cy.get('coding-box-process-overview-dialog').within(() => {
       cy.contains('tr', 'Testdatei-Upload').within(() => {
         cy.contains('50 %').should('be.visible');
         cy.get('button').should('be.disabled');
       });
-      cy.contains('button', 'Schließen').click();
     });
     cy.then(() => {
       uploaded = true;
@@ -84,6 +81,11 @@ describe('zoneless test-file upload', () => {
       .and('contain.text', filename);
     cy.get('coding-box-test-files-upload-result-dialog')
       .contains('button', 'Schließen').click();
+    cy.wait('@processes');
+    cy.get('coding-box-process-overview-dialog').within(() => {
+      cy.contains('tr', 'Testdatei-Upload').should('contain.text', '100 %');
+      cy.contains('button', 'Schließen').click();
+    });
     cy.get('coding-box-test-files .files-table')
       .should('contain.text', filename);
     cy.window().should('not.have.property', 'Zone');

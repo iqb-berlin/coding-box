@@ -45,6 +45,15 @@ describe('WorkspaceProcessesController', () => {
     await expect(controller.getProcesses(5)).resolves.toEqual([newer, upload, older]);
   });
 
+  it('reads only the upload entry when polling its status', async () => {
+    const upload = { id: 'upload-1', queueName: TEST_FILES_UPLOAD_PROCESS };
+    uploadProcesses.getProcess.mockResolvedValueOnce(upload);
+    await expect(controller.getFileUpload(5)).resolves.toEqual(upload);
+    await expect(controller.getFileUpload(5)).resolves.toBeNull();
+    expect(uploadProcesses.getProcess).toHaveBeenCalledWith(5);
+    expect(jobQueueService.getAllWorkspaceJobs).not.toHaveBeenCalled();
+  });
+
   it('cancels processes through the workspace-scoped queue method', async () => {
     await expect(controller.deleteProcess(5, 'data-export', 'job-1')).resolves.toBe(true);
 

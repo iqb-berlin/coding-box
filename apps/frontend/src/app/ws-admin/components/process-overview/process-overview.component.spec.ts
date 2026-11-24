@@ -14,6 +14,7 @@ describe('ProcessOverviewComponent', () => {
   let component: ProcessOverviewComponent;
   let processesService: {
     getProcesses: jest.Mock;
+    getFileUpload: jest.Mock;
     deleteProcess: jest.Mock;
   };
   let dialog: {
@@ -26,6 +27,7 @@ describe('ProcessOverviewComponent', () => {
   beforeEach(async () => {
     processesService = {
       getProcesses: jest.fn().mockReturnValue(of([])),
+      getFileUpload: jest.fn().mockReturnValue(of(null)),
       deleteProcess: jest.fn().mockReturnValue(of(true))
     };
     dialog = {
@@ -249,35 +251,52 @@ describe('ProcessOverviewComponent', () => {
     expect(fixture.nativeElement.querySelector('.loading-overlay')).toBeNull();
   });
 
-  it('refreshes the upload overview without overlapping requests and stops on close', () => {
+  it('polls only the upload, preserves other jobs and stops when the upload settles', () => {
     jest.useFakeTimers();
     try {
-      const pending = new Subject<ProcessDto[]>();
+      const finished = new Subject<void>();
+      const pending = new Subject<ProcessDto | null>();
       const active: ProcessDto = {
         id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 50, timestamp: 100
       };
+      const previous = { ...active, id: 'previous', status: 'completed' as const };
+      const job = { ...active, id: 'job', queueName: 'data-export', timestamp: 90 };
       const completed: ProcessDto = { ...active, status: 'completed', progress: 100 };
-      processesService.getProcesses.mockClear()
-        .mockReturnValueOnce(of([]))
-        .mockReturnValueOnce(pending)
-        .mockReturnValueOnce(of([completed]));
-      component.data.autoRefresh = true;
+      processesService.getProcesses.mockClear().mockReturnValueOnce(of([previous, job])).mockReturnValueOnce(of([completed, job]));
+      processesService.getFileUpload.mockReturnValueOnce(pending);
+      component.data.uploadFinished$ = finished;
       component.ngOnInit();
-      expect(component.processes.data).toEqual([]);
 
       jest.advanceTimersByTime(6000);
+      expect(processesService.getProcesses).toHaveBeenCalledTimes(1);
+      expect(processesService.getFileUpload).toHaveBeenCalledTimes(1);
+      expect(processesService.getFileUpload).toHaveBeenCalledWith(7);
+      pending.next(active);
+      expect(component.processes.data).toEqual([active, job]);
+      finished.next();
+      expect(pending.observed).toBe(false);
+      expect(component.processes.data).toEqual([completed, job]);
+      jest.advanceTimersByTime(6000);
+      expect(processesService.getFileUpload).toHaveBeenCalledTimes(1);
       expect(processesService.getProcesses).toHaveBeenCalledTimes(2);
-      fixture.detectChanges();
-      expect(fixture.nativeElement.querySelector('.loading-overlay')).toBeNull();
-      pending.next([active]);
-      pending.complete();
-      expect(component.processes.data).toEqual([active]);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 
+  it('stops polling when the dialog closes before the upload settles', () => {
+    jest.useFakeTimers();
+    try {
+      const finished = new Subject<void>();
+      component.data.uploadFinished$ = finished;
+      processesService.getProcesses.mockClear();
+      component.ngOnInit();
       jest.advanceTimersByTime(2000);
-      expect(component.processes.data).toEqual([completed]);
       fixture.destroy();
-      jest.advanceTimersByTime(4000);
-      expect(processesService.getProcesses).toHaveBeenCalledTimes(3);
+      finished.next();
+      jest.advanceTimersByTime(6000);
+      expect(processesService.getFileUpload).toHaveBeenCalledTimes(1);
+      expect(processesService.getProcesses).toHaveBeenCalledTimes(1);
     } finally {
       jest.useRealTimers();
     }

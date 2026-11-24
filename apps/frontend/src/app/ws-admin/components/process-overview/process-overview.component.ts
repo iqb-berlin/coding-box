@@ -1,4 +1,6 @@
-import { Subscription, timer } from 'rxjs';
+import {
+  endWith, map, Observable, Subscription, takeUntil, timer
+} from 'rxjs';
 import {
   Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -24,7 +26,7 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialo
 
 type ProcessStatus = ProcessDto['status'];
 type ProcessActionKind = 'cancel' | 'pause' | 'remove';
-type ProcessOverviewData = { workspaceId: number; autoRefresh?: boolean };
+type ProcessOverviewData = { workspaceId: number; uploadFinished$?: Observable<void> };
 
 const PROCESS_REFRESH_INTERVAL_MS = 2000;
 
@@ -289,10 +291,11 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.setupFilterPredicate();
     if (this.workspaceId) {
       this.loadProcesses();
-      if (this.data.autoRefresh) {
+      if (this.data.uploadFinished$) {
         timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS)
-          .pipe(takeUntilDestroyed(this.destroyRef))
-          .subscribe(() => this.loadProcesses(false));
+          .pipe(takeUntil(this.data.uploadFinished$), endWith(null), takeUntilDestroyed(this.destroyRef))
+          // Reload the full overview once when the initiating request settles.
+          .subscribe(tick => this.loadProcesses(tick === null ? 'all' : 'upload'));
       }
     }
   }
@@ -344,25 +347,28 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.applyFilter();
   }
 
-  loadProcesses(showLoading = true): void {
-    if (!this.workspaceId || (!showLoading && this.loadRequest && !this.loadRequest.closed)) return;
+  loadProcesses(scope: 'all' | 'upload' = 'all'): void {
+    if (!this.workspaceId || (scope === 'upload' && this.loadRequest && !this.loadRequest.closed)) return;
     this.loadRequest?.unsubscribe();
-    if (showLoading) {
+    if (scope === 'all') {
       this.isLoading.set(true);
       this.loadFailed.set(false);
     }
-    this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    const request = scope === 'upload' ? this.processesService.getFileUpload(this.workspaceId).pipe(map(upload => {
+      const jobs = this.processes.data.filter(process => process.queueName !== 'test-files-upload');
+      return upload ? [...jobs, upload].sort((a, b) => b.timestamp - a.timestamp) : jobs;
+    })) : this.processesService.getProcesses(this.workspaceId);
+    this.loadRequest = request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
         this.availableTypes.set([...new Set(data.map(d => d.queueName))]
           .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
         this.lastLoadedAt.set(Date.now());
         this.isLoading.set(false);
-        this.loadFailed.set(false);
-        if (showLoading) this.applyFilter();
+        if (scope === 'all') this.applyFilter();
       },
       error: () => {
-        this.loadFailed.set(true);
+        if (scope === 'all') this.loadFailed.set(true);
         this.isLoading.set(false);
       }
     });

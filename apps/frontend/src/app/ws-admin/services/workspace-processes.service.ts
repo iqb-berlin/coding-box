@@ -19,6 +19,10 @@ export class WorkspaceProcessesService {
     return this.http.get<ProcessDto[]>(`${this.serverUrl}/admin/workspace/${workspaceId}/processes`);
   }
 
+  getFileUpload(workspaceId: number): Observable<ProcessDto | null> {
+    return this.http.get<ProcessDto | null>(`${this.serverUrl}/admin/workspace/${workspaceId}/processes/test-files-upload`);
+  }
+
   deleteProcess(workspaceId: number, queueName: string, id: string): Observable<boolean> {
     const encodedQueueName = encodeURIComponent(queueName);
     const encodedId = encodeURIComponent(id);

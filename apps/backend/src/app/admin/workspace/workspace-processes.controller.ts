@@ -40,6 +40,15 @@ export class WorkspaceProcessesController {
     return upload ? [...jobs, upload].sort((a, b) => b.timestamp - a.timestamp) : jobs;
   }
 
+  @Get(TEST_FILES_UPLOAD_PROCESS)
+  @ApiOperation({ summary: 'Get the latest test file upload for this workspace' })
+  @ApiParam({
+    name: 'workspace_id', required: true, description: 'Workspace ID', type: Number
+  })
+  getFileUpload(@Param('workspace_id', ParseIntPipe) wsId: number): Promise<ProcessDto | null> {
+    return this.uploadProcesses.getProcess(wsId);
+  }
+
   @Delete(':queueName/:id')
   @ApiOperation({ summary: 'Cancel or delete a process' })
   @ApiParam({

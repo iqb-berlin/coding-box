@@ -31,7 +31,7 @@ import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import {
-  Subject,
+  Observable, ReplaySubject, Subject,
   Subscription,
   timer
 } from 'rxjs';
@@ -104,6 +104,8 @@ import {
   ContentPoolUploadDialogComponent,
   ContentPoolUploadDialogResult
 } from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
+
+type TrackedUpload = { workspaceId: number; uploadFinished$: Observable<void> };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -178,6 +180,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   readonly isLoadingContentPoolConfig = signal(false);
   readonly isDeleting = signal(false);
   readonly isUploading = signal(false);
+  protected readonly trackedUpload = signal<TrackedUpload | null>(null);
   readonly downloadProgressPercent = signal(0);
   readonly downloadProgressLoadedBytes = signal(0);
   readonly downloadProgressTotalBytes = signal(0);
@@ -728,23 +731,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
-        this.isLoading.set(true);
-        this.isUploading.set(true);
-        const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
-          .length;
-        this.fileService
-          .uploadTestFiles(
-            workspaceId,
-            files,
-            true,
-            resultChoice.overwriteFileIds
-          )
-          .pipe(
-            finalize(() => {
-              this.isLoading.set(false);
-              this.isUploading.set(false);
-            })
-          ).pipe(takeUntilDestroyed(this.destroyRef))
+        const overwriteSelectedCount = (resultChoice.overwriteFileIds || []).length;
+        this.trackUpload(workspaceId, this.fileService.uploadTestFiles(workspaceId, files, true, resultChoice.overwriteFileIds))
           .subscribe({
             next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
@@ -799,26 +787,32 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     });
   }
 
-  protected openProcessOverview(): void {
-    openWorkspaceProcessOverview(this.dialog, { workspaceId: this.appService.selectedWorkspaceId, autoRefresh: true });
+  private trackUpload(workspaceId: number, request: Observable<TestFilesUploadResultDto>): Observable<TestFilesUploadResultDto> {
+    const uploadFinished$ = new ReplaySubject<void>(1);
+    const upload = { workspaceId, uploadFinished$ };
+    this.trackedUpload.set(upload);
+    this.isUploading.set(true);
+    this.isLoading.set(true);
+    return request.pipe(takeUntilDestroyed(this.destroyRef), finalize(() => {
+      uploadFinished$.next();
+      uploadFinished$.complete();
+      if (this.trackedUpload() === upload) {
+        this.trackedUpload.set(null);
+        this.isUploading.set(false);
+        this.isLoading.set(false);
+      }
+    }));
+  }
+
+  protected openProcessOverview(upload: TrackedUpload): void {
+    openWorkspaceProcessOverview(this.dialog, upload);
   }
 
   onFileSelected(target: EventTarget | null): void {
-    if (!target) return;
-    const inputElement = target as HTMLInputElement;
-    const files = inputElement.files;
-    if (files && files.length) {
-      this.isLoading.set(true);
-      this.isUploading.set(true);
+    const files = (target as HTMLInputElement | null)?.files;
+    if (files?.length) {
       const workspaceId = this.appService.selectedWorkspaceId;
-      this.fileService
-        .uploadTestFiles(workspaceId, files, false)
-        .pipe(
-          finalize(() => {
-            this.isLoading.set(false);
-            this.isUploading.set(false);
-          })
-        ).pipe(takeUntilDestroyed(this.destroyRef))
+      this.trackUpload(workspaceId, this.fileService.uploadTestFiles(workspaceId, files, false))
         .subscribe({
           next: result => {
             this.handleUploadResult(workspaceId, files, result);

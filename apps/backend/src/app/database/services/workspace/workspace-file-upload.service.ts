@@ -434,44 +434,33 @@ export class WorkspaceFileUploadService {
     let uploaded = 0;
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
-      const tasks: Array<{ filename: string; promise: Promise<unknown> }> =
-        [];
-      const zipFractions = batch.map(() => 0);
-
-      batch.forEach((file, index) => {
-        const reportZipFraction = report && ((fraction: number) => {
-          zipFractions[index] = fraction;
-          const completed = zipFractions.reduce((sum, part) => sum + part, i);
-          report(completed / files.length);
+      const fractions = batch.map(() => 0);
+      const settledFiles = await Promise.all(batch.map(async (file, index) => {
+        const reportFileProgress = report && ((fraction: number) => {
+          fractions[index] = fraction;
+          report(fractions.reduce((sum, part) => sum + part, i) / files.length);
         });
-        const promises = this.handleFile(
-          workspace_id,
-          file,
-          overwriteExistingParam,
-          overwriteAllowListParam,
-          mutationContext,
-          reportZipFraction
-        );
-        promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
-        );
-      });
+        const results = await Promise.allSettled(this.handleFile(
+          workspace_id, file, overwriteExistingParam, overwriteAllowListParam, mutationContext, reportFileProgress
+        ));
+        reportFileProgress?.(1);
+        return results;
+      }));
 
-      const settled = await Promise.allSettled(tasks.map(t => t.promise));
-      // Preserve task order across returned failures, rejections and nested ZIP results.
-      uploaded += settled.reduce((count, result, idx) => {
-        const task = tasks[idx];
-        if (result.status === 'rejected') {
-          const reason = (result as PromiseRejectedResult).reason;
-          failedFiles.push({
-            filename: task?.filename || 'unknown',
-            reason: reason instanceof Error ? reason.message : String(reason)
-          });
-          return count;
+      // Collect in input order even when files finish out of order.
+      for (const [index, results] of settledFiles.entries()) {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            const { reason } = result;
+            failedFiles.push({
+              filename: batch[index].originalname || 'unknown',
+              reason: reason instanceof Error ? reason.message : String(reason)
+            });
+          } else {
+            uploaded += this.collectUploadResults([result.value], failedFiles, conflicts, uploadedFiles, issues);
+          }
         }
-
-        return count + this.collectUploadResults([result.value], failedFiles, conflicts, uploadedFiles, issues);
-      }, 0);
-      report?.((i + batch.length) / files.length);
+      }
     }
 
     return {
