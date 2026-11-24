@@ -10,7 +10,20 @@ window.addEventListener('message', event => {
   const message = event.data;
   if (message.type === 'vopStartCommand') {
     session = message.sessionId;
-    document.querySelector('main').textContent = JSON.parse(message.unitState.dataParts.answer);
+    const answer = JSON.parse(message.unitState.dataParts.answer);
+    const main = document.querySelector('main');
+    if (answer.point) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      const point = document.createElementNS(ns, 'circle');
+      point.setAttribute('cx', answer.point[0]);
+      point.setAttribute('cy', answer.point[1]);
+      point.setAttribute('r', '4');
+      svg.append(point);
+      main.replaceChildren(svg);
+    } else {
+      main.textContent = answer;
+    }
     show(message.playerConfig.startPage || '0');
   }
   if (message.type === 'vopPageNavigationCommand') show(message.target);
@@ -122,6 +135,48 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.window().then(win => { win.location.hash = `/replay/personA@code@booklet/UNIT/0?workspaceId=5&auth=${token()}`; });
     cy.wait('@response');
     frame().should('contain.text', 'Answer A');
+  });
+
+  it('keeps two responses with the same person, unit and variable independently editable', () => {
+    const drawings = new Map([[41, { point: [10, 20] }], [42, { point: [30, 40] }]]);
+    cy.intercept('GET', '**/replay-response/**', request => {
+      const id = Number(new URL(request.url).searchParams.get('responseId'));
+      expect(id).to.be.oneOf([41, 42]);
+      request.reply({ body: { response: { responses: [{ id: 'answer', content: JSON.stringify(drawings.get(id)) }] } } });
+    }).as('drawing');
+    const firstKey = 'response:41::personA@code@booklet::booklet::UNIT::VAR1';
+    cy.intercept('GET', '**/coding-job/77/replay-session*', { body: {
+      units: [41, 42].map(responseId => ({
+        responseId, progressResponseId: responseId, unitName: 'UNIT', unitAlias: 'Unit', variableId: 'VAR1',
+        variablePage: '0', personLogin: 'personA', personCode: 'code', bookletName: 'booklet'
+      })),
+      progress: { [firstKey]: { id: 1, label: 'Correct' } }, notes: { [firstKey]: 'Viewed' },
+      job: { status: 'active', allowComments: true }, serverTimings: {}
+    } });
+    cy.intercept('PUT', '**/coding-job/77/status', { body: {} });
+    cy.intercept('POST', '**/coding-job/77/progress', { body: {} }).as('saveCase');
+    cy.intercept('POST', '**/coding-job/77/notes', request => {
+      if (request.body.notes === 'Reset') request.alias = 'saveCaseNotes';
+      request.reply({ body: {} });
+    });
+    cy.visit(`/#/replay/personA@code@booklet/UNIT/0?workspaceId=5&codingJobId=77&mode=coding&auth=${token(true)}`);
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '10');
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
+    cy.get('coding-box-code-selector .next-button').click();
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '30');
+    cy.get('coding-box-code-selector .current-position').should('have.text', '2');
+    cy.get('coding-box-code-selector textarea').should('have.value', '').type('Reset').blur();
+    cy.wait('@saveCaseNotes').its('request.body').should('include', { responseId: 42, notes: 'Reset' });
+    cy.get('coding-box-code-selector [data-code-id="1"]').should('not.have.class', 'selected').click();
+    cy.wait('@saveCase').its('request.body').should('include', { variableId: 'VAR1', responseId: 42 });
+    cy.get('.completion-overlay .close-button').click();
+    cy.get('coding-box-code-selector .prev-button').click();
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '10');
+    cy.get('coding-box-code-selector .current-position').should('have.text', '1');
+    cy.get('coding-box-code-selector textarea').should('have.value', 'Viewed');
   });
 
   it('restores unsaved coding notes and the selected case before loading the player', () => {

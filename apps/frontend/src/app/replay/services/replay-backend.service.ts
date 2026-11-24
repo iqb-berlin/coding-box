@@ -5,6 +5,7 @@ import {
 } from 'rxjs';
 import { AuthService } from '../../core/services/auth.service';
 import { SERVER_URL } from '../../injection-tokens';
+import type { ReplayUnitResponseDto } from '../../../../../../api-dto/coding/replay-unit-response.dto';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
 import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../../core/interceptors/http-error-context';
 import { CodingScheme } from '../../models/coding-interfaces';
@@ -12,13 +13,7 @@ import { withReplayAttemptHeader } from '../utils/replay-request-correlation';
 
 const REPLAY_ASSETS_REQUEST_TIMEOUT_MS = 120_000;
 
-export type ReplayUnitResponse = {
-  unit_state?: { CURRENT_PAGE_ID?: string };
-  responses: {
-    id: string;
-    content: string;
-  }[];
-};
+export type ReplayUnitResponse = ReplayUnitResponseDto;
 
 export type ReplayTimingMap = Record<string, number | null>;
 export type ReplayStatisticsSource = 'internal' | 'external';
@@ -137,7 +132,8 @@ export class ReplayBackendService {
     unitId: string,
     authToken?: string,
     includeCodingScheme = false,
-    replayAttemptId?: string
+    replayAttemptId?: string,
+    responseId?: number
   ): Observable<ReplayPayload> {
     return forkJoin({
       assetsEntry: this.getReplayAssetsCacheValue(
@@ -151,7 +147,8 @@ export class ReplayBackendService {
         testPerson,
         unitId,
         authToken,
-        replayAttemptId
+        replayAttemptId,
+        responseId
       )
     }).pipe(
       map(({ assetsEntry, responsePayload }) => ({
@@ -324,14 +321,16 @@ export class ReplayBackendService {
     testPerson: string,
     unitId: string,
     authToken?: string,
-    replayAttemptId?: string
+    replayAttemptId?: string,
+    responseId?: number
   ): Observable<ReplayResponsePayload> {
     const url = `${this.serverUrl}admin/workspace/${workspaceId}/replay-response/${encodeURIComponent(testPerson)}/${encodeURIComponent(unitId)}`;
     const authHeaders = authToken ?
       { Authorization: `Bearer ${authToken}` } :
       this.authHeader;
     const headers = withReplayAttemptHeader(authHeaders, replayAttemptId);
-    const params = new HttpParams().set('replayPart', 'response');
+    let params = new HttpParams().set('replayPart', 'response');
+    if (responseId !== undefined) params = params.set('responseId', responseId);
     return this.http.get<ReplayResponsePayload>(url, { headers, params });
   }
 

@@ -1,8 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, Connection, EntityManager, FindOneOptions,
-  FindOptionsWhere
+  Repository, Connection, EntityManager, FindOptionsWhere, Equal, IsNull, Or
 } from 'typeorm';
 import { assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
@@ -147,7 +146,7 @@ export class CodingJobProgressService {
 
   private getCodingJobUnitWhereForEntry(
     codingJobId: number,
-    entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId'>
+    entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>
   ): FindOptionsWhere<CodingJobUnit> {
     const {
       login: personLogin,
@@ -158,6 +157,7 @@ export class CodingJobProgressService {
 
     const whereCondition: FindOptionsWhere<CodingJobUnit> = {
       coding_job_id: codingJobId,
+      ...(entry.responseId != null ? { response_id: entry.responseId } : {}),
       unit_name: entry.unitId,
       variable_id: entry.variableId,
       person_login: personLogin,
@@ -174,7 +174,7 @@ export class CodingJobProgressService {
 
   private async getCodingJobUnitForEntry(
     codingJob: Pick<CodingJob, 'id' | 'workspace_id'>,
-    entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId'>,
+    entry: Pick<SaveCodingProgressDto, 'testPerson' | 'unitId' | 'variableId' | 'responseId'>,
     notFoundMessage: string,
     manager?: EntityManager,
     lockRows = false
@@ -182,15 +182,19 @@ export class CodingJobProgressService {
     const codingJobUnitRepository = manager ?
       manager.getRepository(CodingJobUnit) :
       this.codingJobUnitRepository;
-    const findOptions: FindOneOptions<CodingJobUnit> = {
-      where: this.getCodingJobUnitWhereForEntry(codingJob.id, entry)
-    };
-
-    if (lockRows) {
-      findOptions.lock = { mode: 'pessimistic_write' };
+    const where = this.getCodingJobUnitWhereForEntry(codingJob.id, entry);
+    if (entry.responseId == null && await codingJobUnitRepository.count({ where }) > 1) {
+      // Older requests may omit the group. An actual groupless row still has its own progress key.
+      const groupless = Or(IsNull(), Equal(''));
+      if (where.person_group != null ||
+          await codingJobUnitRepository.count({ where: { ...where, person_group: groupless } }) !== 1) {
+        throw new BadRequestException('A responseId is required for this ambiguous coding job entry.');
+      }
+      where.person_group = groupless;
     }
-
-    const codingJobUnit = await codingJobUnitRepository.findOne(findOptions);
+    const codingJobUnit = await codingJobUnitRepository.findOne({
+      where, lock: lockRows ? { mode: 'pessimistic_write' } : undefined
+    });
 
     if (!codingJobUnit) {
       throw new NotFoundException(notFoundMessage);

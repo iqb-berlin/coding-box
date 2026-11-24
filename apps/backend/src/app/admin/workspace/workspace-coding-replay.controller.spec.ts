@@ -103,7 +103,8 @@ describe('WorkspaceCodingReplayController', () => {
       12,
       'person@code@booklet',
       'unit-1',
-      res
+      res,
+      42
     );
 
     expect(result).toEqual({
@@ -116,7 +117,8 @@ describe('WorkspaceCodingReplayController', () => {
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(
       12,
       'person@code@booklet',
-      'unit-1'
+      'unit-1',
+      42
     );
     expect(workspacePlayerService.findUnitDef).not.toHaveBeenCalled();
     expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
@@ -153,7 +155,8 @@ describe('WorkspaceCodingReplayController', () => {
     expect(workspaceTestResultsService.findUnitResponse).toHaveBeenCalledWith(
       12,
       'person@code@booklet',
-      'unit-1'
+      'unit-1',
+      undefined
     );
     expect(res.setHeader).toHaveBeenCalledWith('Cache-Control', 'no-store');
     expect(res.setHeader).toHaveBeenCalledWith('Vary', 'Authorization');

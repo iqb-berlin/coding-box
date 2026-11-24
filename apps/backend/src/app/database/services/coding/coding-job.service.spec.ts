@@ -968,7 +968,8 @@ describe('CodingJobService', () => {
       person_group: null,
       booklet_name: 'BOOKLET',
       unit_name: 'UNIT',
-      variable_id: 'VAR1'
+      variable_id: 'VAR',
+      response_id: 1
     } as CodingJobUnit;
     const sourceNewCodeNeededUnit = {
       coding_job_id: 11,
@@ -980,7 +981,8 @@ describe('CodingJobService', () => {
       person_group: null,
       booklet_name: 'BOOKLET',
       unit_name: 'UNIT',
-      variable_id: 'VAR2'
+      variable_id: 'VAR',
+      response_id: 2
     } as CodingJobUnit;
     const sourceOpenReviewUnit = {
       coding_job_id: 11,
@@ -992,7 +994,8 @@ describe('CodingJobService', () => {
       person_group: null,
       booklet_name: 'BOOKLET',
       unit_name: 'UNIT',
-      variable_id: 'VAR3'
+      variable_id: 'VAR',
+      response_id: 3
     } as CodingJobUnit;
     const reviewResolvedUnit = {
       coding_job_id: 77,
@@ -1004,7 +1007,8 @@ describe('CodingJobService', () => {
       person_group: null,
       booklet_name: 'BOOKLET',
       unit_name: 'UNIT',
-      variable_id: 'VAR2'
+      variable_id: 'VAR',
+      response_id: 2
     } as CodingJobUnit;
     const reviewOpenUnit = {
       coding_job_id: 77,
@@ -1016,7 +1020,8 @@ describe('CodingJobService', () => {
       person_group: null,
       booklet_name: 'BOOKLET',
       unit_name: 'UNIT',
-      variable_id: 'VAR3'
+      variable_id: 'VAR',
+      response_id: 3
     } as CodingJobUnit;
     codingJobUnitRepository.createQueryBuilder.mockReturnValueOnce(
       createQueryBuilder([
@@ -4212,6 +4217,50 @@ describe('CodingJobService', () => {
     expect(service).not.toHaveProperty('discussionResultRepository');
   });
 
+  it('addresses repeated person/unit/variable entries by response ID for progress and notes', async () => {
+    const common = {
+      unit_name: 'UNIT',
+      variable_id: 'VAR',
+      person_login: 'login',
+      person_code: 'code',
+      booklet_name: 'booklet',
+      is_open: false,
+      coding_issue_option: null
+    };
+    const rows = [
+      {
+        ...common, response_id: 41, code: 1, notes: 'viewed'
+      },
+      {
+        ...common, response_id: 42, code: 2, notes: 'edited'
+      }
+    ];
+    codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
+    codingJobUnitRepository.find.mockResolvedValue(rows);
+    codingJobUnitRepository.count.mockResolvedValue(2);
+    const entry = { testPerson: 'login@code@booklet', unitId: 'UNIT', variableId: 'VAR' };
+    await expect(service.saveCodingNotes(1, { ...entry, notes: 'ambiguous' }, 7)).rejects.toThrow('responseId');
+    codingJobUnitRepository.count.mockResolvedValueOnce(2).mockResolvedValueOnce(1);
+    codingJobUnitRepository.findOne.mockResolvedValue(rows[0]);
+    await service.saveCodingNotes(1, { ...entry, notes: 'viewed' }, 7);
+    expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ person_group: expect.objectContaining({ type: 'or' }) })
+    }));
+    codingJobUnitRepository.findOne.mockResolvedValue(rows[1]);
+    await service.saveCodingNotes(1, { ...entry, responseId: 42, notes: 'reset' }, 7);
+    expect(codingJobUnitRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ response_id: 42, coding_job_id: 1 })
+    }));
+    fileUploadRepository.find.mockResolvedValue([]);
+    const prefix = 'login@code@booklet::booklet::UNIT::VAR';
+    await expect(service.getCodingProgress(1)).resolves.toMatchObject({
+      [`response:41::${prefix}`]: { id: 1 }, [`response:42::${prefix}`]: { id: 2 }
+    });
+    await expect(service.getCodingNotes(1)).resolves.toEqual({
+      [`response:41::${prefix}`]: 'viewed', [`response:42::${prefix}`]: 'reset'
+    });
+  });
+
   it('maps saved coding progress and notes by composite key', async () => {
     codingJobRepository.findOne.mockResolvedValue({ id: 1, workspace_id: 3 });
     codingJobUnitRepository.find.mockResolvedValueOnce([
@@ -5116,7 +5165,7 @@ describe('CodingJobService', () => {
     codingJobVariableBundleRepository.find.mockResolvedValue([]);
     codingJobUnitRepository.find.mockResolvedValue([
       createUnit(1, 'open', true, null, null),
-      createUnit(2, 'coded-a', false, 7, 'First note'),
+      createUnit(2, 'open', false, 7, 'First note'),
       createUnit(3, 'coded-b', false, 7, 'Second note')
     ]);
     codingFileCacheService.getVariablePageMap.mockResolvedValue(
@@ -5141,6 +5190,7 @@ describe('CodingJobService', () => {
     expect(result.units).toHaveLength(1);
     expect(result.units[0]).toMatchObject({
       responseId: 1,
+      progressResponseId: 1,
       personLogin: 'open',
       variablePage: '0'
     });
@@ -5418,6 +5468,60 @@ describe('CodingJobService', () => {
       }
     ]);
     expect(firstBundleVariablesGetter).toHaveBeenCalledTimes(1);
+  });
+
+  it('resolves bundle navigation and coding status within each repeated subform', async () => {
+    const person = { login: 'login', code: 'code', group: 'group' };
+    const unit = { name: 'UNIT', booklet: { person, bookletinfo: { name: 'BOOKLET' } } };
+    const otherUnit = { ...unit, name: 'OTHER' };
+    const responses = [
+      { id: 41, variableid: 'X', subform: 'A' }, { id: 42, variableid: 'Y', subform: 'A' },
+      { id: 43, variableid: 'X', subform: 'B' }, { id: 44, variableid: 'Y', subform: 'B' },
+      { id: 45, variableid: 'onlyA', subform: 'A' }, { id: 46, variableid: 'shared', subform: '' },
+      { id: 47, variableid: 'Z', subform: 'independent' }
+    ].map(row => ({
+      ...row,
+      unit: row.id === 47 ? otherUnit : unit,
+      unitid: row.id === 47 ? 2 : 1,
+      code_v1: null,
+      code_v2: null,
+      code_v3: null
+    }));
+    const units = responses.map(row => ({
+      response_id: row.id,
+      unit_name: row.unit.name,
+      variable_id: row.variableid,
+      variable_bundle_id: 9,
+      person_login: person.login,
+      person_code: person.code,
+      person_group: person.group,
+      booklet_name: 'BOOKLET',
+      code: row.id === 41 ? 7 : null,
+      is_open: row.id !== 41
+    }));
+    codingJobRepository.findOne.mockResolvedValue({ id: 10, workspace_id: 3, codingJobCoders: [] });
+    codingJobVariableBundleRepository.find.mockResolvedValue([{ variable_bundle_id: 9 }]);
+    variableBundleRepository.find.mockResolvedValue([{
+      id: 9,
+      variables: responses.slice(2).map(row => ({ unitName: row.unit.name, variableId: row.variableid }))
+    }]);
+    codingJobUnitRepository.find.mockResolvedValueOnce(units).mockResolvedValueOnce([]);
+    responseRepository.createQueryBuilder.mockReturnValue({
+      leftJoinAndSelect: jest.fn().mockReturnThis(),
+      where: jest.fn().mockReturnThis(),
+      andWhere: jest.fn().mockReturnThis(),
+      getMany: jest.fn().mockResolvedValue(responses)
+    });
+    const result = await service.getCodingJobUnits(10, true);
+    const bundleTargets = (id: number) => result.find(row => row.responseId === id)?.bundleContext?.variables
+      .map(variable => [variable.responseId, variable.status]);
+    expect(bundleTargets(42)).toEqual([
+      [41, 'manual-coded'], [42, 'manual-open'], [45, 'manual-open'], [46, 'manual-open'], [47, 'manual-open']
+    ]);
+    expect(bundleTargets(43)).toEqual([
+      [43, 'manual-open'], [44, 'manual-open'], [null, 'not-available'], [46, 'manual-open'], [47, 'manual-open']
+    ]);
+    expect(bundleTargets(44)).toEqual(bundleTargets(43));
   });
 
   it('uses all visible bundle units and prepared results for bundle context', async () => {

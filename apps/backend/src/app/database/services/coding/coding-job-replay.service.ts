@@ -3,6 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository, In, Not } from 'typeorm';
 import { SaveCodingProgressDto } from '../../../admin/coding-job/dto/save-coding-progress.dto';
 import { sortUnitsContinuous, sortUnitsAlternating, getLatestCode } from '../../../utils/coding-utils';
+import { jobUnitProgressKeys } from './coding-progress-key.util';
 import { CodingJob } from '../../entities/coding-job.entity';
 import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bundle.entity';
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
@@ -113,8 +114,9 @@ export class CodingJobReplayService {
       }
     };
 
+    const { keyFor } = jobUnitProgressKeys(codingJobUnits);
     codingJobUnits.forEach(unit => {
-      const compositeKey = this.query.getCodingJobUnitProgressKey(unit);
+      const compositeKey = keyFor(unit);
 
       if (unit.is_open) {
         progressMap[`${compositeKey}:open`] = {
@@ -156,9 +158,10 @@ export class CodingJobReplayService {
   ): Record<string, string> {
     const notesMap: Record<string, string> = {};
 
+    const { keyFor } = jobUnitProgressKeys(codingJobUnits);
     codingJobUnits.forEach(unit => {
       if (unit.notes) {
-        const compositeKey = this.query.getCodingJobUnitProgressKey(unit);
+        const compositeKey = keyFor(unit);
         notesMap[compositeKey] = unit.notes;
       }
     });
@@ -276,6 +279,7 @@ export class CodingJobReplayService {
     );
     const units: ReplayCodingSessionUnitDto[] = navigationUnits.map(unit => ({
       responseId: unit.responseId,
+      progressResponseId: unit.progressResponseId,
       unitName: unit.unitName,
       unitAlias: unit.unitAlias,
       variableId: unit.variableId,
@@ -433,10 +437,9 @@ export class CodingJobReplayService {
         visibleCodingJobUnitsForContext
       );
 
+    const { responseIdFor } = jobUnitProgressKeys(visibleCodingJobUnitsForContext);
     return sortedUnits.map(unit => {
-      const otherCoders = Array.from(
-        otherCodersMap.get(unit.response_id) || []
-      );
+      const otherCoders = Array.from(otherCodersMap.get(unit.response_id) || []);
       const variablePage =
         variablePageMaps.get(unit.unit_name)?.get(unit.variable_id) || '0';
       const variableAnchor =
@@ -444,6 +447,7 @@ export class CodingJobReplayService {
         unit.variable_anchor;
       return {
         responseId: unit.response_id,
+        progressResponseId: responseIdFor(unit),
         unitName: unit.unit_name,
         unitAlias: unit.unit_alias,
         variableId: unit.variable_id,
@@ -697,30 +701,8 @@ export class CodingJobReplayService {
       })
       .getMany();
 
-    const responseByCaseAndVariable = new Map<string, ResponseEntity>();
-    responses.forEach(response => {
-      const caseKey = this.getCodingJobBundleResponseCaseKey(response);
-      if (!caseKeys.has(caseKey)) {
-        return;
-      }
-
-      const responseKey = `${caseKey}\u0000${getAggregationVariableKey(
-        response.unit?.name || '',
-        response.variableid
-      )}`;
-      const existing = responseByCaseAndVariable.get(responseKey);
-      const responseIsManual = manualUnitByResponseId.has(response.id);
-      const existingIsManual = existing ?
-        manualUnitByResponseId.has(existing.id) :
-        false;
-      if (
-        !existing ||
-        (responseIsManual && !existingIsManual) ||
-        (responseIsManual === existingIsManual && response.id < existing.id)
-      ) {
-        responseByCaseAndVariable.set(responseKey, response);
-      }
-    });
+    const responseById = new Map(responses.map(response => [response.id, response]));
+    const responsesByVariable = this.indexBundleResponses(responses, caseKeys, manualUnitByResponseId);
 
     const bundleContextByResponseId = new Map<number, CodingJobBundleContext>();
     const configuredBundleIds = new Set(
@@ -739,14 +721,16 @@ export class CodingJobReplayService {
       }
 
       const caseKey = this.getCodingJobBundleUnitCaseKey(unit);
+      const currentResponse = responseById.get(unit.response_id);
+      const subform = currentResponse?.subform ?? '';
       const contextVariables = (variableBundle.variables || [])
         .map(variable => {
-          const response = responseByCaseAndVariable.get(
-            `${caseKey}\u0000${getAggregationVariableKey(
-              variable.unitName,
-              variable.variableId
-            )}`
-          );
+          const unitName = variable.unitName.toUpperCase();
+          const sameUnit = unitName === unit.unit_name.toUpperCase();
+          const unitKey = sameUnit ? currentResponse?.unitid ?? unitName : unitName;
+          const bySubform = responsesByVariable.get(JSON.stringify([caseKey, unitKey, variable.variableId]));
+          const isCurrentVariable = sameUnit && variable.variableId === unit.variable_id;
+          const response = isCurrentVariable ? currentResponse : this.resolveBundleSubform(bySubform, subform, sameUnit);
           const manualUnit = response ?
             manualUnitByResponseId.get(response.id) :
             undefined;
@@ -783,6 +767,44 @@ export class CodingJobReplayService {
     });
 
     return bundleContextByResponseId;
+  }
+
+  private resolveBundleSubform(responses: Map<string, ResponseEntity> | undefined, subform: string, sameUnit: boolean) {
+    if (!responses) return undefined;
+    const local = responses.get(subform) ?? responses.get('');
+    // Different units in a bundle may use independent subform names.
+    if (!local && !sameUnit && responses.size === 1) return responses.values().next().value;
+    return local;
+  }
+
+  private indexBundleResponses(
+    responses: ResponseEntity[],
+    caseKeys: Set<string>,
+    manualUnitByResponseId: Map<number, CodingJobUnit>
+  ) {
+    const responsesByVariable = new Map<string, Map<string, ResponseEntity>>();
+    responses.forEach(response => {
+      const caseKey = this.getCodingJobBundleResponseCaseKey(response);
+      if (!caseKeys.has(caseKey)) {
+        return;
+      }
+
+      const unitKeys: (number | string)[] = [(response.unit?.name || '').toUpperCase()];
+      if (response.unitid != null) unitKeys.push(response.unitid);
+      for (const unitKey of unitKeys) {
+        const key = JSON.stringify([caseKey, unitKey, response.variableid]);
+        const bySubform = responsesByVariable.get(key) ?? new Map<string, ResponseEntity>();
+        const subform = response.subform ?? '';
+        const existing = bySubform.get(subform);
+        const manual = manualUnitByResponseId.has(response.id);
+        const existingManual = existing && manualUnitByResponseId.has(existing.id);
+        if (!existing || (manual && !existingManual) || (manual === existingManual && response.id < existing.id)) {
+          bySubform.set(subform, response);
+          responsesByVariable.set(key, bySubform);
+        }
+      }
+    });
+    return responsesByVariable;
   }
 
   private isComparableDoubleCodingScope(

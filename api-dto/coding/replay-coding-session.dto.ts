@@ -26,6 +26,7 @@ export interface ReplayCodingBundleContextDto {
 }
 
 export interface ReplayCodingSessionUnitDto {
+  progressResponseId?: number;
   responseId: number;
   unitName: string;
   unitAlias: string | null;

@@ -1,8 +1,11 @@
 export interface CoverageResponse {
+  unitId?: number;
+  subform?: string | null;
   responseId: number;
   unitName: string;
   variableId: string;
   value: string | null;
+  status?: number | null;
   codeV2: number | null;
   statusV2: number | null;
   statusV1: number | null;
@@ -22,7 +25,10 @@ export type CoverageResponseRow = Omit<CoverageResponse, 'responseId' | 'codeV2'
 export function mapCoverageRow(row: CoverageResponseRow): CoverageResponse {
   return {
     responseId: Number(row.responseId),
+    unitId: row.unitId,
+    subform: row.subform,
     value: row.value ?? null,
+    status: row.status,
     codeV2: row.codeV2 === null || row.codeV2 === undefined ? null : Number(row.codeV2),
     statusV2: row.statusV2 === null || row.statusV2 === undefined ? null : Number(row.statusV2),
     statusV1: row.statusV1 === null || row.statusV1 === undefined ? null : Number(row.statusV1),

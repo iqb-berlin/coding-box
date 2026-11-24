@@ -3,26 +3,26 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets,
   EntityManager,
-  IsNull,
+  In,
   QueryRunner,
   Repository,
   SelectQueryBuilder
 } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
+import { jobProgressKey } from '../../../../../../../api-dto/coding/coding-progress-key';
 import { JournalService } from '../shared/journal.service';
+import { readEntityBatchesById } from '../shared/postgres-query-batches.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { CodingAnalysisService } from './coding-analysis.service';
 import {
   buildAggregationGroups,
-  getAggregationVariableKey
+  getAggregationVariableKey,
+  toAggregationCandidate
 } from './aggregation-metrics.util';
-import {
-  formatCodingTestPerson,
-  generateCodingProgressKey
-} from './coding-progress-key.util';
 import { CodingFreshnessService } from './coding-freshness.service';
 import {
   lockWorkspaceTestResultsMutationInTransaction,
@@ -32,7 +32,8 @@ import {
 import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
-import { EmptyResponseSelectionService } from './empty-response-selection.service';
+import { addEmptyResponseCandidateValueConditions, EmptyResponseSelectionService } from './empty-response-selection.service';
+import { uncodedV2Criteria } from './response-v2-coding.util';
 import {
   applyResolvedExclusionsToQuery,
   WorkspaceExclusionService
@@ -176,19 +177,9 @@ export class CodingResultsService {
       const openIssueReviewResponseIds = new Set(
         await this.codingJobService.getOpenCodingIssueReviewResponseIds(codingJobId)
       );
-      const getProgressKeyForUnit = (unit: typeof codingJobUnits[number]) => {
-        const testPerson = formatCodingTestPerson({
-          login: unit.personLogin,
-          code: unit.personCode,
-          group: unit.personGroup || undefined,
-          booklet: unit.bookletName
-        });
-
-        return generateCodingProgressKey(testPerson, unit.unitName, unit.variableId);
-      };
       const unitRequiresIssueReview = (unit: typeof codingJobUnits[number]) => (
         openIssueReviewResponseIds.has(unit.responseId) ||
-        this.requiresCodingIssueReview(codingProgress[getProgressKeyForUnit(unit)])
+        this.requiresCodingIssueReview(codingProgress[jobProgressKey(unit)])
       );
       const reviewResponseIds = new Set(codingJobUnits
         .filter(unitRequiresIssueReview)
@@ -224,7 +215,7 @@ export class CodingResultsService {
       let overwrittenExistingCount = 0;
 
       for (const unit of codingJobUnits) {
-        const progressKey = getProgressKeyForUnit(unit);
+        const progressKey = jobProgressKey(unit);
         const progress = codingProgress[progressKey];
 
         if (unitRequiresIssueReview(unit)) {
@@ -406,6 +397,7 @@ export class CodingResultsService {
                 .select([
                   'response.id',
                   'response.value',
+                  'response.status',
                   'response.variableid',
                   'response.status_v2',
                   'response.code_v2',
@@ -429,15 +421,7 @@ export class CodingResultsService {
               const candidates = await candidateQuery.getMany();
 
               const groups = buildAggregationGroups(
-                candidates.map(candidate => ({
-                  responseId: candidate.id,
-                  unitName: candidate.unit?.name || unitName,
-                  variableId: candidate.variableid,
-                  value: candidate.value,
-                  statusV2: candidate.status_v2,
-                  codeV2: candidate.code_v2,
-                  scoreV2: candidate.score_v2
-                })),
+                candidates.map(candidate => toAggregationCandidate(candidate, unitName, variableId)),
                 matchingFlags,
                 aggregationThreshold,
                 derivedVariableMap
@@ -566,9 +550,7 @@ export class CodingResultsService {
               responseUpdate.protectExistingV2 ?
                 {
                   id: responseUpdate.responseId,
-                  status_v2: IsNull(),
-                  code_v2: IsNull(),
-                  score_v2: IsNull()
+                  ...uncodedV2Criteria
                 } :
                 responseUpdate.responseId,
               {
@@ -833,7 +815,7 @@ export class CodingResultsService {
   /**
    * Apply coding to all empty responses in a workspace
    * Sets status_v2 = CODING_COMPLETE and resolves MIR code/score from the default missings profile.
-   * Only updates responses where value is null or empty and status_v2 is not already set
+   * Only updates effectively empty responses without a V2 status.
    */
   async applyEmptyResponseCoding(workspaceId: number): Promise<{
     success: boolean;
@@ -891,99 +873,47 @@ export class CodingResultsService {
           queryRunner.manager
         );
 
-      // Find all empty responses that don't have v2 coding yet
-      // Only target unit responses (status_v1 = CODING_INCOMPLETE)
+      const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId, queryRunner.manager);
       const emptyResponseCandidateQuery = responseRepository
         .createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoin('unit.booklet', 'booklet')
-        .leftJoin('booklet.person', 'person')
+        .innerJoin('response.unit', 'unit')
+        .innerJoin('unit.booklet', 'booklet')
+        .innerJoin('booklet.bookletinfo', 'bookletinfo')
+        .innerJoin('booklet.person', 'person')
+        .select(['response.id', 'response.unitid', 'response.variableid', 'response.subform', 'response.status',
+          'response.status_v1', 'response.value', 'unit.id', 'unit.name'])
         .where('person.workspace_id = :workspaceId', { workspaceId })
         .andWhere('person.consider = :consider', { consider: true })
         .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: [
-            statusStringToNumber('CODING_INCOMPLETE'),
-            statusStringToNumber('INTENDED_INCOMPLETE')
-          ]
+          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
         })
-        .andWhere('response.status_v2 IS NULL');
+        .andWhere(uncodedV2Criteria);
+      applyResolvedExclusionsToQuery(emptyResponseCandidateQuery, exclusions);
 
       emptyResponseCandidateQuery.andWhere(new Brackets(candidateQuery => {
-        candidateQuery.where(
-          '(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)',
-          {
-            whitespaces: ' \r\n\t',
-            emptyString: '',
-            emptyArrayString: '[]'
-          }
-        );
-
-        let derivedUnitIndex = 0;
-        emptyResponseContext.derivedVariableMap.forEach((variableIds, unitName) => {
-          if (variableIds.size === 0) {
-            return;
-          }
-
-          candidateQuery.orWhere(
-            `(UPPER(unit.name) = :derivedUnit${derivedUnitIndex} AND response.variableid IN (:...derivedVariables${derivedUnitIndex}))`,
-            {
-              [`derivedUnit${derivedUnitIndex}`]: unitName.toUpperCase(),
-              [`derivedVariables${derivedUnitIndex}`]: Array.from(variableIds)
-            }
-          );
-          derivedUnitIndex += 1;
-        });
+        addEmptyResponseCandidateValueConditions(candidateQuery, emptyResponseContext.derivedVariableMap);
       }));
 
-      const emptyResponseCandidates =
-        await emptyResponseCandidateQuery.getMany();
-      const emptyResponses =
-        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
-          emptyResponseCandidates,
-          emptyResponseContext,
-          queryRunner.manager
-        );
-
-      if (emptyResponses.length === 0) {
-        await queryRunner.commitTransaction();
-        return {
-          success: true,
-          updatedCount: 0,
-          message: 'Keine leeren Antworten zum Kodieren gefunden'
-        };
-      }
-
-      this.logger.log(`Found ${emptyResponses.length} empty responses to code`);
-      const emptyResponseMissing = await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
-        workspaceId,
-        null,
-        'mir',
-        queryRunner.manager
-      );
-
-      const batchSize = 500;
       let totalUpdated = 0;
-
-      for (let i = 0; i < emptyResponses.length; i += batchSize) {
-        const batch = emptyResponses.slice(i, i + batchSize);
-
-        const updatePromises = batch.map(response => queryRunner.manager.update(
-          ResponseEntity,
-          response.id,
-          {
-            code_v2: emptyResponseMissing.code,
-            score_v2: emptyResponseMissing.score,
-            status_v2: statusStringToNumber('CODING_COMPLETE'), // 5
-            autocoder_invalidated_version: null
-          }
-        ));
-
-        await Promise.all(updatePromises);
-        totalUpdated += batch.length;
-
-        this.logger.log(
-          `Updated batch of ${batch.length} empty responses (${totalUpdated}/${emptyResponses.length})`
+      let missing: Awaited<ReturnType<MissingsProfilesService['getMissingByIdForProfileOrDefault']>> | undefined;
+      for await (const candidates of readEntityBatchesById(emptyResponseCandidateQuery, 500)) {
+        const emptyResponses = await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+          candidates, emptyResponseContext, queryRunner.manager
         );
+        if (emptyResponses.length === 0) continue;
+        missing ??= await this.missingsProfilesService.getMissingByIdForProfileOrDefault(
+          workspaceId, null, 'mir', queryRunner.manager
+        );
+        const { affected } = await queryRunner.manager.update(ResponseEntity, {
+          id: In(emptyResponses.map(response => response.id)),
+          ...uncodedV2Criteria
+        }, {
+          code_v2: missing.code,
+          score_v2: missing.score,
+          status_v2: statusStringToNumber('CODING_COMPLETE'),
+          autocoder_invalidated_version: null
+        });
+        totalUpdated += affected ?? 0;
       }
 
       await queryRunner.commitTransaction();
@@ -993,7 +923,9 @@ export class CodingResultsService {
       return {
         success: true,
         updatedCount: totalUpdated,
-        message: `${totalUpdated} leere Antworten erfolgreich kodiert`
+        message: totalUpdated ?
+          `${totalUpdated} leere Antworten erfolgreich kodiert` :
+          'Keine leeren Antworten zum Kodieren gefunden'
       };
     } catch (error) {
       if (queryRunner.isTransactionActive) {

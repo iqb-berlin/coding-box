@@ -848,6 +848,21 @@ describe('ReplayComponent', () => {
     component.unitId.set('unit-123');
     component.codingService.currentVariableId = 'VAR1';
 
+    const units = {
+      id: 77,
+      name: 'job',
+      currentUnitIndex: 0,
+      units: [{
+        id: 42,
+        name: 'unit-123',
+        alias: null,
+        bookletId: 0,
+        variableId: 'VAR1',
+        progressResponseId: 42
+      }]
+    };
+    component.unitsData.set(units);
+
     component.onNotesChanged('note');
     await Promise.resolve();
 
@@ -857,7 +872,8 @@ describe('ReplayComponent', () => {
       'unit-123',
       'VAR1',
       'note',
-      null
+      units,
+      42
     );
   });
 
@@ -1032,7 +1048,8 @@ describe('ReplayComponent', () => {
       'valid@test@other',
       'unit-123',
       'valid-token',
-      expect.any(String)
+      expect.any(String),
+      undefined
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
     expect(replayComponent.reloadKey()).toBe(initialReloadKey);
@@ -2152,7 +2169,8 @@ describe('ReplayComponent', () => {
       'unit-new',
       'valid-token',
       true,
-      expect.any(String)
+      expect.any(String),
+      2
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
       47,
@@ -2160,7 +2178,8 @@ describe('ReplayComponent', () => {
       'unit-old',
       'valid-token',
       true,
-      expect.any(String)
+      expect.any(String),
+      1
     );
     expect(component.unitId()).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');

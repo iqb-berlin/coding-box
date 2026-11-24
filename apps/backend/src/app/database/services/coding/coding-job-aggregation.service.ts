@@ -259,25 +259,29 @@ export class CodingJobAggregationService {
 
   deduplicateSlimResponsesForManualCoding(
     responses: SlimResponse[],
-    assignedResponseIds: Set<number>
+    assignedResponseIds: Set<number>,
+    isDerivedResponse: (response: SlimResponse) => boolean
   ): {
     responses: SlimResponse[];
     assignedResponseIds: Set<number>;
   } {
     const responsesWithCaseFields =
       this.withManualCodingDeduplicationFields(responses);
+    const keyFor = (response: SlimResponse & ManualCodingDeduplicationResponse) => (
+      getManualCodingDeduplicationKey(response, isDerivedResponse(response))
+    );
     const assignedDeduplicationKeys = new Set(
       responsesWithCaseFields
         .filter(response => assignedResponseIds.has(response.responseId))
-        .map(response => getManualCodingDeduplicationKey(response))
+        .map(keyFor)
     );
     const dedupedResponses =
-      deduplicateManualCodingResponses(responsesWithCaseFields);
+      deduplicateManualCodingResponses(responsesWithCaseFields, keyFor);
     const assignedDedupedResponseIds = new Set(
       dedupedResponses
         .filter(response => (
           assignedResponseIds.has(response.responseId) ||
-          assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+          assignedDeduplicationKeys.has(keyFor(response))
         ))
         .map(response => response.responseId)
     );
@@ -298,7 +302,8 @@ export class CodingJobAggregationService {
       await this.getDerivedVariableMapForAggregation(workspaceId);
     const dedupedResponses = this.deduplicateSlimResponsesForManualCoding(
       responses,
-      new Set()
+      new Set(),
+      response => derivedVariableMap.get(response.unitName.toUpperCase())?.has(response.variableid) ?? false
     ).responses;
     const groups = buildAggregationGroups(
       this.withManualCodingDeduplicationFields(dedupedResponses),

@@ -3,6 +3,8 @@ import {
   IsString,
   IsObject,
   IsOptional,
+  IsInt,
+  Min,
   IsBoolean,
   ValidateIf,
   ValidateNested
@@ -20,6 +22,12 @@ export class SaveCodingProgressDto {
   })
   @IsString()
   testPerson: string;
+
+  @ApiProperty({ description: 'Response ID for cases sharing the same person, booklet, unit and variable', required: false })
+  @IsOptional()
+  @IsInt()
+  @Min(1)
+  responseId?: number;
 
   @ApiProperty({
     description: 'Unit name',

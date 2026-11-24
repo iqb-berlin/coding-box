@@ -22,6 +22,7 @@ export interface CoderTrainingResponse {
   variableId: string;
   unitName: string;
   value: string | null;
+  status?: number | null;
   personLogin: string;
   personCode: string;
   personGroup: string;
@@ -29,6 +30,7 @@ export interface CoderTrainingResponse {
   variable: string;
   chunkTs?: number;
   unitId?: number;
+  subform?: string | null;
 }
 
 export interface TrainingPackage {

@@ -224,14 +224,14 @@ describe('CodingAnalysisService aggregation settings', () => {
       forceRefresh: true
     });
 
-    expect(cacheService.delete).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4');
+    expect(cacheService.delete).toHaveBeenCalledWith('response-analysis:7_v2_IGNORE_CASE_t4');
     const [markerKey, runId, ttl] = cacheService.set.mock.calls[0];
-    expect([markerKey, runId, ttl]).toEqual(['response-analysis:7_IGNORE_CASE_t4:run', expect.any(String), 0]);
+    expect([markerKey, runId, ttl]).toEqual(['response-analysis:7_v2_IGNORE_CASE_t4:run', expect.any(String), 0]);
     expect(jobQueueService.addCodingAnalysisJob).toHaveBeenCalledWith({
       workspaceId: 7,
       matchingFlags: [ResponseMatchingFlag.IGNORE_CASE],
       threshold: 4,
-      cacheKey: 'response-analysis:7_IGNORE_CASE_t4',
+      cacheKey: 'response-analysis:7_v2_IGNORE_CASE_t4',
       runId
     });
     expect(cacheService.set.mock.invocationCallOrder[0])
@@ -245,16 +245,16 @@ describe('CodingAnalysisService aggregation settings', () => {
 
     await service.startAnalysis(7, [ResponseMatchingFlag.IGNORE_CASE], 4, { forceRefresh: true });
 
-    expect(cacheService.getStrict).toHaveBeenCalledWith('response-analysis:7_IGNORE_CASE_t4:run');
+    expect(cacheService.getStrict).toHaveBeenCalledWith('response-analysis:7_v2_IGNORE_CASE_t4:run');
     expect(jobQueueService.getActiveCodingAnalysisJob)
-      .toHaveBeenCalledWith(7, 'response-analysis:7_IGNORE_CASE_t4', 'current-run');
+      .toHaveBeenCalledWith(7, 'response-analysis:7_v2_IGNORE_CASE_t4', 'current-run');
     expect(cacheService.delete).not.toHaveBeenCalled();
     expect(jobQueueService.addCodingAnalysisJob).not.toHaveBeenCalled();
   });
 
   it('accepts a fresh run after invalidation while the previous run is still active', async () => {
     const { service, jobQueueService, cacheService } = createService();
-    const cacheKey = 'response-analysis:7__t2';
+    const cacheKey = 'response-analysis:7_v2__t2';
     let marker: string | null = 'previous-run';
     const queue = [{ data: { runId: marker }, getState: async () => 'active', progress: 70 }];
     cacheService.getStrict.mockImplementation(async () => marker);

@@ -46,7 +46,7 @@ import {
 import { SessionRecoveryService } from '../../../core/services/session-recovery.service';
 import { CodeSelectedEvent } from '../../../models/coding-interfaces';
 import { ReplaySessionLoaderService } from '../../services/replay-session-loader.service';
-import { ReplayRecoveryContext, ReplayRecoveryDraft, ReplayRecoveryService } from './replay-recovery.service';
+import { ReplayRecoveryContext, ReplayRecoveryService } from './replay-recovery.service';
 import { ReplayPayloadFacade } from './replay-payload.facade';
 import { ReplayAnchorHighlightService } from './replay-anchor-highlight.service';
 import { ReplayPanelResizeDirective } from './replay-panel-resize.directive';
@@ -132,6 +132,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   readonly isBookletReplayMode = signal<boolean>(false); // for replays without coding features
   readonly isReviewMode = signal<boolean>(false);
   readonly isCodingIssueReviewMode = signal<boolean>(false);
+  private readonly currentReplayUnit = computed(() => {
+    const units = this.unitsData();
+    return units?.units[units.currentUnitIndex];
+  });
+
   readonly currentUnitIndex = signal<number>(0);
   readonly totalUnits = signal<number>(0);
   private readonly replayAuth = inject(ReplayAuthSessionService);
@@ -190,7 +195,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     });
     this.unregisterRecoveryProvider = this.sessionRecoveryService.registerProvider({
       key: this.replayRecovery.key,
-      capture: () => this.createReplayRecoveryDraft()
+      capture: () => this.replayRecovery.capture(this.recoveryContext())
     });
     this.authBootstrapSubscription = this.appService.authBootstrapStatus$.subscribe(status => {
       if (status === 'session-expired') {
@@ -609,11 +614,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.reloadKey.update(value => value + 1);
     this.responses.set(unitData.response);
     replayAttempt.recordPayloadServerTimings(unitData.serverTimings);
-    this.appliedReplayContext = context ?? {
-      workspaceId: this.workspaceId() || this.appService.selectedWorkspaceId,
-      testPerson: this.testPerson(),
-      unitId: this.unitId()
-    };
+    this.appliedReplayContext = context ?? this.navigationContext(this.workspaceId() || this.appService.selectedWorkspaceId);
 
     const vocsData = unitData.vocs[0]?.data;
     if (this.isCodingMode() && unitData.codingScheme !== undefined) {
@@ -643,11 +644,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return replayAttempt === this.replayAttempt;
   }
 
-  private async loadAndApplyUnitData(workspace: number, authToken?: string): Promise<boolean> {
-    const attempt = this.replayAttempt;
-    const context: ReplayNavigationContext = {
-      workspaceId: workspace, testPerson: this.testPerson(), unitId: this.unitId()
+  private navigationContext(workspaceId: number, unit = this.currentReplayUnit()): ReplayNavigationContext {
+    return {
+      workspaceId,
+      testPerson: this.testPerson(),
+      unitId: this.unitId(),
+      responseId: unit?.responseId ?? unit?.progressResponseId ?? this.originResponseId() ?? undefined
     };
+  }
+
+  private async loadAndApplyUnitData(workspace: number, authToken?: string, context = this.navigationContext(workspace)): Promise<boolean> {
+    const attempt = this.replayAttempt;
     this.isLoaded.next(false);
     const result = await this.replayPayload.loadFull(context, attempt, authToken, this.isCodingMode());
     if (!result || !this.replayPayload.isCurrent(result.runId) || !this.isCurrentReplayAttempt(attempt)) return false;
@@ -656,11 +663,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return true;
   }
 
-  private async loadAndApplyReplayResponse(workspace: number, authToken?: string): Promise<boolean> {
+  private async loadAndApplyReplayResponse(workspace: number, authToken?: string, context = this.navigationContext(workspace)): Promise<boolean> {
     const attempt = this.replayAttempt;
-    const context: ReplayNavigationContext = {
-      workspaceId: workspace, testPerson: this.testPerson(), unitId: this.unitId()
-    };
     this.isLoaded.next(false);
     const result = await this.replayPayload.loadResponse(context, attempt, authToken);
     if (!result || !this.replayPayload.isCurrent(result.runId) || !this.isCurrentReplayAttempt(attempt)) return false;
@@ -749,10 +753,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       player: this.unitPlayerComponent,
       anchor: this.anchor,
       page: this.page,
-      currentUnit: () => {
-        const unitsData = this.unitsData();
-        return unitsData?.units[unitsData.currentUnitIndex];
-      }
+      currentUnit: this.currentReplayUnit
     });
 
     const replayAttempt = this.replayAttempt;
@@ -884,7 +885,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.selectNavigationUnit(unit);
     const workspaceId = this.workspaceId() || this.getWorkspaceIdFromAuthToken(this.authToken);
     const load = this.canLoadReplayWithCurrentAuth(workspaceId) ?
-      this.loadNavigationTarget(workspaceId, replayAttempt) :
+      this.loadNavigationTarget(this.navigationContext(workspaceId, unit), replayAttempt) :
       true;
     const applied = typeof load === 'boolean' ? load : await load;
     if (applied && this.isCurrentReplayAttempt(replayAttempt)) this.updateNavigationIndex(unit);
@@ -908,24 +909,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitId.set(unit.name);
   }
 
-  private loadNavigationTarget(workspaceId: number, attempt: ReplayAttemptContext): boolean | Promise<boolean> {
-    const strategy = decideReplayNavigationStrategy(this.appliedReplayContext, {
-      workspaceId,
-      testPerson: this.testPerson(),
-      unitId: this.unitId()
-    });
+  private loadNavigationTarget(context: ReplayNavigationContext, attempt: ReplayAttemptContext): boolean | Promise<boolean> {
+    const strategy = decideReplayNavigationStrategy(this.appliedReplayContext, context, this.responses()?.subformResponseIds);
     switch (strategy) {
       case 'direct-page-navigation': {
         const page = this.page();
         this.invalidateUnitPayloadRequests();
         attempt.startDirectPageNavigation();
         return !page || this.unitPlayerComponent()?.navigateToPage(page) ||
-          this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+          this.loadAndApplyUnitData(context.workspaceId, this.getReplayRequestAuthToken(), context);
       }
       case 'load-responses':
-        return this.loadAndApplyReplayResponse(workspaceId, this.getReplayRequestAuthToken());
+        return this.loadAndApplyReplayResponse(context.workspaceId, this.getReplayRequestAuthToken(), context);
       case 'load-full-payload':
-        return this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+        return this.loadAndApplyUnitData(context.workspaceId, this.getReplayRequestAuthToken(), context);
       default:
         throw new Error(`Unsupported replay navigation strategy: ${strategy}`);
     }
@@ -990,10 +987,6 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     };
   }
 
-  private createReplayRecoveryDraft(): ReplayRecoveryDraft | null {
-    return this.replayRecovery.capture(this.recoveryContext());
-  }
-
   private restoreReplayRecoveryDraft(): Promise<boolean> {
     return this.replayRecovery.restore(this.recoveryContext(), draft => {
       const units = this.unitsData();
@@ -1036,9 +1029,10 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     if (this.isCodingReadOnly()) return;
 
     const context = this.replayMessageContext();
+    const progressResponseId = this.currentReplayUnit()?.progressResponseId;
     let savedCode: { code?: string; score?: number } | null;
     try {
-      savedCode = await this.codingService.handleCodeSelected(event, this.testPerson(), this.unitId(), this.workspaceId(), this.unitsData());
+      savedCode = await this.codingService.handleCodeSelected(event, this.testPerson(), this.unitId(), this.workspaceId(), this.unitsData(), progressResponseId);
     } catch (error) {
       return;
     }
@@ -1051,7 +1045,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
         variableId: event.variableId,
         code: savedCode.code,
         score: savedCode.score ?? null,
-        notes: this.codingService.getNotes(context.testPerson, context.unitId, event.variableId),
+        notes: this.codingService.getNotes(context.testPerson, context.unitId, event.variableId, progressResponseId),
         responseId: context.responseId
       }, '*');
 
@@ -1064,7 +1058,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   protected getCoderNotes(): string {
-    return this.codingService.getNotes(this.testPerson(), this.unitId(), this.codingService.currentVariableId);
+    return this.codingService.getNotes(this.testPerson(), this.unitId(), this.codingService.currentVariableId, this.currentReplayUnit()?.progressResponseId);
   }
 
   onNotesChanged(notes: string): void {
@@ -1077,7 +1071,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       this.unitId(),
       variableId,
       notes,
-      this.unitsData()
+      this.unitsData(),
+      this.currentReplayUnit()?.progressResponseId
     ).catch(() => undefined);
     this.replayNotesCommitSubject.next({ variableId, notes, context: this.replayMessageContext() });
   }
@@ -1184,7 +1179,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   protected getPreSelectedCodeId(variableId: string): number | null {
-    return this.codingService.getPreSelectedCodeId(this.testPerson(), this.unitId(), variableId);
+    return this.codingService.getPreSelectedCodeId(this.testPerson(), this.unitId(), variableId, this.currentReplayUnit()?.progressResponseId);
   }
 
   protected getCurrentCodingCaseKey(): string {
@@ -1193,11 +1188,11 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       return '';
     }
 
-    return this.codingService.generateCompositeKey(this.testPerson(), this.unitId(), variableId);
+    return this.codingService.generateCompositeKey(this.testPerson(), this.unitId(), variableId, this.currentReplayUnit()?.progressResponseId);
   }
 
   protected getPreSelectedCodingIssueOptionId(variableId: string): number | null {
-    return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson(), this.unitId(), variableId);
+    return this.codingService.getPreSelectedCodingIssueOptionId(this.testPerson(), this.unitId(), variableId, this.currentReplayUnit()?.progressResponseId);
   }
 
   protected async pauseCodingJob(): Promise<void> {
@@ -1306,15 +1301,15 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const activeElement = document.activeElement as HTMLElement | null;
     const inputFocused = !!activeElement && ['INPUT', 'TEXTAREA'].includes(activeElement.tagName);
     const units = this.unitsData();
-    const currentUnit = units?.units[units.currentUnitIndex];
+    const currentUnit = this.currentReplayUnit();
     const variableId = currentUnit?.variableId || this.codingService.currentVariableId;
     const navigationKey = ['Enter', 'ArrowRight'].includes(keyboardEvent.key);
     const authenticationBlocked = this.isCodingInteractionBlockedByReAuthentication();
     const codingMode = this.isCodingMode() && !!units;
-    const hasSelection = !inputFocused && !authenticationBlocked && codingMode && !!units && navigationKey &&
+    const hasSelection = !inputFocused && !authenticationBlocked && codingMode && navigationKey &&
       !this.codingService.hasSaveError && (keyboardEvent.key !== 'Enter' || !!variableId) &&
       this.codingService.selectedCodes.has(this.codingService.generateCompositeKey(
-        this.testPerson(), currentUnit?.name || this.unitId(), variableId
+        this.testPerson(), currentUnit?.name || this.unitId(), variableId, currentUnit?.progressResponseId
       ));
     const action = replayKeyboardAction({
       key: keyboardEvent.key,

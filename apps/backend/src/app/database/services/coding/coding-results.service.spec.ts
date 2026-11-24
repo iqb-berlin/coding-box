@@ -1,4 +1,7 @@
-import { EntityManager, Repository } from 'typeorm';
+import AdmZip from 'adm-zip';
+import {
+  Brackets, EntityManager, In, IsNull, Repository
+} from 'typeorm';
 import { CodingResultsService } from './coding-results.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
@@ -49,6 +52,8 @@ describe('CodingResultsService', () => {
   >>;
 
   const createQueryBuilderMock = (rows: unknown[]) => ({
+    alias: 'response',
+    innerJoin: jest.fn().mockReturnThis(),
     leftJoinAndSelect: jest.fn().mockReturnThis(),
     leftJoin: jest.fn().mockReturnThis(),
     distinct: jest.fn().mockReturnThis(),
@@ -56,9 +61,14 @@ describe('CodingResultsService', () => {
     addSelect: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
     andWhere: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
+    limit: jest.fn().mockReturnThis(),
+    setParameter: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue(rows),
     getRawMany: jest.fn().mockResolvedValue(rows)
   });
+
+  const uncodedV2 = { status_v2: IsNull(), code_v2: IsNull(), score_v2: IsNull() };
 
   beforeEach(() => {
     jest.spyOn(JournalService, 'recordEventInTransaction').mockResolvedValue({} as never);
@@ -277,6 +287,24 @@ describe('CodingResultsService', () => {
       17,
       queryRunner.manager
     );
+  });
+
+  it('applies distinct saved codes to repeated cases in the same job', async () => {
+    const [unit] = await codingJobService.getCodingJobUnits(10);
+    codingJobService.getCodingJobUnits.mockResolvedValueOnce([41, 42].map(id => ({
+      ...unit, responseId: id, progressResponseId: id
+    })));
+    codingJobService.getCodingProgress.mockResolvedValueOnce({
+      'response:41::person@code@booklet::booklet::UNIT::VAR': {
+        id: 1, score: 0, code: '1', label: 'First'
+      },
+      'response:42::person@code@booklet::booklet::UNIT::VAR': {
+        id: 2, score: 1, code: '2', label: 'Second'
+      }
+    });
+    await expect(service.applyCodingResults(17, 10)).resolves.toMatchObject({ success: true });
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(ResponseEntity, 41, expect.objectContaining({ code_v2: 1 }));
+    expect(queryRunner.manager.update).toHaveBeenCalledWith(ResponseEntity, 42, expect.objectContaining({ code_v2: 2 }));
   });
 
   it('resolves manually selected MIR missing from the coding job profile', async () => {
@@ -1228,6 +1256,43 @@ describe('CodingResultsService', () => {
     );
   });
 
+  it.each([false, true])('keeps displayed drawings separate during result application with overwriteExisting=%s', async overwriteExisting => {
+    const archive = new AdmZip();
+    archive.addFile('geogebra.xml', Buffer.from('<geogebra/>'));
+    const value = archive.toBuffer().toString('base64');
+    codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
+      aggregationEnabled: true,
+      aggregationThreshold: 2,
+      responseMatchingFlags: [],
+      aggregationSettingsVersion: 1,
+      fromJobSnapshot: true
+    });
+    const edited = {
+      id: 99, value, variableid: 'VAR', status: statusStringToNumber('VALUE_CHANGED'), unit: { id: 1, name: 'UNIT' }
+    };
+    const viewed = {
+      ...edited,
+      id: 100,
+      status: statusStringToNumber('DISPLAYED'),
+      status_v2: overwriteExisting ? statusStringToNumber('CODING_COMPLETE') : null,
+      code_v2: overwriteExisting ? -98 : null,
+      unit: { id: 2, name: 'UNIT' }
+    };
+    const siblings = createQueryBuilderMock([edited, viewed]);
+    (responseRepository.createQueryBuilder as jest.Mock)
+      .mockReturnValueOnce(createQueryBuilderMock([edited]))
+      .mockReturnValueOnce(createQueryBuilderMock([{ unitName: 'UNIT', variableId: 'VAR' }]))
+      .mockReturnValueOnce(siblings);
+
+    await expect(service.applyCodingResults(17, 10, { overwriteExisting })).resolves.toMatchObject({
+      success: true,
+      updatedResponsesCount: 1,
+      overwrittenExistingCount: 0
+    });
+    expect(siblings.select).toHaveBeenCalledWith(expect.arrayContaining(['response.status']));
+    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(ResponseEntity, 100, expect.anything());
+  });
+
   it('does not propagate aggregated results when the saved threshold is not reached', async () => {
     codingJobService.getAggregationSettingsForCodingJob.mockResolvedValue({
       aggregationEnabled: true,
@@ -1346,6 +1411,7 @@ describe('CodingResultsService', () => {
     ] as ResponseEntity[];
     const queryBuilder = createQueryBuilderMock(rows);
     responseRepository.createQueryBuilder = jest.fn(() => queryBuilder) as never;
+    queryRunner.manager.update.mockResolvedValueOnce({ affected: 2 });
 
     const result = await service.applyEmptyResponseCoding(17);
 
@@ -1354,10 +1420,10 @@ describe('CodingResultsService', () => {
       updatedCount: 2,
       message: '2 leere Antworten erfolgreich kodiert'
     });
-    expect(queryRunner.manager.update).toHaveBeenCalledTimes(2);
+    expect(queryRunner.manager.update).toHaveBeenCalledTimes(1);
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
-      1,
+      { id: In([1, 2]), ...uncodedV2 },
       {
         code_v2: -98,
         score_v2: 0,
@@ -1384,9 +1450,7 @@ describe('CodingResultsService', () => {
       call[0] === 'response.status_v1 IN (:...statuses)'
     ));
     expect(statusFilterCall?.[1].statuses).not.toContain(statusStringToNumber('DERIVE_ERROR'));
-    expect(queryBuilder.andWhere).toHaveBeenCalledWith(
-      'response.status_v2 IS NULL'
-    );
+    expect(queryBuilder.andWhere).toHaveBeenCalledWith(uncodedV2);
     expect(codingValidationService.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(17);
     expect(codingStatisticsService.invalidateCache).toHaveBeenCalledWith(17);
     expect(codingAnalysisService.invalidateCache).toHaveBeenCalledWith(17);
@@ -1394,6 +1458,7 @@ describe('CodingResultsService', () => {
       17,
       queryRunner.manager
     );
+    expect(workspaceExclusionService.resolveExclusionsForQueries).toHaveBeenCalledWith(17, queryRunner.manager);
     expect(emptyResponseSelectionService.filterEffectivelyEmptyResponses)
       .toHaveBeenCalledWith(rows, expect.any(Object), queryRunner.manager);
     expect(queryRunner.query).toHaveBeenNthCalledWith(
@@ -1423,14 +1488,10 @@ describe('CodingResultsService', () => {
     const result = await service.applyEmptyResponseCoding(17);
 
     expect(result.updatedCount).toBe(1);
-    expect(queryRunner.manager.update).not.toHaveBeenCalledWith(
-      ResponseEntity,
-      1,
-      expect.any(Object)
-    );
+    expect(queryRunner.manager.update).toHaveBeenCalledTimes(1);
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
-      2,
+      { id: In([2]), ...uncodedV2 },
       expect.objectContaining({ code_v2: -98 })
     );
   });
@@ -1457,7 +1518,7 @@ describe('CodingResultsService', () => {
     expect(result.updatedCount).toBe(1);
     expect(queryRunner.manager.update).toHaveBeenCalledWith(
       ResponseEntity,
-      1,
+      { id: In([1]), ...uncodedV2 },
       {
         code_v2: -98,
         score_v2: 0,
@@ -1468,17 +1529,12 @@ describe('CodingResultsService', () => {
 
     const candidateBrackets = queryBuilder.andWhere.mock.calls
       .map(call => call[0])
-      .find(condition => typeof condition !== 'string') as {
-      whereFactory: (builder: {
-        where: jest.Mock;
-        orWhere: jest.Mock;
-      }) => void;
-    };
+      .find(condition => condition instanceof Brackets) as Brackets;
     const nestedBuilder = {
       where: jest.fn(),
       orWhere: jest.fn()
     };
-    candidateBrackets.whereFactory(nestedBuilder);
+    candidateBrackets.whereFactory(nestedBuilder as never);
 
     expect(nestedBuilder.orWhere).toHaveBeenCalledWith(
       expect.stringContaining('UPPER(unit.name)'),
@@ -1487,5 +1543,22 @@ describe('CodingResultsService', () => {
         derivedVariables0: ['DERIVED']
       }
     );
+  });
+
+  it('rolls back earlier empty coding batches when a later batch write fails', async () => {
+    const firstPage = Array.from({ length: 500 }, (_, index) => ({ id: index + 1 }));
+    const query = createQueryBuilderMock([]);
+    query.getMany.mockResolvedValueOnce(firstPage).mockResolvedValueOnce([{ id: 501 }]);
+    responseRepository.createQueryBuilder = jest.fn(() => query) as never;
+    queryRunner.manager.update
+      .mockResolvedValueOnce({ affected: 500 })
+      .mockRejectedValueOnce(new Error('second page failed'));
+
+    await expect(service.applyEmptyResponseCoding(17)).resolves.toMatchObject({ success: false, updatedCount: 0 });
+    expect(query.setParameter.mock.calls).toEqual([['batchAfterId', 0], ['batchAfterId', 500]]);
+    expect(query.limit).toHaveBeenCalledWith(500);
+    expect(queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(queryRunner.commitTransaction).not.toHaveBeenCalled();
+    expect(codingAnalysisService.invalidateCache).not.toHaveBeenCalled();
   });
 });

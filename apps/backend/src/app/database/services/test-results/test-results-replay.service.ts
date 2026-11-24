@@ -6,6 +6,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
 } from 'typeorm';
+import type { ReplayUnitResponseDto } from '../../../../../../../api-dto/coding/replay-unit-response.dto';
 import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../workspace/workspace-constants';
 import { CacheService } from '../../../cache/cache.service';
 import { Booklet } from '../../entities/booklet.entity';
@@ -47,35 +48,19 @@ export class TestResultsReplayService {
   async findUnitResponse(
     workspaceId: number,
     connector: string,
-    unitId: string
-  ): Promise<{
-    responses: {
-      id: string;
-      content: string;
-    }[];
-  }> {
-    const cacheKey = `${this.cacheService.generateUnitResponseCacheKey(
+    unitId: string,
+    responseId?: number
+  ): Promise<ReplayUnitResponseDto> {
+    const unitCacheKey = `${this.cacheService.generateUnitResponseCacheKey(
       workspaceId,
       connector,
       unitId
     )}${REPLAY_RESPONSE_CACHE_SUFFIX}`;
-    const cachedResponse = await this.cacheService.get<{
-      responses: {
-        id: string;
-        content: string;
-      }[];
-    }>(cacheKey);
-
-    if (cachedResponse) {
-      this.logger.log(
-        `Cache hit for replay responses: workspace=${workspaceId}, unitId=${unitId}`
-      );
-      return cachedResponse;
+    let cacheKey = unitCacheKey;
+    if (responseId === undefined) {
+      const cached = await this.cacheService.get<ReplayUnitResponseDto>(cacheKey);
+      if (cached) return cached;
     }
-
-    this.logger.log(
-      `Cache miss for replay responses: workspace=${workspaceId}, unitId=${unitId}`
-    );
 
     const parts = connector.split('@');
     const login = parts[0];
@@ -87,33 +72,34 @@ export class TestResultsReplayService {
       return { responses: [] };
     }
 
-    const createUnitLookupQuery = () => {
-      const queryBuilder = this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .innerJoin('booklet.person', 'person')
-        .innerJoin('booklet.bookletinfo', 'bookletinfo')
-        .select('unit.id', 'unitId')
-        .where('person.login = :login', { login })
-        .andWhere('person.code = :code', { code });
+    const unitLookup = this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('unit.id', 'unitId')
+      .where('person.login = :login', { login })
+      .andWhere('person.code = :code', { code });
 
-      if (group) {
-        queryBuilder.andWhere('person.group = :group', { group });
-      }
+    if (group) {
+      unitLookup.andWhere('person.group = :group', { group });
+    }
 
-      queryBuilder
-        .andWhere('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('bookletinfo.name = :bookletId', { bookletId });
-      applyExclusionsToQuery(queryBuilder, exclusions);
-      return queryBuilder;
-    };
-
-    const unitRow = await createUnitLookupQuery()
+    unitLookup
+      .andWhere('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true })
+      .andWhere('bookletinfo.name = :bookletId', { bookletId });
+    applyExclusionsToQuery(unitLookup, exclusions);
+    if (responseId !== undefined) {
+      unitLookup.innerJoin('unit.responses', 'target', 'target.id = :responseId', { responseId })
+        .addSelect('target.subform', 'subform')
+        .addSelect('target.is_autocoder_generated', 'generated');
+    }
+    const unitRow = await unitLookup
       .andWhere('(unit.alias = :unitId OR unit.name = :unitId)', { unitId })
       .orderBy('CASE WHEN unit.alias = :unitId THEN 0 ELSE 1 END', 'ASC')
       .limit(1)
-      .getRawOne<{ unitId: number }>();
+      .getRawOne<{ unitId: number; subform?: string | null; generated?: boolean }>();
 
     const unitDbId = unitRow?.unitId;
 
@@ -158,48 +144,35 @@ export class TestResultsReplayService {
       throw new ReplayResourceNotFoundError('REPLAY_UNIT_NOT_FOUND');
     }
 
+    if (responseId !== undefined) {
+      // All generated targets in a subform use its source rows. For a base target, check
+      // that the cached state contains its exact row before reusing it.
+      cacheKey = `${unitCacheKey}:scope:${JSON.stringify([unitDbId, unitRow.subform ?? '', !!unitRow.generated])}`;
+      const cached = await this.cacheService.get<ReplayUnitResponseDto>(cacheKey);
+      if (cached && (unitRow.generated || cached.subformResponseIds?.includes(responseId))) return cached;
+    }
+
     const chunks = await this.chunkRepository.find({
       where: { unitid: unitDbId }
     });
 
-    if (chunks.length > 0) {
-      this.logger.log(`Found ${chunks.length} chunks for unit ${unitDbId}`);
-      chunks.forEach(chunk => {
-        this.logger.log(
-          `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
-        );
-      });
-    } else {
-      this.logger.log(`No chunks found for unit ${unitDbId}`);
-    }
+    this.logger.log(`Found ${chunks.length} chunks for unit ${unitDbId}`);
+    chunks.forEach(chunk => {
+      this.logger.log(
+        `Chunk: key=${chunk.key}, type=${chunk.type}, variables=${chunk.variables}, ts=${chunk.ts}`
+      );
+    });
 
-    const responseRows = await this.responseRepository
-      .createQueryBuilder('response')
-      .select([
-        'response.variableid AS variableid',
-        'response.value AS value',
-        'response.status AS status',
-        'response.subform AS subform'
-      ])
-      .where('response.unitid = :unitDbId', { unitDbId })
-      .andWhere(
-        nonAutocoderGeneratedResponseCondition(
-          'response'
-        )
-      )
-      .getRawMany<{
-      variableid: string;
-      value: string | null;
-      status: number;
-      subform: string | null;
-    }>();
+    const responseRows = await this.readResponseRows(unitDbId, responseId, unitRow.subform);
 
+    const subformChunkVariables = new Set<string>();
     const chunkKeyMap = new Map<string, { key: string; ts: number }>();
     chunks.forEach(chunk => {
       if (chunk.variables) {
         const chunkTs = Number(chunk.ts) || 0;
         const variables = chunk.variables.split(',').map(v => v.trim());
         variables.forEach(variable => {
+          if (responseId !== undefined && chunk.key === unitRow.subform) subformChunkVariables.add(variable);
           const current = chunkKeyMap.get(variable);
           if (!current || chunkTs >= current.ts) {
             chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
@@ -217,7 +190,8 @@ export class TestResultsReplayService {
 
     responseRows.forEach(response => {
       const mappedChunk = chunkKeyMap.get(response.variableid);
-      const chunkKey = mappedChunk?.key || response.subform || '';
+      const subform = response.subform || '';
+      const chunkKey = subform && subformChunkVariables.has(response.variableid) ? subform : mappedChunk?.key || subform;
       const chunkTs = mappedChunk?.ts || 0;
       const mappedResponse = {
         id: response.variableid,
@@ -245,7 +219,10 @@ export class TestResultsReplayService {
     }));
 
     const result = {
-      responses: responsesArray
+      responses: responsesArray,
+      subformResponseIds: responseId === undefined ? undefined : responseRows
+        .filter(row => (row.subform ?? '') === (unitRow.subform ?? ''))
+        .map(row => row.id)
     };
 
     await this.cacheService.set(cacheKey, result);
@@ -254,5 +231,41 @@ export class TestResultsReplayService {
     );
 
     return result;
+  }
+
+  private readResponseRows(unitDbId: number, responseId?: number, subform?: string | null) {
+    const responseQuery = this.responseRepository
+      .createQueryBuilder('response')
+      .select([
+        'response.id AS id',
+        'response.variableid AS variableid',
+        'response.value AS value',
+        'response.status AS status',
+        'response.subform AS subform'
+      ])
+      .where('response.unitid = :unitDbId', { unitDbId })
+      .andWhere(
+        nonAutocoderGeneratedResponseCondition(
+          'response'
+        )
+      );
+    if (responseId !== undefined) {
+      // A derived target can depend on both local and shared inputs. Prefer its local row
+      // when a variable exists in both scopes, and the exact target among repeated rows.
+      responseQuery.andWhere("COALESCE(response.subform, '') IN ('', :subform)", { subform: subform ?? '' })
+        .distinctOn(['response.variableid'])
+        .orderBy('response.variableid', 'ASC')
+        .addOrderBy('(response.id = :responseId)', 'DESC')
+        .addOrderBy("NULLIF(response.subform, '')", 'ASC', 'NULLS LAST')
+        .addOrderBy('response.id', 'ASC')
+        .setParameter('responseId', responseId);
+    }
+    return responseQuery.getRawMany<{
+      id: number;
+      variableid: string;
+      value: string | null;
+      status: number;
+      subform: string | null;
+    }>();
   }
 }

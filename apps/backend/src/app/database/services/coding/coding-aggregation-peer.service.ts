@@ -20,11 +20,12 @@ import {
 } from '../workspace/workspace-exclusion-query.util';
 import {
   AggregationMatchingFlag,
+  AggregationPeerKey,
   AggregationSourceResponse,
   buildAggregationPeerKeys,
   buildAggregationPeerLookupKeys,
   getAggregationPeerKey,
-  isAggregatableValue,
+  isAggregatableResponse,
   serializeAggregationPeerKey
 } from './aggregation-metrics.util';
 import { getNonCodingIssueReviewJobSqlCondition } from './coding-job-type.util';
@@ -33,6 +34,7 @@ export interface CompletedAggregationPeer {
   responseId: number;
   variableId: string;
   value: string | null;
+  status?: number | null;
   statusV1: number | null;
   statusV2: number | null;
   codeV2: number | null;
@@ -80,9 +82,6 @@ export class CodingAggregationPeerService {
     const peerKeySet = new Set(
       peerKeys.map(peerKey => serializeAggregationPeerKey(peerKey))
     );
-    const exactValueMatching =
-      !options.matchingFlags.includes('IGNORE_CASE') &&
-      !options.matchingFlags.includes('IGNORE_WHITESPACE');
     const responseRepository = options.manager ?
       options.manager.getRepository(ResponseEntity) :
       this.responseRepository;
@@ -135,47 +134,8 @@ export class CodingAggregationPeerService {
       return query;
     };
 
-    const peerVariables = Array.from(new Map(
-      peerKeys.map(peerKey => [
-        JSON.stringify([peerKey.unitName, peerKey.variableId]),
-        {
-          unitName: peerKey.unitName,
-          variableId: peerKey.variableId
-        }
-      ])
-    ).values());
-
-    const peerValueQuery = createCompletedPeerQuery('Values')
-      .select('unit.name', 'unitName')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('response.value', 'value')
-      .distinct(true)
-      .andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerVariables AS jsonb))
-            AS aggregation_peer_variable("unitName" text, "variableId" text)
-          WHERE aggregation_peer_variable."unitName" = UPPER(unit.name)
-            AND aggregation_peer_variable."variableId" = response.variableid
-        )`,
-        { aggregationPeerVariables: JSON.stringify(peerVariables) }
-      );
-    if (exactValueMatching) {
-      peerValueQuery.andWhere(
-        `EXISTS (
-          SELECT 1
-          FROM jsonb_to_recordset(CAST(:aggregationPeerValues AS jsonb))
-            AS aggregation_peer_value("variableId" text, "normalizedValue" text)
-          WHERE aggregation_peer_value."variableId" = response.variableid
-            AND aggregation_peer_value."normalizedValue" = response.value
-        )`,
-        { aggregationPeerValues: JSON.stringify(peerKeys) }
-      );
-    }
-    const peerLookupKeys = buildAggregationPeerLookupKeys(
-      peerKeys,
-      await peerValueQuery.getRawMany(),
-      options.matchingFlags
+    const peerLookupKeys = await this.loadMatchingPeerValues(
+      createCompletedPeerQuery('Values'), peerKeys, options.matchingFlags
     );
     if (peerLookupKeys.length === 0) {
       return [];
@@ -185,6 +145,7 @@ export class CodingAggregationPeerService {
       .select('response.id', 'responseId')
       .addSelect('response.variableid', 'variableId')
       .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.code_v2', 'codeV2')
@@ -212,6 +173,7 @@ export class CodingAggregationPeerService {
       responseId: Number(row.responseId ?? row.id),
       variableId: row.variableId ?? row.variableid,
       value: row.value ?? null,
+      status: this.toNullableNumber(row.status) ?? undefined,
       statusV1: this.toNullableNumber(row.statusV1),
       statusV2: this.toNullableNumber(row.statusV2),
       codeV2: this.toNullableNumber(row.codeV2),
@@ -222,7 +184,7 @@ export class CodingAggregationPeerService {
       personCode: row.personCode ?? '',
       personGroup: row.personGroup ?? ''
     })).filter(response => (
-      isAggregatableValue(response.value) &&
+      isAggregatableResponse(response) &&
       peerKeySet.has(serializeAggregationPeerKey(getAggregationPeerKey(
         response.unitName,
         response.variableId,
@@ -230,6 +192,59 @@ export class CodingAggregationPeerService {
         options.matchingFlags
       )))
     ));
+  }
+
+  private async loadMatchingPeerValues(
+    query: SelectQueryBuilder<ResponseEntity>,
+    peerKeys: AggregationPeerKey[],
+    matchingFlags: readonly AggregationMatchingFlag[]
+  ) {
+    const exactValueMatching =
+      !matchingFlags.includes('IGNORE_CASE') &&
+      !matchingFlags.includes('IGNORE_WHITESPACE');
+    const peerVariables = Array.from(new Map(
+      peerKeys.map(peerKey => [
+        JSON.stringify([peerKey.unitName, peerKey.variableId]),
+        {
+          unitName: peerKey.unitName,
+          variableId: peerKey.variableId
+        }
+      ])
+    ).values());
+
+    const peerValueQuery = query
+      .select('unit.name', 'unitName')
+      .addSelect('response.variableid', 'variableId')
+      .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
+      .distinct(true)
+      .andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(CAST(:aggregationPeerVariables AS jsonb))
+            AS aggregation_peer_variable("unitName" text, "variableId" text)
+          WHERE aggregation_peer_variable."unitName" = UPPER(unit.name)
+            AND aggregation_peer_variable."variableId" = response.variableid
+        )`,
+        { aggregationPeerVariables: JSON.stringify(peerVariables) }
+      );
+    if (exactValueMatching) {
+      peerValueQuery.andWhere(
+        `EXISTS (
+          SELECT 1
+          FROM jsonb_to_recordset(CAST(:aggregationPeerValues AS jsonb))
+            AS aggregation_peer_value("variableId" text, "normalizedValue" text)
+          WHERE aggregation_peer_value."variableId" = response.variableid
+            AND aggregation_peer_value."normalizedValue" = response.value
+        )`,
+        { aggregationPeerValues: JSON.stringify(peerKeys) }
+      );
+    }
+    return buildAggregationPeerLookupKeys(
+      peerKeys,
+      await peerValueQuery.getRawMany(),
+      matchingFlags
+    );
   }
 
   private applyManualCodingCandidateStatusFilter(

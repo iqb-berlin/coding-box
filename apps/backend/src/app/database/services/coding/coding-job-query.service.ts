@@ -13,7 +13,6 @@ import { CodingJobVariableBundle } from '../../entities/coding-job-variable-bund
 import { CodingJobUnit } from '../../entities/coding-job-unit.entity';
 import { VariableBundle } from '../../entities/variable-bundle.entity';
 import { applyResolvedExclusionsToQuery, isExcludedByResolvedExclusions, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-import { formatCodingTestPersonFromUnit, generateCodingProgressKey } from './coding-progress-key.util';
 import { CodingJobFreshnessImpactDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { CodingFreshnessService } from './coding-freshness.service';
 import { applyNonCodingIssueReviewJobFilter, CODING_JOB_TYPE_CODING_ISSUE_REVIEW, isCodingIssueReviewJobType } from './coding-job-type.util';
@@ -103,14 +102,6 @@ export class CodingJobQueryService {
         job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
       }
     ];
-  }
-
-  getCodingJobUnitProgressKey(unit: CodingJobUnit): string {
-    return generateCodingProgressKey(
-      formatCodingTestPersonFromUnit(unit),
-      unit.unit_name,
-      unit.variable_id
-    );
   }
 
   codingJobUnitRequiresIssueReview(unit: CodingJobUnit): boolean {
@@ -219,7 +210,7 @@ export class CodingJobQueryService {
     const sourceIssueKeys = new Set(
       sourceUnits
         .filter(unit => this.codingJobUnitRequiresIssueReview(unit))
-        .map(unit => this.getCodingJobUnitProgressKey(unit))
+        .map(unit => unit.response_id)
     );
 
     if (sourceIssueKeys.size === 0) {
@@ -232,9 +223,9 @@ export class CodingJobQueryService {
       reviewUnits
         .filter(unit => (
           this.codingJobUnitCanOverlayIssueReview(unit) &&
-          sourceIssueKeys.has(this.getCodingJobUnitProgressKey(unit))
+          sourceIssueKeys.has(unit.response_id)
         ))
-        .map(unit => [this.getCodingJobUnitProgressKey(unit), unit])
+        .map(unit => [unit.response_id, unit])
     );
 
     if (reviewUnitsByKey.size === 0) {
@@ -247,7 +238,7 @@ export class CodingJobQueryService {
       }
 
       const reviewUnit = reviewUnitsByKey.get(
-        this.getCodingJobUnitProgressKey(unit)
+        unit.response_id
       );
       if (!reviewUnit) {
         return unit;
@@ -303,7 +294,7 @@ export class CodingJobQueryService {
     }
 
     const issueKeys = new Set(
-      issueUnits.map(unit => this.getCodingJobUnitProgressKey(unit))
+      issueUnits.map(unit => unit.response_id)
     );
     const reviewUnits =
       await this.getCodingIssueReviewUnitsForSource(codingJob);
@@ -311,9 +302,9 @@ export class CodingJobQueryService {
       reviewUnits
         .filter(unit => (
           this.codingJobUnitCanOverlayIssueReview(unit) &&
-          issueKeys.has(this.getCodingJobUnitProgressKey(unit))
+          issueKeys.has(unit.response_id)
         ))
-        .map(unit => [this.getCodingJobUnitProgressKey(unit), unit])
+        .map(unit => [unit.response_id, unit])
     );
     const responseIds = Array.from(reviewUnitsByKey.values())
       .filter(matchesReviewUnit)
@@ -630,7 +621,7 @@ export class CodingJobQueryService {
 
     const sourceUnits = await visibleIssueUnitsQuery.getMany();
     const sourceIssueUnitsByJobId = new Map<number, CodingJobUnit[]>();
-    const sourceIssueKeysByJobId = new Map<number, Set<string>>();
+    const sourceIssueKeysByJobId = new Map<number, Set<number>>();
 
     sourceUnits.forEach(unit => {
       const summary = summaries.get(unit.coding_job_id);
@@ -653,8 +644,8 @@ export class CodingJobQueryService {
       sourceIssueUnitsByJobId.set(unit.coding_job_id, sourceIssueUnits);
 
       const sourceIssueKeys =
-        sourceIssueKeysByJobId.get(unit.coding_job_id) ?? new Set<string>();
-      sourceIssueKeys.add(this.getCodingJobUnitProgressKey(unit));
+        sourceIssueKeysByJobId.get(unit.coding_job_id) ?? new Set<number>();
+      sourceIssueKeys.add(unit.response_id);
       sourceIssueKeysByJobId.set(unit.coding_job_id, sourceIssueKeys);
     });
 
@@ -710,7 +701,7 @@ export class CodingJobQueryService {
           return;
         }
 
-        const progressKey = this.getCodingJobUnitProgressKey(unit);
+        const progressKey = unit.response_id;
         if (!sourceIssueKeysByJobId.get(sourceJobId)?.has(progressKey)) {
           return;
         }
@@ -731,7 +722,7 @@ export class CodingJobQueryService {
       }
 
       sourceIssueUnits.forEach(sourceUnit => {
-        const progressKey = this.getCodingJobUnitProgressKey(sourceUnit);
+        const progressKey = sourceUnit.response_id;
         const effectiveUnit =
           reviewUnitsBySourceJobAndKey.get(`${jobId}:${progressKey}`) ??
           sourceUnit;

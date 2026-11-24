@@ -38,6 +38,30 @@ export class CodingJobResponsesService {
     private readonly missingsProfilesService?: MissingsProfilesService
   ) {}
 
+  private createSlimResponseQuery(responseRepo: Repository<ResponseEntity>, workspaceId: number) {
+    return responseRepo
+      .createQueryBuilder('response')
+      .select('response.id', 'id')
+      .addSelect('response.variableid', 'variableid')
+      .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
+      .addSelect('response.unitid', 'unitId')
+      .addSelect('response.subform', 'subform')
+      .addSelect('response.status_v1', 'statusV1')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
+      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
+      .addSelect("COALESCE(person.login, '')", 'personLogin')
+      .addSelect("COALESCE(person.code, '')", 'personCode')
+      .addSelect("COALESCE(person.group, '')", 'personGroup')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .leftJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+  }
+
   private async getDefaultMirCode(workspaceId: number, manager?: EntityManager): Promise<number> {
     if (!this.missingsProfilesService) {
       return IQB_STANDARD_MISSING_CODES.mir;
@@ -253,24 +277,7 @@ export class CodingJobResponsesService {
     const responseRepo = manager ?
       manager.getRepository(ResponseEntity) :
       this.responseRepository;
-    const queryBuilder = responseRepo
-      .createQueryBuilder('response')
-      .select('response.id', 'id')
-      .addSelect('response.variableid', 'variableid')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('unit.name', 'unitName')
-      .addSelect('unit.alias', 'unitAlias')
-      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
-      .addSelect("COALESCE(person.login, '')", 'personLogin')
-      .addSelect("COALESCE(person.code, '')", 'personCode')
-      .addSelect("COALESCE(person.group, '')", 'personGroup')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
+    const queryBuilder = this.createSlimResponseQuery(responseRepo, workspaceId);
     this.applyManualCodingCandidateStatusFilter(queryBuilder);
 
     queryBuilder.andWhere(`EXISTS (
@@ -303,23 +310,22 @@ export class CodingJobResponsesService {
 
     return raw.map(r => {
       const unitName = r.unitName ?? '';
-      const variableid = r.variableid;
       return {
         id: Number(r.id),
-        variableid: variableid,
+        variableid: r.variableid,
         value: r.value ?? null,
-        statusV1:
-          r.statusV1 !== undefined && r.statusV1 !== null ?
-            Number(r.statusV1) :
-            null,
-        unitName: unitName,
+        status: r.status,
+        unitId: r.unitId,
+        subform: r.subform,
+        statusV1: r.statusV1 == null ? null : Number(r.statusV1),
+        unitName,
         unitAlias: r.unitAlias ?? null,
         bookletName: r.bookletName ?? '',
         personLogin: r.personLogin ?? '',
         personCode: r.personCode ?? '',
         personGroup: r.personGroup ?? '',
         variableBundleId: variableBundleMap.get(
-          getAggregationVariableKey(unitName, variableid)
+          getAggregationVariableKey(unitName, r.variableid)
         )
       };
     });
@@ -384,25 +390,8 @@ export class CodingJobResponsesService {
     const repository = manager ?
       manager.getRepository(ResponseEntity) :
       this.responseRepository;
-    const queryBuilder = repository
-      .createQueryBuilder('response')
-      .select('response.id', 'id')
-      .addSelect('response.variableid', 'variableid')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status_v1', 'statusV1')
+    const queryBuilder = this.createSlimResponseQuery(repository, workspaceId)
       .addSelect('response.status_v2', 'statusV2')
-      .addSelect('unit.name', 'unitName')
-      .addSelect('unit.alias', 'unitAlias')
-      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
-      .addSelect("COALESCE(person.login, '')", 'personLogin')
-      .addSelect("COALESCE(person.code, '')", 'personCode')
-      .addSelect("COALESCE(person.group, '')", 'personGroup')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
       .andWhere(
         '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :defaultMirCode))',
         {
@@ -443,6 +432,9 @@ export class CodingJobResponsesService {
       id: Number(r.id),
       variableid: r.variableid,
       value: r.value ?? null,
+      status: r.status,
+      unitId: r.unitId,
+      subform: r.subform,
       statusV1:
         r.statusV1 !== undefined && r.statusV1 !== null ?
           Number(r.statusV1) :
@@ -487,7 +479,8 @@ export class CodingJobResponsesService {
           responseId: response.id,
           unitName: response.unitName,
           variableId: response.variableid,
-          value: response.value
+          value: response.value,
+          status: response.status
         })),
         matchingFlags,
         derivedVariableMap,
@@ -510,6 +503,7 @@ export class CodingJobResponsesService {
         id: response.responseId,
         variableid: response.variableId,
         value: response.value,
+        status: response.status,
         statusV1: response.statusV1,
         statusV2: response.statusV2,
         unitName: response.unitName,

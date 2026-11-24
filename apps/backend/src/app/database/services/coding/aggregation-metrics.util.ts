@@ -1,5 +1,7 @@
 import { createHash } from 'crypto';
 import { AggregationSummaryDto } from '../../../../../../../api-dto/coding/response-analysis.dto';
+import type { ResponseEntity } from '../../entities/response.entity';
+import { hasGeoGebraConstruction, isDisplayedGeoGebraResponse } from './geogebra-response.util';
 
 export type AggregationMatchingFlag =
   | 'NO_AGGREGATION'
@@ -12,6 +14,7 @@ export interface AggregationSourceResponse {
   unitName: string;
   variableId: string;
   value: string | null;
+  status?: number | null;
 }
 
 export interface AggregationGroup<T extends AggregationSourceResponse> {
@@ -19,7 +22,22 @@ export interface AggregationGroup<T extends AggregationSourceResponse> {
   responses: T[];
 }
 
+export function toAggregationCandidate(response: ResponseEntity, unitName: string, variableId: string) {
+  return {
+    responseId: response.id,
+    unitName: response.unit?.name || unitName,
+    variableId: response.variableid || variableId,
+    value: response.value,
+    status: response.status,
+    statusV2: response.status_v2,
+    codeV2: response.code_v2,
+    scoreV2: response.score_v2
+  };
+}
+
 export interface ManualCodingDeduplicationResponse extends AggregationSourceResponse {
+  unitId?: number;
+  subform?: string | null;
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
@@ -41,6 +59,7 @@ export interface AggregationPeerValueCandidate {
   unitName: string;
   variableId: string;
   value: string | null;
+  status?: number | null;
 }
 
 export interface AggregationPeerLookupKey {
@@ -58,7 +77,7 @@ export function buildAggregationPeerLookupKeys(
   const lookupKeys = new Map<string, AggregationPeerLookupKey>();
 
   candidates.forEach(candidate => {
-    if (!isAggregatableValue(candidate.value)) {
+    if (!isAggregatableResponse(candidate)) {
       return;
     }
 
@@ -136,6 +155,10 @@ export function isAggregatableValue(value: string | null): boolean {
   );
 }
 
+export function isAggregatableResponse(response: Pick<AggregationSourceResponse, 'value' | 'status'>): boolean {
+  return isAggregatableValue(response.value) && !isDisplayedGeoGebraResponse(response);
+}
+
 export function isDerivedAggregationVariable(
   derivedVariableMap: Map<string, Set<string>>,
   unitName: string,
@@ -194,7 +217,7 @@ export function buildAggregationPeerKeys<T extends AggregationSourceResponse>(
 
   responses.forEach(response => {
     if (
-      !isAggregatableValue(response.value) ||
+      !isAggregatableResponse(response) ||
       isDerivedAggregationVariable(
         derivedVariableMap,
         response.unitName,
@@ -217,9 +240,16 @@ export function buildAggregationPeerKeys<T extends AggregationSourceResponse>(
 }
 
 export function getManualCodingDeduplicationKey(
-  response: ManualCodingDeduplicationResponse
+  response: ManualCodingDeduplicationResponse,
+  isDerived = false
 ): string {
+  if (isDerived && (response.unitId == null || hasGeoGebraConstruction(response.value))) return `derived:${response.responseId}`;
   const valueHash = createHash('sha1').update(response.value || '').digest('hex');
+  if (isDerived) {
+    // Derived scalar values are comparable only when they came from the same source scope.
+    return JSON.stringify([response.unitId, response.subform || '', response.variableId, valueHash]);
+  }
+  const valueKey = isDisplayedGeoGebraResponse(response) ? `${valueHash}:displayed-geogebra` : valueHash;
   return [
     response.personLogin || '',
     response.personCode || '',
@@ -227,17 +257,24 @@ export function getManualCodingDeduplicationKey(
     response.bookletName || '',
     response.unitName.toUpperCase(),
     response.variableId,
-    valueHash
+    valueKey
   ].join('::');
 }
 
+export function manualCodingKeyForVariables(derivedVariables: Map<string, Set<string>>) {
+  return (response: ManualCodingDeduplicationResponse) => getManualCodingDeduplicationKey(
+    response, isDerivedAggregationVariable(derivedVariables, response.unitName, response.variableId)
+  );
+}
+
 export function deduplicateManualCodingResponses<T extends ManualCodingDeduplicationResponse>(
-  responses: T[]
+  responses: T[],
+  keyFor: (response: NoInfer<T>) => string = getManualCodingDeduplicationKey
 ): T[] {
   const dedupedByPersonValue = new Map<string, T>();
 
   for (const response of responses) {
-    const key = getManualCodingDeduplicationKey(response);
+    const key = keyFor(response);
     const existing = dedupedByPersonValue.get(key);
     if (!existing || response.responseId < existing.responseId) {
       dedupedByPersonValue.set(key, response);
@@ -255,30 +292,31 @@ export function countEffectiveManualCodingCases<T extends ManualCodingDeduplicat
   derivedVariableMap: Map<string, Set<string>>,
   activeResponseIds?: ReadonlySet<number>
 ): EffectiveManualCodingCaseCounts {
+  const keyFor = manualCodingKeyForVariables(derivedVariableMap);
   const assignedDeduplicationKeys = new Set(
     responses
       .filter(response => assignedResponseIds.has(response.responseId))
-      .map(response => getManualCodingDeduplicationKey(response))
+      .map(keyFor)
   );
-  const dedupedResponses = deduplicateManualCodingResponses(responses);
+  const dedupedResponses = deduplicateManualCodingResponses(responses, keyFor);
   const assignedDedupedResponseIds = new Set(
     dedupedResponses
       .filter(response => (
         assignedResponseIds.has(response.responseId) ||
-        assignedDeduplicationKeys.has(getManualCodingDeduplicationKey(response))
+        assignedDeduplicationKeys.has(keyFor(response))
       ))
       .map(response => response.responseId)
   );
   const activeDeduplicationKeys = activeResponseIds ? new Set(
     responses
       .filter(response => activeResponseIds.has(response.responseId))
-      .map(response => getManualCodingDeduplicationKey(response))
+      .map(keyFor)
   ) : null;
   const activeDedupedResponseIds = activeResponseIds ? new Set(
     dedupedResponses
       .filter(response => (
         activeResponseIds.has(response.responseId) ||
-        activeDeduplicationKeys?.has(getManualCodingDeduplicationKey(response))
+        activeDeduplicationKeys?.has(keyFor(response))
       ))
       .map(response => response.responseId)
   ) : null;
@@ -335,7 +373,7 @@ export function buildAggregationGroups<T extends AggregationSourceResponse>(
     );
     const keepSeparate =
       !aggregationActive ||
-      !isAggregatableValue(response.value) ||
+      !isAggregatableResponse(response) ||
       isDerivedAggregationVariable(
         derivedVariableMap,
         response.unitName,

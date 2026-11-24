@@ -73,7 +73,8 @@ export class UnitsReplayComponent {
     const compositeKey = this.codingService.generateCompositeKey(
       currentUnit.testPerson || '',
       currentUnit.name,
-      currentUnit.variableId || ''
+      currentUnit.variableId || '',
+      currentUnit.progressResponseId
     );
 
     const hasSelection = this.codingService.selectedCodes.has(compositeKey);

@@ -1,5 +1,22 @@
 import { EntityManager, ObjectLiteral, SelectQueryBuilder } from 'typeorm';
 
+/** Keyset pages on the query's connection, including during a write transaction. */
+export async function* readEntityBatchesById<T extends ObjectLiteral & { id: number }>(
+  query: SelectQueryBuilder<T>, batchSize: number
+): AsyncGenerator<T[]> {
+  const idColumn = `${query.alias}.id`;
+  const pageQuery = query.andWhere(`${idColumn} > :batchAfterId`).orderBy(idColumn, 'ASC').limit(batchSize);
+  let afterId = 0;
+
+  while (true) {
+    const rows = await pageQuery.setParameter('batchAfterId', afterId).getMany();
+    if (rows.length === 0) return;
+    yield rows;
+    if (rows.length < batchSize) return;
+    afterId = rows[rows.length - 1].id;
+  }
+}
+
 /** A single cursor snapshot avoids growing OFFSET scans and shifting batch boundaries. */
 export async function* readPostgresQueryBatches<T extends ObjectLiteral>(
   query: SelectQueryBuilder<ObjectLiteral>, batchSize: number,

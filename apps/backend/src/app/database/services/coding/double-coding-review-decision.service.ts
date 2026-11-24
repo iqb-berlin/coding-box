@@ -33,7 +33,7 @@ import { CodingAnalysisService } from './coding-analysis.service';
 import { CodingValidationService } from './coding-validation.service';
 import { CodingProgressService } from './coding-progress.service';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { buildAggregationGroups } from './aggregation-metrics.util';
+import { buildAggregationGroups, toAggregationCandidate } from './aggregation-metrics.util';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
 import {
   DoubleCodedManagerDecisionDto,
@@ -864,6 +864,7 @@ export class DoubleCodingReviewDecisionService {
       .select([
         'response.id',
         'response.value',
+        'response.status',
         'response.variableid',
         'response.status_v2',
         'response.code_v2',
@@ -897,15 +898,7 @@ export class DoubleCodingReviewDecisionService {
     const derivedVariableMap = await this.codingJobService
       .getDerivedVariableMapForAggregation(workspaceId, entityManager);
     const groups = buildAggregationGroups(
-      Array.from(candidateById.values()).map(candidate => ({
-        responseId: candidate.id,
-        unitName: candidate.unit?.name || unitName,
-        variableId: candidate.variableid || variableId,
-        value: candidate.value,
-        statusV2: candidate.status_v2,
-        codeV2: candidate.code_v2,
-        scoreV2: candidate.score_v2
-      })),
+      Array.from(candidateById.values(), candidate => toAggregationCandidate(candidate, unitName, variableId)),
       aggregationSettings.responseMatchingFlags,
       aggregationThreshold,
       derivedVariableMap

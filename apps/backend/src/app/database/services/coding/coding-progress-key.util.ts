@@ -1,3 +1,5 @@
+import { codingProgressKeyForResponse } from '../../../../../../../api-dto/coding/coding-progress-key';
+
 export interface CodingTestPersonParts {
   login: string;
   code: string;
@@ -42,4 +44,31 @@ export function formatCodingTestPersonFromUnit(unit: {
 export function generateCodingProgressKey(testPerson: string, unitId: string, variableId: string): string {
   const { booklet } = parseCodingTestPerson(testPerson);
   return `${testPerson}::${booklet || 'default'}::${unitId}::${variableId}`;
+}
+
+type ProgressUnit = Parameters<typeof formatCodingTestPersonFromUnit>[0] & {
+  response_id: number;
+  unit_name: string;
+  variable_id: string;
+};
+
+function legacyJobUnitProgressKey(unit: ProgressUnit): string {
+  return generateCodingProgressKey(formatCodingTestPersonFromUnit(unit), unit.unit_name, unit.variable_id);
+}
+
+export function jobUnitProgressKeys(units: ProgressUnit[]) {
+  const seen = new Set<string>();
+  const ambiguous = new Set<string>();
+  for (const unit of units) {
+    const key = legacyJobUnitProgressKey(unit);
+    if (seen.has(key)) ambiguous.add(key);
+    seen.add(key);
+  }
+  const responseIdFor = (unit: ProgressUnit) => (
+    ambiguous.has(legacyJobUnitProgressKey(unit)) ? unit.response_id : undefined
+  );
+  return {
+    responseIdFor,
+    keyFor: (unit: ProgressUnit) => codingProgressKeyForResponse(legacyJobUnitProgressKey(unit), responseIdFor(unit))
+  };
 }

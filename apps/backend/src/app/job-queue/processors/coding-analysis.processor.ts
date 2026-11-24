@@ -20,11 +20,13 @@ import {
 } from '../../database/services/workspace/workspace-exclusion.service';
 import {
   createAggregationSummary,
-  isAggregatableValue,
+  isAggregatableResponse,
   isDerivedAggregationVariable,
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
+import { hasGeoGebraConstruction } from '../../database/services/coding/geogebra-response.util';
+import { isUncodedV2Response } from '../../database/services/coding/response-v2-coding.util';
 import {
   getCodingAnalysisRunMarkerKey, FileCodingAnalysis
 } from '../../database/services/coding/coding-analysis-cache-key.util';
@@ -43,10 +45,13 @@ type ResponseRow = {
   id: number;
   unitid: number;
   variableid: string;
+  subform: string | null;
   value: string | null;
+  status: number;
   status_v1: number | null;
   status_v2: number | null;
   code_v2: string | null;
+  score_v2: string | null;
   unitName: string;
   unitAlias: string | null;
   personLogin: string;
@@ -201,12 +206,12 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost implements OnMo
       );
       await writer.appendItems('empty', emptyResponses.map(row => this.toEmptyResponse(row)));
       totalEmpty += emptyResponses.length;
-      totalUncoded += emptyResponses.filter(row => row.status_v2 === null).length;
+      totalUncoded += emptyResponses.filter(isUncodedV2Response).length;
 
       const emptyIds = new Set(emptyResponses.map(row => row.id));
       const candidates: DuplicateCandidate[] = [];
       for (const row of rows) {
-        if (emptyIds.has(row.id) || !isAggregatableValue(row.value) ||
+        if (emptyIds.has(row.id) || !isAggregatableResponse(row) ||
           isDerivedAggregationVariable(emptyResponseContext.derivedVariableMap, row.unitName, row.variableid)) continue;
 
         candidates.push([
@@ -270,8 +275,9 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost implements OnMo
       );
     query.select([
       'response.id AS id', 'response.unitid AS unitid', 'response.variableid AS variableid',
-      'response.value AS value', 'response.status_v1 AS status_v1',
-      'response.status_v2 AS status_v2', 'response.code_v2 AS code_v2',
+      'response.subform AS subform',
+      'response.value AS value', 'response.status AS status', 'response.status_v1 AS status_v1',
+      'response.status_v2 AS status_v2', 'response.code_v2 AS code_v2', 'response.score_v2 AS score_v2',
       'unit.name AS "unitName"', 'unit.alias AS "unitAlias"', 'person.login AS "personLogin"',
       'person.code AS "personCode"', 'person.group AS "personGroup"', 'bookletinfo.name AS "bookletName"'
     ])
@@ -293,8 +299,8 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost implements OnMo
       personGroup: row.personGroup || '',
       bookletName: row.bookletName || 'Unknown',
       responseId: row.id,
-      value: row.value,
-      isCoded: row.status_v2 !== null,
+      value: hasGeoGebraConstruction(row.value) ? null : row.value,
+      isCoded: !isUncodedV2Response(row),
       assignedCode: row.code_v2 === null ? undefined : Number(row.code_v2)
     };
   }
