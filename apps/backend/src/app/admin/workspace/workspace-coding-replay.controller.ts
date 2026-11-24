@@ -6,6 +6,8 @@ import {
   Logger,
   NotFoundException,
   Param,
+  ParseIntPipe,
+  Query,
   Res,
   Req,
   ServiceUnavailableException,
@@ -16,6 +18,7 @@ import {
   ApiNotFoundResponse,
   ApiOkResponse,
   ApiParam,
+  ApiQuery,
   ApiServiceUnavailableResponse,
   ApiTags
 } from '@nestjs/swagger';
@@ -39,15 +42,9 @@ import {
 } from '../../database/services/test-results';
 import FileUpload from '../../database/entities/file_upload.entity';
 import { FilesDto } from '../../../../../../api-dto/files/files.dto';
+import type { ReplayUnitResponseDto } from '../../../../../../api-dto/coding/replay-unit-response.dto';
 import { ReplayErrorDto } from '../../../../../../api-dto/coding/replay-error.dto';
 import { isPostgresConnectionTimeout } from '../../database/postgres-connection-timeout';
-
-interface ReplayUnitResponsePayload {
-  responses: {
-    id: string;
-    content: string;
-  }[];
-}
 
 interface ReplayAssetsPayload {
   unitDef: FilesDto[];
@@ -56,7 +53,7 @@ interface ReplayAssetsPayload {
 }
 
 interface ReplayResponsePayload {
-  response: ReplayUnitResponsePayload;
+  response: ReplayUnitResponseDto;
   serverTimings: Record<string, number>;
 }
 
@@ -248,6 +245,9 @@ export class WorkspaceCodingReplayController {
     type: String,
     description: 'Unit alias/ID'
   })
+  @ApiQuery({
+    name: 'responseId', required: false, type: Number, description: 'Selects the coding case and its subform'
+  })
   @ApiOkResponse({
     description: 'Replay response retrieved successfully.'
   })
@@ -260,7 +260,8 @@ export class WorkspaceCodingReplayController {
     @WorkspaceId() workspaceId: number,
     @Param('testPerson') testPerson: string,
     @Param('unitId') unitId: string,
-    @Res({ passthrough: true }) res: Response
+    @Res({ passthrough: true }) res: Response,
+    @Query('responseId', new ParseIntPipe({ optional: true })) responseId?: number
   ): Promise<ReplayResponsePayload> {
     const startedAt = performance.now();
     const timings: Record<string, number> = {};
@@ -270,7 +271,8 @@ export class WorkspaceCodingReplayController {
         workspaceId,
         testPerson,
         unitId,
-        timings
+        timings,
+        responseId
       );
       const totalMs = Number((performance.now() - startedAt).toFixed(2));
       const serverTimings = this.withTotalTiming(timings, totalMs);
@@ -350,7 +352,8 @@ export class WorkspaceCodingReplayController {
     workspaceId: number,
     testPerson: string,
     unitId: string,
-    timings: Record<string, number>
+    timings: Record<string, number>,
+    responseId?: number
   ): Promise<ReplayResponsePayload> {
     const response = await this.timed(
       timings,
@@ -358,7 +361,8 @@ export class WorkspaceCodingReplayController {
       () => this.workspaceTestResultsService.findUnitResponse(
         workspaceId,
         testPerson,
-        unitId
+        unitId,
+        responseId
       )
     );
 

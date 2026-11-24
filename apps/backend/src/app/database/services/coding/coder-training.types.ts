@@ -30,6 +30,7 @@ export interface CoderTrainingResponse {
   variable: string;
   chunkTs?: number;
   unitId?: number;
+  subform?: string | null;
 }
 
 export interface TrainingPackage {

@@ -13,6 +13,7 @@ import { CacheService } from '../../../cache/cache.service';
 import type { CodingAnalysisJobData } from '../../../job-queue/job-queue.service';
 import { CodingAnalysisProcessor } from '../../../job-queue/processors/coding-analysis.processor';
 import { Booklet } from '../../entities/booklet.entity';
+import { ChunkEntity } from '../../entities/chunk.entity';
 import { BookletInfo } from '../../entities/bookletInfo.entity';
 import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -21,6 +22,7 @@ import Workspace from '../../entities/workspace.entity';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
 import { statusNumberToString, statusStringToNumber } from '../../utils/response-status-converter';
 import type { TcMergeSubForms } from '../shared';
+import { TestResultsReplayService } from '../test-results/test-results-replay.service';
 import { PersonPersistenceService } from '../test-results/person-persistence.service';
 import { ResolvedWorkspaceExclusions, WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { DerivedVariableMetadataSnapshot, WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
@@ -51,6 +53,7 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
   let bookletInfoIds: number[];
   let exclusions: ResolvedWorkspaceExclusions;
   let metadata: DerivedVariableMetadataSnapshot;
+  const cacheEntries = new Map<string, unknown>();
   const publishAnalysis = jest.fn().mockResolvedValue(true);
 
   beforeAll(async () => {
@@ -69,11 +72,18 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
       typeof target === 'function' ? [[getRepositoryToken(target), db.getRepository(target)] as const] : []
     )));
     module = await Test.createTestingModule({
-      providers: [PersonPersistenceService, CodingResultsService, EmptyResponseSelectionService,
+      providers: [TestResultsReplayService, PersonPersistenceService, CodingResultsService, EmptyResponseSelectionService,
         CodingAnalysisProcessor, CodingJobResponsesService, CodingAggregationPeerService, CodingJobAggregationService]
     }).useMocker(token => {
       if (repositories.has(token as string)) return repositories.get(token as string);
-      if (token === CacheService) return { publishIfMarkerMatches: publishAnalysis };
+      if (token === CacheService) {
+        return {
+          publishIfMarkerMatches: publishAnalysis,
+          generateUnitResponseCacheKey: (...parts: unknown[]) => JSON.stringify(parts),
+          get: (key: string) => cacheEntries.get(key),
+          set: (key: string, value: unknown) => cacheEntries.set(key, value)
+        };
+      }
       if (token === WORKSPACE_FILE_METADATA_READER) {
         return { getDerivedVariableMetadata: async () => metadata };
       }
@@ -88,6 +98,7 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
   }, 30000);
 
   beforeEach(async () => {
+    cacheEntries.clear();
     publishAnalysis.mockClear();
     exclusions = { globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] };
     metadata = { metadataAvailable: true, derivedVariableMap: new Map(), derivedVariablesBySourceMap: new Map() };
@@ -156,6 +167,44 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
       value
     });
   }
+
+  it('replays the selected drawing with its shared inputs for both base and derived coding cases', async () => {
+    const unit = await createUnit(await createBooklet('replay'));
+    const connector = `replay@test@synthetic@replay-${workspace.id}`;
+    const drawings = [geometryValue(1), geometryValue(2)];
+    const first = await storeResponse(unit, drawings[0], 'VALUE_CHANGED', 'drawing', 'A');
+    const second = await storeResponse(unit, drawings[1], 'VALUE_CHANGED', 'drawing', 'B');
+    await storeResponse(unit, 'global seed', 'DISPLAYED');
+    await storeResponse(unit, 'shared', 'VALUE_CHANGED', 'label');
+    await db.manager.insert(ChunkEntity, ['A', 'B'].map((key, ts) => ({
+      unitid: unit.id, key, ts, variables: 'drawing'
+    })));
+    await db.manager.insert(ChunkEntity, {
+      unitid: unit.id, key: 'details', variables: 'note', ts: 2
+    });
+    const note = await storeResponse(unit, 'edited', 'VALUE_CHANGED', 'note', 'B');
+    const target = await storeResponse(unit, '0', 'VALUE_CHANGED', 'sum', 'B');
+    await db.manager.update(ResponseEntity, target.id, { is_autocoder_generated: true });
+    const replay = module.get(TestResultsReplayService);
+    for (const [index, responseId] of [first.id, target.id].entries()) {
+      const result = await replay.findUnitResponse(workspace.id, connector, unit.name, responseId);
+      expect(result.subformResponseIds).toEqual(index === 0 ? [first.id] : [second.id, note.id]);
+      expect(result.responses.map(chunk => chunk.id).sort()).toEqual(index === 0 ? ['', 'A'] : ['', 'B', 'details']);
+      const inputs = result.responses.flatMap(chunk => JSON.parse(chunk.content));
+      expect(inputs).toHaveLength(index === 0 ? 2 : 3);
+      expect(inputs).toEqual(expect.arrayContaining([
+        expect.objectContaining({ id: 'drawing', value: drawings[index] }),
+        expect.objectContaining({ id: 'label', value: 'shared' })
+      ]));
+    }
+    const sameScope = await storeResponse(unit, geometryValue(3), 'VALUE_CHANGED', 'drawing', 'A');
+    const refreshed = await replay.findUnitResponse(workspace.id, connector, unit.name, sameScope.id);
+    expect(refreshed.subformResponseIds).toEqual([sameScope.id]);
+    expect(JSON.parse(refreshed.responses.find(chunk => chunk.id === 'A')!.content)[0].value).toBe(sameScope.value);
+    expect((await replay.findUnitResponse(workspace.id, connector, unit.name, first.id)).subformResponseIds).toEqual([first.id]);
+    const other = await storeResponse(await createUnit(await createBooklet('other')), drawings[0]);
+    await expect(replay.findUnitResponse(workspace.id, connector, unit.name, other.id)).rejects.toThrow();
+  });
 
   it('imports the original player status and removes only displayed drawings from new jobs after empty coding', async () => {
     const startingDrawing = geometryValue(0);
@@ -319,6 +368,14 @@ describePostgres('GeoGebra responses in manual coding preparation', () => {
     for (const target of targets) {
       ids.push((await storeResponse(unit, String(target.value), 'VALUE_CHANGED', target.id, target.subform)).id);
     }
+    const candidates = await module.get(CodingJobResponsesService).getSlimResponsesForVariables(
+      workspace.id, [{ unitName: unit.name, variableId: 'target' }]
+    );
+    const selection = module.get(CodingJobAggregationService).deduplicateSlimResponsesForManualCoding(
+      candidates, new Set([ids[0]]), () => true
+    );
+    expect(selection.responses.map(row => row.id)).toEqual(ids);
+    expect(selection.assignedResponseIds).toEqual(new Set([ids[0]]));
     expect((await analyzeEmptyResponses()).items.map(row => row.responseId)).toEqual([ids[0]]);
     await expect(module.get(CodingResultsService).applyEmptyResponseCoding(workspace.id)).resolves.toMatchObject({ updatedCount: 1 });
     expect((await db.manager.findOneByOrFail(ResponseEntity, { id: ids[1] })).status_v2).toBeNull();

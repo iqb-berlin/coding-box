@@ -45,7 +45,7 @@ export class ReplayPayloadFacade {
     codingMode: boolean
   ): Promise<ReplayPayloadResult<ReplayPayload> | null> {
     return this.load(attempt, () => this.backend.getReplayPayload(
-      context.workspaceId, context.testPerson, context.unitId, authToken, codingMode, attempt.id
+      context.workspaceId, context.testPerson, context.unitId, authToken, codingMode, attempt.id, context.responseId
     ));
   }
 
@@ -55,7 +55,7 @@ export class ReplayPayloadFacade {
     authToken?: string
   ): Promise<ReplayPayloadResult<ReplayResponsePayload> | null> {
     const result = await this.load(attempt, () => this.backend.getReplayResponse(
-      context.workspaceId, context.testPerson, context.unitId, authToken, attempt.id
+      context.workspaceId, context.testPerson, context.unitId, authToken, attempt.id, context.responseId
     ));
     if (result && this.isCurrent(result.runId)) {
       attempt.recordPayloadServerTimings(this.responseTimings(result.value.serverTimings));

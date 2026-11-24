@@ -10,7 +10,20 @@ window.addEventListener('message', event => {
   const message = event.data;
   if (message.type === 'vopStartCommand') {
     session = message.sessionId;
-    document.querySelector('main').textContent = JSON.parse(message.unitState.dataParts.answer);
+    const answer = JSON.parse(message.unitState.dataParts.answer);
+    const main = document.querySelector('main');
+    if (answer.point) {
+      const ns = 'http://www.w3.org/2000/svg';
+      const svg = document.createElementNS(ns, 'svg');
+      const point = document.createElementNS(ns, 'circle');
+      point.setAttribute('cx', answer.point[0]);
+      point.setAttribute('cy', answer.point[1]);
+      point.setAttribute('r', '4');
+      svg.append(point);
+      main.replaceChildren(svg);
+    } else {
+      main.textContent = answer;
+    }
     show(message.playerConfig.startPage || '0');
   }
   if (message.type === 'vopPageNavigationCommand') show(message.target);
@@ -125,6 +138,12 @@ describe('Replay responsibilities without Zone.js', () => {
   });
 
   it('keeps two responses with the same person, unit and variable independently editable', () => {
+    const drawings = new Map([[41, { point: [10, 20] }], [42, { point: [30, 40] }]]);
+    cy.intercept('GET', '**/replay-response/**', request => {
+      const id = Number(new URL(request.url).searchParams.get('responseId'));
+      expect(id).to.be.oneOf([41, 42]);
+      request.reply({ body: { response: { responses: [{ id: 'answer', content: JSON.stringify(drawings.get(id)) }] } } });
+    }).as('drawing');
     const firstKey = 'response:41::personA@code@booklet::booklet::UNIT::VAR1';
     cy.intercept('GET', '**/coding-job/77/replay-session*', { body: {
       units: [41, 42].map(responseId => ({
@@ -141,9 +160,12 @@ describe('Replay responsibilities without Zone.js', () => {
       request.reply({ body: {} });
     });
     cy.visit(`/#/replay/personA@code@booklet/UNIT/0?workspaceId=5&codingJobId=77&mode=coding&auth=${token(true)}`);
-    cy.wait('@response');
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '10');
     cy.get('coding-box-code-selector [data-code-id="1"]').should('have.class', 'selected');
     cy.get('coding-box-code-selector .next-button').click();
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '30');
     cy.get('coding-box-code-selector .current-position').should('have.text', '2');
     cy.get('coding-box-code-selector textarea').should('have.value', '').type('Reset').blur();
     cy.wait('@saveCaseNotes').its('request.body').should('include', { responseId: 42, notes: 'Reset' });
@@ -151,6 +173,8 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.wait('@saveCase').its('request.body').should('include', { variableId: 'VAR1', responseId: 42 });
     cy.get('.completion-overlay .close-button').click();
     cy.get('coding-box-code-selector .prev-button').click();
+    cy.wait('@drawing');
+    frame().find('circle').should('have.attr', 'cx', '10');
     cy.get('coding-box-code-selector .current-position').should('have.text', '1');
     cy.get('coding-box-code-selector textarea').should('have.value', 'Viewed');
   });

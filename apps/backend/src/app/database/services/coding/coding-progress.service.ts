@@ -679,17 +679,14 @@ export class CodingProgressService {
     };
   }
 
-  private async getCoverageResponses(
-    workspaceId: number,
-    manualPoolOnly = false,
-    needsValues = true
-  ): Promise<CoverageResponse[]> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const query = this.responseRepository
+  private createCoverageResponseQuery(needsValues: boolean) {
+    return this.responseRepository
       .createQueryBuilder('response')
       .select('response.id', 'responseId')
       .addSelect(needsValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.status', 'status')
+      .addSelect('response.unitid', 'unitId')
+      .addSelect('response.subform', 'subform')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.status_v1', 'statusV1')
@@ -702,7 +699,16 @@ export class CodingProgressService {
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
+      .leftJoin('booklet.person', 'person');
+  }
+
+  private async getCoverageResponses(
+    workspaceId: number,
+    manualPoolOnly = false,
+    needsValues = true
+  ): Promise<CoverageResponse[]> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.createCoverageResponseQuery(needsValues)
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true })
       .orderBy('response.id', 'ASC');
@@ -1440,24 +1446,7 @@ export class CodingProgressService {
     }
 
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const query = this.responseRepository
-      .createQueryBuilder('response')
-      .select('response.id', 'responseId')
-      .addSelect('response.value', 'value')
-      .addSelect('response.status', 'status')
-      .addSelect('response.code_v2', 'codeV2')
-      .addSelect('response.status_v2', 'statusV2')
-      .addSelect('response.status_v1', 'statusV1')
-      .addSelect('response.variableid', 'variableId')
-      .addSelect('unit.name', 'unitName')
-      .addSelect("COALESCE(bookletinfo.name, '')", 'bookletName')
-      .addSelect("COALESCE(person.login, '')", 'personLogin')
-      .addSelect("COALESCE(person.code, '')", 'personCode')
-      .addSelect("COALESCE(person.group, '')", 'personGroup')
-      .leftJoin('response.unit', 'unit')
-      .leftJoin('unit.booklet', 'booklet')
-      .leftJoin('booklet.bookletinfo', 'bookletinfo')
-      .leftJoin('booklet.person', 'person')
+    const query = this.createCoverageResponseQuery(true)
       .where('response.status_v1 IN (:...statuses)', {
         statuses: [
           statusStringToNumber('CODING_INCOMPLETE'),

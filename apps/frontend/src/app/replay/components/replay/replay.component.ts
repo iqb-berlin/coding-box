@@ -614,11 +614,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.reloadKey.update(value => value + 1);
     this.responses.set(unitData.response);
     replayAttempt.recordPayloadServerTimings(unitData.serverTimings);
-    this.appliedReplayContext = context ?? {
-      workspaceId: this.workspaceId() || this.appService.selectedWorkspaceId,
-      testPerson: this.testPerson(),
-      unitId: this.unitId()
-    };
+    this.appliedReplayContext = context ?? this.navigationContext(this.workspaceId() || this.appService.selectedWorkspaceId);
 
     const vocsData = unitData.vocs[0]?.data;
     if (this.isCodingMode() && unitData.codingScheme !== undefined) {
@@ -648,11 +644,17 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return replayAttempt === this.replayAttempt;
   }
 
-  private async loadAndApplyUnitData(workspace: number, authToken?: string): Promise<boolean> {
-    const attempt = this.replayAttempt;
-    const context: ReplayNavigationContext = {
-      workspaceId: workspace, testPerson: this.testPerson(), unitId: this.unitId()
+  private navigationContext(workspaceId: number, unit = this.currentReplayUnit()): ReplayNavigationContext {
+    return {
+      workspaceId,
+      testPerson: this.testPerson(),
+      unitId: this.unitId(),
+      responseId: unit?.responseId ?? unit?.progressResponseId ?? this.originResponseId() ?? undefined
     };
+  }
+
+  private async loadAndApplyUnitData(workspace: number, authToken?: string, context = this.navigationContext(workspace)): Promise<boolean> {
+    const attempt = this.replayAttempt;
     this.isLoaded.next(false);
     const result = await this.replayPayload.loadFull(context, attempt, authToken, this.isCodingMode());
     if (!result || !this.replayPayload.isCurrent(result.runId) || !this.isCurrentReplayAttempt(attempt)) return false;
@@ -661,11 +663,8 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     return true;
   }
 
-  private async loadAndApplyReplayResponse(workspace: number, authToken?: string): Promise<boolean> {
+  private async loadAndApplyReplayResponse(workspace: number, authToken?: string, context = this.navigationContext(workspace)): Promise<boolean> {
     const attempt = this.replayAttempt;
-    const context: ReplayNavigationContext = {
-      workspaceId: workspace, testPerson: this.testPerson(), unitId: this.unitId()
-    };
     this.isLoaded.next(false);
     const result = await this.replayPayload.loadResponse(context, attempt, authToken);
     if (!result || !this.replayPayload.isCurrent(result.runId) || !this.isCurrentReplayAttempt(attempt)) return false;
@@ -886,7 +885,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.selectNavigationUnit(unit);
     const workspaceId = this.workspaceId() || this.getWorkspaceIdFromAuthToken(this.authToken);
     const load = this.canLoadReplayWithCurrentAuth(workspaceId) ?
-      this.loadNavigationTarget(workspaceId, replayAttempt) :
+      this.loadNavigationTarget(this.navigationContext(workspaceId, unit), replayAttempt) :
       true;
     const applied = typeof load === 'boolean' ? load : await load;
     if (applied && this.isCurrentReplayAttempt(replayAttempt)) this.updateNavigationIndex(unit);
@@ -910,24 +909,20 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     this.unitId.set(unit.name);
   }
 
-  private loadNavigationTarget(workspaceId: number, attempt: ReplayAttemptContext): boolean | Promise<boolean> {
-    const strategy = decideReplayNavigationStrategy(this.appliedReplayContext, {
-      workspaceId,
-      testPerson: this.testPerson(),
-      unitId: this.unitId()
-    });
+  private loadNavigationTarget(context: ReplayNavigationContext, attempt: ReplayAttemptContext): boolean | Promise<boolean> {
+    const strategy = decideReplayNavigationStrategy(this.appliedReplayContext, context, this.responses()?.subformResponseIds);
     switch (strategy) {
       case 'direct-page-navigation': {
         const page = this.page();
         this.invalidateUnitPayloadRequests();
         attempt.startDirectPageNavigation();
         return !page || this.unitPlayerComponent()?.navigateToPage(page) ||
-          this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+          this.loadAndApplyUnitData(context.workspaceId, this.getReplayRequestAuthToken(), context);
       }
       case 'load-responses':
-        return this.loadAndApplyReplayResponse(workspaceId, this.getReplayRequestAuthToken());
+        return this.loadAndApplyReplayResponse(context.workspaceId, this.getReplayRequestAuthToken(), context);
       case 'load-full-payload':
-        return this.loadAndApplyUnitData(workspaceId, this.getReplayRequestAuthToken());
+        return this.loadAndApplyUnitData(context.workspaceId, this.getReplayRequestAuthToken(), context);
       default:
         throw new Error(`Unsupported replay navigation strategy: ${strategy}`);
     }

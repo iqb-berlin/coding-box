@@ -36,6 +36,8 @@ export function toAggregationCandidate(response: ResponseEntity, unitName: strin
 }
 
 export interface ManualCodingDeduplicationResponse extends AggregationSourceResponse {
+  unitId?: number;
+  subform?: string | null;
   personLogin?: string | null;
   personCode?: string | null;
   personGroup?: string | null;
@@ -241,9 +243,12 @@ export function getManualCodingDeduplicationKey(
   response: ManualCodingDeduplicationResponse,
   isDerived = false
 ): string {
-  // A copied construction cannot tell us whether its source was edited.
-  if (isDerived && hasGeoGebraConstruction(response.value)) return `derived-geogebra:${response.responseId}`;
+  if (isDerived && (response.unitId == null || hasGeoGebraConstruction(response.value))) return `derived:${response.responseId}`;
   const valueHash = createHash('sha1').update(response.value || '').digest('hex');
+  if (isDerived) {
+    // Derived scalar values are comparable only when they came from the same source scope.
+    return JSON.stringify([response.unitId, response.subform || '', response.variableId, valueHash]);
+  }
   const valueKey = isDisplayedGeoGebraResponse(response) ? `${valueHash}:displayed-geogebra` : valueHash;
   return [
     response.personLogin || '',

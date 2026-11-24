@@ -514,7 +514,7 @@
           "max-lines-per-function": 128
         },
         "class CodingJobReplayService#1/method getCodingJobBundleContextsForUnits#1": {
-          "max-lines-per-function": 164
+          "max-lines-per-function": 145
         },
         "class CodingJobReplayService#1/method getCodingJobBundleVariableStatus#1": {
           "complexity": 23
@@ -525,7 +525,7 @@
       "file": {},
       "functions": {
         "class CodingJobResponsesService#1/method getSlimResponsesForCodingJob#1": {
-          "max-lines-per-function": 117
+          "max-lines-per-function": 101
         }
       }
     },
@@ -579,7 +579,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-progress.service.ts": {
       "file": {
-        "max-lines": 1538
+        "max-lines": 1526
       },
       "functions": {
         "class CodingProgressService#1/method getVariableCoverageOverview#1": {
@@ -998,7 +998,7 @@
       "file": {},
       "functions": {
         "class TestResultsReplayService#1/method findUnitResponse#1": {
-          "max-lines-per-function": 184
+          "max-lines-per-function": 160
         }
       }
     },
@@ -1308,7 +1308,7 @@
     },
     "apps/frontend/src/app/coding/components/coding-jobs/coding-job-result-dialog/coding-job-result-dialog.component.ts": {
       "file": {
-        "max-lines": 816
+        "max-lines": 803
       },
       "functions": {}
     },
@@ -1420,7 +1420,7 @@
     },
     "apps/frontend/src/app/replay/components/replay/replay.component.ts": {
       "file": {
-        "max-lines": 1237
+        "max-lines": 1231
       },
       "functions": {
         "class ReplayComponent#1/method onKeyDown#1": {

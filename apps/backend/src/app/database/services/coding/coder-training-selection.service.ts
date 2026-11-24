@@ -52,6 +52,7 @@ function toTrainingResponse(response: ResponseEntity): CoderTrainingResponse {
     personGroup: person?.group || '',
     bookletName: unit?.booklet?.bookletinfo?.name || '',
     variable: response.variableid,
+    subform: response.subform,
     unitId: response.unitid
   };
 }

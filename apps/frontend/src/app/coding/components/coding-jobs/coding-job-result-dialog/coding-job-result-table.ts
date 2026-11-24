@@ -1,4 +1,5 @@
 export interface CodingResult {
+  responseId?: number;
   progressResponseId?: number;
   unitName: string;
   unitAlias: string | null;

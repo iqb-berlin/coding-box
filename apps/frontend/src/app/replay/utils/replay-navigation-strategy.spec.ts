@@ -15,6 +15,16 @@ describe('decideReplayNavigationStrategy', () => {
       .toBe('direct-page-navigation');
   });
 
+  it('reloads the drawing when the next case has the same person, unit and page', () => {
+    expect(decideReplayNavigationStrategy({ ...current, responseId: 41 }, { ...current, responseId: 42 }))
+      .toBe('load-responses');
+  });
+
+  it('keeps the player for another answer already loaded from the same subform', () => {
+    expect(decideReplayNavigationStrategy({ ...current, responseId: 41 }, { ...current, responseId: 42 }, [41, 42]))
+      .toBe('direct-page-navigation');
+  });
+
   it('loads only responses when the person changes within the same unit', () => {
     expect(decideReplayNavigationStrategy(current, {
       ...current,

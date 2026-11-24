@@ -24,13 +24,13 @@ describe('Replay player request lifetime', () => {
 
   it('replaces a full load with response-only navigation without accepting stale data', async () => {
     const first = facade.loadFull(context, new ReplayAttemptContext(), 'token', true);
-    const latest = facade.loadResponse({ ...context, testPerson: 'other@code@booklet' }, new ReplayAttemptContext(), 'token');
+    const latest = facade.loadResponse({ ...context, testPerson: 'other@code@booklet', responseId: 42 }, new ReplayAttemptContext(), 'token');
     expect(full.observed).toBe(false);
     full.next(payload);
     response.next({ response: payload.response });
     expect(await first).toBeNull();
     expect((await latest)?.value.response).toEqual(payload.response);
-    expect(backend.getReplayResponse).toHaveBeenCalledWith(5, 'other@code@booklet', 'UNIT', 'token', expect.any(String));
+    expect(backend.getReplayResponse).toHaveBeenCalledWith(5, 'other@code@booklet', 'UNIT', 'token', expect.any(String), 42);
   });
 
   it('rejects current failures and allows a new full-payload retry', async () => {

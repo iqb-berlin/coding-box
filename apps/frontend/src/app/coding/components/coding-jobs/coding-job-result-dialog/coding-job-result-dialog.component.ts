@@ -28,7 +28,7 @@ import { jobProgressKey, jobTestPerson } from '../../../../../../../../api-dto/c
 import { CodingResult, createCodingResultFilter, createCodingResultSorter } from './coding-job-result-table';
 import { injectUiTranslator } from '../../../../shared/utils/ui-translator';
 import { FileService } from '../../../../shared/services/file/file.service';
-import { CodingJobBackendService } from '../../../services/coding-job-backend.service';
+import { CodingJobBackendService, type CodingJobUnitDto } from '../../../services/coding-job-backend.service';
 import { MissingsProfileService } from '../../../services/missings-profile.service';
 import { CodingJob } from '../../../models/coding-job.model';
 import { SchemeEditorDialogComponent } from '../../scheme-editor-dialog/scheme-editor-dialog.component';
@@ -46,22 +46,6 @@ interface CodingProgressEntry {
   label?: string;
   score?: number | null;
   codingIssueOption?: number;
-}
-
-interface CodingJobUnitResult {
-  progressResponseId?: number;
-  responseId: number;
-  unitName: string;
-  unitAlias: string | null;
-  variableId: string;
-  variableAnchor: string;
-  variablePage?: string;
-  bookletName: string;
-  personLogin: string;
-  personCode: string;
-  personGroup: string;
-  isDoubleCoded: boolean;
-  otherCoders: string[];
 }
 
 interface ResolvedMissingPreview {
@@ -221,7 +205,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
       }) => {
         const missingPreviewLookup = this.getMissingPreviewLookup(missingProfile);
         this.dataSource.data = (units || []).map(unit => this.mapCodingResult(
-          unit as CodingJobUnitResult,
+          unit,
           progress as Record<string, CodingProgressEntry>,
           notes as Record<string, string>,
           missingPreviewLookup
@@ -238,7 +222,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
   }
 
   private mapCodingResult(
-    unit: CodingJobUnitResult,
+    unit: CodingJobUnitDto,
     progressResult: Record<string, CodingProgressEntry>,
     notesResult: Record<string, string>,
     missingPreviewLookup: MissingPreviewLookup
@@ -258,6 +242,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return {
       unitName: unit.unitName,
       unitAlias: unit.unitAlias,
+      responseId: unit.responseId,
       progressResponseId: unit.progressResponseId,
       variableId: unit.variableId,
       variableAnchor: unit.variableAnchor,
@@ -385,7 +370,7 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     return Number(score);
   }
 
-  private getTestPersonLabel(unit: CodingJobUnitResult): string {
+  private getTestPersonLabel(unit: CodingJobUnitDto): string {
     return [
       unit.personLogin,
       unit.personCode,
@@ -840,7 +825,8 @@ export class CodingJobResultDialogComponent implements OnInit, OnDestroy, AfterV
     const testPerson = jobTestPerson(result);
 
     const reviewUnit: UnitsReplayUnit = {
-      id: 0, // Not needed for replay
+      id: result.responseId ?? 0,
+      responseId: result.responseId,
       name: result.unitName,
       alias: result.unitAlias,
       progressResponseId: result.progressResponseId,

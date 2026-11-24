@@ -6,6 +6,7 @@ import { Writable } from 'stream';
 import {
   QueryRunner
 } from 'typeorm';
+import type { ReplayUnitResponseDto } from '../../../../../../../api-dto/coding/replay-unit-response.dto';
 import {
   TestResultsDeletePreviewDto,
   TestResultsDeleteRequestDto,
@@ -280,14 +281,10 @@ export class WorkspaceTestResultsService {
   async findUnitResponse(
     workspaceId: number,
     connector: string,
-    unitId: string
-  ): Promise<{
-    responses: {
-      id: string;
-      content: string;
-    }[];
-  }> {
-    return this.replay.findUnitResponse(workspaceId, connector, unitId);
+    unitId: string,
+    responseId?: number
+  ): Promise<ReplayUnitResponseDto> {
+    return this.replay.findUnitResponse(workspaceId, connector, unitId, responseId);
   }
 
   async getResponsesByStatus(

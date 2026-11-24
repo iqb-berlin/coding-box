@@ -210,6 +210,7 @@ export class ReplaySessionLoaderService {
       name: `Coding-Job: ${codingJobId}`,
       units: units.map((unit, index) => ({
         id: unit.responseId ?? index,
+        responseId: unit.responseId,
         progressResponseId: unit.progressResponseId,
         name: unit.unitName,
         alias: unit.unitAlias,

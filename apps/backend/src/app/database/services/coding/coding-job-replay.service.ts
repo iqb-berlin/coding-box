@@ -701,30 +701,8 @@ export class CodingJobReplayService {
       })
       .getMany();
 
-    const responseByCaseAndVariable = new Map<string, ResponseEntity>();
-    responses.forEach(response => {
-      const caseKey = this.getCodingJobBundleResponseCaseKey(response);
-      if (!caseKeys.has(caseKey)) {
-        return;
-      }
-
-      const responseKey = `${caseKey}\u0000${getAggregationVariableKey(
-        response.unit?.name || '',
-        response.variableid
-      )}`;
-      const existing = responseByCaseAndVariable.get(responseKey);
-      const responseIsManual = manualUnitByResponseId.has(response.id);
-      const existingIsManual = existing ?
-        manualUnitByResponseId.has(existing.id) :
-        false;
-      if (
-        !existing ||
-        (responseIsManual && !existingIsManual) ||
-        (responseIsManual === existingIsManual && response.id < existing.id)
-      ) {
-        responseByCaseAndVariable.set(responseKey, response);
-      }
-    });
+    const responseById = new Map(responses.map(response => [response.id, response]));
+    const responsesByVariable = this.indexBundleResponses(responses, caseKeys, manualUnitByResponseId);
 
     const bundleContextByResponseId = new Map<number, CodingJobBundleContext>();
     const configuredBundleIds = new Set(
@@ -743,14 +721,16 @@ export class CodingJobReplayService {
       }
 
       const caseKey = this.getCodingJobBundleUnitCaseKey(unit);
+      const currentResponse = responseById.get(unit.response_id);
+      const subform = currentResponse?.subform ?? '';
       const contextVariables = (variableBundle.variables || [])
         .map(variable => {
-          const response = responseByCaseAndVariable.get(
-            `${caseKey}\u0000${getAggregationVariableKey(
-              variable.unitName,
-              variable.variableId
-            )}`
-          );
+          const unitName = variable.unitName.toUpperCase();
+          const sameUnit = unitName === unit.unit_name.toUpperCase();
+          const unitKey = sameUnit ? currentResponse?.unitid ?? unitName : unitName;
+          const bySubform = responsesByVariable.get(JSON.stringify([caseKey, unitKey, variable.variableId]));
+          const isCurrentVariable = sameUnit && variable.variableId === unit.variable_id;
+          const response = isCurrentVariable ? currentResponse : this.resolveBundleSubform(bySubform, subform, sameUnit);
           const manualUnit = response ?
             manualUnitByResponseId.get(response.id) :
             undefined;
@@ -787,6 +767,44 @@ export class CodingJobReplayService {
     });
 
     return bundleContextByResponseId;
+  }
+
+  private resolveBundleSubform(responses: Map<string, ResponseEntity> | undefined, subform: string, sameUnit: boolean) {
+    if (!responses) return undefined;
+    const local = responses.get(subform) ?? responses.get('');
+    // Different units in a bundle may use independent subform names.
+    if (!local && !sameUnit && responses.size === 1) return responses.values().next().value;
+    return local;
+  }
+
+  private indexBundleResponses(
+    responses: ResponseEntity[],
+    caseKeys: Set<string>,
+    manualUnitByResponseId: Map<number, CodingJobUnit>
+  ) {
+    const responsesByVariable = new Map<string, Map<string, ResponseEntity>>();
+    responses.forEach(response => {
+      const caseKey = this.getCodingJobBundleResponseCaseKey(response);
+      if (!caseKeys.has(caseKey)) {
+        return;
+      }
+
+      const unitKeys: (number | string)[] = [(response.unit?.name || '').toUpperCase()];
+      if (response.unitid != null) unitKeys.push(response.unitid);
+      for (const unitKey of unitKeys) {
+        const key = JSON.stringify([caseKey, unitKey, response.variableid]);
+        const bySubform = responsesByVariable.get(key) ?? new Map<string, ResponseEntity>();
+        const subform = response.subform ?? '';
+        const existing = bySubform.get(subform);
+        const manual = manualUnitByResponseId.has(response.id);
+        const existingManual = existing && manualUnitByResponseId.has(existing.id);
+        if (!existing || (manual && !existingManual) || (manual === existingManual && response.id < existing.id)) {
+          bySubform.set(subform, response);
+          responsesByVariable.set(key, bySubform);
+        }
+      }
+    });
+    return responsesByVariable;
   }
 
   private isComparableDoubleCodingScope(

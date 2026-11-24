@@ -121,6 +121,7 @@ describe('ReplaySessionLoaderService', () => {
         currentUnitIndex: 0,
         units: [{
           id: 1,
+          responseId: 1,
           name: 'unit-1',
           alias: 'Unit 1',
           bookletId: 0,

@@ -1048,7 +1048,8 @@ describe('ReplayComponent', () => {
       'valid@test@other',
       'unit-123',
       'valid-token',
-      expect.any(String)
+      expect.any(String),
+      undefined
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalled();
     expect(replayComponent.reloadKey()).toBe(initialReloadKey);
@@ -2168,7 +2169,8 @@ describe('ReplayComponent', () => {
       'unit-new',
       'valid-token',
       true,
-      expect.any(String)
+      expect.any(String),
+      2
     );
     expect(replayBackendService.getReplayPayload).not.toHaveBeenCalledWith(
       47,
@@ -2176,7 +2178,8 @@ describe('ReplayComponent', () => {
       'unit-old',
       'valid-token',
       true,
-      expect.any(String)
+      expect.any(String),
+      1
     );
     expect(component.unitId()).toBe('unit-new');
     expect(component.codingService.currentVariableId).toBe('NEW_VAR');

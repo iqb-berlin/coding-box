@@ -285,6 +285,18 @@ describe('aggregation metrics', () => {
     expect(counts).toEqual({ uniqueCases: 1, casesInJobs: 0 });
   });
 
+  it('deduplicates scalar derived values only within their source unit and subform', () => {
+    const target = {
+      unitName: 'UNIT_DERIVED', unitId: 8, variableId: 'score', value: '0', subform: 'A'
+    };
+    const responses = [
+      { ...target, responseId: 1 }, { ...target, responseId: 2 },
+      { ...target, responseId: 3, subform: 'B' }, { ...target, responseId: 4, unitId: 9 }
+    ];
+    expect(countEffectiveManualCodingCases(responses, new Set([2]), [], 2, derivedVariables))
+      .toEqual({ uniqueCases: 3, casesInJobs: 1 });
+  });
+
   it('deduplicates same-person responses across unit-name case variants', () => {
     const responses = [
       {

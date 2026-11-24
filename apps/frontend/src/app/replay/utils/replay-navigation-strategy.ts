@@ -1,6 +1,7 @@
 import type { UnitsReplayUnit } from '../services/units-replay.service';
 
 export interface ReplayNavigationContext {
+  responseId?: number;
   workspaceId: number;
   testPerson: string;
   unitId: string;
@@ -13,7 +14,8 @@ export type ReplayNavigationStrategy =
 
 export function decideReplayNavigationStrategy(
   current: ReplayNavigationContext | null,
-  target: ReplayNavigationContext
+  target: ReplayNavigationContext,
+  subformResponseIds?: readonly number[]
 ): ReplayNavigationStrategy {
   const isSameUnit = current?.workspaceId === target.workspaceId &&
     current.unitId === target.unitId;
@@ -22,7 +24,9 @@ export function decideReplayNavigationStrategy(
     return 'load-full-payload';
   }
 
-  return current.testPerson === target.testPerson ?
+  const hasTargetResponse = current.responseId === target.responseId ||
+    (target.responseId !== undefined && subformResponseIds?.includes(target.responseId));
+  return current.testPerson === target.testPerson && hasTargetResponse ?
     'direct-page-navigation' :
     'load-responses';
 }

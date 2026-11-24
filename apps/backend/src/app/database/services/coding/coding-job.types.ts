@@ -307,6 +307,8 @@ export const MIN_DISTRIBUTION_CODER_CAPACITY_PERCENT = 10;
 export const MAX_DISTRIBUTION_CODER_CAPACITY_PERCENT = 300;
 
 export interface SlimResponse {
+  unitId?: number;
+  subform?: string | null;
   id: number;
   variableid: string;
   value: string | null;
