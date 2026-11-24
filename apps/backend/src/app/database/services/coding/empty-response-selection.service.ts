@@ -1,7 +1,9 @@
 import { Inject, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { EntityManager, Repository } from 'typeorm';
+import { EntityManager, Repository, WhereExpressionBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
+import { readEntityBatchesById } from '../shared/postgres-query-batches.util';
+import { createGeoGebraValueCondition } from '../test-results/test-results.util';
 import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import {
   getManualCodingScopeKey,
@@ -14,9 +16,29 @@ import {
 } from '../../utils/manual-coding-candidate.util';
 import { statusNumberToString } from '../../utils/response-status-converter';
 import {
-  isAggregatableValue,
+  isAggregatableResponse,
   isDerivedAggregationVariable
 } from './aggregation-metrics.util';
+import { displayedResponseStatus } from './geogebra-response.util';
+
+export function addEmptyResponseCandidateValueConditions(
+  query: WhereExpressionBuilder,
+  derivedVariableMap: Map<string, Set<string>>
+): void {
+  query.where(
+    '(response.value IS NULL OR TRIM(BOTH :whitespaces FROM response.value) = :emptyString OR response.value = :emptyArrayString)',
+    { whitespaces: ' \r\n\t', emptyString: '', emptyArrayString: '[]' }
+  );
+  query.orWhere(`response.status = :displayedResponseStatus AND ${createGeoGebraValueCondition('response')}`, { displayedResponseStatus });
+
+  Array.from(derivedVariableMap).forEach(([unitName, variableIds], index) => {
+    if (variableIds.size === 0) return;
+    query.orWhere(
+      `(UPPER(unit.name) = :derivedUnit${index} AND response.variableid IN (:...derivedVariables${index}))`,
+      { [`derivedUnit${index}`]: unitName.toUpperCase(), [`derivedVariables${index}`]: Array.from(variableIds) }
+    );
+  });
+}
 
 export interface EmptyResponseSelectionContext {
   metadataAvailable: boolean;
@@ -24,13 +46,18 @@ export interface EmptyResponseSelectionContext {
   sourceVariablesByDerivedKey: Map<string, Set<string>>;
 }
 
-type EmptyResponseCandidate = Pick<ResponseEntity, 'id' | 'unitid' | 'variableid' | 'status_v1' | 'value'> & {
+type EmptyResponseCandidate = Pick<ResponseEntity, 'id' | 'unitid' | 'variableid' | 'subform' | 'status' | 'status_v1' | 'value'> & {
   unit?: { name: string };
 };
 
 interface DerivedCandidatePlan {
   response: EmptyResponseCandidate;
   sourceVariableIds: Set<string>;
+}
+
+interface EmptyResponseSource {
+  isEmpty: boolean;
+  statusV1: number | null;
 }
 
 @Injectable()
@@ -113,7 +140,7 @@ export class EmptyResponseSelectionService {
         unitName,
         response.variableid
       )) {
-        if (!isAggregatableValue(response.value)) {
+        if (!isAggregatableResponse(response)) {
           selectedIds.add(response.id);
         }
         return;
@@ -132,40 +159,16 @@ export class EmptyResponseSelectionService {
     const chunkSize = 500;
     for (let index = 0; index < derivedPlans.length; index += chunkSize) {
       const chunk = derivedPlans.slice(index, index + chunkSize);
-      const unitIds = Array.from(new Set(chunk.map(plan => plan.response.unitid)));
-      const sourceVariableIds = Array.from(new Set(
-        chunk.flatMap(plan => Array.from(plan.sourceVariableIds))
-      ));
-
-      const responseRepository = manager?.getRepository(ResponseEntity) ??
-        this.responseRepository;
-      const sourceResponses = await responseRepository
-        .createQueryBuilder('source')
-        .where('source.unitid IN (:...unitIds)', { unitIds })
-        .andWhere('source.variableid IN (:...sourceVariableIds)', {
-          sourceVariableIds
-        })
-        .getMany();
-      const sourceResponsesByKey = new Map<string, ResponseEntity | null>();
-      sourceResponses.forEach(sourceResponse => {
-        const sourceKey = this.getUnitResponseKey(
-          sourceResponse.unitid,
-          sourceResponse.variableid
-        );
-        sourceResponsesByKey.set(
-          sourceKey,
-          sourceResponsesByKey.has(sourceKey) ? null : sourceResponse
-        );
-      });
+      const sourceResponsesByKey = await this.readDerivedSources(chunk, manager);
 
       chunk.forEach(plan => {
         const resolvedSources = Array.from(plan.sourceVariableIds).map(variableId => (
           sourceResponsesByKey.get(
-            this.getUnitResponseKey(plan.response.unitid, variableId)
+            this.getUnitResponseKey(plan.response.unitid, variableId, plan.response.subform)
           )
         ));
         const allSourcesExistExactlyOnce = resolvedSources.every(
-          (source): source is ResponseEntity => source !== undefined && source !== null
+          (source): source is EmptyResponseSource => source !== undefined && source !== null
         );
 
         if (
@@ -180,13 +183,44 @@ export class EmptyResponseSelectionService {
     return responses.filter(response => selectedIds.has(response.id));
   }
 
+  private async readDerivedSources(
+    plans: DerivedCandidatePlan[],
+    manager?: EntityManager
+  ): Promise<Map<string, EmptyResponseSource | null>> {
+    const sourcesToRead = plans.flatMap(plan => Array.from(plan.sourceVariableIds, variableId => ({
+      unitId: plan.response.unitid,
+      variableId,
+      subform: plan.response.subform ?? ''
+    })));
+    const repository = manager?.getRepository(ResponseEntity) ?? this.responseRepository;
+    const query = repository.createQueryBuilder('source')
+      .select(['source.id', 'source.unitid', 'source.variableid', 'source.subform', 'source.value', 'source.status', 'source.status_v1'])
+      .where(`EXISTS (
+        SELECT 1 FROM unnest(
+          CAST(:sourceUnitIds AS int[]), CAST(:sourceVariableIds AS text[]), CAST(:sourceSubforms AS text[])
+        ) requested(unitid, variableid, subform)
+        WHERE requested.unitid = source.unitid AND requested.variableid = source.variableid
+          AND requested.subform = COALESCE(source.subform, '')
+      )`, {
+        sourceUnitIds: sourcesToRead.map(source => source.unitId),
+        sourceVariableIds: sourcesToRead.map(source => source.variableId),
+        sourceSubforms: sourcesToRead.map(source => source.subform)
+      });
+    const sources = new Map<string, EmptyResponseSource | null>();
+    for await (const rows of readEntityBatchesById(query, 500)) {
+      for (const row of rows) {
+        const key = this.getUnitResponseKey(row.unitid, row.variableid, row.subform);
+        sources.set(key, sources.has(key) ? null : { isEmpty: !isAggregatableResponse(row), statusV1: row.status_v1 });
+      }
+    }
+    return sources;
+  }
+
   private isDerivedResponseEffectivelyEmpty(
     target: EmptyResponseCandidate,
-    sources: ResponseEntity[]
+    sources: EmptyResponseSource[]
   ): boolean {
-    const allSourcesEmpty = sources.every(
-      source => !isAggregatableValue(source.value)
-    );
+    const allSourcesEmpty = sources.every(source => source.isEmpty);
 
     // The MC+reason exception is intentionally limited to the target state
     // specified in #972. Other target states keep the conservative behavior
@@ -195,7 +229,7 @@ export class EmptyResponseSelectionService {
       return allSourcesEmpty;
     }
 
-    const sourceStatuses = sources.map(source => source.status_v1);
+    const sourceStatuses = sources.map(source => source.statusV1);
     const allSourceStatusesKnown = sourceStatuses.every(status => (
       status !== null && statusNumberToString(status) !== null
     ));
@@ -204,7 +238,7 @@ export class EmptyResponseSelectionService {
     }
 
     const intendedIncompleteSources = sources.filter(
-      source => source.status_v1 === INTENDED_INCOMPLETE_STATUS
+      source => source.statusV1 === INTENDED_INCOMPLETE_STATUS
     );
     if (intendedIncompleteSources.length === 0) {
       return allSourcesEmpty;
@@ -222,9 +256,7 @@ export class EmptyResponseSelectionService {
       return false;
     }
 
-    return intendedIncompleteSources.every(
-      source => !isAggregatableValue(source.value)
-    );
+    return intendedIncompleteSources.every(source => source.isEmpty);
   }
 
   private invertDerivedSourceMap(
@@ -286,7 +318,7 @@ export class EmptyResponseSelectionService {
     return leafSourceVariableIds;
   }
 
-  private getUnitResponseKey(unitId: number, variableId: string): string {
-    return `${unitId}\u001F${variableId}`;
+  private getUnitResponseKey(unitId: number, variableId: string, subform: string | null): string {
+    return JSON.stringify([unitId, variableId, subform ?? '']);
   }
 }

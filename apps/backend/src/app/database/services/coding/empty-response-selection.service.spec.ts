@@ -1,3 +1,4 @@
+import AdmZip from 'adm-zip';
 import { Repository } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { getManualCodingScopeKey } from '../../utils/manual-coding-scope.util';
@@ -6,6 +7,7 @@ import {
   CODING_INCOMPLETE_STATUS,
   INTENDED_INCOMPLETE_STATUS
 } from '../../utils/manual-coding-candidate.util';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { EmptyResponseSelectionService } from './empty-response-selection.service';
 
@@ -43,8 +45,13 @@ describe('EmptyResponseSelectionService', () => {
   beforeEach(() => {
     sourceRows = [];
     const queryBuilder = {
+      alias: 'source',
+      select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       getMany: jest.fn(async () => sourceRows)
     };
     responseRepository = {
@@ -61,6 +68,30 @@ describe('EmptyResponseSelectionService', () => {
       responseRepository,
       workspaceFilesService as unknown as WorkspaceFilesService
     );
+  });
+
+  it('selects only displayed GeoGebra files as empty, even when an edited file matches the starting value', async () => {
+    const drawing = new AdmZip();
+    drawing.addFile('geogebra.xml', Buffer.from('<geogebra><construction/></geogebra>'));
+    const construction = drawing.toBuffer().toString('base64');
+    const otherArchive = new AdmZip();
+    otherArchive.addFile('notes.txt', Buffer.from('Answer'));
+    const displayed = statusStringToNumber('DISPLAYED');
+    const changed = statusStringToNumber('VALUE_CHANGED');
+    const candidates = [
+      { ...response(1, 1, 'DRAWING', construction), status: displayed },
+      { ...response(2, 2, 'DRAWING', construction), status: changed },
+      { ...response(3, 3, 'DRAWING', construction) },
+      { ...response(4, 4, 'OTHER', otherArchive.toBuffer().toString('base64')), status: displayed },
+      { ...response(5, 5, 'OTHER', 'UEsD-invalid'), status: displayed },
+      { ...response(6, 6, 'OTHER', 'Starting text'), status: displayed },
+      { ...response(7, 7, 'DRAWING', `data:application/vnd.geogebra.file;base64,${construction}`), status: displayed }
+    ];
+
+    const context = await service.createContext(17);
+    const result = await service.filterEffectivelyEmptyResponses(candidates, context);
+
+    expect(result.map(item => item.id)).toEqual([1, 7]);
   });
 
   it('uses source values for derived targets while preserving base behavior', async () => {

@@ -14,13 +14,14 @@ export type StoredDuplicateValueGroup = DuplicateValueGroupDto & {
 };
 
 export const CODING_ANALYSIS_CACHE_KEY_PREFIX = 'response-analysis';
+const CODING_ANALYSIS_CACHE_VERSION = 2;
 
 export function getCodingAnalysisCacheKey(
   workspaceId: number,
   matchingFlags: readonly string[],
   threshold: number
 ): string {
-  return `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_${[...matchingFlags].sort().join(',')}_t${threshold}`;
+  return `${CODING_ANALYSIS_CACHE_KEY_PREFIX}:${workspaceId}_v${CODING_ANALYSIS_CACHE_VERSION}_${[...matchingFlags].sort().join(',')}_t${threshold}`;
 }
 
 export function getCodingAnalysisRunMarkerKey(cacheKey: string): string {

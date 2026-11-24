@@ -258,6 +258,7 @@ export class CodingJobResponsesService {
       .select('response.id', 'id')
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('unit.name', 'unitName')
       .addSelect('unit.alias', 'unitAlias')
@@ -303,23 +304,20 @@ export class CodingJobResponsesService {
 
     return raw.map(r => {
       const unitName = r.unitName ?? '';
-      const variableid = r.variableid;
       return {
         id: Number(r.id),
-        variableid: variableid,
+        variableid: r.variableid,
         value: r.value ?? null,
-        statusV1:
-          r.statusV1 !== undefined && r.statusV1 !== null ?
-            Number(r.statusV1) :
-            null,
-        unitName: unitName,
+        status: r.status,
+        statusV1: r.statusV1 == null ? null : Number(r.statusV1),
+        unitName,
         unitAlias: r.unitAlias ?? null,
         bookletName: r.bookletName ?? '',
         personLogin: r.personLogin ?? '',
         personCode: r.personCode ?? '',
         personGroup: r.personGroup ?? '',
         variableBundleId: variableBundleMap.get(
-          getAggregationVariableKey(unitName, variableid)
+          getAggregationVariableKey(unitName, r.variableid)
         )
       };
     });
@@ -389,6 +387,7 @@ export class CodingJobResponsesService {
       .select('response.id', 'id')
       .addSelect('response.variableid', 'variableid')
       .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
       .addSelect('response.status_v1', 'statusV1')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('unit.name', 'unitName')
@@ -443,6 +442,7 @@ export class CodingJobResponsesService {
       id: Number(r.id),
       variableid: r.variableid,
       value: r.value ?? null,
+      status: r.status,
       statusV1:
         r.statusV1 !== undefined && r.statusV1 !== null ?
           Number(r.statusV1) :
@@ -487,7 +487,8 @@ export class CodingJobResponsesService {
           responseId: response.id,
           unitName: response.unitName,
           variableId: response.variableid,
-          value: response.value
+          value: response.value,
+          status: response.status
         })),
         matchingFlags,
         derivedVariableMap,
@@ -510,6 +511,7 @@ export class CodingJobResponsesService {
         id: response.responseId,
         variableid: response.variableId,
         value: response.value,
+        status: response.status,
         statusV1: response.statusV1,
         statusV2: response.statusV2,
         unitName: response.unitName,

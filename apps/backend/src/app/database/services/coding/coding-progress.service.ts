@@ -25,7 +25,6 @@ import {
   buildAggregationGroups,
   countEffectiveManualCodingCases,
   getAggregationVariableKey,
-  ManualCodingDeduplicationResponse,
   partitionResponsesByAggregationVariable,
   summarizeAggregationGroups
 } from './aggregation-metrics.util';
@@ -690,6 +689,7 @@ export class CodingProgressService {
       .createQueryBuilder('response')
       .select('response.id', 'responseId')
       .addSelect(needsValues ? 'response.value' : 'NULL', 'value')
+      .addSelect('response.status', 'status')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.status_v1', 'statusV1')
@@ -1413,19 +1413,8 @@ export class CodingProgressService {
         variable.variableId
       );
       const variableResponses = responsesByVariable.get(resultKey) || [];
-      const responsesWithCaseFields: ManualCodingDeduplicationResponse[] =
-        variableResponses.map(response => ({
-          responseId: response.responseId,
-          unitName: response.unitName,
-          variableId: response.variableId,
-          value: response.value,
-          personLogin: response.personLogin,
-          personCode: response.personCode,
-          personGroup: response.personGroup,
-          bookletName: response.bookletName
-        }));
       const effectiveCaseCounts = countEffectiveManualCodingCases(
-        responsesWithCaseFields,
+        variableResponses,
         assignedResponseIds,
         matchingFlags,
         aggregationThreshold,
@@ -1455,6 +1444,7 @@ export class CodingProgressService {
       .createQueryBuilder('response')
       .select('response.id', 'responseId')
       .addSelect('response.value', 'value')
+      .addSelect('response.status', 'status')
       .addSelect('response.code_v2', 'codeV2')
       .addSelect('response.status_v2', 'statusV2')
       .addSelect('response.status_v1', 'statusV1')
@@ -1533,6 +1523,7 @@ export class CodingProgressService {
     return completedPeers.map(response => ({
       responseId: response.responseId,
       value: response.value,
+      status: response.status,
       codeV2: response.codeV2,
       statusV2: response.statusV2,
       statusV1: response.statusV1,

@@ -22,6 +22,7 @@ export interface CoderTrainingResponse {
   variableId: string;
   unitName: string;
   value: string | null;
+  status?: number | null;
   personLogin: string;
   personCode: string;
   personGroup: string;

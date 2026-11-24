@@ -37,6 +37,25 @@ import { CoderTrainingSamplingService } from './coder-training-sampling.service'
 import { makeTrainingVariableKey } from './coder-training.util';
 import { CodingJobService } from './coding-job.service';
 
+function toTrainingResponse(response: ResponseEntity): CoderTrainingResponse {
+  const { unit } = response;
+  const person = unit?.booklet?.person;
+  return {
+    responseId: response.id,
+    unitAlias: unit?.alias || '',
+    variableId: response.variableid,
+    unitName: unit?.name || '',
+    value: response.value,
+    status: response.status,
+    personLogin: person?.login || '',
+    personCode: person?.code || '',
+    personGroup: person?.group || '',
+    bookletName: unit?.booklet?.bookletinfo?.name || '',
+    variable: response.variableid,
+    unitId: response.unitid
+  };
+}
+
 @Injectable()
 export class CoderTrainingSelectionService {
   private readonly logger = new Logger('CoderTrainingService');
@@ -449,19 +468,7 @@ export class CoderTrainingSelectionService {
 
       this.logger.log(`Found ${unitResponses.length} incomplete responses for unit ${unitId}, variable ${variableId}`);
 
-      let transformedResponses: CoderTrainingResponse[] = unitResponses.map(r => ({
-        responseId: r.id,
-        unitAlias: r.unit?.alias || '',
-        variableId: r.variableid,
-        unitName: r.unit?.name || '',
-        value: r.value,
-        personLogin: r.unit?.booklet?.person?.login || '',
-        personCode: r.unit?.booklet?.person?.code || '',
-        personGroup: r.unit?.booklet?.person?.group || '',
-        bookletName: r.unit?.booklet?.bookletinfo?.name || '',
-        variable: r.variableid,
-        unitId: r.unitid
-      }));
+      let transformedResponses = unitResponses.map(toTrainingResponse);
 
       if (caseSelectionMode === 'oldest_first' || caseSelectionMode === 'newest_first') {
         const unitIds = [...new Set(transformedResponses.map(r => r.unitId!).filter(Boolean))];

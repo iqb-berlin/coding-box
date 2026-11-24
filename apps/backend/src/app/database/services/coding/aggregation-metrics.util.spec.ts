@@ -1,3 +1,5 @@
+import AdmZip from 'adm-zip';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 import {
   buildAggregationPeerLookupKeys,
   buildAggregationPeerKeys,
@@ -65,6 +67,31 @@ describe('aggregation metrics', () => {
       rawCases: 4,
       effectiveCases: 4
     });
+  });
+
+  it('separates displayed GeoGebra answers from edited answers with the same value', () => {
+    const archive = new AdmZip();
+    archive.addFile('geogebra.xml', Buffer.from('<geogebra/>'));
+    const seed = {
+      unitName: 'GEOGEBRA', variableId: 'drawing', value: archive.toBuffer().toString('base64')
+    };
+    const viewed = {
+      ...seed, responseId: 1, personLogin: 'A', status: statusStringToNumber('DISPLAYED')
+    };
+    const edited = {
+      ...viewed, responseId: 2, status: statusStringToNumber('VALUE_CHANGED')
+    };
+    const anotherEdited = { ...edited, responseId: 3, personLogin: 'B' };
+    const responses = [viewed, edited, anotherEdited];
+
+    expect(buildAggregationGroups(responses, [], 2, new Map()).map(group => (
+      group.responses.map(row => row.responseId)
+    ))).toEqual([[1], [2, 3]]);
+    expect(countEffectiveManualCodingCases(responses, new Set([1]), [], 2, new Map())).toEqual({
+      uniqueCases: 2, casesInJobs: 1
+    });
+    expect(buildAggregationPeerKeys([viewed], [], new Map())).toEqual([]);
+    expect(buildAggregationPeerLookupKeys(buildAggregationPeerKeys([edited], [], new Map()), [viewed], [])).toEqual([]);
   });
 
   it('respects disabled aggregation', () => {

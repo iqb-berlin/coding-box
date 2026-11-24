@@ -310,6 +310,7 @@ export interface SlimResponse {
   id: number;
   variableid: string;
   value: string | null;
+  status?: number | null;
   statusV1?: number | null;
   statusV2?: number | null;
   unitName: string;

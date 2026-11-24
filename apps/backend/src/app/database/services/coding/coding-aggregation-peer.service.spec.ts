@@ -1,3 +1,5 @@
+import AdmZip from 'adm-zip';
+import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingAggregationPeerService } from './coding-aggregation-peer.service';
 
 const createQueryBuilder = (rows: unknown[]) => {
@@ -125,5 +127,39 @@ describe('CodingAggregationPeerService', () => {
 
     expect(loadQueryContext).not.toHaveBeenCalled();
     expect(responseRepository.createQueryBuilder).not.toHaveBeenCalled();
+  });
+
+  it('ignores a completed displayed GeoGebra answer even when an edited peer has the same archive', async () => {
+    const archive = new AdmZip();
+    archive.addFile('geogebra.xml', Buffer.from('<geogebra/>'));
+    const drawing = {
+      unitName: 'GEOGEBRA', variableId: 'drawing', value: archive.toBuffer().toString('base64')
+    };
+    const viewed = {
+      ...drawing, responseId: 2, status: statusStringToNumber('DISPLAYED')
+    };
+    const edited = {
+      ...drawing, responseId: 3, status: statusStringToNumber('VALUE_CHANGED')
+    };
+    const values = createQueryBuilder([viewed, edited]);
+    const peers = createQueryBuilder([viewed, edited]);
+    const repository = {
+      createQueryBuilder: jest.fn().mockReturnValueOnce(values).mockReturnValueOnce(peers)
+    };
+    const service = new CodingAggregationPeerService(repository as never);
+
+    const result = await service.findCompletedPeers({
+      workspaceId: 5,
+      sourceResponses: [{ ...edited, responseId: 1 }],
+      matchingFlags: [],
+      derivedVariableMap: new Map(),
+      loadQueryContext: async () => ({
+        defaultMirCode: -98,
+        exclusions: { globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] }
+      })
+    });
+    expect(result.map(response => response.responseId)).toEqual([3]);
+    expect(values.addSelect).toHaveBeenCalledWith('response.status', 'status');
+    expect(peers.addSelect).toHaveBeenCalledWith('response.status', 'status');
   });
 });

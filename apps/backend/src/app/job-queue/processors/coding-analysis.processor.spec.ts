@@ -253,8 +253,13 @@ describe('CodingAnalysisProcessor', () => {
     };
 
     const sourceQuery = {
+      alias: 'source',
+      select: jest.fn().mockReturnThis(),
       where: jest.fn().mockReturnThis(),
       andWhere: jest.fn().mockReturnThis(),
+      orderBy: jest.fn().mockReturnThis(),
+      limit: jest.fn().mockReturnThis(),
+      setParameter: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([
         {
           id: 2, unitid: 2, variableid: 'CHOICE', value: 'selected', status_v1: CODING_COMPLETE_STATUS
