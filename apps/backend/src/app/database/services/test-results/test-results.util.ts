@@ -38,6 +38,16 @@ export function parseQuotedExactSearchFilter(filter: string): TextSearchFilter {
   };
 }
 
+export function applyVariableRegexFilter<T extends ObjectLiteral>(
+  query: SelectQueryBuilder<T>, pattern: string, parameter: 'variableIdRegex' | 'responseRegex'
+): void {
+  // These characters have literal meaning anywhere outside a bracket expression.
+  const condition = /^[a-zA-Z0-9_-]+$/.test(pattern) ?
+    `strpos(response.variableid, :${parameter}) > 0` :
+    `response.variableid ~ :${parameter}`;
+  query.andWhere(`CASE WHEN person.workspace_id = :workspaceId THEN ${condition} END`, { [parameter]: pattern });
+}
+
 export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
   query: SelectQueryBuilder<T>,
   filters: {
@@ -91,9 +101,7 @@ export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
 
     const responseRegex = assertValidRegexSearchPattern(response, 'response');
     if (responseRegex) {
-      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :responseRegex END', {
-        responseRegex
-      });
+      applyVariableRegexFilter(query, responseRegex, 'responseRegex');
     }
     return;
   }

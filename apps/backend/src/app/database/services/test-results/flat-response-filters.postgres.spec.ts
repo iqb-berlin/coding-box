@@ -192,6 +192,18 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
+  it('matches literal regex substrings case-sensitively and preserves regex syntax', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status) VALUES
+      (41, 1, 'pre-ID_1-x', 3), (42, 1, 'pre-IDa1-x', 3), (43, 1, 'pre-id_1-x', 3)`);
+    try {
+      await expectResponses({ regexSearch: true, response: 'ID_1-' }, [41]);
+      await expectResponses({ regexSearch: true, response: '^pre-ID.1' }, [41, 42]);
+      await expectResponses({ regexSearch: true, response: 'a'.repeat(256) }, []);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 41 AND 43`);
+    }
+  });
+
   it('ignores invalid duration bounds consistently', async () => {
     await expectResponses({ processingDurationMin: '01:60', processingDurationMax: 'bad' }, [1, 2, 3, 4, 5, 6, 7, 8]);
   });

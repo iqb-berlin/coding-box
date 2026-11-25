@@ -31,7 +31,7 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
-  applyExclusionsToQuery, createGeoGebraValueCondition, excludeAutocoderGeneratedResponses, parseQuotedExactSearchFilter
+  applyExclusionsToQuery, applyVariableRegexFilter, createGeoGebraValueCondition, excludeAutocoderGeneratedResponses, parseQuotedExactSearchFilter
 } from './test-results.util';
 import {
   EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
@@ -514,7 +514,7 @@ export class TestResultsSearchService {
     if (regexSearch) {
       const variableIdRegex = assertValidRegexSearchPattern(variableId, 'variableId');
       if (variableIdRegex) {
-        query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :variableIdRegex END', { variableIdRegex });
+        applyVariableRegexFilter(query, variableIdRegex, 'variableIdRegex');
       }
     } else if (variableIdFilter.exact) {
       query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN LOWER(response.variableid) = LOWER(:variableId) END', {
