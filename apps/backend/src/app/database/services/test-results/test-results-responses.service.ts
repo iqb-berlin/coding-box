@@ -26,7 +26,7 @@ import {
 } from '../workspace/workspace-exclusion.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import {
-  applyExclusionsToQuery, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses
+  applyExclusionsToQuery, applyFlatResponseTextFilters, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses
 } from './test-results.util';
 import {
   FlatResponseOptions, FlatResponseResult, LogAnomalyCode, LogAnomalySummary, LogAnomalyThresholds
@@ -126,7 +126,7 @@ export class TestResultsResponsesService {
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
     const matchingBooklets = logAnomalyCodes.length ?
-      await this.findMatchingBookletIds(workspaceId, logAnomalyCodes, logAnomalyThresholds, exclusions, queryRunner) :
+      await this.findMatchingBookletIds(workspaceId, logAnomalyCodes, logAnomalyThresholds, exclusions, filters, queryRunner) :
       undefined;
     if (matchingBooklets?.length === 0) return [[], 0];
 
@@ -213,6 +213,7 @@ export class TestResultsResponsesService {
     codes: LogAnomalyCode[],
     thresholds: LogAnomalyThresholds,
     exclusions: ResolvedWorkspaceExclusions,
+    filters: FlatResponseFilters,
     runner?: QueryRunner
   ): Promise<number[]> {
     const query = this.connection.getRepository(Booklet).createQueryBuilder('bookletEntity', runner)
@@ -221,6 +222,8 @@ export class TestResultsResponsesService {
       .select('bookletEntity.id', 'id')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = TRUE');
+    if (filters.unit) query.innerJoin('bookletEntity.units', 'unit').distinct(true);
+    applyFlatResponseTextFilters(query, { ...filters, response: '' });
     applyIgnoredBookletsToQuery(query, exclusions.ignoredBooklets, 'bookletinfo');
     this.anomalies.applyLogAnomalyFilters(query, codes, thresholds, exclusions);
     const rows = await query.getRawMany<{ id: number }>();

@@ -5,7 +5,6 @@ import {
 import {
   assertValidRegexSearchPattern
 } from '../../../utils/regex-search.util';
-import { ResponseEntity } from '../../entities/response.entity';
 import {
   applyResolvedExclusionsToQuery,
   normalizeExclusionBookletId
@@ -39,8 +38,8 @@ export function parseQuotedExactSearchFilter(filter: string): TextSearchFilter {
   };
 }
 
-export function applyFlatResponseTextFilters(
-  query: SelectQueryBuilder<ResponseEntity>,
+export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
+  query: SelectQueryBuilder<T>,
   filters: {
     code: string;
     group: string;

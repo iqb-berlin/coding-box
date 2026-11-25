@@ -144,6 +144,21 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ logAnomalies: 'debug' }, []);
   });
 
+  it('applies person, booklet and unit regexes before collecting log matches', async () => {
+    const filters = {
+      logAnomalies: 'connection_lost',
+      code: '^A$',
+      group: '^group$',
+      login: '^person$',
+      booklet: '^BOOKLET_A$',
+      unit: '^UNIT_A$',
+      regexSearch: true
+    };
+    await expectResponses({ ...filters, limit: 2, page: 2 }, [3, 4], 4);
+    await expectResponses({ ...filters, login: '^other$' }, []);
+    await expectResponses({ ...filters, response: '^D$' }, [4]);
+  });
+
   it('matches session or unit loading, including equality at the threshold', async () => {
     await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 100 }, [1, 2, 3, 4, 5, 6, 7, 8]);
     await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1000 }, [5]);
