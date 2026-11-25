@@ -80,6 +80,18 @@ describe('UnitPlayerComponent', () => {
     expect(post).toHaveBeenCalledTimes(1);
   });
 
+  it('preserves player HTML and JSON metadata on first render and when switching units', () => {
+    fixture.destroy();
+    fixture = TestBed.createComponent(UnitPlayerComponent);
+    for (const version of ['6.0', '7.0']) {
+      const html = `<script type="application/ld+json">{"specVersion":"${version}"}</script><p>&quot;</p>`;
+      fixture.componentRef.setInput('unitPlayer', html);
+      fixture.componentRef.setInput('unitDef', JSON.stringify({ version }));
+      fixture.detectChanges();
+      expect(fixture.componentInstance.hostingIframe()!.nativeElement.srcdoc).toBe(html);
+    }
+  });
+
   it('should emit playerReady when the hosted player reports ready', () => {
     const emitSpy = jest.spyOn(component.playerReady, 'emit');
     const appService = TestBed.inject(AppService);
@@ -94,6 +106,111 @@ describe('UnitPlayerComponent', () => {
     }));
 
     expect(emitSpy).toHaveBeenCalled();
+  });
+
+  it.each([
+    [{ metadata: { specVersion: '6.0' } }, 6],
+    [{ metadata: '{"specVersion":"6.0"}' }, 6],
+    [{ metadata: '{"specVersion":"7.0"}', apiVersion: '3.0' }, 7],
+    [{ metadata: '{', apiVersion: '3.0' }, 3],
+    [{ metadata: { specVersion: null }, specVersion: '4.1' }, 4],
+    [{}, 2]
+  ] as const)('starts the negotiated protocol for %j', (ready, major) => {
+    const source = component.hostingIframe()!.nativeElement.contentWindow!;
+    const post = jest.spyOn(source, 'postMessage');
+    fixture.componentRef.setInput('unitDef', '{}');
+    fixture.componentRef.setInput('printMode', true);
+    fixture.detectChanges();
+    TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
+      data: { type: 'vopReadyNotification', ...ready }, source
+    }));
+    expect(component.playerApiVersion).toBe(major);
+    const start = post.mock.lastCall![0];
+    expect(start.type).toBe('vopStartCommand');
+    expect(start.playerConfig).toMatchObject(major === 7 ?
+      { pagingMode: 'CONCAT_SCROLL', printMode: 'ON' } :
+      { pagingMode: 'concat-scroll', printMode: 'on', stateReportPolicy: 'eager' });
+    expect(start.unitState.presentationProgress).toBe(major === 7 ? 'NONE' : 'none');
+    expect(start.unitState.responseProgress).toBe(start.unitState.presentationProgress);
+  });
+
+  describe('state notification ordering', () => {
+    const earlier = '2026-11-25T10:00:00+01:00';
+    const later = '2026-11-25T09:00:01Z';
+    let sessionId: string;
+    let source: Window;
+    let post: jest.SpyInstance;
+
+    function receive(data: object): void {
+      TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', { source, data }));
+    }
+
+    function start(version: string): void {
+      receive({ type: 'vopReadyNotification', metadata: JSON.stringify({ specVersion: version }) });
+      sessionId = post.mock.lastCall![0].sessionId;
+    }
+
+    function report(page: string, timeStamp?: string): void {
+      receive({
+        type: 'vopStateChangedNotification',
+        sessionId,
+        timeStamp,
+        playerState: { validPages: [{ id: '1' }, { id: '2' }], currentPage: page }
+      });
+    }
+
+    function selectedPage(): string | undefined {
+      return component.pageList.find(page => page.type === '#goto' && page.disabled)?.id;
+    }
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('unitDef', '{}');
+      fixture.detectChanges();
+      source = component.hostingIframe()!.nativeElement.contentWindow!;
+      post = jest.spyOn(source, 'postMessage');
+    });
+
+    it('discards older v7 state within a session and accepts equal timestamps', () => {
+      start('7.0');
+      report('2', later);
+      report('1', earlier);
+      expect(selectedPage()).toBe('2');
+      report('1', later);
+      expect(selectedPage()).toBe('1');
+    });
+
+    it('starts a fresh timestamp comparison for each replay start', async () => {
+      start('7.0');
+      report('2', later);
+      await component.sendUnitData();
+      sessionId = post.mock.lastCall![0].sessionId;
+      report('1', earlier);
+      expect(selectedPage()).toBe('1');
+    });
+
+    it('requires a usable timestamp for v7 but accepts undated legacy notifications', () => {
+      start('7.0');
+      report('2', later);
+      report('1');
+      report('1', 'invalid');
+      expect(selectedPage()).toBe('2');
+      start('6.0');
+      report('1');
+      expect(selectedPage()).toBe('1');
+    });
+  });
+
+  it.each(['COMPLETE', 'complete'])('reads 7.0 response progress %s', responseProgress => {
+    TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
+      source: component.hostingIframe()!.nativeElement.contentWindow!,
+      data: { type: 'vopStateChangedNotification', unitState: { presentationProgress: 'SOME', responseProgress } }
+    }));
+    TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
+      source: component.hostingIframe()!.nativeElement.contentWindow!,
+      data: { type: 'vopStateChangedNotification', unitState: { dataParts: {} } }
+    }));
+    expect(component.presentationProgress).toBe('some');
+    expect(component.responseProgress).toBe('complete');
   });
 
   it('should emit responseVisible again after unit responses change', () => {
@@ -510,7 +627,8 @@ describe('UnitPlayerComponent', () => {
 
     it.each([
       { playerState: { validPages: [{ id: '0' }], currentPage: 0 } },
-      { playerState: { validPages: [], currentPage: '0' }, unitState: { presentationProgress: 'complete' } }
+      { playerState: { validPages: [], currentPage: '0' }, unitState: { presentationProgress: 'complete' } },
+      { unitState: { presentationProgress: 'SOME' } }
     ])('accepts current-session presentation evidence %j', state => {
       component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
       receive({ type: 'vopStateChangedNotification', sessionId: postMessage.mock.lastCall[0].sessionId, ...state });
@@ -553,17 +671,17 @@ describe('UnitPlayerComponent', () => {
       expect(postMessage.mock.lastCall[0].sessionId).toBe(fallbackSession);
     });
 
-    it('ignores delayed runtime errors from an earlier start but retries for the current session', async () => {
+    it.each(['image-not-loading', 'IMAGE_NOT_LOADING'])('retries only current-session asset errors (%s)', async code => {
       component.ngOnChanges({ unitDef: new SimpleChange(undefined, definition, true) });
       const previousSession = postMessage.mock.lastCall[0].sessionId;
       await component.sendUnitData();
       const currentSession = postMessage.mock.lastCall[0].sessionId;
-      receive({ type: 'vopRuntimeErrorNotification', sessionId: previousSession, code: 'image-not-loading' });
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: previousSession, code });
       expect(postMessage).toHaveBeenCalledTimes(2);
-      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code: 'image-not-loading' });
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code });
       expect(postMessage).toHaveBeenCalledTimes(3);
       expect(postMessage.mock.lastCall[0].unitDefinition).toBe(definition);
-      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code: 'image-not-loading' });
+      receive({ type: 'vopRuntimeErrorNotification', sessionId: currentSession, code });
       jest.advanceTimersByTime(20_000);
       expect(postMessage).toHaveBeenCalledTimes(3);
     });

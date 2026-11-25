@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="de">
+<head>
+  <meta charset="utf-8">
+  <title>Replay-Testplayer 7.0</title>
+  <script type="application/ld+json">
+    {"id":"ReplayTest","name":[{"lang":"de","value":"Replay-Testplayer"}],"type":"PLAYER","version":"1.0.0","specVersion":"7.0","metadataVersion":"3.1"}
+  </script>
+</head>
+<body>
+  <main></main>
+  <script>
+    let sessionId;
+    function showPage(page) {
+      document.body.dataset.page = page;
+      parent.postMessage({
+        type: 'vopStateChangedNotification', sessionId, timeStamp: new Date().toISOString(),
+        playerState: { validPages: [{ id: '0' }, { id: '1' }], currentPage: page },
+        unitState: { presentationProgress: 'COMPLETE', responseProgress: 'SOME' }
+      }, window.origin);
+    }
+    window.addEventListener('message', ({ source, origin, data }) => {
+      if (source !== parent || origin !== window.origin) return;
+      if (data.type === 'vopStartCommand') {
+        const { playerConfig, unitState } = data;
+        const print = playerConfig.printMode === 'ON';
+        if (playerConfig.pagingMode !== (print ? 'CONCAT_SCROLL' : 'BUTTONS') ||
+            unitState.presentationProgress !== 'NONE' || unitState.responseProgress !== 'NONE' ||
+            'stateReportPolicy' in playerConfig) {
+          throw new Error('Unexpected plugin-player 7.0 start command: ' + JSON.stringify(data));
+        }
+        sessionId = data.sessionId;
+        document.body.dataset.mode = print ? 'print' : 'replay';
+        document.querySelector('main').textContent = JSON.parse(unitState.dataParts?.answer || '""');
+        showPage(playerConfig.startPage || '0');
+      } else if (data.type === 'vopPageNavigationCommand' && data.sessionId === sessionId) {
+        showPage(data.target);
+      }
+    });
+    parent.postMessage({
+      type: 'vopReadyNotification', metadata: document.querySelector('script[type="application/ld+json"]').textContent
+    }, window.origin);
+  </script>
+</body>
+</html>

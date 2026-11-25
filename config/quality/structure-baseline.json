@@ -1437,18 +1437,6 @@
         }
       }
     },
-    "apps/frontend/src/app/replay/components/unit-player/unit-player.component.ts": {
-      "file": {},
-      "functions": {
-        "class UnitPlayerComponent#1/method subscribeForMessages#1": {
-          "max-lines-per-function": 121
-        },
-        "class UnitPlayerComponent#1/method subscribeForMessages#1/anonymous:5ff7268ca0f42ee6#1": {
-          "complexity": 41,
-          "max-lines-per-function": 117
-        }
-      }
-    },
     "apps/frontend/src/app/replay/services/replay-coding.service.ts": {
       "file": {
         "max-lines": 1139
