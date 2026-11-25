@@ -18,6 +18,8 @@ import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingFreshnessQueryService } from '../coding/coding-freshness-query.service';
 import { CodingJobFreshnessService } from '../coding/coding-job-freshness.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
 import { CODING_STATISTICS_CACHE_KEY_PREFIX, getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
@@ -54,6 +56,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   let cache: CacheService;
   let files: WorkspaceFilesService;
   let statistics: CodingStatisticsService;
+  let validation: CodingValidationService;
   let xsdServer: Server;
   let xsdUrl: string;
   let created = false;
@@ -103,7 +106,10 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
       db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, exclusions), new CodingJobFreshnessService(db)
     );
     statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
-    const resultsCache = new TestResultsCacheService({} as never, new WorkspaceStatsCacheService(cache), statistics);
+    validation = new CodingValidationService(
+      db.getRepository(ResponseEntity), {} as never, cache, metadata, exclusions, {} as never, {} as never
+    );
+    const resultsCache = new TestResultsCacheService(validation, new WorkspaceStatsCacheService(cache), statistics);
     const results = new WorkspaceTestResultsService(
       {} as never, resultsCache, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
     );
@@ -174,7 +180,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   const unitXml = (variable = 'VAR') => `<Unit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="${xsdUrl}">
     <Metadata><Id>UNIT</Id></Metadata><BaseVariables><Variable id="${variable}" alias="${variable}" type="string"/></BaseVariables><CodingSchemeRef>SCHEME.VOCS</CodingSchemeRef></Unit>`;
   const scheme = (rule = 1) => JSON.stringify({ variableCodings: [{ id: 'VAR', sourceType: 'BASE', rules: [{ value: rule }] }] });
-  async function fixture() {
+  async function fixture(statusV1 = 4) {
     const workspace = await insert('workspace', { name: 'File workflow fixture' });
     const person = await insert('persons', {
       workspace_id: workspace, group: 'group', login: `person-${workspace}`, code: 'code', consider: true
@@ -183,7 +189,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const booklet = await insert('booklet', { personid: person, infoid: info });
     const unit = await insert('unit', { bookletid: booklet, name: 'UNIT' });
     await insert('response', {
-      unitid: unit, variableid: 'VAR', status: 3, value: 'answer', status_v1: 4, code_v1: 1, score_v1: 1
+      unitid: unit, variableid: 'VAR', status: 3, value: 'answer', status_v1: statusV1, code_v1: 1, score_v1: 1
     });
     return { workspace, unit };
   }
@@ -286,20 +292,24 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
   });
 
-  it('refreshes cached coding statistics after a Testcenter Unit insert or overwrite', async () => {
-    const { workspace } = await fixture();
+  it('refreshes cached coding statistics and manual coding scope after a Testcenter Unit insert or overwrite', async () => {
+    const { workspace } = await fixture(statusStringToNumber('CODING_INCOMPLETE'));
     const entry = {
       workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
     };
     const readStats = () => statistics.getCodingStatistics(workspace);
+    const readScope = () => validation.getManualCodingScopeSummary(workspace);
     expect(await readStats()).toMatchObject({ totalResponses: 0 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 0 });
 
     expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1, issues: undefined });
     expect(await readStats()).toMatchObject({ totalResponses: 1 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 1 });
 
     const changed = { ...entry, data: unitXml('OTHER') };
     expect(await files.testCenterImport([changed], ['UNIT'])).toMatchObject({ uploaded: 1, issues: undefined });
     expect(await readStats()).toMatchObject({ totalResponses: 0 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 0 });
   });
 
   it('keeps committed Testcenter files and invalidates caches when one freshness calculation fails', async () => {
@@ -327,7 +337,10 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await cache.get(sentinel)).toBeNull();
   });
 
-  it.each([':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX, CODING_STATISTICS_CACHE_KEY_PREFIX])(
+  it.each([
+    ':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX, CODING_STATISTICS_CACHE_KEY_PREFIX,
+    ...getCodingIncompleteVariablesCacheKeys(0).map(key => key.split(':')[0])
+  ])(
     'reports a committed Testcenter file when deleting the %s cache returns false',
     async failedKeyPart => {
       const { workspace } = await fixture();

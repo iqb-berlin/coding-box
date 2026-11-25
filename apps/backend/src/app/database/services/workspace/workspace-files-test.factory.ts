@@ -55,7 +55,7 @@ export function createWorkspaceFilesService(
   const resources = new WorkspaceResourceFileUploadService(files, parsing, freshness);
   const uploadProcess = new WorkspaceFileUploadProcessService({ duplicate: () => statusRedis } as unknown as Redis);
   const uploads = new WorkspaceFileUploadService(
-    files, xml, resources, storage, caches, statistics, uploadProcess
+    files, xml, resources, storage, caches, uploadProcess
   );
   const mutations = new WorkspaceFileMutationService(files, caches, statistics);
   const testcenter = new WorkspaceTestcenterFileImportService(files, parsing, freshness, caches);

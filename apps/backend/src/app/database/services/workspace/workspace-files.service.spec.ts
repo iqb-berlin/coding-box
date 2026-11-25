@@ -255,7 +255,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
   };
   const mockCodingStatisticsService = {
     invalidateCache: jest.fn().mockResolvedValue(true),
-    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(true)
   };
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)

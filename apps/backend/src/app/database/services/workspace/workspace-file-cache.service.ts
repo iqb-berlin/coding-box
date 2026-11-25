@@ -41,7 +41,9 @@ export class WorkspaceFileCacheService {
       !isCodingSchemeFileId(file.fileId) && !isCodingSchemeFileId(file.filename)
     ));
     const codingStats = !affectsCodingStatistics || await this.codingStatisticsService.invalidateCache(workspaceId);
-    if (!metadata || !exclusions || !stats || !codingStats) {
+    const manualCodingScope = uploadedFiles.length === 0 ||
+      await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspaceId);
+    if (!metadata || !exclusions || !stats || !codingStats || !manualCodingScope) {
       this.logger.warn(`Incomplete workspace file cache invalidation for workspace ${workspaceId}`);
       return false;
     }

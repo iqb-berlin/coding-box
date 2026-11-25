@@ -11,7 +11,6 @@ import {
   TestFilesUploadConflictDto, TestFilesUploadFailedDto, TestFilesUploadResultDto, TestFilesUploadUploadedDto
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
-import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
 import { WorkspaceFileCacheService } from './workspace-file-cache.service';
@@ -34,13 +33,8 @@ export class WorkspaceFileUploadService {
     private readonly resources: WorkspaceResourceFileUploadService,
     private readonly workspaceFileStorageService: WorkspaceFileStorageService,
     private readonly caches: WorkspaceFileCacheService,
-    private readonly codingStatisticsService: CodingStatisticsService,
     private readonly uploadProcess: WorkspaceFileUploadProcessService
   ) {}
-
-  private hasUploadedFiles(result: TestFilesUploadResultDto): boolean {
-    return (result.uploadedFiles || []).length > 0;
-  }
 
   async uploadTestFiles(
     workspace_id: number,
@@ -111,11 +105,6 @@ export class WorkspaceFileUploadService {
       );
       // Refresh shared file caches even when every file fails or conflicts.
       await this.caches.invalidateWorkspaceFileCaches(workspace_id, result.uploadedFiles);
-      if (this.hasUploadedFiles(result)) {
-        await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-          workspace_id
-        );
-      }
       return result;
     } catch (error) {
       this.logger.error(

@@ -419,7 +419,7 @@ describe('CodingStatisticsService', () => {
     it('should invalidate incomplete variables cache', async () => {
       mockCacheService.delete.mockResolvedValue(true);
 
-      await service.invalidateIncompleteVariablesCache(1);
+      await expect(service.invalidateIncompleteVariablesCache(1)).resolves.toBe(true);
 
       expect(mockCacheService.incr).toHaveBeenCalledWith(
         'coding_incomplete_variables_version:1'
@@ -430,6 +430,14 @@ describe('CodingStatisticsService', () => {
       expect(mockCacheService.delete).toHaveBeenCalledWith(
         'coding_incomplete_variables_scope_v2:1'
       );
+    });
+
+    it('reports an incomplete invalidation if the planning cache version could not be incremented', async () => {
+      mockCacheService.incr.mockResolvedValueOnce(0);
+      mockCacheService.delete.mockResolvedValue(true);
+
+      await expect(service.invalidateIncompleteVariablesCache(1)).resolves.toBe(false);
+      expect(mockCacheService.delete).toHaveBeenCalledTimes(2);
     });
 
     it('should skip cache when skipCache is true', async () => {

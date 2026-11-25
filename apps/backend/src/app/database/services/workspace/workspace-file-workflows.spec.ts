@@ -70,7 +70,7 @@ function fixture() {
   const statusRedis = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) };
   const statistics = {
     invalidateCache: jest.fn(async () => { events.push('statistics'); return true; }),
-    invalidateIncompleteVariablesCache: jest.fn(async () => { events.push('incomplete'); })
+    invalidateIncompleteVariablesCache: jest.fn(async () => { events.push('incomplete'); return true; })
   };
   const codingFreshness = { markUnitsStaleAfterCodingSchemeChange: jest.fn(async () => { events.push('freshness'); }) };
   const codingCache = { clearCaches: jest.fn(() => events.push('coding-cache')) };
@@ -297,7 +297,7 @@ describe('workspace file workflow boundaries', () => {
     expect(result.uploadedFiles?.map(upload => upload.fileId)).toEqual(['B.VOCS', 'A.VOCS']);
     expect(f.lockedFiles.insert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'B.VOCS' })]);
     expect(f.lockedFiles.upsert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'A.VOCS', file_id_normalized: 'A.VOCS' })], ['file_id', 'workspace_id']);
-    expect(f.events).toEqual(['lock', 'begin', 'insert', 'upsert', 'commit', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'unlock', 'release']);
+    expect(f.events).toEqual(['lock', 'begin', 'insert', 'upsert', 'commit', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'incomplete', 'unlock', 'release']);
     expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
     expect(f.codingFreshness.markUnitsStaleAfterCodingSchemeChange).toHaveBeenCalledWith(7, expect.anything(), f.manager);
   });
@@ -351,7 +351,7 @@ describe('workspace file workflow boundaries', () => {
     f.cache.delete.mockResolvedValueOnce(false);
     const result = await f.service.testCenterImport([{ workspace_id: 7, file_id: 'A', filename: 'a.xml' }]);
     expect(result).toMatchObject({ uploaded: 1, failed: 0, issues: [{ level: 'warning', category: 'other' }] });
-    expect(f.events.slice(-6)).toEqual(['stats', 'coding-cache', 'process-cache', 'statistics', 'unlock', 'release']);
+    expect(f.events.slice(-7)).toEqual(['stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
   });
 
   it('rejects files from different workspaces before writing any of them', async () => {

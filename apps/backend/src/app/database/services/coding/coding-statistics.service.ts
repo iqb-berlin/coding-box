@@ -340,15 +340,15 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
     return deletions.every(deleted => deleted);
   }
 
-  async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    await this.cacheService.incr(
+  async invalidateIncompleteVariablesCache(workspace_id: number): Promise<boolean> {
+    const version = await this.cacheService.incr(
       getCodingIncompleteVariablesCacheVersionKey(workspace_id)
     );
-    await Promise.all(
+    const deletions = await Promise.all(
       getCodingIncompleteVariablesCacheKeys(workspace_id)
         .map(cacheKey => this.cacheService.delete(cacheKey))
     );
-    this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
+    return version > 0 && deletions.every(Boolean);
   }
 
   async refreshStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1'): Promise<CodingStatistics> {
