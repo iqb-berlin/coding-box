@@ -17,7 +17,7 @@ describe('WorkspaceFileMetadataService.onModuleInit', () => {
 
   function makeService(): WorkspaceFileMetadataService {
     return new WorkspaceFileMetadataService(mockFileUploadRepository as unknown as CtorParams[0],
-      { delete: jest.fn() } as unknown as CtorParams[1],
+      { get: jest.fn().mockResolvedValue(null) } as unknown as CtorParams[1],
       undefined as never
     );
   }
@@ -64,7 +64,9 @@ describe('WorkspaceFileMetadataService.onModuleInit', () => {
 
   it('should reuse one unit variable cache refresh for concurrent workspace requests', async () => {
     const service = makeService();
-    let resolveRefresh: () => void = () => undefined;
+    let resolveRefresh!: () => void;
+    let signalRefresh!: () => void;
+    const started = new Promise<void>(resolve => { signalRefresh = resolve; });
     const refreshSpy = jest
       .spyOn(
         service as unknown as {
@@ -75,14 +77,16 @@ describe('WorkspaceFileMetadataService.onModuleInit', () => {
       .mockImplementation(
         () => new Promise<void>(resolve => {
           resolveRefresh = resolve;
+          signalRefresh();
         })
       );
 
     const firstRefresh = service.refreshUnitVariableCache(4);
     const secondRefresh = service.refreshUnitVariableCache(4);
 
+    await started;
     expect(refreshSpy).toHaveBeenCalledTimes(1);
-    expect(refreshSpy).toHaveBeenCalledWith(4);
+    expect(refreshSpy).toHaveBeenCalledWith(4, 0);
 
     resolveRefresh();
     await Promise.all([firstRefresh, secondRefresh]);

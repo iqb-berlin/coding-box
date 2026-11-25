@@ -52,15 +52,23 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
 
   private readonly logger = new Logger(WorkspaceFileMetadataService.name);
 
-  private readonly detailedUnitCacheLogging =
-    process.env.DEBUG_UNIT_CACHE === 'true';
+  private readonly detailedUnitCacheLogging = process.env.DEBUG_UNIT_CACHE === 'true';
 
   private readonly unitVariableCacheVersion = 'v2';
 
-  private readonly unitVariableCacheRefreshes = new Map<number, Promise<void>>();
+  private readonly unitVariableCacheRefreshes = new Map<string, Promise<void>>();
 
-  private getCacheKey(workspaceId: number, type: string): string {
-    return `workspace_files:${this.unitVariableCacheVersion}:${type}:${workspaceId}`;
+  private generationKey(workspaceId: number): string {
+    return `workspace_files:${this.unitVariableCacheVersion}:generation:${workspaceId}`;
+  }
+
+  private async getGeneration(workspaceId: number): Promise<number> {
+    return (await this.cacheService.get<number>(this.generationKey(workspaceId))) ?? 0;
+  }
+
+  private getCacheKey(workspaceId: number, type: string, generation: number): string {
+    const key = `workspace_files:${this.unitVariableCacheVersion}:${type}:${workspaceId}`;
+    return generation > 0 ? `${key}:${generation}` : key;
   }
 
   private logUnitCacheDebug(message: string): void {
@@ -316,31 +324,40 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
   }
 
   async refreshUnitVariableCache(workspaceId: number): Promise<void> {
-    const activeRefresh = this.unitVariableCacheRefreshes.get(workspaceId);
+    await this.refreshGeneration(workspaceId, await this.getGeneration(workspaceId));
+  }
+
+  private async refreshGeneration(workspaceId: number, generation: number, manager?: EntityManager): Promise<void> {
+    if (manager) {
+      await this.refreshUnitVariableCacheInternal(workspaceId, generation, manager);
+      return;
+    }
+
+    const refreshKey = this.getCacheKey(workspaceId, 'unit_variables', generation);
+    const activeRefresh = this.unitVariableCacheRefreshes.get(refreshKey);
     if (activeRefresh) {
       await activeRefresh;
       return;
     }
 
-    const refresh = this.refreshUnitVariableCacheInternal(workspaceId);
-    this.unitVariableCacheRefreshes.set(workspaceId, refresh);
+    const refresh = this.refreshUnitVariableCacheInternal(workspaceId, generation);
+    this.unitVariableCacheRefreshes.set(refreshKey, refresh);
 
     try {
       await refresh;
     } finally {
-      this.unitVariableCacheRefreshes.delete(workspaceId);
+      this.unitVariableCacheRefreshes.delete(refreshKey);
     }
   }
 
   private async refreshUnitVariableCacheInternal(
     workspaceId: number,
+    generation: number,
     manager?: EntityManager
   ): Promise<void> {
-    this.logger.log(
-      `Refreshing unit variable cache for workspace ${workspaceId}`
-    );
+    this.logger.log(`Refreshing unit variable cache for workspace ${workspaceId}`);
 
-    const derivedMetadataCompleteKey = this.getCacheKey(workspaceId, 'derived_variable_metadata_complete');
+    const derivedMetadataCompleteKey = this.getCacheKey(workspaceId, 'derived_variable_metadata_complete', generation);
     let derivedMetadataComplete = true;
 
     try {
@@ -745,27 +762,27 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
       }
 
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'unit_variables'),
+        this.getCacheKey(workspaceId, 'unit_variables', generation),
         this.toRedisMap(unitVariables)
       );
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'intended_incomplete'),
+        this.getCacheKey(workspaceId, 'intended_incomplete', generation),
         this.toRedisMap(intendedIncompleteAliasByUnit)
       );
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'training_required'),
+        this.getCacheKey(workspaceId, 'training_required', generation),
         this.toRedisMap(trainingRequiredAliasByUnit)
       );
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'derived_variables'),
+        this.getCacheKey(workspaceId, 'derived_variables', generation),
         this.toRedisMap(derivedVariablesByUnit)
       );
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'derived_variables_by_source'),
+        this.getCacheKey(workspaceId, 'derived_variables_by_source', generation),
         this.toRedisMap(derivedVariablesBySource)
       );
       await this.cacheService.set(
-        this.getCacheKey(workspaceId, 'manual_instruction_variables'),
+        this.getCacheKey(workspaceId, 'manual_instruction_variables', generation),
         this.toRedisMap(manualInstructionAliasByUnit)
       );
       await this.cacheService.set(
@@ -810,97 +827,52 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
     if (isPostgresConnectionTimeout(error)) throw error;
   }
 
+  private async readVariableMap(workspaceId: number, type: string, manager?: EntityManager): Promise<Map<string, Set<string>>> {
+    const generation = await this.getGeneration(workspaceId);
+    const cacheKey = this.getCacheKey(workspaceId, type, generation);
+    let data = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    if (!data) {
+      await this.refreshGeneration(workspaceId, generation, manager);
+      data = await this.cacheService.get<Record<string, string[]>>(cacheKey);
+    }
+    return this.fromRedisMap(data);
+  }
+
   async getUnitVariableMap(
     workspaceId: number,
     manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'unit_variables');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      if (manager) {
-        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
-      } else {
-        await this.refreshUnitVariableCache(workspaceId);
-      }
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'unit_variables', manager);
   }
 
   async getIntendedIncompleteSchemeVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'intended_incomplete');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'intended_incomplete');
   }
 
   async getDerivedVariableMap(
     workspaceId: number,
     manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'derived_variables');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      if (manager) {
-        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
-      } else {
-        await this.refreshUnitVariableCache(workspaceId);
-      }
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'derived_variables', manager);
   }
 
   async getDerivedVariablesBySourceMap(
     workspaceId: number,
     manager?: EntityManager
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'derived_variables_by_source');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      if (manager) {
-        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
-      } else {
-        await this.refreshUnitVariableCache(workspaceId);
-      }
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'derived_variables_by_source', manager);
   }
 
   async getDerivedVariableMetadata(
     workspaceId: number,
     manager?: EntityManager
   ): Promise<DerivedVariableMetadataSnapshot> {
-    const metadataCompleteKey = this.getCacheKey(
-      workspaceId,
-      'derived_variable_metadata_complete'
-    );
-    const derivedVariableKey = this.getCacheKey(
-      workspaceId,
-      'derived_variables'
-    );
-    const derivedVariablesBySourceKey = this.getCacheKey(
-      workspaceId,
-      'derived_variables_by_source'
-    );
+    const generation = await this.getGeneration(workspaceId);
+    const metadataCompleteKey = this.getCacheKey(workspaceId, 'derived_variable_metadata_complete', generation);
+    const derivedVariableKey = this.getCacheKey(workspaceId, 'derived_variables', generation);
+    const derivedVariablesBySourceKey = this.getCacheKey(workspaceId, 'derived_variables_by_source', generation);
 
     const readMetadata = async () => Promise.all([
       this.cacheService.get<boolean>(metadataCompleteKey),
@@ -923,11 +895,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
         (!derivedVariableData || !derivedVariablesBySourceData)
       )
     ) {
-      if (manager) {
-        await this.refreshUnitVariableCacheInternal(workspaceId, manager);
-      } else {
-        await this.refreshUnitVariableCache(workspaceId);
-      }
+      await this.refreshGeneration(workspaceId, generation, manager);
       [
         metadataComplete,
         derivedVariableData,
@@ -954,31 +922,13 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
   async getManualInstructionVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'manual_instruction_variables');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'manual_instruction_variables');
   }
 
   async getCoderTrainingRequiredVariableMap(
     workspaceId: number
   ): Promise<Map<string, Set<string>>> {
-    const cacheKey = this.getCacheKey(workspaceId, 'training_required');
-    const cached =
-      await this.cacheService.get<Record<string, string[]>>(cacheKey);
-    if (!cached) {
-      await this.refreshUnitVariableCache(workspaceId);
-      return this.fromRedisMap(
-        await this.cacheService.get<Record<string, string[]>>(cacheKey)
-      );
-    }
-    return this.fromRedisMap(cached);
+    return this.readVariableMap(workspaceId, 'training_required');
   }
 
   async getUnitVariableDetails(
@@ -1526,10 +1476,15 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
     return undefined;
   }
 
-  async invalidateMetadataCache(workspaceId: number): Promise<void> {
-    await Promise.all([
+  async invalidateMetadataCache(workspaceId: number): Promise<boolean> {
+    // A refresh already reading the old files may finish later and write only its own generation.
+    const nextGeneration = await this.cacheService.incr(this.generationKey(workspaceId));
+    const previousGeneration = nextGeneration > 0 ? nextGeneration - 1 : await this.getGeneration(workspaceId);
+    const deletions = [
       'unit_variables', 'intended_incomplete', 'training_required', 'derived_variables',
       'derived_variables_by_source', 'derived_variable_metadata_complete', 'manual_instruction_variables'
-    ].map(type => this.cacheService.delete(this.getCacheKey(workspaceId, type))));
+    ].map(type => this.cacheService.delete(this.getCacheKey(workspaceId, type, previousGeneration)));
+    const deleted = await Promise.all(deletions);
+    return nextGeneration > 0 && deleted.every(Boolean);
   }
 }

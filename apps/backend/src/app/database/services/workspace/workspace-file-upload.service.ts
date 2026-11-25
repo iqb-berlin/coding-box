@@ -11,7 +11,6 @@ import {
   TestFilesUploadConflictDto, TestFilesUploadFailedDto, TestFilesUploadResultDto, TestFilesUploadUploadedDto
 } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
-import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.util';
 import { WorkspaceFileCacheService } from './workspace-file-cache.service';
@@ -19,14 +18,8 @@ import { WorkspaceXmlFileUploadService } from './workspace-xml-file-upload.servi
 import { WorkspaceResourceFileUploadService } from './workspace-resource-file-upload.service';
 import { ReportFileUploadProgress, WorkspaceFileUploadProcessService } from './workspace-file-upload-process.service';
 import {
-  isCodingSchemeFileId, toFailedUploadResult, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
+  toFailedUploadResult, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
 } from './workspace-file-write.util';
-
-type UploadedFileForCacheInvalidation = {
-  fileId?: string;
-  filename?: string;
-  fileType?: string;
-};
 
 export type WorkspaceFileUploadOptions = { trackProgress: boolean };
 
@@ -40,30 +33,8 @@ export class WorkspaceFileUploadService {
     private readonly resources: WorkspaceResourceFileUploadService,
     private readonly workspaceFileStorageService: WorkspaceFileStorageService,
     private readonly caches: WorkspaceFileCacheService,
-    private readonly codingStatisticsService: CodingStatisticsService,
     private readonly uploadProcess: WorkspaceFileUploadProcessService
   ) {}
-
-  private isUploadedCodingSchemeFile(
-    file: UploadedFileForCacheInvalidation
-  ): boolean {
-    return [file.fileId, file.filename]
-      .some(value => isCodingSchemeFileId(value));
-  }
-
-  private shouldInvalidateCodingStatisticsAfterUpload(
-    result: TestFilesUploadResultDto
-  ): boolean {
-    const uploadedFiles = result.uploadedFiles || [];
-    if (uploadedFiles.length === 0) {
-      return false;
-    }
-    return !uploadedFiles.every(file => this.isUploadedCodingSchemeFile(file));
-  }
-
-  private hasUploadedFiles(result: TestFilesUploadResultDto): boolean {
-    return (result.uploadedFiles || []).length > 0;
-  }
 
   async uploadTestFiles(
     workspace_id: number,
@@ -133,16 +104,7 @@ export class WorkspaceFileUploadService {
         report
       );
       // Refresh shared file caches even when every file fails or conflicts.
-      await this.caches.invalidateWorkspaceFileCaches(workspace_id);
-
-      if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
-        await this.codingStatisticsService.invalidateCache(workspace_id);
-      }
-      if (this.hasUploadedFiles(result)) {
-        await this.codingStatisticsService.invalidateIncompleteVariablesCache(
-          workspace_id
-        );
-      }
+      await this.caches.invalidateWorkspaceFileCaches(workspace_id, result.uploadedFiles);
       return result;
     } catch (error) {
       this.logger.error(

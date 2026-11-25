@@ -3,6 +3,8 @@ import {
 } from '@nestjs/common';
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { getErrorMessage } from '../../../utils/error.util';
+import type { TestFilesUploadUploadedDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
+import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../coding/coding-process-cache-invalidator.token';
 import type { CodingProcessCacheInvalidator } from '../coding/coding-process-cache-invalidator.token';
@@ -18,23 +20,33 @@ export class WorkspaceFileCacheService {
     private readonly fileMetadata: WorkspaceFileMetadataService,
     private readonly cacheService: CacheService,
     @Inject(WorkspaceTestResultsService) private readonly workspaceTestResultsService: WorkspaceTestResultsService,
+    private readonly codingStatisticsService: CodingStatisticsService,
     @Optional() private readonly codingFileCacheService?: CodingFileCacheService,
     @Optional() @Inject(CODING_PROCESS_CACHE_INVALIDATOR) private readonly codingProcessCacheInvalidator?: CodingProcessCacheInvalidator
   ) {}
 
-  async invalidateWorkspaceFileCaches(workspaceId: number): Promise<void> {
-    await Promise.all([
+  async invalidateWorkspaceFileCaches(
+    workspaceId: number,
+    uploadedFiles: TestFilesUploadUploadedDto[] = []
+  ): Promise<boolean> {
+    const [metadata, exclusions] = await Promise.all([
       this.fileMetadata.invalidateMetadataCache(workspaceId),
       this.cacheService.delete(`${EXCLUSION_CACHE_PREFIX}${workspaceId}`)
     ]);
-    await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(
-      workspaceId
-    );
+    const stats = await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     this.codingFileCacheService?.clearCaches();
     this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
+    const codingStats = uploadedFiles.length === 0 || await this.codingStatisticsService.invalidateCache(workspaceId);
+    const manualCodingScope = uploadedFiles.length === 0 ||
+      await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspaceId);
+    if (!metadata || !exclusions || !stats || !codingStats || !manualCodingScope) {
+      this.logger.warn(`Incomplete workspace file cache invalidation for workspace ${workspaceId}`);
+      return false;
+    }
     this.logger.log(
       `Invalidated workspace files caches for workspace ${workspaceId} in Redis`
     );
+    return true;
   }
 
   async invalidateResponseDeletionCaches(workspaceId: number): Promise<void> {

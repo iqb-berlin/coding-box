@@ -20,10 +20,6 @@ function fixture() {
     andWhere: jest.fn().mockReturnThis(),
     delete: jest.fn().mockReturnThis(),
     from: jest.fn().mockReturnThis(),
-    insert: jest.fn().mockReturnThis(),
-    into: jest.fn().mockReturnThis(),
-    values: jest.fn().mockReturnThis(),
-    orIgnore: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
     execute: jest.fn(async () => { events.push('execute'); return { affected: 1 }; })
   };
@@ -33,9 +29,24 @@ function fixture() {
     create: jest.fn(value => value),
     createQueryBuilder: jest.fn(() => query),
     save: jest.fn(async value => { events.push('save'); return value; }),
+    insert: jest.fn(async () => { events.push('insert'); }),
     upsert: jest.fn(async () => { events.push('upsert'); })
   };
-  const manager = { getRepository: jest.fn(() => lockedFiles) };
+  const transactionManager = { getRepository: jest.fn(() => lockedFiles) };
+  const manager = {
+    getRepository: jest.fn(() => lockedFiles),
+    transaction: jest.fn(async (work: (transaction: typeof transactionManager) => Promise<unknown>) => {
+      events.push('begin');
+      try {
+        const result = await work(transactionManager);
+        events.push('commit');
+        return result;
+      } catch (error) {
+        events.push('rollback');
+        throw error;
+      }
+    })
+  };
   const runner = {
     manager,
     connect: jest.fn().mockResolvedValue(undefined),
@@ -53,15 +64,13 @@ function fixture() {
     upsert: jest.fn(),
     createQueryBuilder: jest.fn()
   };
-  const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); }) };
-  const cache = {
-    delete: jest.fn(async () => { events.push('exclusion'); })
-  };
+  const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); return true; }) };
+  const cache = { delete: jest.fn(async () => { events.push('exclusion'); return true; }) };
+  const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); return true; }) };
   const statusRedis = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) };
-  const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); }) };
   const statistics = {
-    invalidateCache: jest.fn(async () => { events.push('statistics'); }),
-    invalidateIncompleteVariablesCache: jest.fn(async () => { events.push('incomplete'); })
+    invalidateCache: jest.fn(async () => { events.push('statistics'); return true; }),
+    invalidateIncompleteVariablesCache: jest.fn(async () => { events.push('incomplete'); return true; })
   };
   const codingFreshness = { markUnitsStaleAfterCodingSchemeChange: jest.fn(async () => { events.push('freshness'); }) };
   const codingCache = { clearCaches: jest.fn(() => events.push('coding-cache')) };
@@ -111,8 +120,8 @@ describe('workspace file workflow boundaries', () => {
     expect(f.codingFreshness.markUnitsStaleAfterCodingSchemeChange).toHaveBeenCalledWith(
       7, { autoCodingSchemeRefs: ['A'], manualCodingSchemeRefs: ['A'] }, f.manager
     );
-    expect(f.events).toEqual(['lock', 'upsert', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'incomplete', 'unlock', 'release']);
-    expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
+    expect(f.events).toEqual(['lock', 'upsert', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
   });
 
   it('collects nested ZIP successes, conflicts and schema failures in entry order', async () => {
@@ -286,11 +295,28 @@ describe('workspace file workflow boundaries', () => {
       }
     ], ['A.VOCS']);
     expect(result.uploadedFiles?.map(upload => upload.fileId)).toEqual(['B.VOCS', 'A.VOCS']);
-    expect(f.query.orIgnore).toHaveBeenCalledTimes(1);
+    expect(f.lockedFiles.insert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'B.VOCS' })]);
     expect(f.lockedFiles.upsert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'A.VOCS', file_id_normalized: 'A.VOCS' })], ['file_id', 'workspace_id']);
-    expect(f.events).toEqual(['lock', 'execute', 'upsert', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'unlock', 'release']);
-    expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
+    expect(f.events).toEqual(['lock', 'begin', 'insert', 'upsert', 'commit', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
     expect(f.codingFreshness.markUnitsStaleAfterCodingSchemeChange).toHaveBeenCalledWith(7, expect.anything(), f.manager);
+  });
+
+  it('invalidates coding statistics when the Unit conflicts and only a schema is saved', async () => {
+    const f = fixture();
+    f.query.getMany.mockResolvedValue([{ file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit' }]);
+
+    const result = await f.service.testCenterImport([
+      {
+        workspace_id: 7, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit'
+      },
+      {
+        workspace_id: 7, file_id: 'A.VOCS', filename: 'a.vocs', file_type: 'Resource'
+      }
+    ]);
+
+    expect(result).toMatchObject({ uploaded: 1, conflicts: [{ fileId: 'UNIT' }], issues: undefined });
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
   });
 
   it('returns the existing import failure result after an overwrite fails and releases the lock', async () => {
@@ -308,7 +334,40 @@ describe('workspace file workflow boundaries', () => {
     expect(result).toEqual(expect.objectContaining({
       total: 2, uploaded: 0, failed: 2, failedFiles: [{ filename: 'Testcenter import', reason: 'overwrite failed' }]
     }));
-    expect(f.events).toEqual(['lock', 'execute', 'unlock', 'release']);
+    expect(f.events).toEqual(['lock', 'begin', 'insert', 'rollback', 'unlock', 'release']);
+    expect(f.metadata.invalidateMetadataCache).not.toHaveBeenCalled();
+  });
+
+  it('reports committed files with a warning if cache invalidation fails', async () => {
+    const f = fixture();
+    f.cache.delete.mockRejectedValueOnce(new Error('Redis unavailable'));
+    const result = await f.service.testCenterImport([{ workspace_id: 7, file_id: 'A', filename: 'a.xml' }]);
+    expect(result).toMatchObject({ uploaded: 1, failed: 0, issues: [{ level: 'warning', category: 'other' }] });
+    expect(f.events.slice(-2)).toEqual(['unlock', 'release']);
+  });
+
+  it('clears the remaining caches and releases the lock when Redis deletion returns false', async () => {
+    const f = fixture();
+    f.cache.delete.mockResolvedValueOnce(false);
+    const result = await f.service.testCenterImport([{ workspace_id: 7, file_id: 'A', filename: 'a.xml' }]);
+    expect(result).toMatchObject({ uploaded: 1, failed: 0, issues: [{ level: 'warning', category: 'other' }] });
+    expect(f.events.slice(-7)).toEqual(['stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
+  });
+
+  it('rejects files from different workspaces before writing any of them', async () => {
+    const f = fixture();
+    const result = await f.service.testCenterImport([{ workspace_id: 7 }, { workspace_id: 8 }]);
+    expect(result).toMatchObject({ total: 2, uploaded: 0, failed: 2 });
+    expect(f.events).toEqual([]);
+  });
+
+  it('fails the whole import when an entry is missing its filename', async () => {
+    const f = fixture();
+    const result = await f.service.testCenterImport([
+      { workspace_id: 7, file_id: 'A', filename: 'a.xml' }, { workspace_id: 7, file_id: 'B', filename: '' }
+    ]);
+    expect(result).toMatchObject({ total: 2, uploaded: 0, failed: 2 });
+    expect(f.lockedFiles.insert).not.toHaveBeenCalled();
     expect(f.metadata.invalidateMetadataCache).not.toHaveBeenCalled();
   });
 

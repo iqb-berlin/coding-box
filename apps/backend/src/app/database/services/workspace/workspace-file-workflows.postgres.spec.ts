@@ -18,9 +18,11 @@ import { CodingUnitFreshness } from '../../entities/coding-unit-freshness.entity
 import { CodingFreshnessService } from '../coding/coding-freshness.service';
 import { CodingFreshnessQueryService } from '../coding/coding-freshness-query.service';
 import { CodingJobFreshnessService } from '../coding/coding-job-freshness.service';
+import { statusStringToNumber } from '../../utils/response-status-converter';
+import { CodingValidationService } from '../coding/coding-validation.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
-import { getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
+import { CODING_STATISTICS_CACHE_KEY_PREFIX, getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
 import { getCodingIncompleteVariablesCacheKeys } from '../coding/coding-incomplete-variables-cache-key.util';
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 import { TestResultsCacheService } from '../test-results/test-results-cache.service';
@@ -53,6 +55,8 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   let redis: Redis;
   let cache: CacheService;
   let files: WorkspaceFilesService;
+  let statistics: CodingStatisticsService;
+  let validation: CodingValidationService;
   let xsdServer: Server;
   let xsdUrl: string;
   let created = false;
@@ -101,13 +105,15 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const freshness = new CodingFreshnessService(
       db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, exclusions), new CodingJobFreshnessService(db)
     );
-    const statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
-    const resultsCache = new TestResultsCacheService({} as never, new WorkspaceStatsCacheService(cache), statistics);
+    statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
+    validation = new CodingValidationService(
+      db.getRepository(ResponseEntity), {} as never, cache, metadata, exclusions, {} as never, {} as never
+    );
+    const resultsCache = new TestResultsCacheService(validation, new WorkspaceStatsCacheService(cache), statistics);
     const results = new WorkspaceTestResultsService(
       {} as never, resultsCache, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
     );
-    // Only unused response-validation/queue paths are omitted; persistence, freshness,
-    // XML validation, file metadata and every cache operation exercised here are real.
+    // Only unused response-validation and queue dependencies are omitted.
     files = createWorkspaceFilesService(
       repository, db.getRepository(ResponseEntity), {} as never, {} as never, statistics, new WorkspaceXmlSchemaValidationService(repository), new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache, results, metadata, freshness, new CodingFileCacheService(repository)
     );
@@ -174,7 +180,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   const unitXml = (variable = 'VAR') => `<Unit xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="${xsdUrl}">
     <Metadata><Id>UNIT</Id></Metadata><BaseVariables><Variable id="${variable}" alias="${variable}" type="string"/></BaseVariables><CodingSchemeRef>SCHEME.VOCS</CodingSchemeRef></Unit>`;
   const scheme = (rule = 1) => JSON.stringify({ variableCodings: [{ id: 'VAR', sourceType: 'BASE', rules: [{ value: rule }] }] });
-  async function fixture() {
+  async function fixture(statusV1 = 4) {
     const workspace = await insert('workspace', { name: 'File workflow fixture' });
     const person = await insert('persons', {
       workspace_id: workspace, group: 'group', login: `person-${workspace}`, code: 'code', consider: true
@@ -183,7 +189,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const booklet = await insert('booklet', { personid: person, infoid: info });
     const unit = await insert('unit', { bookletid: booklet, name: 'UNIT' });
     await insert('response', {
-      unitid: unit, variableid: 'VAR', status: 3, value: 'answer', status_v1: 4, code_v1: 1, score_v1: 1
+      unitid: unit, variableid: 'VAR', status: 3, value: 'answer', status_v1: statusV1, code_v1: 1, score_v1: 1
     });
     return { workspace, unit };
   }
@@ -212,14 +218,14 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   it('persists VOCS changes, reports conflicts and scopes selective overwrites and freshness', async () => {
     const { workspace, unit } = await fixture();
     await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
-    await cache.set(getCodingStatisticsCacheKey(workspace, 'v1'), { retainForVocs: true });
+    await cache.set(getCodingStatisticsCacheKey(workspace, 'v1'), { stale: true });
     for (const key of getCodingIncompleteVariablesCacheKeys(workspace)) await cache.set(key, { stale: true });
     const first = await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme())], false);
     expect(first).toMatchObject({ uploaded: 1, failed: 0, issues: undefined });
     expect(await db.getRepository(CodingUnitFreshness).findBy({ workspace_id: workspace, unit_id: unit })).toEqual(expect.arrayContaining([
       expect.objectContaining({ version: 'v1', state: 'STALE', reason: 'CODING_SCHEME_CHANGED' })
     ]));
-    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toEqual({ retainForVocs: true });
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toBeNull();
     for (const key of getCodingIncompleteVariablesCacheKeys(workspace)) expect(await cache.get(key)).toBeNull();
     expect(await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme(2))], false)).toMatchObject({ uploaded: 0, conflicts: [{ fileId: 'SCHEME.VOCS' }] });
     expect(await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme(2))], true, ['OTHER'])).toMatchObject({ uploaded: 0 });
@@ -277,7 +283,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const entry = {
       workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
     };
-    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1 });
+    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1, failed: 0, issues: undefined });
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['VAR'])]]));
     expect(await files.testCenterImport([{ ...entry, data: unitXml('NEW') }])).toMatchObject({ uploaded: 0, conflicts: [{ fileId: 'UNIT' }] });
     expect(await files.testCenterImport([{ ...entry, data: unitXml('NEW') }], ['UNIT'])).toMatchObject({ uploaded: 1 });
@@ -286,27 +292,187 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
   });
 
-  it('retains the existing partial-import result and stale cache after a later SQL write fails', async () => {
+  it('counts a derived variable introduced by a Testcenter schema after statistics were cached', async () => {
     const { workspace } = await fixture();
-    await files.uploadTestFiles(workspace, [input('existing.voud', '{}')], false);
+    const xml = unitXml().replace('SCHEME.VOCS', 'UNIT.VOCS');
+    const unit = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: Buffer.byteLength(xml), data: xml
+    };
+    expect(await files.testCenterImport([unit])).toMatchObject({ uploaded: 1 });
+    expect((await statistics.getCodingStatistics(workspace)).derivedVariableCount).toBe(0);
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toMatchObject({ derivedVariableCount: 0 });
+
+    const data = JSON.stringify({ variableCodings: [{ id: 'DERIVED', sourceType: 'COPY_VALUE', deriveSources: ['VAR'] }] });
+    const schema = {
+      workspace_id: workspace, file_id: 'UNIT.VOCS', filename: 'unit.vocs', file_type: 'Resource', file_size: Buffer.byteLength(data), data
+    };
+    expect(await files.testCenterImport([schema])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect((await statistics.getCodingStatistics(workspace)).derivedVariableCount).toBe(1);
+  });
+
+  it.each(['statistics', 'file metadata'])('keeps current results when a %s cache write overlaps a Testcenter overwrite', async cacheWrite => {
+    const { workspace } = await fixture();
+    const unit = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
+    };
+    expect(await files.testCenterImport([unit])).toMatchObject({ uploaded: 1 });
+    let signalWrite!: () => void;
+    let resumeWrite!: () => void;
+    const writeStarted = new Promise<void>(resolve => { signalWrite = resolve; });
+    const writeAllowed = new Promise<void>(resolve => { resumeWrite = resolve; });
+    const pauseWrite = async () => {
+      signalWrite();
+      await writeAllowed;
+    };
+    if (cacheWrite === 'statistics') {
+      const publish = cache.publishIfMarkerMatches.bind(cache);
+      jest.spyOn(cache, 'publishIfMarkerMatches').mockImplementationOnce(async (...args) => {
+        await pauseWrite();
+        return publish(...args);
+      });
+    } else {
+      const set = cache.set.bind(cache);
+      let paused = false;
+      jest.spyOn(cache, 'set').mockImplementation(async (key, value, ttl) => {
+        if (!paused && key.includes(':unit_variables:')) {
+          paused = true;
+          await pauseWrite();
+        }
+        return set(key, value, ttl);
+      });
+    }
+
+    const before = statistics.getCodingStatistics(workspace);
+    try {
+      await writeStarted;
+      const changed = { ...unit, data: unitXml('OTHER') };
+      expect(await files.testCenterImport([changed], ['UNIT'])).toMatchObject({ uploaded: 1, issues: undefined });
+      expect((await statistics.getCodingStatistics(workspace)).totalResponses).toBe(0);
+    } finally {
+      resumeWrite();
+    }
+    expect((await before).totalResponses).toBe(1);
+    expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['OTHER'])]]));
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toMatchObject({ totalResponses: 0 });
+    expect((await statistics.getCodingStatistics(workspace)).totalResponses).toBe(0);
+  });
+
+  it('refreshes cached coding statistics and manual coding scope after a Testcenter Unit insert or overwrite', async () => {
+    const { workspace } = await fixture(statusStringToNumber('CODING_INCOMPLETE'));
+    const entry = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
+    };
+    const readStats = () => statistics.getCodingStatistics(workspace);
+    const readScope = () => validation.getManualCodingScopeSummary(workspace);
+    expect(await readStats()).toMatchObject({ totalResponses: 0 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 0 });
+
+    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect(await readStats()).toMatchObject({ totalResponses: 1 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 1 });
+
+    const changed = { ...entry, data: unitXml('OTHER') };
+    expect(await files.testCenterImport([changed], ['UNIT'])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect(await readStats()).toMatchObject({ totalResponses: 0 });
+    expect(await readScope()).toMatchObject({ manualVariableCount: 0 });
+  });
+
+  it('keeps committed Testcenter files and invalidates caches when one freshness calculation fails', async () => {
+    const { workspace, unit } = await fixture();
+    await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
     const sentinel = `${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`;
     await cache.set(sentinel, { stale: true });
+    const vocs = (id: string, data: string) => ({
+      workspace_id: workspace, file_id: id, filename: id, file_type: 'Resource', file_size: Buffer.byteLength(data), data
+    });
+    const malformed = vocs('BROKEN.VOCS', JSON.stringify({ variableCodings: [null] }));
+    const valid = vocs('SCHEME.VOCS', scheme());
+    const result = await files.testCenterImport([malformed, valid]);
+    expect(result).toMatchObject({
+      uploaded: 2,
+      failed: 0,
+      issues: [{ level: 'warning', category: 'coding_freshness', fileName: malformed.file_id }]
+    });
+    const repository = db.getRepository(FileUpload);
+    for (const entry of [malformed, valid]) {
+      expect(await repository.findOneByOrFail({ workspace_id: workspace, file_id: entry.file_id })).toMatchObject({ data: entry.data });
+    }
+    expect(await db.getRepository(CodingUnitFreshness).findOneBy({ workspace_id: workspace, unit_id: unit, version: 'v1' }))
+      .toMatchObject({ state: 'STALE', reason: 'CODING_SCHEME_CHANGED' });
+    expect(await cache.get(sentinel)).toBeNull();
+  });
+
+  it.each([
+    ':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX, CODING_STATISTICS_CACHE_KEY_PREFIX,
+    ...getCodingIncompleteVariablesCacheKeys(0).map(key => key.split(':')[0])
+  ])(
+    'reports a committed Testcenter file when deleting the %s cache returns false',
+    async failedKeyPart => {
+      const { workspace } = await fixture();
+      const deleteKey = cache.delete.bind(cache);
+      jest.spyOn(cache, 'delete').mockImplementation(key => (
+        key.includes(failedKeyPart) ? Promise.resolve(false) : deleteKey(key)
+      ));
+      const entry = {
+        workspace_id: workspace, file_id: 'A.VOUD', filename: 'a.voud', file_type: 'Resource', file_size: 2, data: '{}'
+      };
+      const result = await files.testCenterImport([entry]);
+      expect(result).toMatchObject({
+        uploaded: 1,
+        failed: 0,
+        uploadedFiles: [{ fileId: entry.file_id }],
+        issues: [{ level: 'warning', category: 'other' }]
+      });
+      expect(await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace, file_id: entry.file_id })).toMatchObject({ data: entry.data });
+      expect(cache.delete).toHaveBeenCalledWith(`${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`);
+    }
+  );
+
+  it('rolls back a failed Testcenter import and retries it with the same overwrite permissions', async () => {
+    const { workspace } = await fixture();
+    const existing = {
+      workspace_id: workspace, file_id: 'EXISTING.VOUD', filename: 'existing.voud', file_type: 'Resource', file_size: 2, data: '{}'
+    };
+    const protectedFile = { ...existing, file_id: 'PROTECTED.VOUD', filename: 'protected.voud' };
+    expect(await files.testCenterImport([existing, protectedFile])).toMatchObject({ uploaded: 2 });
+
+    const repository = db.getRepository(FileUpload);
+    const readFiles = () => repository.find({ where: { workspace_id: workspace }, order: { file_id: 'ASC' } });
+    const originalFiles = await readFiles();
+    const sentinel = `${OVERVIEW_STATS_CACHE_PREFIX}${workspace}`;
+    await cache.set(sentinel, { files: 2 });
+    const entries = [
+      { ...existing, file_id: 'NEW.VOUD', filename: 'new.voud' },
+      { ...existing, filename: 'reject.voud', data: 'changed' },
+      { ...protectedFile, data: 'unauthorized change' }
+    ];
+    const overwrite = [existing.file_id];
     await db.query("ALTER TABLE file_upload ADD CONSTRAINT reject_file_fixture CHECK (filename <> 'reject.voud')");
     try {
-      const result = await files.testCenterImport([
-        {
-          workspace_id: workspace, file_id: 'NEW.VOUD', filename: 'new.voud', file_type: 'Resource', file_size: 2, data: '{}'
-        },
-        {
-          workspace_id: workspace, file_id: 'EXISTING.VOUD', filename: 'reject.voud', file_type: 'Resource', file_size: 2, data: 'changed'
-        }
-      ], ['EXISTING.VOUD']);
-      expect(result).toMatchObject({ total: 2, uploaded: 0, failed: 2 });
-      expect(await countFiles(workspace)).toBe(2);
-      expect(await cache.get(sentinel)).toEqual({ stale: true });
+      expect(await files.testCenterImport(entries, overwrite)).toMatchObject({
+        total: 3,
+        uploaded: 0,
+        failed: 3,
+        uploadedFiles: [],
+        failedFiles: [{ reason: expect.stringContaining('reject_file_fixture') }]
+      });
+      expect(await readFiles()).toEqual(originalFiles);
+      expect(await cache.get(sentinel)).toEqual({ files: 2 });
     } finally { await db.query('ALTER TABLE file_upload DROP CONSTRAINT reject_file_fixture'); }
-    // The error path must have released its session advisory lock.
-    expect(await files.uploadTestFiles(workspace, [input('after.voud', '{}')], false)).toMatchObject({ uploaded: 1 });
+
+    expect(await files.testCenterImport(entries, overwrite)).toMatchObject({
+      total: 3,
+      uploaded: 2,
+      failed: 0,
+      uploadedFiles: [{ fileId: 'NEW.VOUD' }, { fileId: existing.file_id }],
+      conflicts: [{ fileId: protectedFile.file_id }]
+    });
+    expect(await readFiles()).toMatchObject([
+      { file_id: existing.file_id, filename: 'reject.voud', data: 'changed' },
+      { file_id: 'NEW.VOUD', filename: 'new.voud', data: '{}' },
+      originalFiles[1]
+    ]);
+    expect(await cache.get(sentinel)).toBeNull();
   });
 
   it('retains the existing HTML fallback overwrite after a real primary-write SQL failure', async () => {

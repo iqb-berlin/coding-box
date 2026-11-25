@@ -49,13 +49,13 @@ export function createWorkspaceFilesService(
   processCache?: CodingProcessCacheInvalidator,
   statusRedis: Pick<Redis, 'on' | 'eval'> = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) }
 ): WorkspaceFilesService {
-  const caches = new WorkspaceFileCacheService(metadata, cache, results, codingCache, processCache);
+  const caches = new WorkspaceFileCacheService(metadata, cache, results, statistics, codingCache, processCache);
   const freshness = new WorkspaceFileFreshnessService(codingFreshness);
   const xml = new WorkspaceXmlFileUploadService(files, schema, parsing);
   const resources = new WorkspaceResourceFileUploadService(files, parsing, freshness);
   const uploadProcess = new WorkspaceFileUploadProcessService({ duplicate: () => statusRedis } as unknown as Redis);
   const uploads = new WorkspaceFileUploadService(
-    files, xml, resources, storage, caches, statistics, uploadProcess
+    files, xml, resources, storage, caches, uploadProcess
   );
   const mutations = new WorkspaceFileMutationService(files, caches, statistics);
   const testcenter = new WorkspaceTestcenterFileImportService(files, parsing, freshness, caches);

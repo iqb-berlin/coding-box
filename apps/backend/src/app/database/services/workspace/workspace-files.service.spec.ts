@@ -45,7 +45,7 @@ describe('WorkspaceFilesService.handleFile', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService(({} as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+      new WorkspaceFileMetadataService(({} as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
     );
   }
 
@@ -234,6 +234,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
   const mockFileUploadRepository = {
     create: jest.fn((value: unknown) => value),
+    insert: jest.fn(),
     createQueryBuilder: jest.fn(),
     find: jest.fn(),
     findOne: jest.fn(),
@@ -244,6 +245,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
           connect: jest.fn().mockResolvedValue(undefined),
           query: jest.fn().mockResolvedValue([{ locked: true }]),
           manager: {
+            transaction: jest.fn(work => work({ getRepository: () => mockFileUploadRepository })),
             getRepository: jest.fn(() => mockFileUploadRepository)
           },
           release: jest.fn().mockResolvedValue(undefined)
@@ -252,14 +254,14 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     }
   };
   const mockCodingStatisticsService = {
-    invalidateCache: jest.fn().mockResolvedValue(undefined),
-    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
+    invalidateCache: jest.fn().mockResolvedValue(true),
+    invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(true)
   };
   const mockCodingFreshnessService = {
     markUnitsStaleAfterCodingSchemeChange: jest.fn().mockResolvedValue(undefined)
   };
   const mockWorkspaceTestResultsService = {
-    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined)
+    invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(true)
   };
   const mockWorkspaceFileParsingService = {
     extractUnitInfo: jest.fn().mockResolvedValue({
@@ -280,9 +282,9 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       mockWorkspaceFileParsingService as unknown as CtorParams[7],
       {} as unknown as CtorParams[8],
       {} as unknown as CtorParams[9],
-      { delete: jest.fn() } as unknown as CtorParams[10],
+      { delete: jest.fn().mockResolvedValue(true) } as unknown as CtorParams[10],
       mockWorkspaceTestResultsService as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never),
+      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn().mockResolvedValue(true) } as unknown as CtorParams[10]) as never, (undefined) as never),
       mockCodingFreshnessService as unknown as CtorParams[13],
       undefined,
       undefined
@@ -469,7 +471,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     expect(mockFileUploadRepository.upsert).toHaveBeenCalled();
   });
 
-  it('keeps incomplete variable cache fresh after a pure coding scheme upload', async () => {
+  it('invalidates statistics and incomplete variables after a coding scheme upload', async () => {
     const service = makeService();
     const oldData = createCodingScheme({ processing: [] });
     const newData = createCodingScheme({ processing: ['IGNORE_CASE'] });
@@ -480,7 +482,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
 
     await service.uploadTestFiles(1, [createVocsFile(newData)], true);
 
-    expect(mockCodingStatisticsService.invalidateCache).not.toHaveBeenCalled();
+    expect(mockCodingStatisticsService.invalidateCache).toHaveBeenCalledWith(1);
     expect(mockCodingStatisticsService.invalidateIncompleteVariablesCache)
       .toHaveBeenCalledWith(1);
     expect(mockWorkspaceTestResultsService.invalidateWorkspaceStatsCache)
@@ -577,25 +579,11 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       andWhere: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([])
     };
-    const insertQueryBuilder = {
-      insert: jest.fn().mockReturnThis(),
-      into: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      orIgnore: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue(undefined)
-    };
-    mockFileUploadRepository.createQueryBuilder
-      .mockReturnValueOnce(conflictQueryBuilder)
-      .mockReturnValueOnce(insertQueryBuilder);
+    mockFileUploadRepository.createQueryBuilder.mockReturnValueOnce(conflictQueryBuilder);
     mockFileUploadRepository.find.mockResolvedValue([]);
     const invalidateSpy = jest
-      .spyOn(
-        fileCaches(service) as unknown as {
-          invalidateWorkspaceFileCaches: (workspaceId: number) => Promise<void>;
-        },
-        'invalidateWorkspaceFileCaches'
-      )
-      .mockResolvedValue(undefined);
+      .spyOn(fileCaches(service), 'invalidateWorkspaceFileCaches')
+      .mockResolvedValue(true);
 
     await service.testCenterImport([
       {
@@ -608,7 +596,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       }
     ]);
 
-    expect(invalidateSpy).toHaveBeenCalledWith(1);
+    expect(invalidateSpy).toHaveBeenCalledWith(1, [{ fileId: 'UNIT_A.VOCS', filename: 'UNIT_A.VOCS', fileType: 'Resource' }]);
   });
 
   it('extracts coding scheme refs for Unit files imported from Testcenter', async () => {
@@ -619,16 +607,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       andWhere: jest.fn().mockReturnThis(),
       getMany: jest.fn().mockResolvedValue([])
     };
-    const insertQueryBuilder = {
-      insert: jest.fn().mockReturnThis(),
-      into: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      orIgnore: jest.fn().mockReturnThis(),
-      execute: jest.fn().mockResolvedValue(undefined)
-    };
-    mockFileUploadRepository.createQueryBuilder
-      .mockReturnValueOnce(conflictQueryBuilder)
-      .mockReturnValueOnce(insertQueryBuilder);
+    mockFileUploadRepository.createQueryBuilder.mockReturnValueOnce(conflictQueryBuilder);
 
     await service.testCenterImport([
       {
@@ -642,7 +621,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     ]);
 
     expect(mockWorkspaceFileParsingService.extractUnitInfo).toHaveBeenCalled();
-    expect(insertQueryBuilder.values).toHaveBeenCalledWith([
+    expect(mockFileUploadRepository.insert).toHaveBeenCalledWith([
       expect.objectContaining({
         file_id: 'UnitA',
         file_id_normalized: 'UNITA',
@@ -710,7 +689,7 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
     );
   }
 
@@ -822,7 +801,7 @@ describe('WorkspaceFilesService response deletion cache invalidation', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       mockWorkspaceTestResultsService as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService(({} as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+      new WorkspaceFileMetadataService(({} as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
     );
   }
 
@@ -917,7 +896,7 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
     );
   }
 
@@ -1004,7 +983,7 @@ describe('WorkspaceFilesService.findFiles', () => {
     {} as unknown as CtorParams[9],
     { delete: jest.fn() } as unknown as CtorParams[10],
     { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
-    new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+    new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
   );
 
   beforeEach(() => {
@@ -1086,7 +1065,7 @@ describe('WorkspaceFilesService.downloadWorkspaceFilesAsZip', () => {
       {} as unknown as CtorParams[9],
       { delete: jest.fn() } as unknown as CtorParams[10],
       { invalidateWorkspaceStatsCache: jest.fn().mockResolvedValue(undefined) } as unknown as CtorParams[11],
-      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
+      new WorkspaceFileMetadataService((mockFileUploadRepository as unknown as CtorParams[0]) as never, ({ incr: jest.fn().mockResolvedValue(1), delete: jest.fn() } as unknown as CtorParams[10]) as never, (undefined) as never)
     );
   }
 

@@ -26,6 +26,7 @@ import { isExportWorkerProcess } from '../../../export-worker/export-worker-role
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey,
+  getCodingStatisticsGenerationKey,
   getLegacyCodingStatisticsCacheKeys,
   type CodingStatisticsVersion
 } from './coding-statistics-cache-key.util';
@@ -41,6 +42,8 @@ import {
   KappaVariableSummary,
   RawKappaResult
 } from './interrater-reliability.calculator';
+
+type CodingStatusCount = { statusValue: string | number; isDerived: boolean | string; count: string };
 
 export type KappaCalculationResult = RawKappaResult;
 export type { FleissKappaResult, KappaVariableSummary };
@@ -133,15 +136,21 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       }
     }
 
-    const statistics: CodingStatistics & Required<Pick<CodingStatistics, 'baseResponseCount' | 'derivedResponseCount' | 'derivedStatusCounts'>> = {
-      totalResponses: 0,
-      baseResponseCount: 0,
-      derivedResponseCount: 0,
-      derivedVariableCount: 0,
-      derivedStatusCounts: {},
-      statusCounts: {}
-    };
+    // Capture the generation before reading the metadata and responses used by this calculation.
+    const generationKey = getCodingStatisticsGenerationKey(workspace_id);
+    const generation = await this.cacheService.get<number>(generationKey);
+    const result = await this.calculateCodingStatistics(workspace_id, version);
+    try {
+      await this.cacheService.publishIfMarkerMatches(cacheKey, result, this.CACHE_TTL_SECONDS, {
+        key: generationKey, value: generation
+      });
+    } catch (error) {
+      this.logger.warn(`Could not cache coding statistics for workspace ${workspace_id}: ${getErrorMessage(error)}`);
+    }
+    return result;
+  }
 
+  private async calculateCodingStatistics(workspace_id: number, version: CodingStatisticsVersion): Promise<CodingStatistics> {
     try {
       const [unitVariables, derivedVariables] = await Promise.all([
         this.getUnitVariables(workspace_id),
@@ -157,12 +166,10 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
       ));
       const validVariablePairKeySet = new Set(validVariablePairKeys);
       const derivedVariablePairKeys = this.getDerivedVariablePairKeys(derivedVariables, globalIgnoredSet, validVariablePairKeySet);
-      statistics.derivedVariableCount = derivedVariablePairKeys.length;
 
       if (validVariablePairKeys.length === 0) {
         this.logger.log(`No units with variables found for workspace ${workspace_id}`);
-        await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
-        return statistics;
+        return this.summarizeStatusCounts([], derivedVariablePairKeys.length);
       }
 
       this.logger.log(
@@ -218,7 +225,7 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         queryParams.push(unitsWithVariables);
       }
 
-      const statusCountResults: { statusValue: string | number; isDerived: boolean | string; count: string }[] = await this.responseRepository.query(`
+      const statusCountResults: CodingStatusCount[] = await this.responseRepository.query(`
         SELECT
           ${statusColumn} as "statusValue",
           ${derivedExpression} as "isDerived",
@@ -236,38 +243,44 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
         GROUP BY ${statusColumn}, ${derivedExpression}
       `, queryParams);
 
-      let totalResponses = 0;
-      statusCountResults.forEach(result => {
-        const count = parseInt(result.count, 10);
-        const validCount = Number.isNaN(count) ? 0 : count;
-        const statusValue = String(result.statusValue);
-        statistics.statusCounts[statusValue] = (statistics.statusCounts[statusValue] || 0) + validCount;
-        if (result.isDerived === true || result.isDerived === 'true') {
-          statistics.derivedResponseCount += validCount;
-          statistics.derivedStatusCounts[statusValue] = (statistics.derivedStatusCounts[statusValue] || 0) + validCount;
-        } else {
-          statistics.baseResponseCount += validCount;
-        }
-        totalResponses += validCount;
-        this.logger.debug(`Coded status ${result.statusValue}: ${validCount} responses`);
-      });
-
-      statistics.totalResponses = totalResponses;
-
+      const statistics = this.summarizeStatusCounts(statusCountResults, derivedVariablePairKeys.length);
       this.logger.log(
-        `Computed coding statistics for workspace ${workspace_id}: ${totalResponses} total coded responses ` +
+        `Computed coding statistics for workspace ${workspace_id}: ${statistics.totalResponses} total coded responses ` +
         `(${statistics.baseResponseCount} base, ${statistics.derivedResponseCount} derived) ` +
         `from ${unitsWithVariables.length} units, ${Object.keys(statistics.statusCounts).length} different status types`
       );
-
-      await this.cacheService.set(cacheKey, statistics, this.CACHE_TTL_SECONDS);
-      this.logger.log(`Computed and cached statistics for workspace ${workspace_id}`);
 
       return statistics;
     } catch (error) {
       this.logger.error(`Error getting coding statistics: ${getErrorMessage(error)}`);
       throw error;
     }
+  }
+
+  private summarizeStatusCounts(statusCountResults: CodingStatusCount[], derivedVariableCount: number): CodingStatistics {
+    const statistics: CodingStatistics & Required<Pick<CodingStatistics, 'baseResponseCount' | 'derivedResponseCount' | 'derivedStatusCounts'>> = {
+      totalResponses: 0,
+      baseResponseCount: 0,
+      derivedResponseCount: 0,
+      derivedVariableCount,
+      derivedStatusCounts: {},
+      statusCounts: {}
+    };
+    statusCountResults.forEach(result => {
+      const count = parseInt(result.count, 10);
+      const validCount = Number.isNaN(count) ? 0 : count;
+      const statusValue = String(result.statusValue);
+      statistics.statusCounts[statusValue] = (statistics.statusCounts[statusValue] || 0) + validCount;
+      if (result.isDerived === true || result.isDerived === 'true') {
+        statistics.derivedResponseCount += validCount;
+        statistics.derivedStatusCounts[statusValue] = (statistics.derivedStatusCounts[statusValue] || 0) + validCount;
+      } else {
+        statistics.baseResponseCount += validCount;
+      }
+      statistics.totalResponses += validCount;
+      this.logger.debug(`Coded status ${result.statusValue}: ${validCount} responses`);
+    });
+    return statistics;
   }
 
   private async getUnitVariables(workspace_id: number): Promise<Record<string, string[]>> {
@@ -319,36 +332,25 @@ export class CodingStatisticsService implements OnApplicationBootstrap {
   }
 
   async invalidateCache(workspace_id: number, version?: CodingStatisticsVersion): Promise<boolean> {
-    if (version) {
-      const cacheKeys = [
-        getCodingStatisticsCacheKey(workspace_id, version),
-        ...getLegacyCodingStatisticsCacheKeys(workspace_id, version)
-      ];
-      const deletions = await Promise.all(
-        cacheKeys.map(cacheKey => this.cacheService.delete(cacheKey))
-      );
-      this.logger.log(`Invalidated coding statistics cache for workspace ${workspace_id} (version: ${version})`);
-      return deletions.every(deleted => deleted);
-    }
-
-    const deletePromises = CODING_STATISTICS_CACHE_VERSIONS.flatMap(v => [
+    const generation = await this.cacheService.incr(getCodingStatisticsGenerationKey(workspace_id));
+    const versions = version ? [version] : CODING_STATISTICS_CACHE_VERSIONS;
+    const keys = versions.flatMap(v => [
       getCodingStatisticsCacheKey(workspace_id, v),
       ...getLegacyCodingStatisticsCacheKeys(workspace_id, v)
-    ]).map(cacheKey => this.cacheService.delete(cacheKey));
-    const deletions = await Promise.all(deletePromises);
-    this.logger.log(`Invalidated all coding statistics caches for workspace ${workspace_id}`);
-    return deletions.every(deleted => deleted);
+    ]);
+    const deletions = await Promise.all(keys.map(key => this.cacheService.delete(key)));
+    return generation > 0 && deletions.every(Boolean);
   }
 
-  async invalidateIncompleteVariablesCache(workspace_id: number): Promise<void> {
-    await this.cacheService.incr(
+  async invalidateIncompleteVariablesCache(workspace_id: number): Promise<boolean> {
+    const version = await this.cacheService.incr(
       getCodingIncompleteVariablesCacheVersionKey(workspace_id)
     );
-    await Promise.all(
+    const deletions = await Promise.all(
       getCodingIncompleteVariablesCacheKeys(workspace_id)
         .map(cacheKey => this.cacheService.delete(cacheKey))
     );
-    this.logger.log(`Invalidated incomplete variables cache for workspace ${workspace_id}`);
+    return version > 0 && deletions.every(Boolean);
   }
 
   async refreshStatistics(workspace_id: number, version: CodingStatisticsVersion = 'v1'): Promise<CodingStatistics> {

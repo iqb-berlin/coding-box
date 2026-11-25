@@ -22,6 +22,7 @@ import { WorkspaceStatsCacheService } from './workspace-stats-cache.service';
 import {
   CODING_STATISTICS_CACHE_VERSIONS,
   getCodingStatisticsCacheKey,
+  getCodingStatisticsGenerationKey,
   getLegacyCodingStatisticsCacheKeys
 } from '../coding/coding-statistics-cache-key.util';
 import {
@@ -285,9 +286,10 @@ export class WorkspaceCoreService {
   }
 
   private async invalidateCachesAffectedByExclusions(workspaceId: number): Promise<void> {
-    await this.cacheService.incr(
-      getCodingIncompleteVariablesCacheVersionKey(workspaceId)
-    );
+    await Promise.all([
+      this.cacheService.incr(getCodingIncompleteVariablesCacheVersionKey(workspaceId)),
+      this.cacheService.incr(getCodingStatisticsGenerationKey(workspaceId))
+    ]);
     await Promise.all([
       ...CODING_STATISTICS_CACHE_VERSIONS.flatMap(version => [
         getCodingStatisticsCacheKey(workspaceId, version),

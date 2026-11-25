@@ -14,7 +14,7 @@ describe('Statistics failure contracts', () => {
   let baseUrl: string;
   let log: jest.SpyInstance;
   const repository = { query: jest.fn() };
-  const cache = { get: jest.fn().mockResolvedValue(null), set: jest.fn() };
+  const cache = { get: jest.fn().mockResolvedValue(null), publishIfMarkerMatches: jest.fn() };
   const queue = { getWorkspaceJob: jest.fn() };
   const files = {
     getUnitVariableMap: jest.fn().mockResolvedValue(new Map([['UNIT', new Set(['V'])]])),
@@ -47,7 +47,7 @@ describe('Statistics failure contracts', () => {
     jest.clearAllMocks();
     repository.query.mockResolvedValue([]);
     queue.getWorkspaceJob.mockResolvedValue(null);
-    cache.set.mockResolvedValue(true);
+    cache.publishIfMarkerMatches.mockResolvedValue(true);
   });
 
   afterAll(async () => { await app.close(); log.mockRestore(); });
@@ -57,7 +57,7 @@ describe('Statistics failure contracts', () => {
     const response = await fetch(baseUrl);
     expect(response.status).toBe(500);
     expect(await response.json()).toMatchObject({ message: 'Internal server error' });
-    expect(cache.set).not.toHaveBeenCalled();
+    expect(cache.publishIfMarkerMatches).not.toHaveBeenCalled();
   });
 
   it('still returns valid empty statistics when the query succeeds', async () => {
@@ -68,7 +68,7 @@ describe('Statistics failure contracts', () => {
 
   it('returns computed data when a best-effort cache write returns false', async () => {
     repository.query.mockResolvedValue([{ statusValue: 5, isDerived: false, count: '3' }]);
-    cache.set.mockResolvedValue(false);
+    cache.publishIfMarkerMatches.mockResolvedValue(false);
     const response = await fetch(baseUrl);
     expect(response.status).toBe(200);
     expect(await response.json()).toMatchObject({ totalResponses: 3, statusCounts: { 5: 3 } });

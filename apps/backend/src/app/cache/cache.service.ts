@@ -164,14 +164,14 @@ export class CacheService {
   }
 
   async publishIfMarkerMatches<T>(
-    key: string, value: T, ttl: number, marker: { key: string; value: string }
+    key: string, value: T, ttl: number, marker: { key: string; value: string | number | null }
   ): Promise<boolean> {
     const command = `
-      if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end
+      if (redis.call('GET', KEYS[2]) or '') ~= ARGV[1] then return 0 end
       redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
       return 1`;
     return (await this.redis.eval(
-      command, 2, key, marker.key, JSON.stringify(marker.value), JSON.stringify(value), ttl
+      command, 2, key, marker.key, marker.value === null ? '' : JSON.stringify(marker.value), JSON.stringify(value), ttl
     )) === 1;
   }
 
