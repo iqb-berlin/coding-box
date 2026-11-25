@@ -6,6 +6,7 @@ interface PlayerReadyMessage {
 }
 
 export interface ReplayStateNotification {
+  timeStamp?: string;
   playerState?: { validPages?: unknown; currentPage?: string | number | null };
   unitState?: { presentationProgress?: string; responseProgress?: string; dataParts?: Record<string, string> };
 }

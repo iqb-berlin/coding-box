@@ -134,6 +134,72 @@ describe('UnitPlayerComponent', () => {
     expect(start.unitState.responseProgress).toBe(start.unitState.presentationProgress);
   });
 
+  describe('state notification ordering', () => {
+    const earlier = '2026-11-25T10:00:00+01:00';
+    const later = '2026-11-25T09:00:01Z';
+    let sessionId: string;
+    let source: Window;
+    let post: jest.SpyInstance;
+
+    function receive(data: object): void {
+      TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', { source, data }));
+    }
+
+    function start(version: string): void {
+      receive({ type: 'vopReadyNotification', metadata: JSON.stringify({ specVersion: version }) });
+      sessionId = post.mock.lastCall![0].sessionId;
+    }
+
+    function report(page: string, timeStamp?: string): void {
+      receive({
+        type: 'vopStateChangedNotification',
+        sessionId,
+        timeStamp,
+        playerState: { validPages: [{ id: '1' }, { id: '2' }], currentPage: page }
+      });
+    }
+
+    function selectedPage(): string | undefined {
+      return component.pageList.find(page => page.type === '#goto' && page.disabled)?.id;
+    }
+
+    beforeEach(() => {
+      fixture.componentRef.setInput('unitDef', '{}');
+      fixture.detectChanges();
+      source = component.hostingIframe()!.nativeElement.contentWindow!;
+      post = jest.spyOn(source, 'postMessage');
+    });
+
+    it('discards older v7 state within a session and accepts equal timestamps', () => {
+      start('7.0');
+      report('2', later);
+      report('1', earlier);
+      expect(selectedPage()).toBe('2');
+      report('1', later);
+      expect(selectedPage()).toBe('1');
+    });
+
+    it('starts a fresh timestamp comparison for each replay start', async () => {
+      start('7.0');
+      report('2', later);
+      await component.sendUnitData();
+      sessionId = post.mock.lastCall![0].sessionId;
+      report('1', earlier);
+      expect(selectedPage()).toBe('1');
+    });
+
+    it('requires a usable timestamp for v7 but accepts undated legacy notifications', () => {
+      start('7.0');
+      report('2', later);
+      report('1');
+      report('1', 'invalid');
+      expect(selectedPage()).toBe('2');
+      start('6.0');
+      report('1');
+      expect(selectedPage()).toBe('1');
+    });
+  });
+
   it.each(['COMPLETE', 'complete'])('reads 7.0 response progress %s', responseProgress => {
     TestBed.inject(AppService).postMessage$.next(new MessageEvent('message', {
       source: component.hostingIframe()!.nativeElement.contentWindow!,

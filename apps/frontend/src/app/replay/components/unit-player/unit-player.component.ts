@@ -71,6 +71,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
   private unitStartFallbackTimeout: ReturnType<typeof setTimeout> | null = null;
   playerApiVersion = 3;
   private sessionId = '';
+  private lastStateTimestamp = -Infinity;
   pageList: PageData[] = [];
   presentationProgress: Progress = 'none';
   responseProgress: Progress = 'none';
@@ -461,7 +462,12 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
     return !sessionScoped || !this.sessionId || event.data.sessionId === this.sessionId;
   }
 
-  private handlePlayerStateChange({ playerState, unitState }: ReplayStateNotification): void {
+  private handlePlayerStateChange({ playerState, unitState, timeStamp }: ReplayStateNotification): void {
+    if (this.playerApiVersion >= 7) {
+      const timestamp = typeof timeStamp === 'string' ? Date.parse(timeStamp) : NaN;
+      if (!Number.isFinite(timestamp) || timestamp < this.lastStateTimestamp) return;
+      this.lastStateTimestamp = timestamp;
+    }
     if (this.hasPresentationStarted(playerState?.validPages, playerState?.currentPage, unitState?.presentationProgress)) {
       this.confirmUnitDefinitionStarted();
     }
@@ -502,6 +508,7 @@ export class UnitPlayerComponent implements AfterViewInit, OnChanges, OnDestroy 
       return;
     }
 
+    this.lastStateTimestamp = -Infinity;
     // A new session also separates delayed teardown messages from the next response's startup.
     if (this.sessionId) {
       this.sessionId = (Number(this.sessionId) + 1).toString();
