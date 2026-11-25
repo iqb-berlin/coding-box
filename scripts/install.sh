@@ -175,53 +175,6 @@ check_prerequisites() {
   printf "\nPrerequisites check finished successfully.\n\n"
 }
 
-has_keycloak_theme_mount() {
-  awk '
-    /^  [^[:space:]]/ { keycloak = ($1 == "keycloak:"); volumes = 0 }
-    keycloak && /^    [^[:space:]]/ { volumes = ($1 == "volumes:") }
-    volumes && /^      - / { bind = source = target = read_only = 0 }
-    volumes && /^(      - |        )type: bind$/ { bind = 1 }
-    volumes && /^(      - |        )source: \.\/config\/keycloak\/themes(\/kodierbox)?$/ {
-      source = $NF; sub(/^\.\/config/, "/opt", source)
-    }
-    volumes && /^(      - |        )target: \/opt\/keycloak\/themes(\/kodierbox)?$/ { target = $NF }
-    volumes && /^(      - |        )read_only: true$/ { read_only = 1 }
-    volumes && bind && source && source == target && read_only { found = 1 }
-    END { exit !found }
-  '
-}
-
-ensure_keycloak_theme_mount() (
-  cd "${TRAEFIK_DIR}" || return 1
-  local compose_file=docker-compose.traefik.yaml
-  local -a compose=(docker compose --env-file .env.traefik)
-  local config staged_compose
-  config=$("${compose[@]}" --file "${compose_file}" --file docker-compose.traefik.prod.yaml \
-    config --no-path-resolution keycloak) || return 1
-  if has_keycloak_theme_mount <<<"${config}"; then
-    return 0
-  fi
-
-  # Keep the bind mount in the local file used by the regular Traefik start commands.
-  staged_compose=$(mktemp .compose-theme.XXXXXXXX) || return 1
-  trap 'rm -f "${staged_compose}"' EXIT
-  cp -p "${compose_file}" "${staged_compose}" || return 1
-  awk '
-    /^  [^[:space:]]/ { keycloak = ($1 == "keycloak:") }
-    { print }
-    keycloak && /^    volumes:[[:space:]]*$/ {
-      print "      - \"./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro\""
-      mounts++
-    }
-    END { if (mounts != 1) exit 1 }
-  ' "${compose_file}" >"${staged_compose}" || return 1
-
-  config=$("${compose[@]}" --file "${staged_compose}" --file docker-compose.traefik.prod.yaml \
-    config --no-path-resolution keycloak) || return 1
-  has_keycloak_theme_mount <<<"${config}" || return 1
-  mv "${staged_compose}" "${compose_file}"
-)
-
 install_application_infrastructure() {
   local use_infrastructure_keycloak="$1"
   if [ -z "${TRAEFIK_DIR}" ]; then
@@ -379,6 +332,9 @@ download_files() {
 install_keycloak_theme_files() {
   local theme_path=config/keycloak/themes/kodierbox
   local theme_dir="${TRAEFIK_DIR}/${theme_path}"
+  local update_script="${TRAEFIK_DIR}/config/keycloak/kodierbox-update/scripts/update_traefik.sh"
+  local makefile="${TRAEFIK_DIR}/Makefile"
+  local update_target='traefik-update: TRAEFIK_BASE_DIR := $(TRAEFIK_BASE_DIR)/config/keycloak/kodierbox-update'
   local realm_file="${APP_DIR}/config/keycloak/${APP_NAME}-realm.json"
   local -a theme_files=(
     login/theme.properties
@@ -397,7 +353,9 @@ install_keycloak_theme_files() {
     return 1
   fi
 
-  if ! ensure_keycloak_theme_mount; then
+  install -d -m 0755 "$(dirname "${update_script}")" || return 1
+  download_file "${update_script}" scripts/update-traefik-with-kodierbox.sh
+  if ! (source "${update_script}" && ensure_keycloak_theme_mount "${TRAEFIK_DIR}"); then
     printf 'Could not configure the read-only Kodierbox theme mount in %s.\n' "${TRAEFIK_DIR}" >&2
     return 1
   fi
@@ -408,6 +366,11 @@ install_keycloak_theme_files() {
     download_file "${theme_dir}/${theme_file}" "${theme_path}/${theme_file}"
     chmod 0644 "${theme_dir}/${theme_file}" || return 1
   done
+
+  # The Traefik updater replaces its own script and included make rules, but keeps the local Makefile.
+  if [[ -f "${makefile}" ]] && ! grep -Fxq "${update_target}" "${makefile}"; then
+    printf '\n# Preserve the Kodierbox theme during an infrastructure update.\n%s\n' "${update_target}" >>"${makefile}" || return 1
+  fi
 
   # The downloaded realm assigns its login theme to the Kodierbox client.
   sed -i.bak 's/"login_theme": "iqb"/"login_theme": "kodierbox"/' "${realm_file}" &&

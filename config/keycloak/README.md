@@ -66,13 +66,18 @@ Installation das bisherige Kodierbox-Verzeichnis und die zuvor eingerichtete
 Infrastruktur erneut auswählen. Die automatische Theme-Einrichtung gilt für
 neu eingerichtete Infrastruktur mit ausgewähltem Keycloak.
 
-Ein Traefik-Update kann die lokale Compose-Datei ersetzen. Falls die neue
-Datei keinen gemeinsamen Theme-Mount enthält, vor dem Neustart den folgenden
-Eintrag unter `services.keycloak.volumes` wieder ergänzen oder das unten
-beschriebene Compose-Override mitladen.
+## Traefik aktualisieren
 
-```yaml
-      - "./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro"
+Im Traefik-Installationsverzeichnis wie gewohnt `make traefik-update`
+aufrufen. Der Kodierbox-Installer richtet dafür einen lokalen Einstieg ein,
+der das reguläre Traefik-Update ausführt. Er prüft den Theme-Mount in der
+neu heruntergeladenen Compose-Konfiguration vor dem Neustart und beim
+Abschluss des Updates. Ein fehlender Mount wird automatisch ergänzt.
+
+Für ein Update ohne Make denselben installierten Einstieg verwenden:
+
+```sh
+bash config/keycloak/kodierbox-update/scripts/update_traefik.sh
 ```
 
 ## In Bestehenden Keycloak Einbinden

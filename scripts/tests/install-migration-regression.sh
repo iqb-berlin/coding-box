@@ -143,6 +143,8 @@ EOF
   compose_file="${TRAEFIK_DIR}/docker-compose.traefik.yaml"
   themes_dir="${TRAEFIK_DIR}/config/keycloak/themes"
   pending_theme="${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}"
+  makefile="${TRAEFIK_DIR}/Makefile"
+  printf 'include scripts/make/traefik.mk\n' >"${makefile}"
   cp "${repo_root}/config/keycloak/realm/coding-box-realm.json" "${realm_file}"
   cat >"${compose_file}" <<'EOF'
 services:
@@ -185,8 +187,10 @@ EOF
   printf 'iqb\n' >"${themes_dir}/iqb/original"
   install_keycloak_theme_files
   cp "${compose_file}" "${compose_file}.configured"
+  cp "${makefile}" "${makefile}.configured"
   install_keycloak_theme_files
   cmp "${compose_file}" "${compose_file}.configured"
+  cmp "${makefile}" "${makefile}.configured"
   diff -r "${repo_root}/config/keycloak/themes/kodierbox" "${themes_dir}/kodierbox"
   grep -Fxq 'iqb' "${themes_dir}/iqb/original"
   sed '/themes\/kodierbox:\/opt\/keycloak\/themes\/kodierbox:ro/d' "${compose_file}" |
@@ -198,6 +202,84 @@ EOF
   cp "${compose_file}" "${compose_file}.shared"
   install_keycloak_theme_files
   cmp "${compose_file}" "${compose_file}.shared"
+
+  # The released updater rewrites both Compose files and can call a new updater.
+  cd "${TRAEFIK_DIR}"
+  mkdir -p scripts/make bin
+  printf 'TRAEFIK_BASE_DIR := %s\n' "$PWD" >scripts/make/traefik.mk
+  cat >>scripts/make/traefik.mk <<'EOF'
+.PHONY: traefik-update traefik-config
+traefik-update:
+	bash $(TRAEFIK_BASE_DIR)/scripts/update_traefik.sh
+traefik-config:
+	@printf '%s\n' '$(TRAEFIK_BASE_DIR)'
+EOF
+  cat >scripts/update-source.sh <<'EOF'
+#!/usr/bin/env bash
+set -e
+cp docker-compose.traefik.yaml.before docker-compose.traefik.yaml
+printf 'services: {}\n' >docker-compose.traefik.prod.yaml
+cp scripts/update-selected.sh scripts/update-next.sh
+mv scripts/update-next.sh scripts/update_traefik.sh
+bash scripts/update_traefik.sh
+EOF
+  cat >scripts/update-selected.sh <<'EOF'
+#!/usr/bin/env bash
+set -e
+if [[ ${FIXTURE_UPDATE_MODE} == restart ]]; then
+  docker compose --env-file "$PWD/.env.traefik" --file "$PWD/docker-compose.traefik.yaml" \
+    --file "$PWD/docker-compose.traefik.prod.yaml" up -d
+elif [[ ${FIXTURE_UPDATE_MODE} == fail ]]; then
+  exit 37
+fi
+EOF
+  cat >bin/docker <<'EOF'
+#!/usr/bin/env bash
+set -e
+[[ "$1 $2 $3 $4" == "compose --env-file $3 --file" ]]
+case "$8" in
+  up)
+    grep -Fq 'themes/kodierbox:/opt/keycloak/themes/kodierbox:ro' "$5"
+    printf 'mounted before up\n' >>compose-up.log
+    ;;
+  config)
+    suffix=/iqb
+    if grep -Fq 'themes/kodierbox:/opt/keycloak/themes/kodierbox:ro' "$5"; then suffix=/kodierbox; fi
+    cat <<CONFIG
+services:
+  keycloak:
+    volumes:
+      - type: bind
+        source: ./config/keycloak/themes${suffix}
+        target: /opt/keycloak/themes${suffix}
+        read_only: true
+CONFIG
+    ;;
+  *) exit 99 ;;
+esac
+EOF
+  chmod +x bin/docker
+  export PATH="$PWD/bin:${PATH}"
+  update_wrapper=config/keycloak/kodierbox-update/scripts/update_traefik.sh
+
+  cp scripts/update-source.sh scripts/update_traefik.sh
+  FIXTURE_UPDATE_MODE=restart make -s traefik-update
+  grep -Fxq 'mounted before up' compose-up.log
+  cmp "${compose_file}" "${compose_file}.configured"
+  [[ "$(make -s traefik-config)" == "${TRAEFIK_DIR}" ]]
+
+  cp scripts/update-source.sh scripts/update_traefik.sh
+  FIXTURE_UPDATE_MODE=stopped make -s traefik-update
+  cmp "${compose_file}" "${compose_file}.configured"
+  [[ $(wc -l <compose-up.log) -eq 1 ]]
+
+  cp scripts/update-source.sh scripts/update_traefik.sh
+  update_status=0
+  FIXTURE_UPDATE_MODE=fail bash "${update_wrapper}" || update_status=$?
+  [[ "${update_status}" -eq 37 ]]
+  cmp "${compose_file}" "${compose_file}.configured"
+  [[ $(wc -l <compose-up.log) -eq 1 ]]
+  cmp "${makefile}" "${makefile}.configured"
 )
 
 source "${repo_root}/scripts/migration/2.0.0.sh"
