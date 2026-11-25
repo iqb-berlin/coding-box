@@ -74,7 +74,7 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
   ) {
     return new CodingStatisticsService(
       createMock<Repository<ResponseEntity>>({ query: (sql, parameters) => db.query(sql, parameters) }),
-      createMock<CacheService>({ get: async () => null, set: async () => true }),
+      createMock<CacheService>({ get: async () => null, publishIfMarkerMatches: async () => true }),
       createMock<JobQueueService>(),
       createMock<WorkspaceExclusionService>({ resolveExclusionsForQueries: async () => exclusions }),
       createMock<WorkspaceFileMetadataReader>({

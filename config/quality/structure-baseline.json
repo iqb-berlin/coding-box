@@ -656,14 +656,6 @@
         }
       }
     },
-    "apps/backend/src/app/database/services/coding/coding-statistics.service.ts": {
-      "file": {},
-      "functions": {
-        "class CodingStatisticsService#1/method getCodingStatistics#1": {
-          "max-lines-per-function": 126
-        }
-      }
-    },
     "apps/backend/src/app/database/services/coding/coding-times-export.service.ts": {
       "file": {},
       "functions": {
@@ -1161,7 +1153,7 @@
     },
     "apps/backend/src/app/database/services/workspace/workspace-file-metadata.service.ts": {
       "file": {
-        "max-lines": 1368
+        "max-lines": 1317
       },
       "functions": {
         "class WorkspaceFileMetadataService#1/method getUnitVariableDetails#1": {
@@ -1176,7 +1168,7 @@
         "class WorkspaceFileMetadataService#1/method refreshUnitVariableCacheInternal#1": {
           "complexity": 94,
           "max-depth": 9,
-          "max-lines-per-function": 407
+          "max-lines-per-function": 406
         }
       }
     },

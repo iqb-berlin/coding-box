@@ -218,14 +218,14 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   it('persists VOCS changes, reports conflicts and scopes selective overwrites and freshness', async () => {
     const { workspace, unit } = await fixture();
     await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
-    await cache.set(getCodingStatisticsCacheKey(workspace, 'v1'), { retainForVocs: true });
+    await cache.set(getCodingStatisticsCacheKey(workspace, 'v1'), { stale: true });
     for (const key of getCodingIncompleteVariablesCacheKeys(workspace)) await cache.set(key, { stale: true });
     const first = await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme())], false);
     expect(first).toMatchObject({ uploaded: 1, failed: 0, issues: undefined });
     expect(await db.getRepository(CodingUnitFreshness).findBy({ workspace_id: workspace, unit_id: unit })).toEqual(expect.arrayContaining([
       expect.objectContaining({ version: 'v1', state: 'STALE', reason: 'CODING_SCHEME_CHANGED' })
     ]));
-    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toEqual({ retainForVocs: true });
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toBeNull();
     for (const key of getCodingIncompleteVariablesCacheKeys(workspace)) expect(await cache.get(key)).toBeNull();
     expect(await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme(2))], false)).toMatchObject({ uploaded: 0, conflicts: [{ fileId: 'SCHEME.VOCS' }] });
     expect(await files.uploadTestFiles(workspace, [input('SCHEME.VOCS', scheme(2))], true, ['OTHER'])).toMatchObject({ uploaded: 0 });
@@ -290,6 +290,71 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const stored = await db.getRepository(FileUpload).findOneByOrFail({ workspace_id: workspace });
     expect(stored).toMatchObject({ file_id_normalized: 'UNIT', coding_scheme_ref_normalized: 'SCHEME' });
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
+  });
+
+  it('counts a derived variable introduced by a Testcenter schema after statistics were cached', async () => {
+    const { workspace } = await fixture();
+    const xml = unitXml().replace('SCHEME.VOCS', 'UNIT.VOCS');
+    const unit = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: Buffer.byteLength(xml), data: xml
+    };
+    expect(await files.testCenterImport([unit])).toMatchObject({ uploaded: 1 });
+    expect((await statistics.getCodingStatistics(workspace)).derivedVariableCount).toBe(0);
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toMatchObject({ derivedVariableCount: 0 });
+
+    const data = JSON.stringify({ variableCodings: [{ id: 'DERIVED', sourceType: 'COPY_VALUE', deriveSources: ['VAR'] }] });
+    const schema = {
+      workspace_id: workspace, file_id: 'UNIT.VOCS', filename: 'unit.vocs', file_type: 'Resource', file_size: Buffer.byteLength(data), data
+    };
+    expect(await files.testCenterImport([schema])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect((await statistics.getCodingStatistics(workspace)).derivedVariableCount).toBe(1);
+  });
+
+  it.each(['statistics', 'file metadata'])('keeps current results when a %s cache write overlaps a Testcenter overwrite', async cacheWrite => {
+    const { workspace } = await fixture();
+    const unit = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
+    };
+    expect(await files.testCenterImport([unit])).toMatchObject({ uploaded: 1 });
+    let signalWrite!: () => void;
+    let resumeWrite!: () => void;
+    const writeStarted = new Promise<void>(resolve => { signalWrite = resolve; });
+    const writeAllowed = new Promise<void>(resolve => { resumeWrite = resolve; });
+    const pauseWrite = async () => {
+      signalWrite();
+      await writeAllowed;
+    };
+    if (cacheWrite === 'statistics') {
+      const publish = cache.publishIfMarkerMatches.bind(cache);
+      jest.spyOn(cache, 'publishIfMarkerMatches').mockImplementationOnce(async (...args) => {
+        await pauseWrite();
+        return publish(...args);
+      });
+    } else {
+      const set = cache.set.bind(cache);
+      let paused = false;
+      jest.spyOn(cache, 'set').mockImplementation(async (key, value, ttl) => {
+        if (!paused && key.includes(':unit_variables:')) {
+          paused = true;
+          await pauseWrite();
+        }
+        return set(key, value, ttl);
+      });
+    }
+
+    const before = statistics.getCodingStatistics(workspace);
+    try {
+      await writeStarted;
+      const changed = { ...unit, data: unitXml('OTHER') };
+      expect(await files.testCenterImport([changed], ['UNIT'])).toMatchObject({ uploaded: 1, issues: undefined });
+      expect((await statistics.getCodingStatistics(workspace)).totalResponses).toBe(0);
+    } finally {
+      resumeWrite();
+    }
+    expect((await before).totalResponses).toBe(1);
+    expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['OTHER'])]]));
+    expect(await cache.get(getCodingStatisticsCacheKey(workspace, 'v1'))).toMatchObject({ totalResponses: 0 });
+    expect((await statistics.getCodingStatistics(workspace)).totalResponses).toBe(0);
   });
 
   it('refreshes cached coding statistics and manual coding scope after a Testcenter Unit insert or overwrite', async () => {

@@ -1337,8 +1337,9 @@ test-group;test-user;code;booklet1;unit1;[];""`;
         }]
       ]);
       const statisticsCacheService = {
-        get: jest.fn(async (key: string) => codingStatisticsCache.get(key)),
-        set: jest.fn(async (key: string, value: unknown) => {
+        get: jest.fn(async (key: string) => codingStatisticsCache.get(key) ?? null),
+        incr: jest.fn().mockResolvedValue(1),
+        publishIfMarkerMatches: jest.fn(async (key: string, value: unknown) => {
           codingStatisticsCache.set(key, value);
           return true;
         }),

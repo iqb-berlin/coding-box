@@ -120,8 +120,8 @@ describe('workspace file workflow boundaries', () => {
     expect(f.codingFreshness.markUnitsStaleAfterCodingSchemeChange).toHaveBeenCalledWith(
       7, { autoCodingSchemeRefs: ['A'], manualCodingSchemeRefs: ['A'] }, f.manager
     );
-    expect(f.events).toEqual(['lock', 'upsert', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'incomplete', 'unlock', 'release']);
-    expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
+    expect(f.events).toEqual(['lock', 'upsert', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
   });
 
   it('collects nested ZIP successes, conflicts and schema failures in entry order', async () => {
@@ -297,12 +297,12 @@ describe('workspace file workflow boundaries', () => {
     expect(result.uploadedFiles?.map(upload => upload.fileId)).toEqual(['B.VOCS', 'A.VOCS']);
     expect(f.lockedFiles.insert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'B.VOCS' })]);
     expect(f.lockedFiles.upsert).toHaveBeenCalledWith([expect.objectContaining({ file_id: 'A.VOCS', file_id_normalized: 'A.VOCS' })], ['file_id', 'workspace_id']);
-    expect(f.events).toEqual(['lock', 'begin', 'insert', 'upsert', 'commit', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'incomplete', 'unlock', 'release']);
-    expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
+    expect(f.events).toEqual(['lock', 'begin', 'insert', 'upsert', 'commit', 'freshness', 'freshness', 'metadata', 'exclusion', 'stats', 'coding-cache', 'process-cache', 'statistics', 'incomplete', 'unlock', 'release']);
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
     expect(f.codingFreshness.markUnitsStaleAfterCodingSchemeChange).toHaveBeenCalledWith(7, expect.anything(), f.manager);
   });
 
-  it('keeps coding statistics when the Unit conflicts and only a schema is saved', async () => {
+  it('invalidates coding statistics when the Unit conflicts and only a schema is saved', async () => {
     const f = fixture();
     f.query.getMany.mockResolvedValue([{ file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit' }]);
 
@@ -316,7 +316,7 @@ describe('workspace file workflow boundaries', () => {
     ]);
 
     expect(result).toMatchObject({ uploaded: 1, conflicts: [{ fileId: 'UNIT' }], issues: undefined });
-    expect(f.statistics.invalidateCache).not.toHaveBeenCalled();
+    expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
   });
 
   it('returns the existing import failure result after an overwrite fails and releases the lock', async () => {

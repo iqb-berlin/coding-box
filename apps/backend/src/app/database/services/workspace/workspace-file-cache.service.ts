@@ -4,7 +4,6 @@ import {
 import { WorkspaceFileMetadataService } from './workspace-file-metadata.service';
 import { getErrorMessage } from '../../../utils/error.util';
 import type { TestFilesUploadUploadedDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
-import { isCodingSchemeFileId } from './workspace-file-write.util';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
 import { CODING_PROCESS_CACHE_INVALIDATOR } from '../coding/coding-process-cache-invalidator.token';
@@ -37,10 +36,7 @@ export class WorkspaceFileCacheService {
     const stats = await this.workspaceTestResultsService.invalidateWorkspaceStatsCache(workspaceId);
     this.codingFileCacheService?.clearCaches();
     this.codingProcessCacheInvalidator?.invalidateWorkspaceCaches(workspaceId);
-    const affectsCodingStatistics = uploadedFiles.some(file => (
-      !isCodingSchemeFileId(file.fileId) && !isCodingSchemeFileId(file.filename)
-    ));
-    const codingStats = !affectsCodingStatistics || await this.codingStatisticsService.invalidateCache(workspaceId);
+    const codingStats = uploadedFiles.length === 0 || await this.codingStatisticsService.invalidateCache(workspaceId);
     const manualCodingScope = uploadedFiles.length === 0 ||
       await this.codingStatisticsService.invalidateIncompleteVariablesCache(workspaceId);
     if (!metadata || !exclusions || !stats || !codingStats || !manualCodingScope) {

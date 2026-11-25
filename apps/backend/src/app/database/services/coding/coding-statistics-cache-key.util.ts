@@ -13,6 +13,10 @@ export const CODING_STATISTICS_CACHE_VERSIONS: CodingStatisticsVersion[] = [
   'v3'
 ];
 
+export function getCodingStatisticsGenerationKey(workspaceId: number): string {
+  return `coding-statistics:generation:${workspaceId}`;
+}
+
 export function getCodingStatisticsCacheKey(
   workspaceId: number,
   version: CodingStatisticsVersion

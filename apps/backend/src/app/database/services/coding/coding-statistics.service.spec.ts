@@ -37,8 +37,9 @@ describe('CodingStatisticsService', () => {
     } as unknown as jest.Mocked<Repository<ResponseEntity>>;
 
     mockCacheService = {
-      get: jest.fn(),
+      get: jest.fn().mockResolvedValue(null),
       set: jest.fn(),
+      publishIfMarkerMatches: jest.fn().mockResolvedValue(true),
       delete: jest.fn(),
       incr: jest.fn().mockResolvedValue(1)
     } as unknown as jest.Mocked<CacheService>;
@@ -112,6 +113,10 @@ describe('CodingStatisticsService', () => {
     const entries = new Map<string, unknown>();
     mockCacheService.get.mockImplementation(async <T>(key: string) => (entries.get(key) as T | undefined) ?? null);
     mockCacheService.set.mockImplementation(async (key, value) => {
+      entries.set(key, value);
+      return true;
+    });
+    mockCacheService.publishIfMarkerMatches.mockImplementation(async (key, value) => {
       entries.set(key, value);
       return true;
     });
@@ -201,7 +206,7 @@ describe('CodingStatisticsService', () => {
       expect(result.baseResponseCount).toBe(30);
       expect(result.derivedResponseCount).toBe(0);
       expect(result.statusCounts).toEqual({ 5: 10, 8: 20 });
-      expect(mockCacheService.set).toHaveBeenCalled();
+      expect(mockCacheService.publishIfMarkerMatches).toHaveBeenCalled();
     });
 
     it('should calculate statistics for v2 version', async () => {
@@ -215,7 +220,7 @@ describe('CodingStatisticsService', () => {
       const result = await service.getCodingStatistics(1, 'v2');
 
       expect(result.totalResponses).toBe(40);
-      expect(mockCacheService.set).toHaveBeenCalled();
+      expect(mockCacheService.publishIfMarkerMatches).toHaveBeenCalled();
     });
 
     it('should calculate statistics for v3 version', async () => {
@@ -456,7 +461,7 @@ describe('CodingStatisticsService', () => {
 
       await service.getCodingStatistics(1, 'v1', true);
 
-      expect(mockCacheService.get).not.toHaveBeenCalled();
+      expect(mockCacheService.get).not.toHaveBeenCalledWith(getCodingStatisticsCacheKey(1, 'v1'));
     });
   });
 
@@ -539,7 +544,7 @@ describe('CodingStatisticsService', () => {
       // When all units are filtered out, returns empty statistics
       expect(result.totalResponses).toBe(0);
       expect(result.statusCounts).toEqual({});
-      expect(mockCacheService.set).toHaveBeenCalled();
+      expect(mockCacheService.publishIfMarkerMatches).toHaveBeenCalled();
     });
   });
 
@@ -1109,7 +1114,7 @@ describe('CodingStatisticsService', () => {
       mockResponseRepository.query.mockRejectedValue(failure);
 
       await expect(service.getCodingStatistics(1)).rejects.toBe(failure);
-      expect(mockCacheService.set).not.toHaveBeenCalled();
+      expect(mockCacheService.publishIfMarkerMatches).not.toHaveBeenCalled();
     });
 
     it('does not confuse a failed queue read with a missing statistics job', async () => {
@@ -1145,7 +1150,7 @@ describe('CodingStatisticsService', () => {
 
       await service.refreshStatistics(1, 'v1');
 
-      expect(mockCacheService.get).not.toHaveBeenCalled();
+      expect(mockCacheService.get).not.toHaveBeenCalledWith(getCodingStatisticsCacheKey(1, 'v1'));
     });
   });
 });
