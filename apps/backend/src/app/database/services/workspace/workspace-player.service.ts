@@ -191,7 +191,7 @@ export class WorkspacePlayerService {
     this.logger.log(`Fetching unit definition for unit: ${unitId} in workspace: ${workspaceId}`);
     try {
       const files = await this.fileUploadRepository.find({
-        select: ['file_id', 'filename', 'data'],
+        select: { file_id: true, filename: true, data: true },
         where: {
           file_id: `${unitId}.VOUD`,
           workspace_id: workspaceId
@@ -224,7 +224,7 @@ export class WorkspacePlayerService {
     this.logger.log('Returning all test persons for workspace ', id);
     const persons = await this.personsRepository
       .find({
-        select: ['id'],
+        select: { id: true },
         where: { workspace_id: id },
         order: { id: 'ASC' }
       });
@@ -236,7 +236,7 @@ export class WorkspacePlayerService {
     this.logger.log('Returning all unit Ids for testperson ', testPerson);
     const res = this.responseRepository
       .find({
-        select: ['unitid'],
+        select: { unitid: true },
         // where: { testPerson: testPerson },
         order: { unitid: 'ASC' }
       });
@@ -332,14 +332,14 @@ export class WorkspacePlayerService {
 
     const [unitFiles, unitDefinitionFiles, resultUnitKeys] = await Promise.all([
       this.fileUploadRepository.find({
-        select: ['file_id'],
+        select: { file_id: true },
         where: {
           workspace_id: workspaceId,
           file_id: In(uniqueUnitIds)
         }
       }),
       this.fileUploadRepository.find({
-        select: ['file_id'],
+        select: { file_id: true },
         where: {
           workspace_id: workspaceId,
           file_id: In(uniqueUnitIds.map(unitId => `${unitId}.VOUD`))
@@ -437,7 +437,7 @@ export class WorkspacePlayerService {
     }
 
     const resultUnits = await this.unitRepository.find({
-      select: ['name', 'alias'],
+      select: { name: true, alias: true },
       where: { bookletid: booklet.id }
     });
 

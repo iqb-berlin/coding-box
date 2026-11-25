@@ -69,7 +69,7 @@ export class AutocoderSchemeService {
       );
       const missingFiles = await repository.find({
         where: { workspace_id, file_id: In(missingAliases) },
-        select: ['file_id', 'data', 'filename']
+        select: { file_id: true, data: true, filename: true }
       });
 
       missingFiles.forEach(file => {
@@ -84,7 +84,7 @@ export class AutocoderSchemeService {
     this.logger.log(`Fetching all test files for workspace ${workspace_id}`);
     const testFiles = await repository.find({
       where: { workspace_id, file_id: In(unitAliasesArray) },
-      select: ['file_id', 'data', 'filename']
+      select: { file_id: true, data: true, filename: true }
     });
 
     const fileMap = new Map<string, FileUpload>();
@@ -128,7 +128,7 @@ export class AutocoderSchemeService {
     );
     const codingSchemeFiles = await repository.find({
       where: { workspace_id: workspaceId, file_id: In(missingSchemeRefs) },
-      select: ['file_id', 'data', 'filename']
+      select: { file_id: true, data: true, filename: true }
     });
 
     codingSchemeFiles.forEach(file => {

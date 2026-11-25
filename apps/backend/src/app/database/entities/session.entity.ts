@@ -28,6 +28,7 @@ export class Session {
 
   @Index()
   @ManyToOne(() => Booklet, booklet => booklet.sessions, {
+    nullable: false,
     onDelete: 'CASCADE'
   })
   @JoinColumn({ name: 'bookletid' })

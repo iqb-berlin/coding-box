@@ -53,7 +53,7 @@ describe('ExternalCodingImportService', () => {
     };
     const responseRepository = {
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }
@@ -153,7 +153,7 @@ describe('ExternalCodingImportService', () => {
     };
     const responseRepository = {
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }
@@ -243,7 +243,7 @@ describe('ExternalCodingImportService', () => {
     };
     const responseRepository = {
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }
@@ -409,7 +409,7 @@ describe('ExternalCodingImportService', () => {
 
   it('rejects unchanged coding-list exports with status_v1 as coding lists, not coding-results', async () => {
     const service = new ExternalCodingImportService(
-      { manager: { connection: {} } } as never,
+      { manager: { dataSource: {} } } as never,
       {} as never,
       {} as never,
       {} as never,
@@ -470,7 +470,7 @@ describe('ExternalCodingImportService', () => {
     };
     const responseRepository = {
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }

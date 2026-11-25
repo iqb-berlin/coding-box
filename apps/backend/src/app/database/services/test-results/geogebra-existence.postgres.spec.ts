@@ -40,7 +40,7 @@ describePostgres('GeoGebra availability and partial index', () => {
   let source: DataSource;
   let service: TestResultsExportService;
   let exclusions: ResolvedWorkspaceExclusions;
-  let queries: { sql: string; parameters: unknown[] }[];
+  let queries: { sql: string; parameters: Parameters<DataSource['query']>[1] }[];
 
   beforeAll(async () => {
     source = new DataSource({
@@ -118,7 +118,7 @@ describePostgres('GeoGebra availability and partial index', () => {
       }).compile();
     service = module.get(TestResultsExportService);
     jest.spyOn(source.logger, 'logQuery').mockImplementation((sql, parameters) => {
-      queries.push({ sql, parameters: parameters || [] });
+      queries.push({ sql, parameters });
     });
   }, 240000);
 

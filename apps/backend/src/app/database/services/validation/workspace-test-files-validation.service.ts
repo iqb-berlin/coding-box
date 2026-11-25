@@ -27,6 +27,10 @@ import { ResourcePackageService } from '../workspace/resource-package.service';
 import { WorkspaceSettingsDto } from '../../../../../../../api-dto/workspaces/workspace-settings-dto';
 import codingSchemeSchema from '../../../schemas/coding-scheme.schema.json';
 
+const fileIdentitySelect = {
+  id: true, file_id: true, filename: true, file_type: true
+} as const;
+
 type FileStatus = {
   filename: string;
   exists: boolean;
@@ -205,20 +209,14 @@ export class WorkspaceTestFilesValidationService {
     const [files, exclusions, persons] = await Promise.all([
       this.fileUploadRepository.find({
         where: { workspace_id: workspaceId },
-        select: [
-          'id',
-          'file_id',
-          'filename',
-          'file_type',
-          'file_size',
-          'created_at',
-          'data'
-        ]
+        select: {
+          ...fileIdentitySelect, file_size: true, created_at: true, data: true
+        }
       }),
       this.workspaceExclusionService.getExclusions(workspaceId),
       this.personsRepository.find({
         where: { workspace_id: workspaceId },
-        select: ['login', 'consider']
+        select: { login: true, consider: true }
       })
     ]);
 
@@ -746,7 +744,7 @@ export class WorkspaceTestFilesValidationService {
 
     const allFiles = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'file_id', 'filename', 'file_type']
+      select: fileIdentitySelect
     });
 
     return allFiles
@@ -782,7 +780,7 @@ export class WorkspaceTestFilesValidationService {
           login: In(batch),
           consider: false
         },
-        select: ['login']
+        select: { login: true }
       });
       notConsideredLogins.push(...persons.map(p => p.login));
     }
@@ -803,7 +801,7 @@ export class WorkspaceTestFilesValidationService {
           workspace_id: workspaceId,
           login: In(batch)
         },
-        select: ['login', 'consider']
+        select: { login: true, consider: true }
       });
 
       persons.forEach(p => {
@@ -838,7 +836,7 @@ export class WorkspaceTestFilesValidationService {
 
     let booklets = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Booklet' },
-      select: ['file_id', 'data'],
+      select: { file_id: true, data: true },
       skip: offset,
       take: BATCH_SIZE
     });
@@ -912,7 +910,7 @@ export class WorkspaceTestFilesValidationService {
       offset += BATCH_SIZE;
       booklets = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' },
-        select: ['file_id', 'data'],
+        select: { file_id: true, data: true },
         skip: offset,
         take: BATCH_SIZE
       });
@@ -929,7 +927,7 @@ export class WorkspaceTestFilesValidationService {
 
     let units = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
-      select: ['file_id', 'data'],
+      select: { file_id: true, data: true },
       skip: offset,
       take: BATCH_SIZE
     });
@@ -1000,7 +998,7 @@ export class WorkspaceTestFilesValidationService {
       offset += BATCH_SIZE;
       units = await this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Unit' },
-        select: ['file_id', 'data'],
+        select: { file_id: true, data: true },
         skip: offset,
         take: BATCH_SIZE
       });
@@ -1100,7 +1098,7 @@ export class WorkspaceTestFilesValidationService {
           workspace_id: workspaceId,
           file_type: 'Resource'
         },
-        select: ['file_id', 'filename', 'data']
+        select: { file_id: true, filename: true, data: true }
       });
 
       definitionRefsByUnit.forEach((definitionRefs, unitId) => {
@@ -1996,7 +1994,7 @@ export class WorkspaceTestFilesValidationService {
         file_type: 'Resource',
         file_id: ILike('%.VOCS')
       },
-      select: ['file_id', 'filename', 'data']
+      select: { file_id: true, filename: true, data: true }
     });
 
     if (codingSchemeFiles.length === 0) {

@@ -660,9 +660,9 @@ describe('ContentPoolIntegrationService.uploadWorkspaceFilesToAcp', () => {
       versionNumber: 7,
       changelog: 'manual changelog'
     });
-    expect(fileUploadRepository.find).toHaveBeenCalledWith(expect.objectContaining({ select: ['id', 'filename', 'workspace_id'] }));
+    expect(fileUploadRepository.find).toHaveBeenCalledWith(expect.objectContaining({ select: { id: true, filename: true, workspace_id: true } }));
     expect(fileUploadRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
-      select: ['data'], where: expect.objectContaining({ id: 11, workspace_id: 123, data: expect.anything() })
+      select: { data: true }, where: expect.objectContaining({ id: 11, workspace_id: 123, data: expect.anything() })
     }));
     expect(httpService.axiosRef.post).toHaveBeenCalledWith(
       'http://content-pool.test/api/server/acp/acp-1/coding-schemes/replace',

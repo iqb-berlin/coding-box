@@ -47,7 +47,7 @@ function fixture() {
     release: jest.fn(async () => { events.push('release'); })
   };
   const ordinaryFiles = {
-    manager: { connection: { createQueryRunner: jest.fn(() => runner) } },
+    manager: { dataSource: { createQueryRunner: jest.fn(() => runner) } },
     findOne: jest.fn(),
     find: jest.fn(),
     upsert: jest.fn(),

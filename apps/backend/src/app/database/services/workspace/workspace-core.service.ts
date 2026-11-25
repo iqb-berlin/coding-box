@@ -2,7 +2,7 @@ import {
   BadRequestException, ConflictException, Inject, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Connection, In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import { withWorkspaceDeletionLocks } from '../shared/workspace-lifecycle-lock.util';
 import { WorkspaceDeletionService } from './workspace-deletion.service';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
@@ -42,7 +42,7 @@ export class WorkspaceCoreService {
   constructor(
     @InjectRepository(Workspace)
     private workspaceRepository: Repository<Workspace>,
-    private connection: Connection,
+    private connection: DataSource,
     private readonly cacheService: CacheService,
     @Inject(WorkspaceStatsCacheService)
     private readonly workspaceStatsCacheService: WorkspaceStatsCacheService,
@@ -58,7 +58,7 @@ export class WorkspaceCoreService {
       const validPage = Math.max(1, page);
       const validLimit = Math.min(Math.max(1, limit), MAX_LIMIT);
       const [workspaces, total] = await this.workspaceRepository.findAndCount({
-        select: ['id', 'name'],
+        select: { id: true, name: true },
         skip: (validPage - 1) * validLimit,
         take: validLimit
       });
@@ -68,7 +68,7 @@ export class WorkspaceCoreService {
     }
 
     const workspaces = await this.workspaceRepository.find({
-      select: ['id', 'name']
+      select: { id: true, name: true }
     });
     this.logger.log(`Found ${workspaces.length} workspaces.`);
     return [workspaces.map(({ id, name }) => ({ id, name })), workspaces.length];

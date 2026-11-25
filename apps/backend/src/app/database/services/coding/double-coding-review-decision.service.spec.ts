@@ -236,7 +236,7 @@ describe('DoubleCodingReviewDecisionService', () => {
         where: expect.arrayContaining([
           expect.objectContaining({ id: 77, response_id: 10 })
         ]),
-        relations: ['response', 'coding_job', 'coding_job.codingJobCoders']
+        relations: { response: true, coding_job: { codingJobCoders: true } }
       })
     );
     expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(
@@ -1082,7 +1082,7 @@ describe('DoubleCodingReviewDecisionService', () => {
         where: expect.arrayContaining([
           expect.objectContaining({ id: 77, response_id: 10 })
         ]),
-        relations: ['response', 'coding_job', 'coding_job.codingJobCoders']
+        relations: { response: true, coding_job: { codingJobCoders: true } }
       })
     );
     expect(codingJobService.getSelectableReviewCodeForUnit).toHaveBeenCalledWith(

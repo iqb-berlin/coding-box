@@ -11,7 +11,9 @@ import {
   isExcludedByResolvedExclusions
 } from '../workspace/workspace-exclusion.service';
 import { CoderTrainingWithJobs } from './coder-training.types';
-import { getBundleVariableKeys, getTrainingVariablesByKey, makeTrainingVariableKey } from './coder-training.util';
+import {
+  coderTrainingRelations, getBundleVariableKeys, getTrainingVariablesByKey, makeTrainingVariableKey
+} from './coder-training.util';
 
 @Injectable()
 export class CoderTrainingQueryService {
@@ -28,7 +30,7 @@ export class CoderTrainingQueryService {
 
     const trainings = await this.coderTrainingRepository.find({
       where: { workspace_id: workspaceId },
-      relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders'],
+      relations: coderTrainingRelations,
       order: { created_at: 'DESC' }
     });
 
@@ -99,7 +101,7 @@ export class CoderTrainingQueryService {
         id: trainingId,
         workspace_id: workspaceId
       },
-      relations: ['codingJobs', 'codingJobs.codingJobCoders', 'codingJobs.codingJobCoders.user', 'codingJobs.codingJobUnits']
+      relations: { codingJobs: { codingJobCoders: { user: true }, codingJobUnits: true } }
     });
 
     if (!training || !training.codingJobs) {

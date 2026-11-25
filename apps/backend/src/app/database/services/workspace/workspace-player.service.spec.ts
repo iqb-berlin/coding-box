@@ -484,7 +484,7 @@ describe('WorkspacePlayerService', () => {
       const result = await service.findUnitDef(5, 'UNIT123');
 
       expect(mockRepository.find).toHaveBeenCalledWith({
-        select: ['file_id', 'filename', 'data'],
+        select: { file_id: true, filename: true, data: true },
         where: {
           file_id: 'UNIT123.VOUD',
           workspace_id: 5
@@ -758,7 +758,7 @@ describe('WorkspacePlayerService', () => {
       const result = await service.findTestPersons(5);
 
       expect(mockRepository.find).toHaveBeenCalledWith({
-        select: ['id'],
+        select: { id: true },
         where: { workspace_id: 5 },
         order: { id: 'ASC' }
       });
@@ -795,7 +795,7 @@ describe('WorkspacePlayerService', () => {
       const result = await service.findTestPersonUnits(5, 'PERSON1');
 
       expect(mockRepository.find).toHaveBeenCalledWith({
-        select: ['unitid'],
+        select: { unitid: true },
         order: { unitid: 'ASC' }
       });
       expect(result).toEqual(mockResponses);

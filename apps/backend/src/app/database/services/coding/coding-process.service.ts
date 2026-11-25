@@ -93,7 +93,7 @@ export class CodingProcessService {
             group: In(groupsOrIds),
             consider: true
           },
-          select: ['id']
+          select: { id: true }
         });
 
         personIds = persons.map(person => person.id.toString());
@@ -404,7 +404,7 @@ export class CodingProcessService {
     try {
       // Step 12: Update responses in database - 100% progress
       queryRunner =
-        this.responseRepository.manager.connection.createQueryRunner();
+        this.responseRepository.manager.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction('READ COMMITTED');
 
@@ -684,7 +684,7 @@ export class CodingProcessService {
     workspaceId: number
   ): Promise<QueryRunner> {
     const queryRunner =
-      this.responseRepository.manager.connection.createQueryRunner();
+      this.responseRepository.manager.dataSource.createQueryRunner();
     try {
       await queryRunner.connect();
       await queryRunner.query(`SET lock_timeout = '${AUTOCODER_LOCK_TIMEOUT}'`);

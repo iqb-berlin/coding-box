@@ -73,7 +73,7 @@ export class WorkspaceFileUploadService {
     options?: WorkspaceFileUploadOptions
   ): Promise<TestFilesUploadResultDto> {
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspace_id,
       async queryRunner => {
         const mutationContext = getWorkspaceFilesMutationContext(queryRunner);

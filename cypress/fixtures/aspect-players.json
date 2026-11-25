@@ -10,5 +10,11 @@
     "fileName": "iqb-player-aspect-3.0.1.html",
     "url": "https://github.com/iqb-berlin/verona-modules-aspect/releases/download/editor/3.0.1%2Bplayer/3.0.1/iqb-player-aspect-3.0.1.html",
     "sha256": "54ee0f792c105c933b1c811ded0ee54eefae8502fa690edb18f6dd0b71c803c2"
+  },
+  {
+    "version": "3.1.2",
+    "fileName": "iqb-player-aspect-3.1.2.html",
+    "url": "https://github.com/iqb-berlin/verona-modules-aspect/releases/download/editor/3.1.2%2Bplayer/3.1.2/iqb-player-aspect-3.1.2.html",
+    "sha256": "0572e1e302ba465a1ad03514bd8c38201903b9934ce70d1656bc790af86ed27d"
   }
 ]

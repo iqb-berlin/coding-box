@@ -322,7 +322,7 @@ export class CoderTrainingDiscussionService {
           id: trainingId,
           workspace_id: workspaceId
         },
-        relations: ['codingJobs', 'codingJobs.codingJobUnits', 'codingJobs.codingJobUnits.response']
+        relations: { codingJobs: { codingJobUnits: { response: true } } }
       });
 
       if (!training) {
