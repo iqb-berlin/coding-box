@@ -1,5 +1,6 @@
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource, Repository } from 'typeorm';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
@@ -83,6 +84,29 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
       })
     );
   }
+
+  it('matches individual job lookups for open, applied, mixed and missing assignments', async () => {
+    await db.transaction(async manager => {
+      await manager.query(`INSERT INTO coding_job (id, status) VALUES (501, 'open'), (502, 'results_applied'), (503, NULL);
+        INSERT INTO coding_job_unit (response_id, coding_job_id)
+        VALUES (501,501), (502,502), (503,501), (503,502), (504,503), (505,501), (505,503), (NULL,502);
+        INSERT INTO response (id, status_v1, status_v2, status_v3, code_v2, score_v2)
+        VALUES (501,5,8,NULL,NULL,NULL), (502,5,8,1,NULL,NULL), (503,5,8,NULL,NULL,NULL),
+          (504,5,8,NULL,NULL,NULL), (505,5,8,NULL,NULL,NULL), (506,5,8,NULL,NULL,NULL);`);
+      try {
+        for (const version of ['v2', 'v3'] as const) {
+          const rows = await manager.query<Array<{ individual: number; grouped: number }>>(`SELECT ${getEffectiveCodingStatusExpression(version)} AS individual,
+            ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} AS grouped
+            FROM response WHERE response.id BETWEEN 501 AND 506 ORDER BY response.id`);
+          expect(rows.map(row => row.individual)).toEqual([5, 8, 8, 8, 5, 8]);
+          expect(rows.map(row => row.grouped)).toEqual(rows.map(row => row.individual));
+        }
+      } finally {
+        await manager.query(`DELETE FROM coding_job_unit WHERE coding_job_id BETWEEN 501 AND 503;
+          DELETE FROM coding_job WHERE id BETWEEN 501 AND 503; DELETE FROM response WHERE id BETWEEN 501 AND 506;`);
+      }
+    });
+  });
 
   it.each([
     ['v1', { 5: 1, 8: 1 }], ['v2', { 6: 1, 7: 1 }], ['v3', { 6: 1, 7: 1 }]

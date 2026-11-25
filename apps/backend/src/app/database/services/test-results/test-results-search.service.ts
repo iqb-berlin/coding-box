@@ -223,6 +223,7 @@ export class TestResultsSearchService {
         if (!exists) return { data: [], total: 0 };
       }
 
+      const codedStatusNumber = searchParams.codedStatus ? statusStringToNumber(searchParams.codedStatus) : null;
       const runSearch = async (queryRunner?: QueryRunner) => {
         const query = this.responseRepository
           .createQueryBuilder('response', queryRunner)
@@ -280,12 +281,10 @@ export class TestResultsSearchService {
         }
 
         if (searchParams.codedStatus) {
-          const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
           if (codedStatusNumber === null) {
             query.andWhere('1=0');
           } else {
-            const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-            query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
+            query.andWhere(`${this.workspaceStatusExpression(version)} = :codedStatus`, {
               codedStatus: codedStatusNumber
             });
           }
@@ -352,29 +351,10 @@ export class TestResultsSearchService {
           );
         }
 
-        if (responseSource === 'derived') {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-          query.andWhere('response.is_autocoder_generated = :derivedOnly', {
-            derivedOnly: true
-          });
-          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-            ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
-          });
-          await this.applyValidCodingVariableFilter(query, workspaceId);
-        } else if (responseSource === 'all') {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-            ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
-          });
-          await this.applyValidCodingVariableFilter(query, workspaceId);
-        } else {
-          excludeAutocoderGeneratedResponses(query);
-        }
+        await this.applyResponseSourceFilter(query, workspaceId, responseSource, version, codedStatusNumber);
 
         const total = await this.countMatchingResponses(
-          query, !options.sortBy && !searchParams.geogebra && !searchParams.codedStatus
+          query, !options.sortBy && !searchParams.geogebra && (version !== 'v1' || !searchParams.codedStatus)
         );
         this.applyResponseSearchSorting(
           query,
@@ -462,7 +442,7 @@ export class TestResultsSearchService {
         await withRegexSearchStatementTimeout(this.connection, runSearch) :
         await runSearch();
     } catch (error) {
-      const regexError = toRegexSearchException(error);
+      const regexError = searchParams.regexSearch ? toRegexSearchException(error) : null;
       if (regexError) {
         throw regexError;
       }
@@ -477,9 +457,40 @@ export class TestResultsSearchService {
     }
   }
 
+  private workspaceStatusExpression(version: CodingVersion): string {
+    return version === 'v1' ? getEffectiveCodingStatusExpression(version) :
+      `(CASE WHEN person.workspace_id = :workspaceId THEN ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} END)`;
+  }
+
+  private async applyResponseSourceFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    workspaceId: number,
+    responseSource: NonNullable<ResponseSearchFilters['responseSource']>,
+    version: CodingVersion,
+    codedStatusNumber: number | null
+  ): Promise<void> {
+    const effectiveStatusExpression = this.workspaceStatusExpression(version);
+    if (responseSource === 'derived') {
+      query.andWhere('response.is_autocoder_generated = :derivedOnly', { derivedOnly: true });
+    }
+    if (responseSource === 'derived' || responseSource === 'all') {
+      if (version === 'v1') query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+      // A selected, eligible status already excludes NULL and ignored statuses.
+      if (version === 'v1' || codedStatusNumber === null ||
+          TestResultsSearchService.ignoredDerivedCodingStatuses.includes(codedStatusNumber)) {
+        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
+        });
+      }
+      await this.applyValidCodingVariableFilter(query, workspaceId);
+    } else {
+      excludeAutocoderGeneratedResponses(query);
+    }
+  }
+
   private async countMatchingResponses(query: SelectQueryBuilder<ResponseEntity>, boundIdScan: boolean): Promise<number> {
-    // The joins are to-one. For ID-ordered pages without a status filter, start the
-    // ordered scan at the first matching ID instead of reading earlier workspaces.
+    // The joins are to-one. For eligible ID-ordered pages, start the ordered
+    // scan at the first matching ID instead of reading earlier workspaces.
     const count = query.clone().select('COUNT(*)', 'total');
     if (boundIdScan) count.addSelect('MIN(response.id)', 'firstId');
     const [row] = await count.getRawMany<{ total: string; firstId?: number | null }>();

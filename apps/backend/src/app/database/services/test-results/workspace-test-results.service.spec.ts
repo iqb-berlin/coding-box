@@ -1090,6 +1090,14 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it('preserves the database timeout reason when a normal status search is cancelled', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany.mockRejectedValue(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }));
+      await expect(service.searchResponses(1, { version: 'v2', codedStatus: '5' }))
+        .rejects.toThrow('canceling statement due to statement timeout');
+    });
+
     it('should convert PostgreSQL invalid regex errors into bad request errors', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
@@ -1449,7 +1457,8 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE(response.status_v3')
+        expect.stringContaining('COALESCE(response.status_v3'),
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
       );
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('NOT IN (:...ignoredDerivedCodingStatuses)'),
