@@ -953,7 +953,7 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "max-lines-per-function": 146
+          "max-lines-per-function": 132
         }
       }
     },

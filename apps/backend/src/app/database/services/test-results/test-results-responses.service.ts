@@ -32,7 +32,7 @@ import {
   FlatResponseOptions, FlatResponseResult, LogAnomalyCode, LogAnomalySummary, LogAnomalyThresholds
 } from './workspace-test-results.types';
 import {
-  applyFlatResponseFilters, FlatResponseFilters, longLoadingUnitsSql, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
+  applyFlatResponseFilters, FlatResponseFilters, findLongLoadingUnitIds, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 500;
@@ -130,20 +130,18 @@ export class TestResultsResponsesService {
       undefined;
     if (matchingBooklets?.length === 0) return [[], 0];
 
-    const slowUnits: Array<{ unitid: number }> | undefined = filters.longLoadingOnly ?
-      await (queryRunner || this.connection).query(
-        longLoadingUnitsSql(true), [filters.longLoadingThresholdMs, workspaceId]
-      ) : undefined;
+    const slowUnitIds = filters.longLoadingOnly ?
+      await findLongLoadingUnitIds(queryRunner || this.connection, workspaceId, filters.longLoadingThresholdMs) : undefined;
     const createQuery = () => {
       const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
       applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
       if (matchingBooklets) query.andWhere('bookletEntity.id = ANY(:matchingBooklets)', { matchingBooklets });
-      if (slowUnits) {
+      if (slowUnitIds) {
         const session = `"bookletEntity"."id" IN (SELECT s.bookletid FROM session s
           WHERE COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs)`;
-        query.andWhere(slowUnits.length ? `(${session} OR unit.id = ANY(:slowUnitIds))` : session, {
+        query.andWhere(slowUnitIds.length ? `(${session} OR unit.id = ANY(:slowUnitIds))` : session, {
           longLoadingThresholdMs: filters.longLoadingThresholdMs,
-          slowUnitIds: slowUnits.map(row => row.unitid)
+          slowUnitIds
         });
       }
       return query;

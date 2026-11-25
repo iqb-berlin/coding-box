@@ -52,12 +52,14 @@ export function getOpenManualCodingPlaceholderCondition(
         AND ${responseAlias}.score_v2 IS NULL`;
   if (manualJobs === 'grouped') {
     // A response remains a placeholder if it has an open job and no applied job.
-    // Build that set once when filtering large response tables.
+    // Group the assignments of the workspace bound by the search query.
     return `${unscored} AND ${responseAlias}.id IN (
       SELECT assignment.response_id
       FROM coding_job_unit assignment
       INNER JOIN coding_job job ON job.id = assignment.coding_job_id
-      WHERE assignment.response_id IS NOT NULL
+      WHERE job.workspace_id = :workspaceId
+        AND (assignment.workspace_id = :workspaceId OR assignment.workspace_id IS NULL)
+        AND assignment.response_id IS NOT NULL
       GROUP BY assignment.response_id
       HAVING BOOL_OR(job.status <> 'results_applied')
         AND NOT BOOL_OR(job.status = 'results_applied')

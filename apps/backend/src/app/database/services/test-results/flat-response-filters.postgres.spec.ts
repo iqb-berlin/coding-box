@@ -1,6 +1,7 @@
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource } from 'typeorm';
 import { TestResultsResponsesService } from './test-results-responses.service';
+import { findLongLoadingUnitIds } from './flat-response-filters';
 import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import { FlatResponseOptions } from './workspace-test-results.types';
@@ -167,7 +168,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
 
   it('searches short values within the displayed Unicode prefix and handles ambiguous leading spaces', async () => {
     await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value) VALUES
-      (20, 5, 'I', 3, repeat('ä',1999) || 'Öx'), (21, 5, 'J', 3, repeat(' ',15) || '[] '),
+      (20, 5, 'I', 3, repeat('ä',1999) || 'öx'), (21, 5, 'J', 3, repeat(' ',15) || '[] '),
       (22, 5, 'K', 3, repeat(' ',16) || '[]x'), (23, 5, 'L', 3, repeat(' ',32) || '[]')`);
     try {
       await expectResponses({ unit: 'UNIT_E', responseValue: 'ö' }, [20]);
@@ -246,6 +247,20 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const rows = await expectResponses({ tags: 'review' }, [1, 2, 3, 4, 5]);
     expect(rows[0].tags.sort()).toEqual(['review-alpha', 'review-beta']);
     await expectResponses({ tags: 'review', page: 3, limit: 2 }, [5], 5);
+  });
+
+  it('scopes slow units to the workspace and skips persons excluded from consideration', async () => {
+    await db.query(`INSERT INTO unitlog (id, unitid, key, ts) VALUES
+      (10, 6, 'STARTED', 0), (11, 6, 'ENDED', 5000),
+      (12, 7, 'STARTED', 0), (13, 7, 'ENDED', 5000)`);
+    try {
+      await expect(findLongLoadingUnitIds(db, 43, 5000)).resolves.toEqual([6]);
+      await expect(findLongLoadingUnitIds(db, 42, 5000)).resolves.toEqual([]);
+      const empty = await optionsService.findFlatResponseFilterOptions(42, { longLoading: 'yes', longLoadingThresholdMs: 5000 });
+      expect(Object.values(empty).every(values => values.length === 0)).toBe(true);
+    } finally {
+      await db.query('DELETE FROM unitlog WHERE id BETWEEN 10 AND 13');
+    }
   });
 
   it('keeps options scoped by unit loading and duration while listing alternative sessions', async () => {

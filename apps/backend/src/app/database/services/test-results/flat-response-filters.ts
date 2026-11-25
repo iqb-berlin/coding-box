@@ -1,4 +1,4 @@
-import { SelectQueryBuilder } from 'typeorm';
+import { DataSource, QueryRunner, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -86,10 +86,6 @@ export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatRespons
   applyProcessingFilters(qb, filters);
   applyUnitProgressFilter(qb, filters);
   applySessionFilters(qb, filters, purpose);
-  if (purpose === 'options' && filters.longLoadingOnly) {
-    // The option lists consider only unit logs.
-    qb.andWhere(`unit.id IN (${longLoadingUnitsSql()})`, { longLoadingThresholdMs: filters.longLoadingThresholdMs });
-  }
 }
 
 function applyFilterOptionText(qb: ResponseQuery, filters: FlatResponseFilters): void {
@@ -297,17 +293,22 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters, pu
   }
 }
 
-export function longLoadingUnitsSql(workspaceScoped = false): string {
+export async function findLongLoadingUnitIds(
+  connection: DataSource | QueryRunner, workspaceId: number, thresholdMs: number
+): Promise<number[]> {
   // A STARTED/ENDED pair passes exactly when the largest possible gap passes.
-  const scope = workspaceScoped ? `JOIN unit u ON u.id = ul.unitid
-    JOIN booklet b ON b.id = u.bookletid
-    JOIN persons p ON p.id = b.personid AND p.consider AND p.workspace_id = $2` : '';
-  const threshold = workspaceScoped ? '$1' : ':longLoadingThresholdMs';
-  return `SELECT ul.unitid FROM unitlog ul ${scope}
-    WHERE ul.key IN ('STARTED', 'ENDED')
-    GROUP BY ul.unitid
-    HAVING MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED')
-      - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED') >= ${threshold}`;
+  const rows: { unitid: number }[] = await connection.query(
+    `SELECT ul.unitid FROM unitlog ul
+     JOIN unit u ON u.id = ul.unitid
+     JOIN booklet b ON b.id = u.bookletid
+     JOIN persons p ON p.id = b.personid
+     WHERE p.workspace_id = $1 AND p.consider AND ul.key IN ('STARTED', 'ENDED')
+     GROUP BY ul.unitid
+     HAVING MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED')
+       - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED') >= $2`,
+    [workspaceId, thresholdMs]
+  );
+  return rows.map(row => row.unitid);
 }
 
 function applyProcessingDurationCategory(qb: ResponseQuery, filters: FlatResponseFilters): void {

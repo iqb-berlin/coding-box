@@ -7,7 +7,9 @@ import { statusNumberToString } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { applyExclusionsToQuery, excludeAutocoderGeneratedResponses } from './test-results.util';
 
-import { applyFlatResponseFilters, normalizeFlatResponseFilters } from './flat-response-filters';
+import {
+  applyFlatResponseFilters, findLongLoadingUnitIds, FlatResponseFilters, normalizeFlatResponseFilters
+} from './flat-response-filters';
 
 @Injectable()
 export class TestResultsFilterOptionsService {
@@ -89,6 +91,32 @@ export class TestResultsFilterOptionsService {
     );
   }
 
+  private async buildFilterOptionsQuery(workspaceId: number, filters: FlatResponseFilters) {
+    const baseQb = this.responseRepository
+      .createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    applyExclusionsToQuery(baseQb, exclusions, {
+      bookletInfoAlias: 'bookletinfo'
+    });
+    excludeAutocoderGeneratedResponses(baseQb);
+
+    if (filters.tags) baseQb.innerJoin('unit.tags', 'unitTag');
+    applyFlatResponseFilters(baseQb, filters, 'options');
+
+    if (filters.longLoadingOnly) {
+      // The option lists consider only unit logs. Reuse the matching IDs for every list.
+      const slowUnitIds = await findLongLoadingUnitIds(this.connection, workspaceId, filters.longLoadingThresholdMs);
+      baseQb.andWhere('unit.id = ANY(:slowUnitIds)', { slowUnitIds });
+    }
+    return baseQb;
+  }
+
   async findFlatResponseFilterOptions(
     workspaceId: number,
     options: {
@@ -140,22 +168,7 @@ export class TestResultsFilterOptionsService {
 
     const filters = normalizeFlatResponseFilters(options);
 
-    const baseQb = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'bookletEntity')
-      .innerJoin('bookletEntity.person', 'person')
-      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    applyExclusionsToQuery(baseQb, exclusions, {
-      bookletInfoAlias: 'bookletinfo'
-    });
-    excludeAutocoderGeneratedResponses(baseQb);
-
-    if (filters.tags) baseQb.innerJoin('unit.tags', 'unitTag');
-    applyFlatResponseFilters(baseQb, filters, 'options');
+    const baseQb = await this.buildFilterOptionsQuery(workspaceId, filters);
 
     // Person, booklet, session and log options depend only on which booklets
     // contain a matching response. Resolve that set once before reading those lists.

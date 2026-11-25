@@ -464,9 +464,9 @@ export class TestResultsSearchService {
   }
 
   private createStatusFilter(version: CodingVersion, filters: ResponseSearchFilters): ResponseStatusFilter {
-    // GeoGebra's partial index and named-unit searches narrow the response set
-    // before status evaluation. Indexed job lookups avoid grouping all jobs there.
-    const grouped = version !== 'v1' && !filters.geogebra && !filters.unitName;
+    // Use indexed job lookups when the response set is already narrowed by person, unit or GeoGebra.
+    const exactPerson = Boolean(filters.code) && !filters.regexSearch;
+    const grouped = version !== 'v1' && !exactPerson && !filters.geogebra && !filters.unitName;
     const expression = grouped ?
       `(CASE WHEN person.workspace_id = :workspaceId THEN ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} END)` :
       getEffectiveCodingStatusExpression(version);
