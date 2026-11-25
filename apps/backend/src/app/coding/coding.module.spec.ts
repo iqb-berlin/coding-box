@@ -144,7 +144,10 @@ async function createApplication(): Promise<TestingModule> {
     .overrideProvider(DataSource)
     .useValue({})
     .overrideProvider(getRedisConnectionToken())
-    .useValue({ disconnect: jest.fn() });
+    .useValue({
+      disconnect: jest.fn(),
+      duplicate: () => ({ on: jest.fn(), disconnect: jest.fn() })
+    });
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',

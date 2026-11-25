@@ -291,7 +291,7 @@ export class WorkspaceFilesController {
   @ApiBearerAuth()
   @ApiOperation({
     summary: 'Upload test files',
-    description: 'Uploads test files to a workspace'
+    description: 'Uploads test files and reports server-side processing in the workspace process overview'
   })
   @ApiParam({
     name: 'workspace_id',
@@ -307,9 +307,12 @@ export class WorkspaceFilesController {
   @ApiBadRequestResponse({
     description: 'Invalid workspace ID or no files uploaded'
   })
+  @ApiConflictResponse({
+    description: 'An Autocoder or another file mutation is already running in this workspace'
+  })
   @ApiTags('workspace')
   async addTestFiles(
-    @Param('workspace_id') workspaceId: number,
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Query('overwriteExisting', new ParseBoolPipe({ optional: true })) overwriteExisting: boolean | undefined,
     @Query('overwriteFileIds') overwriteFileIds: string | undefined,
     @UploadedFiles() files: Express.Multer.File[]
@@ -318,7 +321,7 @@ export class WorkspaceFilesController {
       throw new BadRequestException('Workspace ID is required.');
     }
 
-    if (!files || files.length === 0) {
+    if (!Array.isArray(files) || files.length === 0) {
       throw new BadRequestException('At least one file must be uploaded.');
     }
 
@@ -331,7 +334,8 @@ export class WorkspaceFilesController {
       workspaceId,
       files,
       overwrite,
-      overwriteIds.length > 0 ? overwriteIds : undefined
+      overwriteIds.length > 0 ? overwriteIds : undefined,
+      { trackProgress: true }
     );
   }
 
