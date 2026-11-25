@@ -204,6 +204,29 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
+  it('gets the total once for a regex page and preserves it beyond the last page', async () => {
+    await expectResponses({
+      regexSearch: true, response: '.', page: 2, limit: 3
+    }, [4, 5, 6], 8);
+    await expectResponses({
+      regexSearch: true, response: '.', page: 4, limit: 3
+    }, [], 8);
+    await expectResponses({ regexSearch: true, response: '^absent$' }, []);
+  });
+
+  it('returns consecutive pages at the 500-row size offered by the result browser', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value)
+      SELECT i, 1, 'PAGE', 3, 'page-size-fixture' FROM generate_series(1000, 1500) AS i`);
+    try {
+      const filters = { responseValue: 'page-size-fixture', limit: 500 };
+      await expectResponses(filters, Array.from({ length: 500 }, (_, index) => 1000 + index), 501);
+      await expectResponses({ ...filters, page: 2 }, [1500], 501);
+      await expectResponses({ ...filters, page: 3 }, [], 501);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 1000 AND 1500`);
+    }
+  });
+
   it('ignores invalid duration bounds consistently', async () => {
     await expectResponses({ processingDurationMin: '01:60', processingDurationMax: 'bad' }, [1, 2, 3, 4, 5, 6, 7, 8]);
   });

@@ -1793,7 +1793,7 @@ describe('WorkspaceTestResultsService', () => {
         .mockReturnValueOnce(countQb);
 
       await service.findFlatResponses(1, {
-        page: 1,
+        page: 2,
         limit: 10,
         code: '^P-',
         group: '^G[12]$',
@@ -1919,7 +1919,7 @@ describe('WorkspaceTestResultsService', () => {
         .mockReturnValueOnce(countQb);
 
       await service.findFlatResponses(1, {
-        page: 1,
+        page: 2,
         limit: 10,
         responseValue: 'needle'
       });
@@ -2040,7 +2040,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
       const dataQb = mockQueryBuilder();
       const countQb = mockQueryBuilder();
-      countQb.getRawOne.mockRejectedValue({
+      dataQb.getRawMany.mockRejectedValue({
         code: '57014',
         message: 'canceling statement due to statement timeout'
       });

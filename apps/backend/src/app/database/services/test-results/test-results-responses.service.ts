@@ -35,7 +35,7 @@ import {
   applyFlatResponseFilters, FlatResponseFilters, longLoadingUnitsSql, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 
-const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
+const MAX_FLAT_RESPONSE_PAGE_SIZE = 500;
 
 @Injectable()
 export class TestResultsResponsesService {
@@ -155,12 +155,20 @@ export class TestResultsResponsesService {
       .then(r => Number(r?.cnt || 0));
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const selectRows = () => this.selectFlatResponseRows(
-      rowQuery, validPage, validLimit, Boolean(filters.tags)
-    );
-    const [total, raw] = queryRunner ?
-      [await countRows(), await selectRows()] :
-      await Promise.all([countRows(), selectRows()]);
+    const pageQuery = this.createFlatResponsePageQuery(rowQuery, validPage, validLimit, Boolean(filters.tags));
+    let total: number;
+    let raw: Record<string, unknown>[];
+    if (filters.responseValue || (filters.regexSearch && filters.response)) {
+      // These searches run sequentially on one transaction. Evaluate their text predicate once.
+      raw = await pageQuery.addSelect('COUNT(*) OVER()', 'matchedCount').getRawMany();
+      if (raw.length) total = Number(raw[0].matchedCount);
+      else total = validPage === 1 ? 0 : await countRows();
+    } else if (queryRunner) {
+      total = await countRows();
+      raw = await pageQuery.getRawMany();
+    } else {
+      [total, raw] = await Promise.all([countRows(), pageQuery.getRawMany()]);
+    }
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
@@ -247,7 +255,7 @@ export class TestResultsResponsesService {
     return query;
   }
 
-  private selectFlatResponseRows(
+  private createFlatResponsePageQuery(
     qb: SelectQueryBuilder<ResponseEntity>,
     validPage: number,
     validLimit: number,
@@ -285,7 +293,6 @@ export class TestResultsResponsesService {
       .addOrderBy('response.variableid', 'ASC')
       .addOrderBy('response.id', 'ASC')
       .offset((validPage - 1) * validLimit)
-      .limit(validLimit)
-      .getRawMany();
+      .limit(validLimit);
   }
 }
