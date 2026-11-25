@@ -1090,6 +1090,14 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it.each([{ geogebra: true }, { unitName: 'Unit1' }])('uses individual job lookups for a narrowed manual status search', async filter => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
+      await service.searchResponses(1, { version: 'v2', codedStatus: '5', ...filter });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('effective_status_cju.response_id = response.id'), { codedStatus: 5 });
+    });
+
     it('preserves the database timeout reason when a normal status search is cancelled', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);

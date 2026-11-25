@@ -56,6 +56,12 @@ interface ResponseSearchFilters {
   regexSearch?: boolean;
 }
 
+interface ResponseStatusFilter {
+  value: number | null;
+  grouped: boolean;
+  expression: string;
+}
+
 const RESPONSE_SEARCH_COLUMNS = [
   'response.id', 'response.variableid', 'response.value', 'response.status',
   'response.status_v1', 'response.status_v2', 'response.status_v3',
@@ -223,7 +229,7 @@ export class TestResultsSearchService {
         if (!exists) return { data: [], total: 0 };
       }
 
-      const codedStatusNumber = searchParams.codedStatus ? statusStringToNumber(searchParams.codedStatus) : null;
+      const statusFilter = this.createStatusFilter(version, searchParams);
       const runSearch = async (queryRunner?: QueryRunner) => {
         const query = this.responseRepository
           .createQueryBuilder('response', queryRunner)
@@ -281,11 +287,11 @@ export class TestResultsSearchService {
         }
 
         if (searchParams.codedStatus) {
-          if (codedStatusNumber === null) {
+          if (statusFilter.value === null) {
             query.andWhere('1=0');
           } else {
-            query.andWhere(`${this.workspaceStatusExpression(version)} = :codedStatus`, {
-              codedStatus: codedStatusNumber
+            query.andWhere(`${statusFilter.expression} = :codedStatus`, {
+              codedStatus: statusFilter.value
             });
           }
         }
@@ -351,10 +357,10 @@ export class TestResultsSearchService {
           );
         }
 
-        await this.applyResponseSourceFilter(query, workspaceId, responseSource, version, codedStatusNumber);
+        await this.applyResponseSourceFilter(query, workspaceId, responseSource, statusFilter);
 
         const total = await this.countMatchingResponses(
-          query, !options.sortBy && !searchParams.geogebra && (version !== 'v1' || !searchParams.codedStatus)
+          query, !options.sortBy && !searchParams.geogebra && (statusFilter.grouped || !searchParams.codedStatus)
         );
         this.applyResponseSearchSorting(
           query,
@@ -457,28 +463,31 @@ export class TestResultsSearchService {
     }
   }
 
-  private workspaceStatusExpression(version: CodingVersion): string {
-    return version === 'v1' ? getEffectiveCodingStatusExpression(version) :
-      `(CASE WHEN person.workspace_id = :workspaceId THEN ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} END)`;
+  private createStatusFilter(version: CodingVersion, filters: ResponseSearchFilters): ResponseStatusFilter {
+    // GeoGebra's partial index and named-unit searches narrow the response set
+    // before status evaluation. Indexed job lookups avoid grouping all jobs there.
+    const grouped = version !== 'v1' && !filters.geogebra && !filters.unitName;
+    const expression = grouped ?
+      `(CASE WHEN person.workspace_id = :workspaceId THEN ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} END)` :
+      getEffectiveCodingStatusExpression(version);
+    return { grouped, expression, value: filters.codedStatus ? statusStringToNumber(filters.codedStatus) : null };
   }
 
   private async applyResponseSourceFilter(
     query: SelectQueryBuilder<ResponseEntity>,
     workspaceId: number,
     responseSource: NonNullable<ResponseSearchFilters['responseSource']>,
-    version: CodingVersion,
-    codedStatusNumber: number | null
+    status: ResponseStatusFilter
   ): Promise<void> {
-    const effectiveStatusExpression = this.workspaceStatusExpression(version);
     if (responseSource === 'derived') {
       query.andWhere('response.is_autocoder_generated = :derivedOnly', { derivedOnly: true });
     }
     if (responseSource === 'derived' || responseSource === 'all') {
-      if (version === 'v1') query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
+      if (!status.grouped) query.andWhere(`${status.expression} IS NOT NULL`);
       // A selected, eligible status already excludes NULL and ignored statuses.
-      if (version === 'v1' || codedStatusNumber === null ||
-          TestResultsSearchService.ignoredDerivedCodingStatuses.includes(codedStatusNumber)) {
-        query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+      if (!status.grouped || status.value === null ||
+          TestResultsSearchService.ignoredDerivedCodingStatuses.includes(status.value)) {
+        query.andWhere(`${status.expression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
           ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
         });
       }
