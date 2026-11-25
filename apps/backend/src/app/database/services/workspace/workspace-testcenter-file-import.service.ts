@@ -134,7 +134,7 @@ export class WorkspaceTestcenterFileImportService {
       )
     )))).filter((issue): issue is TestResultsUploadIssueDto => !!issue);
     if (result.uploaded > 0) {
-      const invalidated = await this.caches.invalidateWorkspaceFileCaches(workspaceId).catch(error => {
+      const invalidated = await this.caches.invalidateWorkspaceFileCaches(workspaceId, result.uploadedFiles).catch(error => {
         this.logger.error('Could not invalidate workspace caches after Testcenter import', error);
         return false;
       });

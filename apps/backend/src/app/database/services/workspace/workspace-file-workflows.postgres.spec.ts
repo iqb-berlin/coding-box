@@ -20,7 +20,7 @@ import { CodingFreshnessQueryService } from '../coding/coding-freshness-query.se
 import { CodingJobFreshnessService } from '../coding/coding-job-freshness.service';
 import { CodingStatisticsService } from '../coding/coding-statistics.service';
 import { CodingFileCacheService } from '../coding/coding-file-cache.service';
-import { getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
+import { CODING_STATISTICS_CACHE_KEY_PREFIX, getCodingStatisticsCacheKey } from '../coding/coding-statistics-cache-key.util';
 import { getCodingIncompleteVariablesCacheKeys } from '../coding/coding-incomplete-variables-cache-key.util';
 import { WorkspaceTestResultsService } from '../test-results/workspace-test-results.service';
 import { TestResultsCacheService } from '../test-results/test-results-cache.service';
@@ -53,6 +53,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
   let redis: Redis;
   let cache: CacheService;
   let files: WorkspaceFilesService;
+  let statistics: CodingStatisticsService;
   let xsdServer: Server;
   let xsdUrl: string;
   let created = false;
@@ -101,7 +102,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     const freshness = new CodingFreshnessService(
       db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, new CodingFreshnessQueryService(db.getRepository(CodingUnitFreshness), db.getRepository(ResponseEntity), db, exclusions), new CodingJobFreshnessService(db)
     );
-    const statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
+    statistics = new CodingStatisticsService(db.getRepository(ResponseEntity), cache, {} as never, exclusions, metadata);
     const resultsCache = new TestResultsCacheService({} as never, new WorkspaceStatsCacheService(cache), statistics);
     const results = new WorkspaceTestResultsService(
       {} as never, resultsCache, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never, {} as never
@@ -285,6 +286,22 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await files.getUnitVariableMap(workspace)).toEqual(new Map([['UNIT', new Set(['NEW'])]]));
   });
 
+  it('refreshes cached coding statistics after a Testcenter Unit insert or overwrite', async () => {
+    const { workspace } = await fixture();
+    const entry = {
+      workspace_id: workspace, file_id: 'UNIT', filename: 'unit.xml', file_type: 'Unit', file_size: 100, data: unitXml()
+    };
+    const readStats = () => statistics.getCodingStatistics(workspace);
+    expect(await readStats()).toMatchObject({ totalResponses: 0 });
+
+    expect(await files.testCenterImport([entry])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect(await readStats()).toMatchObject({ totalResponses: 1 });
+
+    const changed = { ...entry, data: unitXml('OTHER') };
+    expect(await files.testCenterImport([changed], ['UNIT'])).toMatchObject({ uploaded: 1, issues: undefined });
+    expect(await readStats()).toMatchObject({ totalResponses: 0 });
+  });
+
   it('keeps committed Testcenter files and invalidates caches when one freshness calculation fails', async () => {
     const { workspace, unit } = await fixture();
     await files.uploadTestFiles(workspace, [input('unit.xml', unitXml(), 'text/xml')], false);
@@ -310,7 +327,7 @@ describePostgres('Workspace file workflows with PostgreSQL and Redis', () => {
     expect(await cache.get(sentinel)).toBeNull();
   });
 
-  it.each([':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX])(
+  it.each([':unit_variables:', EXCLUSION_CACHE_PREFIX, OVERVIEW_STATS_CACHE_PREFIX, CODING_STATISTICS_CACHE_KEY_PREFIX])(
     'reports a committed Testcenter file when deleting the %s cache returns false',
     async failedKeyPart => {
       const { workspace } = await fixture();

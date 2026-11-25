@@ -46,7 +46,7 @@ export function createWorkspaceFilesService(
   codingCache?: CodingFileCacheService,
   processCache?: CodingProcessCacheInvalidator
 ): WorkspaceFilesService {
-  const caches = new WorkspaceFileCacheService(metadata, cache, results, codingCache, processCache);
+  const caches = new WorkspaceFileCacheService(metadata, cache, results, statistics, codingCache, processCache);
   const freshness = new WorkspaceFileFreshnessService(codingFreshness);
   const xml = new WorkspaceXmlFileUploadService(files, schema, parsing);
   const resources = new WorkspaceResourceFileUploadService(files, parsing, freshness);

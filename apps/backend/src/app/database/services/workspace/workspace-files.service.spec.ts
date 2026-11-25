@@ -254,7 +254,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     }
   };
   const mockCodingStatisticsService = {
-    invalidateCache: jest.fn().mockResolvedValue(undefined),
+    invalidateCache: jest.fn().mockResolvedValue(true),
     invalidateIncompleteVariablesCache: jest.fn().mockResolvedValue(undefined)
   };
   const mockCodingFreshnessService = {
@@ -596,7 +596,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       }
     ]);
 
-    expect(invalidateSpy).toHaveBeenCalledWith(1);
+    expect(invalidateSpy).toHaveBeenCalledWith(1, [{ fileId: 'UNIT_A.VOCS', filename: 'UNIT_A.VOCS', fileType: 'Resource' }]);
   });
 
   it('extracts coding scheme refs for Unit files imported from Testcenter', async () => {

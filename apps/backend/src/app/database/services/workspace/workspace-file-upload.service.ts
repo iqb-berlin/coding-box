@@ -18,14 +18,8 @@ import { WorkspaceFileCacheService } from './workspace-file-cache.service';
 import { WorkspaceXmlFileUploadService } from './workspace-xml-file-upload.service';
 import { WorkspaceResourceFileUploadService } from './workspace-resource-file-upload.service';
 import {
-  isCodingSchemeFileId, toFailedUploadResult, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
+  toFailedUploadResult, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
 } from './workspace-file-write.util';
-
-type UploadedFileForCacheInvalidation = {
-  fileId?: string;
-  filename?: string;
-  fileType?: string;
-};
 
 @Injectable()
 export class WorkspaceFileUploadService {
@@ -39,23 +33,6 @@ export class WorkspaceFileUploadService {
     private readonly caches: WorkspaceFileCacheService,
     private readonly codingStatisticsService: CodingStatisticsService
   ) {}
-
-  private isUploadedCodingSchemeFile(
-    file: UploadedFileForCacheInvalidation
-  ): boolean {
-    return [file.fileId, file.filename]
-      .some(value => isCodingSchemeFileId(value));
-  }
-
-  private shouldInvalidateCodingStatisticsAfterUpload(
-    result: TestFilesUploadResultDto
-  ): boolean {
-    const uploadedFiles = result.uploadedFiles || [];
-    if (uploadedFiles.length === 0) {
-      return false;
-    }
-    return !uploadedFiles.every(file => this.isUploadedCodingSchemeFile(file));
-  }
 
   private hasUploadedFiles(result: TestFilesUploadResultDto): boolean {
     return (result.uploadedFiles || []).length > 0;
@@ -122,11 +99,7 @@ export class WorkspaceFileUploadService {
         mutationContext
       );
       // Refresh shared file caches even when every file fails or conflicts.
-      await this.caches.invalidateWorkspaceFileCaches(workspace_id);
-
-      if (this.shouldInvalidateCodingStatisticsAfterUpload(result)) {
-        await this.codingStatisticsService.invalidateCache(workspace_id);
-      }
+      await this.caches.invalidateWorkspaceFileCaches(workspace_id, result.uploadedFiles);
       if (this.hasUploadedFiles(result)) {
         await this.codingStatisticsService.invalidateIncompleteVariablesCache(
           workspace_id
