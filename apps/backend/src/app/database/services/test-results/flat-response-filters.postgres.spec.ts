@@ -178,6 +178,20 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     }
   });
 
+  it('keeps partial variable IDs case-insensitive and preserves LIKE wildcards within the workspace', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status) VALUES
+      (31, 1, 'TeXtA34', 3), (32, 1, 'TEXT_34', 3), (33, 1, 'text9934', 3),
+      (34, 6, 'TextB34', 3), (35, 7, 'TextC34', 3), (36, 8, 'TextD34', 3)`);
+    try {
+      const [partial, total] = await service.findFlatResponses(42, { response: 'text_34', page: 1, limit: 50 });
+      expect(total).toBe(2);
+      expect(partial.map(row => row.responseId).sort((a, b) => a - b)).toEqual([31, 32]);
+      await expectResponses({ response: '"text_34"' }, [32]);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 31 AND 36`);
+    }
+  });
+
   it('ignores invalid duration bounds consistently', async () => {
     await expectResponses({ processingDurationMin: '01:60', processingDurationMax: 'bad' }, [1, 2, 3, 4, 5, 6, 7, 8]);
   });

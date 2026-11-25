@@ -126,7 +126,9 @@ export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
         { responseExact: responseFilter.value }
       );
     } else {
-      query.andWhere('response.variableid ILIKE :response', {
+      // Evaluate the substring against responses from the joined workspace.
+      // A global ILIKE scan is expensive for common variable IDs across workspaces.
+      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END', {
         response: `%${responseFilter.value}%`
       });
     }

@@ -1741,7 +1741,7 @@ describe('WorkspaceTestResultsService', () => {
           { responseExact: '01_unique' }
         );
         expect(qb.andWhere).not.toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
+          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END',
           expect.anything()
         );
       });
@@ -1762,7 +1762,7 @@ describe('WorkspaceTestResultsService', () => {
 
       [dataQb, countQb].forEach(qb => {
         expect(qb.andWhere).toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
+          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END',
           { response: '%01%' }
         );
       });
