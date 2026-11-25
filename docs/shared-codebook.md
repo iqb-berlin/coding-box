@@ -1,8 +1,17 @@
 # Integration des gemeinsamen Codebooks
 
+## Paket und Tiptap
+
+Die Kodierbox verwendet aus `@iqb/ngx-coding-components` 5.0.0 die
+Einstiegspunkte `codebook-export`, `codebook-models`, `codebook-generator` und
+`translations`. Exportdialog und Generator kommen ohne Tiptap aus. Die
+Bibliothek deklariert Tiptap für ihren Rich-Text-Editor als Peer-Abhängigkeit.
+Deshalb installiert npm Tiptap beim Auflösen der Bibliothek mit. Die Kodierbox
+braucht dafür keinen eigenen Eintrag in der `package.json`.
+
 ## Paketupdate vom 20.10.2026
 
-Der aktuelle Stand verwendet die veröffentlichte Bibliothek **4.1.0**,
+Der damalige Stand verwendete die veröffentlichte Bibliothek **4.1.0**,
 Responses **5.4.0** und Coding-Scheme **3.5.0**. Der
 [aktuelle Prüfbericht](codebook-npm-update-2026-10-20.md) nennt Paketprüfsumme,
 Autocoder-Abgleich und Prüfgrenzen. Die nachfolgenden Berichte gehören
@@ -74,7 +83,7 @@ beendet die Statusabfrage, nicht den Serverjob.
 Der Wrapper meldet asynchrone Daten- und Statusänderungen an Angular und ist mit
 OnPush und zoneless Change Detection getestet.
 
-## Veröffentlichtes Paket
+## Veröffentlichtes Paket vom 20.10.2026
 
 Root-Abhängigkeit und Lock verwenden die veröffentlichte Version
 `@iqb/ngx-coding-components@4.1.0`. Das von Nx generierte Runtime-Manifest nennt
