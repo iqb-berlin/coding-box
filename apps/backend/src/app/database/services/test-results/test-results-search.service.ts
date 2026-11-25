@@ -15,6 +15,7 @@ import {
   toRegexSearchException,
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   CodingVersion,
@@ -35,6 +36,25 @@ import {
 import {
   EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
 } from './workspace-test-results.types';
+
+interface ResponseSearchFilters {
+  value?: string;
+  variableId?: string;
+  unitName?: string;
+  bookletName?: string;
+  status?: string;
+  codedStatus?: string;
+  group?: string;
+  code?: string;
+  codingCode?: string;
+  score?: string;
+  version?: 'v1' | 'v2' | 'v3';
+  geogebra?: boolean;
+  derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
+  personLogin?: string;
+  regexSearch?: boolean;
+}
 
 const RESPONSE_SEARCH_COLUMNS = [
   'response.id', 'response.variableid', 'response.value', 'response.status',
@@ -142,24 +162,7 @@ export class TestResultsSearchService {
 
   async searchResponses(
     workspaceId: number,
-    searchParams: {
-      value?: string;
-      variableId?: string;
-      unitName?: string;
-      bookletName?: string;
-      status?: string;
-      codedStatus?: string;
-      group?: string;
-      code?: string;
-      codingCode?: string;
-      score?: string;
-      version?: 'v1' | 'v2' | 'v3';
-      geogebra?: boolean;
-      derivedOnly?: boolean;
-      responseSource?: 'base' | 'derived' | 'all';
-      personLogin?: string;
-      regexSearch?: boolean;
-    },
+    searchParams: ResponseSearchFilters,
     options: {
       page?: number;
       limit?: number;
@@ -205,6 +208,20 @@ export class TestResultsSearchService {
           searchParams
         )} (page: ${page}, limit: ${limit})`
       );
+
+      const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+      const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
+        'base' :
+        requestedResponseSource;
+
+      // An unknown exact person code can be answered from the workspace/code
+      // index before loading the workspace's coding scheme metadata.
+      if (searchParams.code && !searchParams.regexSearch && responseSource !== 'base') {
+        const exists = await this.connection.getRepository(Persons).existsBy({
+          workspace_id: workspaceId, code: searchParams.code, consider: true
+        });
+        if (!exists) return { data: [], total: 0 };
+      }
 
       const runSearch = async (queryRunner?: QueryRunner) => {
         const query = this.responseRepository
@@ -334,11 +351,6 @@ export class TestResultsSearchService {
             createGeoGebraValueCondition('response')
           );
         }
-
-        const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
-        const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
-          'base' :
-          requestedResponseSource;
 
         if (responseSource === 'derived') {
           const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);

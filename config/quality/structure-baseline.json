@@ -1012,11 +1012,11 @@
       "file": {},
       "functions": {
         "class TestResultsSearchService#1/method searchResponses#1": {
-          "max-lines-per-function": 292
+          "max-lines-per-function": 281
         },
         "class TestResultsSearchService#1/method searchResponses#1/function runSearch#1": {
-          "complexity": 38,
-          "max-lines-per-function": 213
+          "complexity": 34,
+          "max-lines-per-function": 209
         }
       }
     },

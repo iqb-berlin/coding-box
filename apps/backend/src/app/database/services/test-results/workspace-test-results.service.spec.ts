@@ -968,6 +968,23 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('searchResponses', () => {
+    it('skips coding metadata only when an exact code has no considered workspace person', async () => {
+      const existsBy = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({ existsBy });
+      const filters = { responseSource: 'all' as const, code: 'Person-A' };
+
+      await expect(service.searchResponses(23, filters)).resolves.toEqual({ data: [], total: 0 });
+      expect(existsBy).toHaveBeenCalledWith({ workspace_id: 23, code: 'Person-A', consider: true });
+      expect(codingListService.getValidVariablePairKeys).not.toHaveBeenCalled();
+
+      const qb = mockQueryBuilder();
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      await expect(service.searchResponses(23, filters)).resolves.toEqual({ data: [], total: 0 });
+      expect(codingListService.getValidVariablePairKeys).toHaveBeenCalledWith(23);
+      expect(qb.andWhere).toHaveBeenCalledWith('person.code = :code', { code: 'Person-A' });
+    });
+
     it('should filter by autocoder-generated responses when derivedOnly is set', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
