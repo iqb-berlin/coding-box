@@ -92,14 +92,9 @@ describe('CodingJobOperationsService', () => {
 
     expect(codingJobRepository.find).toHaveBeenCalledWith({
       where: { workspace_id: 5 },
-      select: [
-        'id',
-        'name',
-        'status',
-        'training_id',
-        'freshness_status',
-        'job_type'
-      ]
+      select: {
+        id: true, name: true, status: true, training_id: true, freshness_status: true, job_type: true
+      }
     });
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledTimes(1);
     expect(codingResultsService.applyCodingResults).toHaveBeenCalledWith(5, 3, { actorUserId: 7 });

@@ -1,3 +1,4 @@
+import { resolve } from 'node:path';
 import { Client } from 'pg';
 import { Job } from 'bullmq';
 import { DataSource, Repository } from 'typeorm';
@@ -23,11 +24,14 @@ const describeWithDatabase = databaseUrl ? describe : describe.skip;
 describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
   let client: Client;
   let processor: VariableAnalysisProcessor;
-  const dataSource = new DataSource({ type: 'postgres' });
+  const dataSource = new DataSource({
+    type: 'postgres', url: databaseUrl, entities: [resolve(__dirname, '../../database/entities/*.entity.ts')]
+  });
 
   beforeAll(async () => {
     client = new Client({ connectionString: databaseUrl });
     await client.connect();
+    await dataSource.initialize();
     await client.query(`
       CREATE TEMP TABLE analysis_person (id int, consider boolean);
       CREATE TEMP TABLE analysis_booklet (id int, person_id int);
@@ -38,6 +42,7 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
         code_v2 int, status_v2 int, score_v2 int,
         code_v3 int, status_v3 int, score_v3 int
       );
+      CREATE TEMP VIEW response AS SELECT * FROM analysis_response;
       INSERT INTO analysis_person SELECT n, true FROM generate_series(1, 8) n;
       INSERT INTO analysis_booklet SELECT n, n FROM generate_series(1, 8) n;
       INSERT INTO analysis_unit SELECT n, 'UNIT', n FROM generate_series(1, 8) n;
@@ -67,10 +72,10 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
 
   afterAll(async () => {
     await client?.end();
+    if (dataSource.isInitialized) await dataSource.destroy();
   });
 
-  const createQuery = () => dataSource.createQueryBuilder()
-    .from('analysis_response', 'response')
+  const createQuery = () => dataSource.getRepository(ResponseEntity).createQueryBuilder('response')
     .innerJoin('analysis_unit', 'unit', 'unit.id = response.unitid')
     .innerJoin('analysis_booklet', 'booklet', 'booklet.id = unit.booklet_id')
     .innerJoin('analysis_person', 'person', 'person.id = booklet.person_id')
@@ -85,7 +90,7 @@ describeWithDatabase('Variable analysis SQL with PostgreSQL', () => {
     const summary = await client.query(`
       SELECT COUNT(*)::int AS total,
         COUNT(*) FILTER (WHERE "analysisValid")::int AS valid,
-        COUNT(*) FILTER (WHERE ${getEmptyVariableAnalysisValueSql('analysis_rows."rawValue"')})::int AS empty
+        COUNT(*) FILTER (WHERE analysis_rows."rawValueIsEmpty")::int AS empty
       FROM (${source.sql}) analysis_rows
     `, source.parameters);
     const frequencies = await client.query(`

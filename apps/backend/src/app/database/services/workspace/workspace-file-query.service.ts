@@ -183,7 +183,7 @@ export class WorkspaceFileQueryService {
 
     if (regexSearch) {
       return withRegexSearchStatementTimeout(
-        this.fileUploadRepository.manager.connection,
+        this.fileUploadRepository.manager.dataSource,
         runFindFiles
       );
     }

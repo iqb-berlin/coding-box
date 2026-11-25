@@ -47,7 +47,7 @@ describe('CodingAnalysisService aggregation settings', () => {
       createQueryBuilder: jest.fn().mockReturnValue(queryBuilder),
       update: jest.fn().mockResolvedValue(undefined),
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue(queryRunner)
         }
       }

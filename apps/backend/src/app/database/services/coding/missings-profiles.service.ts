@@ -84,7 +84,7 @@ export class MissingsProfilesService {
 
       const profiles = await this.missingsProfileRepository.find({
         where: { workspace_id: workspaceId },
-        select: ['id', 'label']
+        select: { id: true, label: true }
       });
 
       return profiles.map(profile => ({ label: profile.label, id: profile.id }));
@@ -102,7 +102,7 @@ export class MissingsProfilesService {
     );
     const profiles = await this.missingsProfileRepository.find({
       where: { workspace_id: workspaceId },
-      select: ['id', 'label']
+      select: { id: true, label: true }
     });
 
     return profiles.map(profile => ({ label: profile.label, id: profile.id }));

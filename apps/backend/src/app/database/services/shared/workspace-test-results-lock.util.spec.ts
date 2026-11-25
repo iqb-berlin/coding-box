@@ -16,7 +16,7 @@ describe('workspace test results mutation lock', () => {
     };
     const connection = { options: { extra: { max: 2 } }, createQueryRunner: jest.fn(() => queryRunner) };
     const transactionManager = {};
-    const factory = { connection, transaction: jest.fn(async callback => callback(transactionManager)) };
+    const factory = { dataSource: connection, transaction: jest.fn(async callback => callback(transactionManager)) };
     const imported = withWorkspaceTestcenterImportLock(connection as never, 1, async () => {
       importStarted();
       await importPending;

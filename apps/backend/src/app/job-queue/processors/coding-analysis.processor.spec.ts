@@ -179,7 +179,7 @@ describe('CodingAnalysisProcessor', () => {
       getExists: jest.fn().mockResolvedValue(false),
       getCount: jest.fn().mockResolvedValue(rows.length),
       getQueryAndParameters: () => ['SELECT id FROM response', []],
-      connection: { createQueryRunner: () => runner }
+      dataSource: { createQueryRunner: () => runner }
     };
     const repository = { createQueryBuilder: () => query } as unknown as Repository<ResponseEntity>;
     return { repository, query, runner };

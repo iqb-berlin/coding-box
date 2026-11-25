@@ -320,7 +320,7 @@ export class CodingJobSchemeService {
         workspace_id: workspaceId,
         file_id: In([...unitFileIds])
       },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
     const unitFileById = new Map(unitFiles.map(file => [file.file_id, file]));
     const codingSchemeRefsByUnitFileId = new Map<string, string[]>();
@@ -571,7 +571,7 @@ export class CodingJobSchemeService {
         workspace_id: workspaceId,
         file_id: In(codingSchemeRefs)
       },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
 
     for (const file of codingSchemeFiles) {
