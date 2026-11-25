@@ -51,9 +51,9 @@ and prints that location. Set `CODEBOOK_PROOF_DIR` only for an operator-controll
 output directory; the runner intentionally reuses an explicitly configured path.
 
 To also compare against a real installed Studio checkout, add
-`STUDIO_REFERENCE_ROOT=/absolute/path/to/studio-checkout`. It must contain the
-published `@iqb/ngx-coding-components@4.1.0` package and installed dependencies.
-Both lockfiles must record the same package version and integrity. The reference
+`STUDIO_REFERENCE_ROOT=/absolute/path/to/studio-checkout`. Install the dependencies
+in that checkout first. Both lockfiles must record the same version and integrity
+for `@iqb/ngx-coding-components`. The reference
 loads the actual Studio adapter and its installed generator without modifying the
 checkout. Studio receives the explicitly expected filtered subset and item
 identities; Studio repository/profile boundaries remain in memory. DOCX
