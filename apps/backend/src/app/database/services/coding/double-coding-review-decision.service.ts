@@ -256,7 +256,7 @@ export class DoubleCodingReviewDecisionService {
           }
         }
       ],
-      relations: ['response', 'coding_job', 'coding_job.codingJobCoders']
+      relations: { response: true, coding_job: { codingJobCoders: true } }
     });
     if (!sourceUnit || this.getDistinctCodingJobCoders(
       sourceUnit.coding_job?.codingJobCoders || []
@@ -655,7 +655,7 @@ export class DoubleCodingReviewDecisionService {
           }
         }
       ],
-      relations: ['response', 'coding_job', 'coding_job.codingJobCoders'],
+      relations: { response: true, coding_job: { codingJobCoders: true } },
       order: { id: 'ASC' }
     })).filter(unit => {
       const existedWhenDecisionWasApplied = !decisionTime || !unit.created_at ||
@@ -1046,7 +1046,7 @@ export class DoubleCodingReviewDecisionService {
         response_id: decision.responseId,
         coding_job_id: selectedJobId
       },
-      relations: ['response', 'coding_job']
+      relations: { response: true, coding_job: true }
     });
 
     if (!selectedCodingJobUnit) {

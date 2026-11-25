@@ -121,8 +121,8 @@ export class KappaPostgresFixture {
     return this.insert('response', { unitid: unitId, variableid: variableId, status: 1 });
   }
 
-  async result(jobId: number, responseId: number, unitName: string, variableId: string, extra: Record<string, unknown> = {}): Promise<void> {
-    await this.insert('coding_job_unit', {
+  async result(jobId: number, responseId: number, unitName: string, variableId: string, extra: Record<string, unknown> = {}): Promise<number> {
+    return this.insert('coding_job_unit', {
       coding_job_id: jobId,
       response_id: responseId,
       unit_name: unitName,

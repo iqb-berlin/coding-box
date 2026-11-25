@@ -239,12 +239,12 @@
     },
     "apps/backend/src/app/database/services/coding/coder-training-comparison.service.ts": {
       "file": {
-        "max-lines": 965
+        "max-lines": 956
       },
       "functions": {
         "class CoderTrainingComparisonService#1/method getTrainingCodingComparison#1": {
           "max-depth": 5,
-          "max-lines-per-function": 156
+          "max-lines-per-function": 151
         },
         "class CoderTrainingComparisonService#1/method getWithinTrainingCodingComparison#1": {
           "complexity": 23,
@@ -290,7 +290,7 @@
         "class CoderTrainingMutationService#1/method updateCoderTraining#1": {
           "max-lines-per-function": 345
         },
-        "class CoderTrainingMutationService#1/method updateCoderTraining#1/anonymous:b7636e03c4e339ee#1": {
+        "class CoderTrainingMutationService#1/method updateCoderTraining#1/anonymous:8f2190df82c3eda5#1": {
           "complexity": 71,
           "max-depth": 6,
           "max-lines-per-function": 319
@@ -514,7 +514,7 @@
       "file": {},
       "functions": {
         "class CodingJobReplayService#1/method buildCodingJobNavigationUnits#1": {
-          "max-lines-per-function": 128
+          "max-lines-per-function": 124
         },
         "class CodingJobReplayService#1/method getCodingJobBundleContextsForUnits#1": {
           "max-lines-per-function": 164
@@ -607,22 +607,22 @@
     },
     "apps/backend/src/app/database/services/coding/coding-results-export.service.ts": {
       "file": {
-        "max-lines": 1811
+        "max-lines": 1787
       },
       "functions": {
         "class CodingResultsExportService#1/method exportAggregatedNewColumnPerCoder#1": {
           "complexity": 98,
-          "max-lines-per-function": 253
+          "max-lines-per-function": 247
         },
         "class CodingResultsExportService#1/method exportAggregatedNewRowPerVariable#1": {
           "complexity": 106,
           "max-depth": 5,
-          "max-lines-per-function": 262
+          "max-lines-per-function": 256
         },
         "class CodingResultsExportService#1/method exportCodingResultsAggregated#1": {
           "complexity": 109,
           "max-depth": 5,
-          "max-lines-per-function": 254
+          "max-lines-per-function": 248
         },
         "class CodingResultsExportService#1/method exportCodingResultsByCoder#1": {
           "complexity": 69,
@@ -632,7 +632,7 @@
         "class CodingResultsExportService#1/method exportCodingResultsByVariable#1": {
           "complexity": 102,
           "max-depth": 7,
-          "max-lines-per-function": 265
+          "max-lines-per-function": 259
         },
         "class CodingResultsExportService#1/method exportCodingResultsDetailed#1": {
           "complexity": 77,
@@ -670,7 +670,7 @@
         "class CodingTimesExportService#1/method exportCodingTimesReport#1": {
           "complexity": 53,
           "max-depth": 5,
-          "max-lines-per-function": 205
+          "max-lines-per-function": 197
         }
       }
     },
@@ -749,7 +749,7 @@
     },
     "apps/backend/src/app/database/services/coding/double-coding-review-query.service.ts": {
       "file": {
-        "max-lines": 1516
+        "max-lines": 1502
       },
       "functions": {
         "class DoubleCodingReviewQueryService#1/method getCodedVariablesForKappa#1": {
@@ -758,7 +758,7 @@
         },
         "class DoubleCodingReviewQueryService#1/method getDoubleCodedReviewData#1": {
           "complexity": 102,
-          "max-lines-per-function": 447
+          "max-lines-per-function": 433
         },
         "class DoubleCodingReviewQueryService#1/method getWorkspaceCohensKappaSummary#1": {
           "complexity": 39,
@@ -865,7 +865,7 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1059
+        "max-lines": 1058
       },
       "functions": {
         "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
@@ -1116,7 +1116,7 @@
     },
     "apps/backend/src/app/database/services/validation/workspace-test-files-validation.service.ts": {
       "file": {
-        "max-lines": 1845
+        "max-lines": 1842
       },
       "functions": {
         "class WorkspaceTestFilesValidationService#1/method getUnusedTestFilesFromValidationGraph#1": {
@@ -1437,18 +1437,6 @@
         }
       }
     },
-    "apps/frontend/src/app/replay/components/unit-player/unit-player.component.ts": {
-      "file": {},
-      "functions": {
-        "class UnitPlayerComponent#1/method subscribeForMessages#1": {
-          "max-lines-per-function": 121
-        },
-        "class UnitPlayerComponent#1/method subscribeForMessages#1/anonymous:5ff7268ca0f42ee6#1": {
-          "complexity": 41,
-          "max-lines-per-function": 117
-        }
-      }
-    },
     "apps/frontend/src/app/replay/services/replay-coding.service.ts": {
       "file": {
         "max-lines": 1139
@@ -1516,7 +1504,7 @@
     },
     "apps/frontend/src/app/ws-admin/components/test-files/test-files.component.ts": {
       "file": {
-        "max-lines": 1295
+        "max-lines": 1288
       },
       "functions": {
         "class TestFilesComponent#1/method handleValidationResponse#1": {

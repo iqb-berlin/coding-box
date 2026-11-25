@@ -240,7 +240,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
     findOne: jest.fn(),
     upsert: jest.fn().mockResolvedValue(undefined),
     manager: {
-      connection: {
+      dataSource: {
         createQueryRunner: jest.fn(() => ({
           connect: jest.fn().mockResolvedValue(undefined),
           query: jest.fn().mockResolvedValue([{ locked: true }]),
@@ -327,7 +327,7 @@ describe('WorkspaceFilesService coding scheme freshness', () => {
       file_type: 'Unit',
       file_id_normalized: 'UNIT_A'
     }));
-    expect(findOptions.select).toEqual(['file_id', 'data']);
+    expect(findOptions.select).toEqual({ file_id: true, data: true });
     expect(result).toEqual([expect.objectContaining({
       id: 'v1',
       alias: 'v1',
@@ -659,7 +659,7 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
   const mockFileUploadRepository = {
     createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder),
     manager: {
-      connection: {
+      dataSource: {
         createQueryRunner: jest.fn(() => ({
           connect: jest.fn().mockResolvedValue(undefined),
           query: jest.fn().mockResolvedValue([{ locked: true }]),
@@ -717,7 +717,7 @@ describe('WorkspaceFilesService.deleteTestFiles', () => {
       'id IN (:...ids)',
       { ids: [1, 2, 3] }
     );
-    const queryRunner = mockFileUploadRepository.manager.connection
+    const queryRunner = mockFileUploadRepository.manager.dataSource
       .createQueryRunner.mock.results[0].value;
     expect(queryRunner.manager.getRepository).toHaveBeenCalledTimes(1);
     expect(mockQueryBuilder.execute).toHaveBeenCalled();
@@ -870,7 +870,7 @@ describe('WorkspaceFilesService.findAllFileTypes', () => {
   const mockFileUploadRepository = {
     createQueryBuilder: jest.fn(),
     manager: {
-      connection: {
+      dataSource: {
         createQueryRunner: jest.fn().mockReturnValue({
           connect: jest.fn().mockResolvedValue(undefined),
           startTransaction: jest.fn().mockResolvedValue(undefined),
@@ -958,7 +958,7 @@ describe('WorkspaceFilesService.findFiles', () => {
   const mockFileUploadRepository = {
     createQueryBuilder: jest.fn(),
     manager: {
-      connection: {
+      dataSource: {
         createQueryRunner: jest.fn().mockReturnValue({
           connect: jest.fn().mockResolvedValue(undefined),
           startTransaction: jest.fn().mockResolvedValue(undefined),

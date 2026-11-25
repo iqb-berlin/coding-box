@@ -344,7 +344,7 @@ export class CodingAnalysisService {
 
     try {
       const lockAttempt = await tryWithWorkspaceTestResultsMutationLock(
-        this.responseRepository.manager.connection,
+        this.responseRepository.manager.dataSource,
         workspaceId,
         async queryRunner => {
           await this.codingJobService.setAggregationThreshold(

@@ -181,7 +181,7 @@ export class WorkspaceFileMetadataService implements OnModuleInit, WorkspaceFile
           file_type: 'Unit',
           file_id_normalized: expectedUnitId
         },
-        select: ['file_id', 'data']
+        select: { file_id: true, data: true }
       });
 
       if (!unitFiles || unitFiles.length === 0) {

@@ -2815,7 +2815,7 @@ describe('CodingItemMatrixExportService', () => {
     });
     expect(repository.find).toHaveBeenCalledWith({
       where: { workspace_id: 7, file_type: 'Booklet' },
-      select: ['file_id', 'data'],
+      select: { file_id: true, data: true },
       order: { file_id: 'ASC' }
     });
   });

@@ -45,8 +45,8 @@ class Persons {
   @Column({ type: 'jsonb' })
   booklets: TcMergeBooklet[];
 
-  @Column({ type: 'varchar' })
-  source!: string;
+  @Column({ type: 'varchar', nullable: true })
+  source!: string | null;
 
   @Column({ type: 'boolean', default: true })
   consider!: boolean;

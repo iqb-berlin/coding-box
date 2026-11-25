@@ -37,7 +37,7 @@ export class UsersService {
     if (workspaceId) {
       const workspaceUsers = await this.workspaceUserRepository.find({
         where: { workspaceId, accessLevel: MoreThan(0) },
-        select: ['userId']
+        select: { userId: true }
       });
       workspaceUsers.forEach(wsUser => validUsers.add(wsUser.userId));
     }
@@ -186,7 +186,7 @@ export class UsersService {
         accessLevel: MoreThan(0),
         canCode: true
       },
-      select: ['userId']
+      select: { userId: true }
     });
     const coderUserIds = new Set(coderRows.map(row => row.userId));
     const missingUserIds = uniqueUserIds.filter(userId => !coderUserIds.has(userId));
@@ -211,7 +211,7 @@ export class UsersService {
         accessLevel: MoreThan(0),
         canCode: true
       },
-      select: ['userId']
+      select: { userId: true }
     });
 
     return !!workspaceUser;
@@ -404,7 +404,7 @@ export class UsersService {
   async createUser(user: RequestBody<'CreateUserDto'>): Promise<number> {
     const existingUser: User | null = await this.usersRepository.findOne({
       where: { username: user.username },
-      select: ['id', 'username'] // Fetch only the needed fields for validation
+      select: { id: true, username: true } // Fetch only the needed fields for validation
     });
 
     this.logger.log('Attempting to create user');

@@ -34,7 +34,7 @@ import {
 } from '../../../core/services/auth-session.config';
 import { AccessRightsMatrixDialogComponent } from '../access-rights-matrix-dialog/access-rights-matrix-dialog.component';
 import { WorkspaceSettingsService } from '../../../shared/services/workspace/workspace-settings.service';
-import { ProcessOverviewComponent } from '../process-overview/process-overview.component';
+import { openWorkspaceProcessOverview } from '../process-overview/process-overview.component';
 import { WorkspaceSettingsSaveFacade } from './workspace-settings-save.facade';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { DatabaseExportService } from '../../../shared/services/database-export.service';
@@ -188,15 +188,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   protected openProcessOverview(): void {
-    const workspaceId = this.appService.selectedWorkspaceId;
-    if (workspaceId) {
-      this.dialog.open(ProcessOverviewComponent, {
-        width: '1200px',
-        maxWidth: '95vw',
-        maxHeight: '90vh',
-        data: { workspaceId }
-      });
-    }
+    openWorkspaceProcessOverview(this.dialog, { workspaceId: this.appService.selectedWorkspaceId });
   }
 
   openReplayStatistics(): void {

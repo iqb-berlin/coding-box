@@ -43,6 +43,7 @@ describe('TestFilesComponent', () => {
     };
 
     const contentPoolIntegrationServiceMock = {
+      importAcp: jest.fn().mockReturnValue(new Subject()),
       getWorkspaceConfig: jest.fn().mockReturnValue(
         of({ enabled: false, baseUrl: '' })
       )
@@ -180,6 +181,33 @@ describe('TestFilesComponent', () => {
         })
       }));
     });
+  });
+
+  it('keeps the process button hidden during a synchronous Content Pool overwrite', () => {
+    component.contentPoolSettings.set({ enabled: true, baseUrl: 'https://pool.example', hasApplicationToken: true });
+    dialog.open.mockReturnValueOnce({
+      afterClosed: () => of({
+        success: true,
+        acpId: 'acp',
+        result: {
+          total: 1, uploaded: 0, failed: 0, conflicts: [{ fileId: 'ID', filename: 'unit.xml' }]
+        }
+      })
+    } as MatDialogRef<unknown>).mockReturnValueOnce({
+      afterClosed: () => of({ overwrite: true, overwriteFileIds: ['ID'] })
+    } as MatDialogRef<unknown>);
+    fixture.detectChanges();
+    const buttons = Array.from<HTMLButtonElement>(fixture.nativeElement.querySelectorAll('.upload-buttons button'));
+    const importButton = buttons.find(button => button.textContent.includes(translateGerman('ui-text.test-files.content-pool-import')));
+    expect(importButton).toBeDefined();
+    importButton!.click();
+    fixture.detectChanges();
+    expect(TestBed.inject(ContentPoolIntegrationService).importAcp).toHaveBeenCalledWith(1, {
+      acpId: 'acp', overwriteExisting: true, overwriteFileIds: ['ID']
+    });
+    const overlay = fixture.nativeElement.querySelector('.busy-overlay');
+    expect(overlay).not.toBeNull();
+    expect(overlay.querySelector('button')).toBeNull();
   });
 
   describe('onFileSelected', () => {

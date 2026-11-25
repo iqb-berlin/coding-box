@@ -79,7 +79,7 @@ export async function getCodingReviewCapabilities(
   if (responseIds.length > 0) {
     const units = await manager.find(CodingJobUnit, {
       where: { response_id: In(responseIds), coding_job: { workspace_id: workspaceId } },
-      relations: ['coding_job', 'coding_job.codingJobCoders']
+      relations: { coding_job: { codingJobCoders: true } }
     });
     for (const responseId of responseIds) {
       const jobs = units.filter(unit => unit.response_id === responseId)

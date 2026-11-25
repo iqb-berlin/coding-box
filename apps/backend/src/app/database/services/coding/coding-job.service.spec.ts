@@ -1115,7 +1115,7 @@ describe('CodingJobService', () => {
         where: expect.arrayContaining([
           expect.objectContaining({ workspace_id: 3 })
         ]),
-        relations: ['training']
+        relations: { training: true }
       })
     );
     expect(result.total).toBe(1);
@@ -1891,7 +1891,7 @@ describe('CodingJobService', () => {
 
     expect(codingJobRepository.findOne).toHaveBeenCalledWith({
       where: { id: 12 },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
     expect(codingJobCoderRepository.delete).toHaveBeenCalledWith({
       coding_job_id: 12
@@ -5607,7 +5607,7 @@ describe('CodingJobService', () => {
     expect(codingJobUnitRepository.find).toHaveBeenCalledTimes(2);
     expect(codingJobUnitRepository.find).toHaveBeenNthCalledWith(1, {
       where: { coding_job_id: 10 },
-      select: expect.any(Array)
+      select: expect.objectContaining({ response_id: true, variable_bundle_id: true, code: true })
     });
     expect(result[0].bundleContext?.caseKey).toBe('login\u0000code\u0000group\u0000BOOKLET');
     expect(result[0].bundleContext?.variables).toEqual([

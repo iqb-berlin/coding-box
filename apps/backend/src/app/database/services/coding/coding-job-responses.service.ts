@@ -128,7 +128,7 @@ export class CodingJobResponsesService {
 
     const codingJobVariableBundles = await bundleRepo.find({
       where: { coding_job_id: codingJobId },
-      relations: ['variable_bundle']
+      relations: { variable_bundle: true }
     });
 
     const allVariables: { unit_name: string; variable_id: string }[] =
@@ -222,7 +222,7 @@ export class CodingJobResponsesService {
 
     const codingJobVariableBundles = await bundleRepo.find({
       where: { coding_job_id: codingJobId },
-      relations: ['variable_bundle']
+      relations: { variable_bundle: true }
     });
 
     const variableBundleMap = new Map<string, number>();

@@ -337,7 +337,7 @@ export class JobQueueService {
           if (name === 'validation-task') {
             const taskIds = [...new Set(jobs.map(job => Number(job.data?.taskId)).filter(id => Number.isSafeInteger(id) && id > 0))];
             if (taskIds.length > 0) {
-              const tasks = await this.validationTaskRepository.find({ where: { id: In(taskIds) }, select: ['id', 'workspace_id'] });
+              const tasks = await this.validationTaskRepository.find({ where: { id: In(taskIds) }, select: { id: true, workspace_id: true } });
               taskOwners = new Map(tasks.map(task => [Number(task.id), Number(task.workspace_id)]));
             }
           }
@@ -451,7 +451,7 @@ export class JobQueueService {
 
       const tasks = await this.validationTaskRepository.find({
         where: { id: In([taskId]) },
-        select: ['id', 'workspace_id']
+        select: { id: true, workspace_id: true }
       });
       return tasks.some(task => Number(task.workspace_id) === Number(workspaceId));
     }
@@ -533,15 +533,15 @@ export class JobQueueService {
             if (taskIds.length === 0) return [];
             const tasks = (await this.validationTaskRepository.find({
               where: { id: In(taskIds) },
-              select: [
-                'id',
-                'workspace_id',
-                'validation_type',
-                'status',
-                'progress',
-                'progress_message',
-                'error'
-              ]
+              select: {
+                id: true,
+                workspace_id: true,
+                validation_type: true,
+                status: true,
+                progress: true,
+                progress_message: true,
+                error: true
+              }
             })) as ProcessOverviewValidationTask[];
             validationTaskMap = new Map(tasks.map(t => [Number(t.id), t]));
             matchedJobs = existingJobs.filter(j => Number(validationTaskMap.get(Number(j.data?.taskId))?.workspace_id) === Number(workspaceId)
@@ -615,7 +615,7 @@ export class JobQueueService {
       if (taskIds.length === 0) return undefined;
       const tasks = await this.validationTaskRepository.find({
         where: { id: In(taskIds) },
-        select: ['id', 'workspace_id']
+        select: { id: true, workspace_id: true }
       });
       const taskWorkspaceMap = new Map(tasks.map(t => [t.id, t.workspace_id]));
       return jobs.find(j => taskWorkspaceMap.get(j.data?.taskId) === workspaceId);

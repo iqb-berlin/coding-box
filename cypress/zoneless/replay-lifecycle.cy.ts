@@ -36,11 +36,13 @@ const scheme = {
 };
 
 describe('Replay responsibilities without Zone.js', () => {
+  let replayPlayer: string;
   let assetsRequests: number;
   let responseRequests: number;
   let unexpectedRequests: string[];
 
   beforeEach(() => {
+    replayPlayer = player;
     unexpectedRequests = [];
     cy.intercept('**/api/**', request => {
       unexpectedRequests.push(`${request.method} ${new URL(request.url).pathname}`);
@@ -59,7 +61,7 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.intercept('GET', '**/replay-assets/*', request => {
       assetsRequests += 1;
       request.reply({ delay: 150, body: {
-        unitDef: [{ data: '{}' }], player: [{ data: player }],
+        unitDef: [{ data: '{}' }], player: [{ data: replayPlayer }],
         vocs: [{ data: JSON.stringify(scheme) }]
       } });
     }).as('assets');
@@ -99,6 +101,26 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.wait('@response');
     frame().should('contain.text', 'Answer B').and('have.attr', 'data-page', '0');
     cy.then(() => { expect(assetsRequests).to.equal(1); expect(responseRequests).to.equal(2); });
+  });
+
+  describe('plugin-player 7.0', () => {
+    beforeEach(() => {
+      cy.fixture<string>('replay-player-7.html').then(html => { replayPlayer = html; });
+    });
+
+    it('restores the answer and navigates to the next page', () => {
+      visitBooklet();
+      frame().should('have.attr', 'data-mode', 'replay');
+      cy.get('coding-box-units-replay .next-button').click();
+      frame().should('have.attr', 'data-page', '1');
+    });
+
+    it('starts the player in print mode', () => {
+      cy.visit(`/#/print-view/UNIT?workspaceId=5&auth=${token()}`);
+      cy.wait('@assets');
+      cy.wait('@response');
+      frame().should('have.attr', 'data-mode', 'print');
+    });
   });
 
   it('retains the latest route after an abandoned response and supports leaving and reopening replay', () => {

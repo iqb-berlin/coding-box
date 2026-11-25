@@ -172,7 +172,7 @@ export class CodingJobQueryService {
         job_type: CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
         source_coding_job_id: sourceCodingJob.id
       },
-      relations: ['codingJobCoders']
+      relations: { codingJobCoders: true }
     })) ?? [];
   }
 
@@ -283,7 +283,7 @@ export class CodingJobQueryService {
   ): Promise<number[]> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId },
-      select: ['id', 'workspace_id', 'job_type']
+      select: { id: true, workspace_id: true, job_type: true }
     });
 
     if (!codingJob || this.isCodingIssueReviewJob(codingJob)) {
@@ -352,7 +352,7 @@ export class CodingJobQueryService {
       this.codingJobUnitRepository;
     const codingJob = await codingJobRepository.findOne({
       where: { id: jobId },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
 
     if (!codingJob) {
@@ -669,7 +669,7 @@ export class CodingJobQueryService {
         job_type: CODING_JOB_TYPE_CODING_ISSUE_REVIEW,
         source_coding_job_id: In(sourceIssueJobIds)
       },
-      select: ['id', 'source_coding_job_id']
+      select: { id: true, source_coding_job_id: true }
     })) ?? [];
     const reviewJobSourceJobIds = new Map<number, number>();
     reviewJobs.forEach(job => {
@@ -972,7 +972,7 @@ export class CodingJobQueryService {
 
     const jobs = await this.codingJobRepository.find({
       where: visibleJobWhere,
-      relations: ['training'],
+      relations: { training: true },
       order: this.getCodingJobListOrder(filters),
       skip,
       take
@@ -997,7 +997,7 @@ export class CodingJobQueryService {
           }),
           this.codingJobVariableBundleRepository.find({
             where: { coding_job_id: In(jobIds) },
-            relations: ['variable_bundle']
+            relations: { variable_bundle: true }
           }),
           this.getCodingJobProgressByJobIds(jobIds, workspaceId),
           filters.includeIssueSummary ?
@@ -1114,7 +1114,7 @@ export class CodingJobQueryService {
 
     const codingJob = await this.codingJobRepository.findOne({
       where: whereClause,
-      relations: ['training']
+      relations: { training: true }
     });
     if (!codingJob) {
       if (workspaceId !== undefined) {
@@ -1171,7 +1171,7 @@ export class CodingJobQueryService {
   ): Promise<CodingJob> {
     const codingJob = await this.getCodingJobRepository(manager).findOne({
       where: { id, workspace_id: workspaceId },
-      relations: ['training']
+      relations: { training: true }
     });
 
     if (!codingJob) {
@@ -1194,7 +1194,7 @@ export class CodingJobQueryService {
   async getCodingJobsByCoder(coderId: number): Promise<CodingJob[]> {
     const codingJobCoders = await this.codingJobCoderRepository.find({
       where: { user_id: coderId },
-      relations: ['coding_job']
+      relations: { coding_job: true }
     });
 
     return codingJobCoders
@@ -1227,7 +1227,7 @@ export class CodingJobQueryService {
   > {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id },
-      relations: ['training']
+      relations: { training: true }
     });
 
     if (!codingJob) {
@@ -1250,7 +1250,7 @@ export class CodingJobQueryService {
     const codingJobVariableBundles =
       await this.codingJobVariableBundleRepository.find({
         where: { coding_job_id: id },
-        relations: ['variable_bundle']
+        relations: { variable_bundle: true }
       });
 
     const assignedVariableBundles = codingJobVariableBundles
@@ -1271,7 +1271,7 @@ export class CodingJobQueryService {
   async hasCodingIssues(codingJobId: number): Promise<boolean> {
     const codingJob = await this.codingJobRepository.findOne({
       where: { id: codingJobId },
-      select: ['id', 'workspace_id', 'job_type']
+      select: { id: true, workspace_id: true, job_type: true }
     });
     if (!codingJob) {
       return false;

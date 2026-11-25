@@ -39,7 +39,9 @@ export class WorkspaceXmlSchemaValidationService {
         workspace_id: workspaceId,
         file_type: In(['Unit', 'Booklet', 'TestTakers', 'Testtakers'])
       },
-      select: ['file_id', 'filename', 'file_type', 'data'],
+      select: {
+        file_id: true, filename: true, file_type: true, data: true
+      },
       skip: offset,
       take: BATCH_SIZE
     });
@@ -84,7 +86,9 @@ export class WorkspaceXmlSchemaValidationService {
           workspace_id: workspaceId,
           file_type: In(['Unit', 'Booklet', 'TestTakers', 'Testtakers'])
         },
-        select: ['file_id', 'filename', 'file_type', 'data'],
+        select: {
+          file_id: true, filename: true, file_type: true, data: true
+        },
         skip: offset,
         take: BATCH_SIZE
       });

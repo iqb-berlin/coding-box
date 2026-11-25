@@ -1,4 +1,4 @@
-import { Repository, Connection } from 'typeorm';
+import { Repository, DataSource } from 'typeorm';
 import { createFacadeTestProxy } from '../shared/facade-test.factory';
 import { CodingJobService } from './coding-job.service';
 import { CodingJob } from '../../entities/coding-job.entity';
@@ -41,7 +41,7 @@ export function createCodingJobService(codingJobRepository: Repository<CodingJob
   responseRepository: Repository<ResponseEntity>,
   fileUploadRepository: Repository<FileUpload>,
   settingRepository: Repository<Setting>,
-  connection: Connection,
+  connection: DataSource,
   cacheService: CacheService,
   workspaceFilesService: WorkspaceFilesService,
   workspaceExclusionService: WorkspaceExclusionService,

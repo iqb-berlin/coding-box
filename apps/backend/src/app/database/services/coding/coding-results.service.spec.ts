@@ -81,7 +81,7 @@ describe('CodingResultsService', () => {
       createQueryBuilder: jest.fn(),
       manager: {
         query: jest.fn().mockResolvedValue([]),
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn(() => queryRunner)
         }
       }

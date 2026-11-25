@@ -47,12 +47,7 @@ export class CodingReplayService {
     try {
       const response = await this.responseRepository.findOne({
         where: { id: responseId },
-        relations: [
-          'unit',
-          'unit.booklet',
-          'unit.booklet.person',
-          'unit.booklet.bookletinfo'
-        ]
+        relations: { unit: { booklet: { person: true, bookletinfo: true } } }
       });
 
       if (!response) {

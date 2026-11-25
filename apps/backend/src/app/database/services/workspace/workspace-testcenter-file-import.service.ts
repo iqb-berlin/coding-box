@@ -104,7 +104,7 @@ export class WorkspaceTestcenterFileImportService {
       return this.importFailure(entries.length, new Error('Testcenter files must belong to a single valid workspace.'));
     }
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspaceId,
       runner => this.testCenterImportUnlocked(workspaceId, entries, overwriteFileIds, runner.manager)
     );
