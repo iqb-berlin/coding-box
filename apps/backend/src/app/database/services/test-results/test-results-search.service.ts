@@ -33,8 +33,16 @@ import {
   applyExclusionsToQuery, createGeoGebraValueCondition, excludeAutocoderGeneratedResponses, parseQuotedExactSearchFilter
 } from './test-results.util';
 import {
-  EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, EFFECTIVE_CODING_STATUS_SORT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
+  EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
 } from './workspace-test-results.types';
+
+const RESPONSE_SEARCH_COLUMNS = [
+  'response.id', 'response.variableid', 'response.value', 'response.status',
+  'response.status_v1', 'response.status_v2', 'response.status_v3',
+  'response.code_v1', 'response.code_v2', 'response.code_v3',
+  'unit.id', 'unit.name', 'unit.alias', 'booklet.id', 'bookletinfo.id', 'bookletinfo.name',
+  'person.id', 'person.login', 'person.code', 'person.group'
+];
 
 @Injectable()
 export class TestResultsSearchService {
@@ -198,36 +206,14 @@ export class TestResultsSearchService {
         )} (page: ${page}, limit: ${limit})`
       );
 
-      const runSearch = async (
-        queryRunner?: QueryRunner
-      ): Promise<{
-        data: {
-          responseId: number;
-          variableId: string;
-          value: string;
-          status: string;
-          code?: number | null;
-          score?: number | null;
-          codedStatus?: string;
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-          bookletId: number;
-          bookletName: string;
-          personId: number;
-          personLogin: string;
-          personCode: string;
-          personGroup: string;
-          variablePage?: string;
-        }[];
-        total: number;
-      }> => {
+      const runSearch = async (queryRunner?: QueryRunner) => {
         const query = this.responseRepository
           .createQueryBuilder('response', queryRunner)
-          .innerJoinAndSelect('response.unit', 'unit')
-          .innerJoinAndSelect('unit.booklet', 'booklet')
-          .innerJoinAndSelect('booklet.person', 'person')
-          .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .innerJoin('response.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select([...RESPONSE_SEARCH_COLUMNS, `response.score_${version}`])
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true });
 
@@ -389,7 +375,9 @@ export class TestResultsSearchService {
           excludeAutocoderGeneratedResponses(query);
         }
 
-        const total = await query.getCount();
+        // The to-one joins preserve one row per response for both counting and pagination.
+        const [count] = await query.clone().select('COUNT(*)', 'total').getRawMany<{ total: string }>();
+        const total = Number(count.total);
         this.applyResponseSearchSorting(
           query,
           version,
@@ -405,10 +393,11 @@ export class TestResultsSearchService {
           return { data: [], total: 0 };
         }
 
-        query.skip(skip).take(limit);
+        query.offset(skip).limit(limit);
 
+        // Keep the computed alias distinct from the mapped status_v1 column in TypeORM.
         query.addSelect(
-          getEffectiveCodingStatusExpression(version),
+          `(${getEffectiveCodingStatusExpression(version)})`,
           EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
         );
         const { entities: responses, raw: rawResponses } =
@@ -436,13 +425,7 @@ export class TestResultsSearchService {
           const score = response[
             `score_${version}` as keyof ResponseEntity
           ] as number;
-          const rawEffectiveCodingStatus = rawResponses[responseIndex]?.[
-            EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
-          ];
-          const codedStatus = rawEffectiveCodingStatus === null ||
-            rawEffectiveCodingStatus === undefined ?
-            null :
-            Number(rawEffectiveCodingStatus);
+          const codedStatus = Number(rawResponses[responseIndex]?.[EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS]);
           const variablePage =
             variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
           '0';
@@ -513,12 +496,8 @@ export class TestResultsSearchService {
     }
 
     if (sortBy === 'codedstatus') {
-      query.addSelect(
-        getEffectiveCodingStatusExpression(version),
-        EFFECTIVE_CODING_STATUS_SORT_ALIAS
-      );
       query
-        .orderBy(EFFECTIVE_CODING_STATUS_SORT_ALIAS, direction)
+        .orderBy(EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, direction)
         .addOrderBy('response.id', 'ASC');
       return;
     }

@@ -108,19 +108,6 @@ export class TestResultsQueryService {
       .getRawOne()
       .then(res => Number(res?.count || 0));
 
-    const uniqueResponsesQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true });
-
-    applyExclusionsToQuery(uniqueResponsesQuery, exclusions);
-    excludeAutocoderGeneratedResponses(uniqueResponsesQuery);
-    const uniqueResponsesPromise = uniqueResponsesQuery.getCount();
-
     const statusRowsQuery = this.responseRepository
       .createQueryBuilder('response')
       .innerJoin('response.unit', 'unit')
@@ -142,7 +129,6 @@ export class TestResultsQueryService {
       testGroups,
       uniqueBooklets,
       uniqueUnits,
-      uniqueResponses,
       statusRows,
       browserRows,
       osRows,
@@ -152,7 +138,6 @@ export class TestResultsQueryService {
       testGroupsPromise,
       uniqueBookletsPromise,
       uniqueUnitsPromise,
-      uniqueResponsesPromise,
       statusRowsPromise,
       this.sessionRepository
         .createQueryBuilder('session')
@@ -225,7 +210,7 @@ export class TestResultsQueryService {
       testGroups,
       uniqueBooklets,
       uniqueUnits,
-      uniqueResponses,
+      uniqueResponses: Object.values(responseStatusCounts).reduce((total, count) => total + count, 0),
       responseStatusCounts,
       sessionBrowserCounts,
       sessionOsCounts,
