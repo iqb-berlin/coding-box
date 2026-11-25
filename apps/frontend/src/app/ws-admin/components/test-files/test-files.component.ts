@@ -1,7 +1,7 @@
 import {
   Component, DestroyRef, OnDestroy, OnInit, inject, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
@@ -31,7 +31,7 @@ import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import {
   Observable,
-  ReplaySubject,
+  BehaviorSubject,
   Subject,
   Subscription,
   timer
@@ -39,6 +39,7 @@ import {
 import {
   debounceTime,
   filter,
+  map,
   finalize,
   switchMap,
   takeUntil
@@ -107,7 +108,7 @@ import {
   ContentPoolUploadDialogResult
 } from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
 
-type TrackedUpload = { workspaceId: number; uploadFinished$: Observable<void> };
+type TrackedUpload = { workspaceId: number };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -182,7 +183,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   readonly isLoadingContentPoolConfig = signal(false);
   readonly isDeleting = signal(false);
   readonly isUploading = signal(false);
-  protected readonly trackedUpload = signal<TrackedUpload | null>(null);
+  private readonly uploads = new BehaviorSubject<TrackedUpload | null>(null);
+  protected readonly trackedUpload = toSignal(this.uploads, { requireSync: true });
   protected readonly validationProgress = this.validationState.progress;
   protected readonly validationProgressMessage = this.validationState.message;
   protected get validationProgressSteps(): ValidationProgressStep[] { return this.validationState.steps(); }
@@ -779,24 +781,22 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private trackUpload(workspaceId: number, request: Observable<TestFilesUploadResultDto>): Observable<TestFilesUploadResultDto> {
-    const uploadFinished$ = new ReplaySubject<void>(1);
-    const upload = { workspaceId, uploadFinished$ };
-    this.trackedUpload.set(upload);
+    const upload = { workspaceId };
+    this.uploads.next(upload);
     this.isUploading.set(true);
     this.isLoading.set(true);
     return request.pipe(takeUntilDestroyed(this.destroyRef), finalize(() => {
-      uploadFinished$.next();
-      uploadFinished$.complete();
-      if (this.trackedUpload() === upload) {
-        this.trackedUpload.set(null);
+      if (this.uploads.value === upload) {
+        this.uploads.next(null);
         this.isUploading.set(false);
         this.isLoading.set(false);
       }
     }));
   }
 
-  protected openProcessOverview(upload: TrackedUpload): void {
-    openWorkspaceProcessOverview(this.dialog, upload);
+  protected openProcessOverview({ workspaceId }: TrackedUpload): void {
+    const uploadPending$ = this.uploads.pipe(map(upload => upload?.workspaceId === workspaceId));
+    openWorkspaceProcessOverview(this.dialog, { workspaceId, uploadPending$ });
   }
 
   onFileSelected(target: EventTarget | null): void {

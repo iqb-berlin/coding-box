@@ -4,7 +4,7 @@ import { By } from '@angular/platform-browser';
 import { MAT_DIALOG_DATA, MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
-import { of, Subject } from 'rxjs';
+import { BehaviorSubject, of, Subject } from 'rxjs';
 import { WorkspaceProcessesService } from '../../services/workspace-processes.service';
 import { ProcessOverviewComponent } from './process-overview.component';
 import { ProcessDto } from '../../../../../../../api-dto/workspaces/process-dto';
@@ -254,7 +254,7 @@ describe('ProcessOverviewComponent', () => {
   it('polls only the upload, preserves other jobs and stops when the upload settles', () => {
     jest.useFakeTimers();
     try {
-      const finished = new Subject<void>();
+      const uploading = new BehaviorSubject(true);
       const pending = new Subject<ProcessDto | null>();
       const active: ProcessDto = {
         id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 50, timestamp: 100
@@ -266,7 +266,7 @@ describe('ProcessOverviewComponent', () => {
       const completed: ProcessDto = { ...active, status: 'completed', progress: 100 };
       processesService.getProcesses.mockClear().mockReturnValueOnce(of([previous, job])).mockReturnValueOnce(of([completed, job]));
       processesService.getFileUpload.mockReturnValueOnce(pending);
-      component.data.uploadFinished$ = finished;
+      component.data.uploadPending$ = uploading;
       component.ngOnInit();
 
       jest.advanceTimersByTime(6000);
@@ -275,7 +275,7 @@ describe('ProcessOverviewComponent', () => {
       expect(processesService.getFileUpload).toHaveBeenCalledWith(7);
       pending.next(active);
       expect(component.processes.data).toEqual([active, job]);
-      finished.next();
+      uploading.next(false);
       expect(pending.observed).toBe(false);
       expect(component.processes.data).toEqual([completed, job]);
       jest.advanceTimersByTime(6000);
@@ -286,16 +286,57 @@ describe('ProcessOverviewComponent', () => {
     }
   });
 
+  it.each(['completed', 'failed'] as const)('reads the delayed %s state and stops polling', status => {
+    jest.useFakeTimers();
+    try {
+      const uploading = new BehaviorSubject(true);
+      const active: ProcessDto = {
+        id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 99, timestamp: 1
+      };
+      const terminal = { ...active, status, progress: 100 };
+      component.data.uploadPending$ = uploading;
+      processesService.getProcesses.mockReturnValue(of([active]));
+      processesService.getFileUpload.mockReturnValueOnce(of(active)).mockReturnValueOnce(of(terminal));
+      component.ngOnInit();
+      uploading.next(false);
+      jest.advanceTimersByTime(20_000);
+      expect(component.processes.data).toEqual([terminal]);
+      expect(processesService.getFileUpload).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('bounds the final reads when the upload remains active', () => {
+    jest.useFakeTimers();
+    try {
+      const active: ProcessDto = {
+        id: 'upload', queueName: 'test-files-upload', status: 'active', progress: 99, timestamp: 1
+      };
+      component.data.uploadPending$ = of(false);
+      processesService.getProcesses.mockReturnValue(of([active]));
+      processesService.getFileUpload.mockReturnValue(of(active));
+      component.ngOnInit();
+      jest.advanceTimersByTime(30_000);
+      const calls = processesService.getFileUpload.mock.calls.length;
+      expect(calls).toBeGreaterThan(0);
+      jest.advanceTimersByTime(30_000);
+      expect(processesService.getFileUpload).toHaveBeenCalledTimes(calls);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('stops polling when the dialog closes before the upload settles', () => {
     jest.useFakeTimers();
     try {
-      const finished = new Subject<void>();
-      component.data.uploadFinished$ = finished;
+      const uploading = new BehaviorSubject(true);
+      component.data.uploadPending$ = uploading;
       processesService.getProcesses.mockClear();
       component.ngOnInit();
       jest.advanceTimersByTime(2000);
       fixture.destroy();
-      finished.next();
+      uploading.next(false);
       jest.advanceTimersByTime(6000);
       expect(processesService.getFileUpload).toHaveBeenCalledTimes(1);
       expect(processesService.getProcesses).toHaveBeenCalledTimes(1);

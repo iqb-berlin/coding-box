@@ -1,5 +1,6 @@
 import {
-  endWith, map, Observable, Subscription, takeUntil, timer
+  catchError, concat, distinctUntilChanged, EMPTY, exhaustMap, map, Observable, of,
+  startWith, Subscription, switchMap, takeUntil, takeWhile, timer
 } from 'rxjs';
 import {
   Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
@@ -26,9 +27,16 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialo
 
 type ProcessStatus = ProcessDto['status'];
 type ProcessActionKind = 'cancel' | 'pause' | 'remove';
-type ProcessOverviewData = { workspaceId: number; uploadFinished$?: Observable<void> };
+type ProcessOverviewData = { workspaceId: number; uploadPending$?: Observable<boolean> };
 
+type RefreshScope = 'all' | 'upload' | 'settled';
 const PROCESS_REFRESH_INTERVAL_MS = 2000;
+const TERMINAL_REFRESH_WINDOW_MS = 12_000;
+
+function withLatestUpload(jobs: ProcessDto[], upload: ProcessDto | null): ProcessDto[] {
+  const otherJobs = jobs.filter(process => process.queueName !== 'test-files-upload');
+  return upload ? [...otherJobs, upload].sort((a, b) => b.timestamp - a.timestamp) : otherJobs;
+}
 
 interface ProcessStatusPresentation {
   labelKey: string;
@@ -289,15 +297,19 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
 
   ngOnInit(): void {
     this.setupFilterPredicate();
-    if (this.workspaceId) {
+    if (!this.workspaceId) return;
+    const pending = this.data.uploadPending$;
+    if (!pending) {
       this.loadProcesses();
-      if (this.data.uploadFinished$) {
-        timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS)
-          .pipe(takeUntil(this.data.uploadFinished$), endWith(null), takeUntilDestroyed(this.destroyRef))
-          // Reload the full overview once when the initiating request settles.
-          .subscribe(tick => this.loadProcesses(tick === null ? 'all' : 'upload'));
-      }
+      return;
     }
+    pending.pipe(
+      distinctUntilChanged(),
+      switchMap(isPending => (isPending ?
+        timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS).pipe(map(() => 'upload' as const), startWith('all' as const)) :
+        of('settled' as const))),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(scope => this.loadProcesses(scope));
   }
 
   ngAfterViewInit() {
@@ -347,28 +359,43 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.applyFilter();
   }
 
-  loadProcesses(scope: 'all' | 'upload' = 'all'): void {
+  private followSettledUpload(jobs: ProcessDto[]): Observable<ProcessDto[]> {
+    const active = jobs.find(job => job.queueName === 'test-files-upload' && job.status === 'active');
+    if (!active) return of(jobs);
+
+    // The upload response can arrive before Redis publishes the terminal state.
+    const updates = timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS).pipe(
+      exhaustMap(() => this.processesService.getFileUpload(this.workspaceId).pipe(catchError(() => EMPTY))),
+      takeWhile(upload => upload?.id === active.id && upload.status === 'active', true),
+      map(upload => withLatestUpload(jobs, upload)),
+      takeUntil(timer(TERMINAL_REFRESH_WINDOW_MS))
+    );
+    return concat(of(jobs), updates);
+  }
+
+  loadProcesses(scope: RefreshScope = 'all'): void {
     if (!this.workspaceId || (scope === 'upload' && this.loadRequest && !this.loadRequest.closed)) return;
     this.loadRequest?.unsubscribe();
-    if (scope === 'all') {
+    if (scope !== 'upload') {
       this.isLoading.set(true);
       this.loadFailed.set(false);
     }
-    const request = scope === 'upload' ? this.processesService.getFileUpload(this.workspaceId).pipe(map(upload => {
-      const jobs = this.processes.data.filter(process => process.queueName !== 'test-files-upload');
-      return upload ? [...jobs, upload].sort((a, b) => b.timestamp - a.timestamp) : jobs;
-    })) : this.processesService.getProcesses(this.workspaceId);
+    const request = scope === 'upload' ?
+      this.processesService.getFileUpload(this.workspaceId).pipe(map(upload => withLatestUpload(this.processes.data, upload))) :
+      this.processesService.getProcesses(this.workspaceId).pipe(
+        switchMap(jobs => (scope === 'settled' ? this.followSettledUpload(jobs) : of(jobs)))
+      );
     this.loadRequest = request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
         this.availableTypes.set([...new Set(data.map(d => d.queueName))]
           .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
         this.lastLoadedAt.set(Date.now());
+        if (this.isLoading()) this.applyFilter();
         this.isLoading.set(false);
-        if (scope === 'all') this.applyFilter();
       },
       error: () => {
-        if (scope === 'all') this.loadFailed.set(true);
+        if (scope !== 'upload') this.loadFailed.set(true);
         this.isLoading.set(false);
       }
     });

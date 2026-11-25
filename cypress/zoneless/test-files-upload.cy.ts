@@ -1,8 +1,10 @@
 describe('zoneless test-file upload', () => {
-  it('shows active upload progress, the upload result and the refreshed file list', () => {
+  it('follows the conflict overwrite through delayed publication of its result', () => {
     const filename = 'zoneless-upload.vomd';
     let uploaded = false;
     let uploadGateId = '';
+    let overwriteGateId = '';
+    let overwriteStarted = false;
 
     cy.mockKeycloakAuthentication();
     cy.stubWorkspace({ workspaceId: 5 });
@@ -24,11 +26,9 @@ describe('zoneless test-file upload', () => {
     cy.task<{ id: string; url: string }>('deferred:create', {
       body: {
         total: 1,
-        uploaded: 1,
+        uploaded: 0,
         failed: 0,
-        uploadedFiles: [{ fileId: '17', filename, fileType: 'vomd' }],
-        failedFiles: [],
-        conflicts: []
+        conflicts: [{ fileId: '17', filename, fileType: 'vomd' }]
       }
     }).then(gate => {
       uploadGateId = gate.id;
@@ -38,17 +38,28 @@ describe('zoneless test-file upload', () => {
         request.continue();
       }).as('upload');
     });
+    cy.task<{ id: string; url: string }>('deferred:create', {
+      body: { total: 1, uploaded: 1, failed: 0, uploadedFiles: [{ fileId: '17', filename, fileType: 'vomd' }] }
+    }).then(gate => {
+      overwriteGateId = gate.id;
+      cy.intercept('POST', '**/upload?overwriteExisting=true&overwriteFileIds=17', request => {
+        overwriteStarted = true;
+        request.url = gate.url;
+        request.continue();
+      }).as('overwrite');
+    });
     cy.intercept('GET', '**/api/admin/workspace/5/processes', request => {
       request.reply([{
-        id: uploaded ? 'active-upload' : 'previous-upload', queueName: 'test-files-upload',
-        status: 'completed', progress: 100, timestamp: Date.now(), data: { fileCount: 1 }
+        id: uploaded ? 'overwrite' : 'initial', queueName: 'test-files-upload',
+        status: uploaded ? 'active' : 'completed', progress: uploaded ? 99 : 100, timestamp: Date.now()
       }]);
     }).as('processes');
-    cy.intercept('GET', '**/api/admin/workspace/5/processes/test-files-upload', {
-      body: {
-        id: 'active-upload', queueName: 'test-files-upload', status: 'active',
-        progress: 50, timestamp: Date.now(), data: { fileCount: 1 }
-      }
+    cy.intercept('GET', '**/api/admin/workspace/5/processes/test-files-upload', request => {
+      request.reply({
+        id: overwriteStarted ? 'overwrite' : 'initial', queueName: 'test-files-upload',
+        status: uploaded ? 'completed' : 'active',
+        progress: uploaded ? 100 : (overwriteStarted ? 25 : 50), timestamp: Date.now()
+      });
     }).as('uploadProgress');
 
     cy.visit('/');
@@ -71,17 +82,24 @@ describe('zoneless test-file upload', () => {
         cy.get('button').should('be.disabled');
       });
     });
+    cy.then(() => cy.task('deferred:release', uploadGateId));
+    cy.wait('@upload');
+    cy.wait('@processes');
+    cy.get('coding-box-test-files-upload-conflicts-dialog').within(() => {
+      cy.get('.row-checkbox input').check({ force: true });
+      cy.contains('button', 'Auswahl überschreiben').click();
+    });
+    cy.get('coding-box-process-overview-dialog').contains('tr', 'Testdatei-Upload').should('contain.text', '25 %');
     cy.then(() => {
       uploaded = true;
-      return cy.task('deferred:release', uploadGateId);
+      return cy.task('deferred:release', overwriteGateId);
     });
-    cy.wait('@upload');
+    cy.wait('@overwrite');
     cy.get('coding-box-test-files-upload-result-dialog')
       .should('contain.text', 'Erfolgreich: 1')
       .and('contain.text', filename);
     cy.get('coding-box-test-files-upload-result-dialog')
       .contains('button', 'Schließen').click();
-    cy.wait('@processes');
     cy.get('coding-box-process-overview-dialog').within(() => {
       cy.contains('tr', 'Testdatei-Upload').should('contain.text', '100 %');
       cy.contains('button', 'Schließen').click();
