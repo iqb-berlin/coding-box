@@ -92,7 +92,7 @@ export function applyFlatResponseTextFilters(
 
     const responseRegex = assertValidRegexSearchPattern(response, 'response');
     if (responseRegex) {
-      query.andWhere('response.variableid ~ :responseRegex', {
+      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :responseRegex END', {
         responseRegex
       });
     }

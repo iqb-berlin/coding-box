@@ -221,27 +221,13 @@ export class TestResultsSearchService {
         applyExclusionsToQuery(query, exclusions);
 
         if (searchParams.value) {
-          query.andWhere('response.value ILIKE :value', {
+          query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.value ILIKE :value END', {
             value: `%${searchParams.value}%`
           });
         }
 
         if (searchParams.variableId) {
-          const variableIdFilter = parseQuotedExactSearchFilter(searchParams.variableId);
-          if (searchParams.regexSearch) {
-            const variableIdRegex = assertValidRegexSearchPattern(searchParams.variableId, 'variableId');
-            if (variableIdRegex) {
-              query.andWhere('response.variableid ~ :variableIdRegex', { variableIdRegex });
-            }
-          } else if (variableIdFilter.exact) {
-            query.andWhere('LOWER(response.variableid) = LOWER(:variableId)', {
-              variableId: variableIdFilter.value
-            });
-          } else {
-            query.andWhere('response.variableid ILIKE :variableId', {
-              variableId: `%${variableIdFilter.value}%`
-            });
-          }
+          this.applyVariableIdFilter(query, searchParams.variableId, searchParams.regexSearch);
         }
 
         if (searchParams.unitName) {
@@ -375,9 +361,9 @@ export class TestResultsSearchService {
           excludeAutocoderGeneratedResponses(query);
         }
 
-        // The to-one joins preserve one row per response for both counting and pagination.
-        const [count] = await query.clone().select('COUNT(*)', 'total').getRawMany<{ total: string }>();
-        const total = Number(count.total);
+        const total = await this.countMatchingResponses(
+          query, !options.sortBy && !searchParams.geogebra && !searchParams.codedStatus
+        );
         this.applyResponseSearchSorting(
           query,
           version,
@@ -476,6 +462,36 @@ export class TestResultsSearchService {
       throw new Error(
         `An error occurred while searching for responses: ${getErrorMessage(error)}`
       );
+    }
+  }
+
+  private async countMatchingResponses(query: SelectQueryBuilder<ResponseEntity>, boundIdScan: boolean): Promise<number> {
+    // The joins are to-one. For ID-ordered pages without a status filter, start the
+    // ordered scan at the first matching ID instead of reading earlier workspaces.
+    const count = query.clone().select('COUNT(*)', 'total');
+    if (boundIdScan) count.addSelect('MIN(response.id)', 'firstId');
+    const [row] = await count.getRawMany<{ total: string; firstId?: number | null }>();
+    if (row.firstId != null) query.andWhere('response.id >= :firstId', { firstId: row.firstId });
+    return Number(row.total);
+  }
+
+  private applyVariableIdFilter(
+    query: SelectQueryBuilder<ResponseEntity>, variableId: string, regexSearch?: boolean
+  ): void {
+    const variableIdFilter = parseQuotedExactSearchFilter(variableId);
+    if (regexSearch) {
+      const variableIdRegex = assertValidRegexSearchPattern(variableId, 'variableId');
+      if (variableIdRegex) {
+        query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :variableIdRegex END', { variableIdRegex });
+      }
+    } else if (variableIdFilter.exact) {
+      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN LOWER(response.variableid) = LOWER(:variableId) END', {
+        variableId: variableIdFilter.value
+      });
+    } else {
+      query.andWhere('response.variableid ILIKE :variableId', {
+        variableId: `%${variableIdFilter.value}%`
+      });
     }
   }
 

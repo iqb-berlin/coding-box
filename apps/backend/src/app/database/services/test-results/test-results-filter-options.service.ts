@@ -1,6 +1,7 @@
 import { Inject, Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { DataSource, Repository, SelectQueryBuilder } from 'typeorm';
+import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { statusNumberToString } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
@@ -16,24 +17,11 @@ export class TestResultsFilterOptionsService {
     @Inject(WorkspaceExclusionService) private readonly workspaceExclusionService: WorkspaceExclusionService
   ) {}
 
-  private buildFlatResponseFilteredBookletsSubquery(
-    baseQb: SelectQueryBuilder<ResponseEntity>
-  ): [string, unknown[]] {
-    return baseQb
-      .clone()
-      .select('"bookletEntity"."id"', 'bookletId')
-      .distinct(true)
-      .getQueryAndParameters();
-  }
-
   private async queryFlatResponseProcessingDurationOptions(
-    baseQb: SelectQueryBuilder<ResponseEntity>,
+    bookletIds: number[],
     maxOptions: number,
     processingDurationThresholdMs: number
   ): Promise<Array<{ v: string }>> {
-    const [filteredBookletsSql, filteredBookletsParams] =
-      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
-    const thresholdParam = `$${filteredBookletsParams.length + 1}`;
     const limit = Math.max(1, Math.floor(maxOptions));
 
     return this.connection.query(
@@ -41,10 +29,10 @@ export class TestResultsFilterOptionsService {
         SELECT DISTINCT
           CASE
             WHEN first_duration.duration_ms IS NULL THEN 'Unbekannt'
-            WHEN first_duration.duration_ms < ${thresholdParam} THEN 'Kurz'
+            WHEN first_duration.duration_ms < $2 THEN 'Kurz'
             ELSE 'Lang'
           END AS v
-        FROM (${filteredBookletsSql}) filtered_booklets
+        FROM unnest($1::int[]) AS filtered_booklets("bookletId")
         LEFT JOIN LATERAL (
           SELECT (bl_terminated.ts - bl_running.ts) AS duration_ms
           FROM bookletlog bl_running
@@ -61,22 +49,20 @@ export class TestResultsFilterOptionsService {
         ORDER BY v ASC
         LIMIT ${limit}
       `,
-      [...filteredBookletsParams, processingDurationThresholdMs]
+      [bookletIds, processingDurationThresholdMs]
     );
   }
 
   private async queryFlatResponseUnitProgressOptions(
-    baseQb: SelectQueryBuilder<ResponseEntity>,
+    bookletIds: number[],
     maxOptions: number
   ): Promise<Array<{ v: string }>> {
-    const [filteredBookletsSql, filteredBookletsParams] =
-      this.buildFlatResponseFilteredBookletsSubquery(baseQb);
     const limit = Math.max(1, Math.floor(maxOptions));
 
     return this.connection.query(
       `
         SELECT DISTINCT progress.v AS v
-        FROM (${filteredBookletsSql}) filtered_booklets
+        FROM unnest($1::int[]) AS filtered_booklets("bookletId")
         CROSS JOIN LATERAL (
           SELECT
             CASE
@@ -99,7 +85,7 @@ export class TestResultsFilterOptionsService {
         ORDER BY progress.v ASC
         LIMIT ${limit}
       `,
-      filteredBookletsParams
+      [bookletIds]
     );
   }
 
@@ -160,7 +146,6 @@ export class TestResultsFilterOptionsService {
       .innerJoin('unit.booklet', 'bookletEntity')
       .innerJoin('bookletEntity.person', 'person')
       .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
-      .leftJoin('unit.tags', 'unitTag')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
@@ -169,7 +154,26 @@ export class TestResultsFilterOptionsService {
     });
     excludeAutocoderGeneratedResponses(baseQb);
 
+    if (filters.tags) baseQb.innerJoin('unit.tags', 'unitTag');
     applyFlatResponseFilters(baseQb, filters, 'options');
+
+    // Person, booklet, session and log options depend only on which booklets
+    // contain a matching response. Resolve that set once before reading those lists.
+    const matches = await baseQb.clone().select('DISTINCT bookletEntity.id', 'id').getRawMany<{ id: number }>();
+    const bookletIds = matches.map(row => row.id);
+    const booklets = this.connection.createQueryBuilder(Booklet, 'bookletEntity')
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('bookletEntity.id = ANY(:bookletIds)', { bookletIds });
+
+    const sessions = booklets.clone().innerJoin('bookletEntity.sessions', 'session');
+    const tagged = filters.tags ? baseQb : baseQb.clone().innerJoin('unit.tags', 'unitTag');
+    const distinctValues = (source: SelectQueryBuilder<ResponseEntity | Booklet>, column: string, nonNull = false) => {
+      const query = source.clone().select(`DISTINCT ${column}`, 'v').orderBy('v', 'ASC').limit(MAX_OPTIONS);
+      if (nonNull) query.andWhere(`${column} IS NOT NULL`);
+      return query.getRawMany<{ v: string }>();
+    };
 
     const [
       codeRows,
@@ -185,96 +189,27 @@ export class TestResultsFilterOptionsService {
       sessionScreenRows,
       sessionIdRows
     ] = await Promise.all([
-      baseQb
-        .clone()
-        .select('DISTINCT person.code', 'v')
-        .orderBy('person.code', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT person.group', 'v')
-        .orderBy('person.group', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT person.login', 'v')
-        .orderBy('person.login', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT bookletinfo.name', 'v')
-        .orderBy('bookletinfo.name', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT COALESCE(unit.alias, unit.name)', 'v')
-        .orderBy('v', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT response.variableid', 'v')
-        .orderBy('response.variableid', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT response.status', 'v')
-        .orderBy('response.status', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string | number }>(),
-      baseQb
-        .clone()
-        .select('DISTINCT unitTag.tag', 'v')
-        .andWhere('unitTag.tag IS NOT NULL')
-        .orderBy('unitTag.tag', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.browser', 'v')
-        .andWhere('session.browser IS NOT NULL')
-        .orderBy('session.browser', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.os', 'v')
-        .andWhere('session.os IS NOT NULL')
-        .orderBy('session.os', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.screen', 'v')
-        .andWhere('session.screen IS NOT NULL')
-        .orderBy('session.screen', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>(),
-      baseQb
-        .clone()
-        .leftJoin('bookletEntity.sessions', 'session')
-        .select('DISTINCT session.id', 'v')
-        .andWhere('session.id IS NOT NULL')
-        .orderBy('session.id', 'ASC')
-        .limit(MAX_OPTIONS)
-        .getRawMany<{ v: string }>()
+      distinctValues(booklets, 'person.code'),
+      distinctValues(booklets, 'person.group'),
+      distinctValues(booklets, 'person.login'),
+      distinctValues(booklets, 'bookletinfo.name'),
+      distinctValues(baseQb, 'COALESCE(unit.alias, unit.name)'),
+      distinctValues(baseQb, 'response.variableid'),
+      distinctValues(baseQb, 'response.status'),
+      distinctValues(tagged, 'unitTag.tag', true),
+      distinctValues(sessions, 'session.browser', true),
+      distinctValues(sessions, 'session.os', true),
+      distinctValues(sessions, 'session.screen', true),
+      distinctValues(sessions, 'session.id', true)
     ]);
 
     const [processingDurationRows, unitProgressRows] = await Promise.all([
       this.queryFlatResponseProcessingDurationOptions(
-        baseQb,
+        bookletIds,
         MAX_OPTIONS,
         filters.processingDurationThresholdMs
       ),
-      this.queryFlatResponseUnitProgressOptions(baseQb, MAX_OPTIONS)
+      this.queryFlatResponseUnitProgressOptions(bookletIds, MAX_OPTIONS)
     ]);
 
     const mapVals = (rows: Array<{ v: string }>) => (rows || []).map(r => String(r.v || '').trim()).filter(Boolean);

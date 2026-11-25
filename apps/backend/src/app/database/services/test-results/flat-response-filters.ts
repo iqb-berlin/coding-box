@@ -86,7 +86,10 @@ export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatRespons
   applyProcessingFilters(qb, filters);
   applyUnitProgressFilter(qb, filters);
   applySessionFilters(qb, filters, purpose);
-  applyLongLoadingFilter(qb, filters, purpose);
+  if (purpose === 'options' && filters.longLoadingOnly) {
+    // The option lists consider only unit logs.
+    qb.andWhere(`unit.id IN (${longLoadingUnitsSql()})`, { longLoadingThresholdMs: filters.longLoadingThresholdMs });
+  }
 }
 
 function applyFilterOptionText(qb: ResponseQuery, filters: FlatResponseFilters): void {
@@ -115,8 +118,13 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
     }
   }
   if (responseValue) {
+    // Short terms have no searchable trigram. Read only the displayed prefix
+    // after the workspace join instead of inspecting values in other workspaces.
+    const predicate = responseValue.length < 3 ?
+      `CASE WHEN person.workspace_id = :workspaceId THEN SUBSTRING(response.value, 1, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue END` :
+      `LEFT(response.value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue`;
     qb.andWhere(
-      `LEFT(response.value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue`,
+      predicate,
       { responseValue: `%${responseValue}%` }
     );
   }
@@ -154,7 +162,10 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
 
   if (hasValueOnly) {
     qb.andWhere(
-      "BTRIM(COALESCE(response.value, '')) <> '' AND BTRIM(COALESCE(response.value, '')) <> '[]'"
+      `CASE WHEN person.workspace_id = :workspaceId THEN
+        CASE WHEN BTRIM(SUBSTRING(response.value, 1, 16)) NOT IN ('', '[', '[]') THEN TRUE
+          ELSE BTRIM(response.value) NOT IN ('', '[]') END
+      END`
     );
   }
 }
@@ -175,6 +186,7 @@ function applyProcessingFilters(qb: ResponseQuery, filters: FlatResponseFilters)
           AND bl_terminated.key = 'CONTROLLER'
           AND bl_terminated.parameter = 'TERMINATED'
           AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
+        OFFSET 0
       )`,
       { shortProcessingThresholdMs }
     );
@@ -197,6 +209,7 @@ function applyProcessingFilters(qb: ResponseQuery, filters: FlatResponseFilters)
           AND bl_terminated.parameter = 'TERMINATED'
           AND (bl_terminated.ts - bl_running.ts) >= :processingDurationMinMs
           AND (bl_terminated.ts - bl_running.ts) <= :processingDurationMaxMs
+        OFFSET 0
       )`,
       {
         processingDurationMinMs: minMs,
@@ -284,26 +297,17 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters, pu
   }
 }
 
-function applyLongLoadingFilter(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
-  const { longLoadingOnly, longLoadingThresholdMs } = filters;
-  if (!longLoadingOnly) return;
-  const unitLoading = `EXISTS (
-    SELECT 1
-    FROM unitlog ul_started
-    JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
-    WHERE ul_started.unitid = unit.id
-      AND ul_started.key = 'STARTED'
-      AND ul_ended.key = 'ENDED'
-      AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-  )`;
-  // The option lists historically consider only unit logs.
-  const condition = purpose === 'options' ? unitLoading : `(EXISTS (
-    SELECT 1
-    FROM session s
-    WHERE s.bookletid = "bookletEntity"."id"
-      AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
-  ) OR ${unitLoading})`;
-  qb.andWhere(condition, { longLoadingThresholdMs });
+export function longLoadingUnitsSql(workspaceScoped = false): string {
+  // A STARTED/ENDED pair passes exactly when the largest possible gap passes.
+  const scope = workspaceScoped ? `JOIN unit u ON u.id = ul.unitid
+    JOIN booklet b ON b.id = u.bookletid
+    JOIN persons p ON p.id = b.personid AND p.consider AND p.workspace_id = $2` : '';
+  const threshold = workspaceScoped ? '$1' : ':longLoadingThresholdMs';
+  return `SELECT ul.unitid FROM unitlog ul ${scope}
+    WHERE ul.key IN ('STARTED', 'ENDED')
+    GROUP BY ul.unitid
+    HAVING MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED')
+      - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED') >= ${threshold}`;
 }
 
 function applyProcessingDurationCategory(qb: ResponseQuery, filters: FlatResponseFilters): void {

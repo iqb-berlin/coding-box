@@ -953,7 +953,7 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "max-lines-per-function": 201
+          "max-lines-per-function": 146
         }
       }
     },
@@ -1012,11 +1012,11 @@
       "file": {},
       "functions": {
         "class TestResultsSearchService#1/method searchResponses#1": {
-          "max-lines-per-function": 305
+          "max-lines-per-function": 292
         },
         "class TestResultsSearchService#1/method searchResponses#1/function runSearch#1": {
-          "complexity": 39,
-          "max-lines-per-function": 226
+          "complexity": 38,
+          "max-lines-per-function": 213
         }
       }
     },

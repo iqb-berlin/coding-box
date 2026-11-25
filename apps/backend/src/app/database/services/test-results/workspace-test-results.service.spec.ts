@@ -897,15 +897,9 @@ describe('WorkspaceTestResultsService', () => {
     it('keeps scoped option predicates and derives log options from filtered booklets', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getQueryAndParameters
-        .mockReturnValueOnce([
-          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
-          [1]
-        ])
-        .mockReturnValueOnce([
-          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
-          [1]
-        ]);
+      const booklets = mockQueryBuilder();
+      (dataSource.createQueryBuilder as jest.Mock).mockReturnValue(booklets);
+      qb.getRawMany.mockResolvedValueOnce([{ id: 5 }]);
       (dataSource.query as jest.Mock)
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
@@ -928,10 +922,10 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
@@ -939,13 +933,14 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(qb.andWhere).toHaveBeenCalledWith('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: '%"quoted"%' });
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('FROM unitlog ul_started'),
+        expect.stringContaining('FROM unitlog ul'),
         { longLoadingThresholdMs: 5000 }
       );
       const filterSql = qb.andWhere.mock.calls.map(([condition]) => condition).join('\n');
       expect(filterSql).not.toContain('s.loadcompletems');
       expect(filterSql).not.toContain('s.id IN (:...sessionIds)');
 
+      expect(booklets.andWhere).toHaveBeenCalledWith('bookletEntity.id = ANY(:bookletIds)', { bookletIds: [5] });
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
         'LEFT JOIN LATERAL'
@@ -954,7 +949,7 @@ describe('WorkspaceTestResultsService', () => {
         'first_duration.duration_ms < $2'
       );
       expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
-        1,
+        [5],
         60000
       ]);
       expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
@@ -963,7 +958,7 @@ describe('WorkspaceTestResultsService', () => {
       expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
         'COUNT(DISTINCT progress_unit.id)'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([[5]]);
       expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
       expect(result.unitProgresses).toEqual([
         'Vollständig',
@@ -1053,7 +1048,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'response.variableid ~ :variableIdRegex',
+        'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :variableIdRegex END',
         { variableIdRegex: '^VAR_\\d+$' }
       );
       expect(qb.andWhere).toHaveBeenCalledWith(
@@ -1105,7 +1100,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'LOWER(response.variableid) = LOWER(:variableId)',
+        'CASE WHEN person.workspace_id = :workspaceId THEN LOWER(response.variableid) = LOWER(:variableId) END',
         { variableId: '01_unique' }
       );
       expect(qb.andWhere).not.toHaveBeenCalledWith(
@@ -1126,7 +1121,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'response.value ILIKE :value',
+        'CASE WHEN person.workspace_id = :workspaceId THEN response.value ILIKE :value END',
         { value: '%answer%' }
       );
     });
@@ -1328,7 +1323,7 @@ describe('WorkspaceTestResultsService', () => {
     it.each(['v1', 'v2'] as const)('returns the effective %s status alongside the stored v1 status', async version => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getRawMany.mockResolvedValue([{ total: '1' }]);
+      qb.getRawMany.mockResolvedValue([{ total: '1', firstId: 1 }]);
       qb.getRawAndEntities.mockResolvedValue({
         entities: [{
           id: 1,
@@ -1374,6 +1369,7 @@ describe('WorkspaceTestResultsService', () => {
         'effective_coding_status_output'
       );
       expect(qb.select).toHaveBeenCalledWith('COUNT(*)', 'total');
+      expect(qb.andWhere).toHaveBeenCalledWith('response.id >= :firstId', { firstId: 1 });
       const [columns] = qb.select.mock.calls[0];
       expect(columns.filter((column: string) => column.startsWith('person.'))).toEqual([
         'person.id', 'person.login', 'person.code', 'person.group'
@@ -1399,6 +1395,7 @@ describe('WorkspaceTestResultsService', () => {
         { page: 1, limit: 100 }
       );
 
+      expect(qb.addSelect).not.toHaveBeenCalledWith('MIN(response.id)', 'firstId');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'response.status_v1 = :codedStatus',
         { codedStatus: 4 }
@@ -1795,7 +1792,7 @@ describe('WorkspaceTestResultsService', () => {
           { unitRegex: '^Unit' }
         );
         expect(qb.andWhere).toHaveBeenCalledWith(
-          'response.variableid ~ :responseRegex',
+          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :responseRegex END',
           { responseRegex: '^VAR_\\d+$' }
         );
       });
@@ -1920,7 +1917,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it.each([
-      [{ hasValue: 'yes' }, 'BTRIM(COALESCE(response.value', undefined],
+      [{ hasValue: 'yes' }, 'BTRIM(SUBSTRING(response.value', undefined],
       [{ processingDurationMin: '01:15' }, '>= :processingDurationMinMs', { processingDurationMinMs: 75000, processingDurationMaxMs: Number.MAX_SAFE_INTEGER }],
       [{ processingDurationMax: '02:30' }, '<= :processingDurationMaxMs', { processingDurationMinMs: 0, processingDurationMaxMs: 150000 }],
       [{ sessionIds: '5, invalid, -1, 8' }, 's.id IN (:...sessionIds)', { sessionIds: [5, 8] }]

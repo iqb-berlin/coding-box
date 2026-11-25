@@ -82,7 +82,8 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (1, 1, 'CONTROLLER', 'RUNNING', 1000), (2, 1, 'CONTROLLER', 'TERMINATED', 61000),
         (3, 2, 'CONTROLLER', 'RUNNING', 1000), (4, 2, 'CONTROLLER', 'TERMINATED', 60000),
         (5, 3, 'CONTROLLER', 'RUNNING', 1000), (6, 3, 'CONTROLLER', 'TERMINATED', 62000),
-        (7, 4, 'CONTROLLER', 'RUNNING', 1000), (8, 4, 'CONTROLLER', 'TERMINATED', 121000);
+        (7, 4, 'CONTROLLER', 'RUNNING', 1000), (8, 4, 'CONTROLLER', 'TERMINATED', 121000),
+        (9, 1, 'CONNECTION', 'LOST', 20000), (10, 6, 'CONNECTION', 'LOST', 30000);
       INSERT INTO "${schema}".session VALUES
         (101, 1, 'Firefox', 'Linux', '1920x1080', 100), (102, 1, 'Chrome', 'Windows', '1280x720', 100),
         (201, 2, 'Firefox', 'Mac', '1920x1080', 100), (301, 3, 'Chrome', 'Linux', '1920x1080', 100),
@@ -117,6 +118,11 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it('combines a nonempty person code with matching tags without duplicating responses', async () => {
+    const rows = await expectResponses({ code: 'A', tags: 'review' }, [1, 2, 3, 4, 5]);
+    expect(rows[0].tags).toEqual(['review-alpha', 'review-beta']);
+  });
+
   it('counts meaningful values while excluding NULL, whitespace and empty arrays', async () => {
     const rows = await expectResponses({ hasValue: 'yes' }, [4, 5, 6, 7, 8]);
     expect(rows.map(row => row.responseValue)).toContain('0');
@@ -129,6 +135,32 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     [{ processingDurationMin: '00:59', processingDurationMax: '01:01' }, [1, 2, 3, 4, 5, 6]]
   ])('applies inclusive duration bounds to IDs and total: %j', async (filters, ids) => {
     await expectResponses(filters, ids);
+  });
+
+  it('keeps booklet anomaly counts independent of the page and other filters', async () => {
+    await expectResponses({ logAnomalies: 'connection_lost', limit: 2, page: 2 }, [3, 4], 4);
+    await expectResponses({ logAnomalies: 'connection_lost', response: 'D' }, [4]);
+    await expectResponses({ logAnomalies: 'connection_lost', unit: 'UNIT_B' }, []);
+    await expectResponses({ logAnomalies: 'debug' }, []);
+  });
+
+  it('matches session or unit loading, including equality at the threshold', async () => {
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 100 }, [1, 2, 3, 4, 5, 6, 7, 8]);
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1000 }, [5]);
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1001 }, []);
+  });
+
+  it('searches short values within the displayed Unicode prefix and handles ambiguous leading spaces', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value) VALUES
+      (20, 5, 'I', 3, repeat('ä',1999) || 'Öx'), (21, 5, 'J', 3, repeat(' ',15) || '[] '),
+      (22, 5, 'K', 3, repeat(' ',16) || '[]x'), (23, 5, 'L', 3, repeat(' ',32) || '[]')`);
+    try {
+      await expectResponses({ unit: 'UNIT_E', responseValue: 'ö' }, [20]);
+      await expectResponses({ unit: 'UNIT_E', responseValue: 'x' }, [22]);
+      await expectResponses({ unit: 'UNIT_E', hasValue: 'true' }, [8, 20, 22]);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 20 AND 23`);
+    }
   });
 
   it('ignores invalid duration bounds consistently', async () => {
@@ -165,6 +197,26 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     expect(result.units).toEqual(['UNIT_B']);
     expect(result.sessionIds).toEqual(['201']);
     expect(result.processingDurations).toEqual(['Kurz']);
+  });
+
+  it('derives person and session choices from booklets with matching responses and preserves tag matches', async () => {
+    const options = await optionsService.findFlatResponseFilterOptions(42, { response: 'E', tags: 'alpha' });
+    expect(options).toMatchObject({
+      codes: ['A'],
+      groups: ['group'],
+      logins: ['person'],
+      booklets: ['BOOKLET_B'],
+      units: ['UNIT_B'],
+      tags: ['review-alpha'],
+      responses: ['E'],
+      responseStatuses: ['VALUE_CHANGED'],
+      sessionIds: ['201'],
+      sessionBrowsers: ['Firefox'],
+      sessionOs: ['Mac'],
+      processingDurations: ['Kurz']
+    });
+    const empty = await optionsService.findFlatResponseFilterOptions(42, { response: 'nonexistent' });
+    expect(Object.values(empty).every(values => values.length === 0)).toBe(true);
   });
 
   it('combines value, duration, session and tag filters in the real queries', async () => {

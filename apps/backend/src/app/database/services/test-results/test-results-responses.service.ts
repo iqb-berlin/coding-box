@@ -16,20 +16,23 @@ import {
   withRegexSearchStatementTimeout,
   withResponseValueSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusNumberToString
 } from '../../utils/response-status-converter';
 import {
-  WorkspaceExclusionService
+  ResolvedWorkspaceExclusions, WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import {
-  applyExclusionsToQuery, excludeAutocoderGeneratedResponses
+  applyExclusionsToQuery, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses
 } from './test-results.util';
-import { FlatResponseOptions, FlatResponseResult, LogAnomalySummary } from './workspace-test-results.types';
 import {
-  applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
+  FlatResponseOptions, FlatResponseResult, LogAnomalyCode, LogAnomalySummary, LogAnomalyThresholds
+} from './workspace-test-results.types';
+import {
+  applyFlatResponseFilters, FlatResponseFilters, longLoadingUnitsSql, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 
 const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
@@ -122,10 +125,27 @@ export class TestResultsResponsesService {
       repeatedStartThreshold: options.repeatedStartThreshold
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
+    const matchingBooklets = logAnomalyCodes.length ?
+      await this.findMatchingBookletIds(workspaceId, logAnomalyCodes, logAnomalyThresholds, exclusions, queryRunner) :
+      undefined;
+    if (matchingBooklets?.length === 0) return [[], 0];
+
+    const slowUnits: Array<{ unitid: number }> | undefined = filters.longLoadingOnly ?
+      await (queryRunner || this.connection).query(
+        longLoadingUnitsSql(true), [filters.longLoadingThresholdMs, workspaceId]
+      ) : undefined;
     const createQuery = () => {
       const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
       applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
-      this.anomalies.applyLogAnomalyFilters(query, logAnomalyCodes, logAnomalyThresholds, exclusions);
+      if (matchingBooklets) query.andWhere('bookletEntity.id = ANY(:matchingBooklets)', { matchingBooklets });
+      if (slowUnits) {
+        const session = `"bookletEntity"."id" IN (SELECT s.bookletid FROM session s
+          WHERE COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs)`;
+        query.andWhere(slowUnits.length ? `(${session} OR unit.id = ANY(:slowUnitIds))` : session, {
+          longLoadingThresholdMs: filters.longLoadingThresholdMs,
+          slowUnitIds: slowUnits.map(row => row.unitid)
+        });
+      }
       return query;
     };
     const rowQuery = createQuery();
@@ -186,6 +206,25 @@ export class TestResultsResponsesService {
       })),
       total
     ];
+  }
+
+  private async findMatchingBookletIds(
+    workspaceId: number,
+    codes: LogAnomalyCode[],
+    thresholds: LogAnomalyThresholds,
+    exclusions: ResolvedWorkspaceExclusions,
+    runner?: QueryRunner
+  ): Promise<number[]> {
+    const query = this.connection.getRepository(Booklet).createQueryBuilder('bookletEntity', runner)
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = TRUE');
+    applyIgnoredBookletsToQuery(query, exclusions.ignoredBooklets, 'bookletinfo');
+    this.anomalies.applyLogAnomalyFilters(query, codes, thresholds, exclusions);
+    const rows = await query.getRawMany<{ id: number }>();
+    return rows.map(row => row.id);
   }
 
   private createFlatResponseQuery(
