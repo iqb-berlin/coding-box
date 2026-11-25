@@ -30,6 +30,12 @@
     } @else {
     <mat-spinner class="mat-spinner"></mat-spinner>
     <p class="loading-text">{{ busyText }}</p>
+    @if (trackedUpload(); as upload) {
+    <button type="button" mat-stroked-button (click)="openProcessOverview(upload)">
+      <mat-icon>list</mat-icon>
+      {{ 'ws-settings.show-processes' | translate }}
+    </button>
+    }
     }
   </div>
   }

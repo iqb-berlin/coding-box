@@ -248,7 +248,7 @@
   "process-overview": {
     "title": "Zentrale Prozess-Übersicht",
     "refresh": "Aktualisieren",
-    "no-data": "Keine Prozesse in der Warteschlange.",
+    "no-data": "Keine Prozesse vorhanden.",
     "no-filter-data": "Keine Prozesse für die aktuellen Filter.",
     "confirm-content": "Möchten Sie den Prozess \"{{queue}}\" (ID: {{id}}) wirklich {{action}}?",
     "filters": {
@@ -1710,7 +1710,7 @@
     "error-downloading-workspace-database-export": "Fehler beim Herunterladen der Exportdatei.",
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an.",
-    "process-overview-description": "Zentrale Prozess-Übersicht für Queue-Hintergrundaufgaben.",
+    "process-overview-description": "Status und Fortschritt der Prozesse im Arbeitsbereich.",
     "show-processes": "Prozesse anzeigen"
   },
   "journal": {
@@ -4441,7 +4441,12 @@
       "install-failed": "Installation fehlgeschlagen."
     },
     "process-overview": {
-      "pagination": "Seite der Prozesse auswählen"
+      "pagination": "Seite der Prozesse auswählen",
+      "test-files-upload": "Testdatei-Upload",
+      "test-files-upload-description": "Verarbeitung hochgeladener Testdateien und ZIP-Archive",
+      "uploaded-file-count": "Importiert",
+      "failed-file-count": "Fehlgeschlagen",
+      "conflict-count": "Konflikte"
     },
     "resource-packages-dialog": {
       "title": "Ressourcenpakete",

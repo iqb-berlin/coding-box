@@ -36,6 +36,15 @@ describe('WorkspaceProcessesService', () => {
     req.flush([]);
   });
 
+  it('loads the latest file upload for the requested workspace', () => {
+    const next = jest.fn();
+    service.getFileUpload(7).subscribe(next);
+    const req = httpMock.expectOne('http://localhost/api/admin/workspace/7/processes/test-files-upload');
+    expect(req.request.method).toBe('GET');
+    req.flush(null);
+    expect(next).toHaveBeenCalledWith(null);
+  });
+
   it('encodes queue name and job ID when deleting a process', () => {
     service.deleteProcess(7, 'queue/name', 'job/1').subscribe();
 
