@@ -194,6 +194,10 @@ make dev-volumes-clean
 
 
 ## Installation (Produktivumgebung)
+
+Neuinstallationen verwenden PostgreSQL 17. Bestehende Installationen auf PostgreSQL 14
+können Sie im eigenen Wartungsfenster umstellen. [Kurzanleitung zum Wechsel auf PostgreSQL 17](docs/postgresql-17-migration.md)
+
 Um das Kodiersystem zu verwenden, muss es auf einem Server installiert sein.
 Die technische Basis hierfür ist [Docker](https://www.docker.com/).
 Die Installation, Aktualisierung und Bedienung des Servers kann durch die Ansteuerung sogenannter Make-Targets erfolgen,

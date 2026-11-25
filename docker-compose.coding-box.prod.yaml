@@ -3,7 +3,7 @@ services:
     restart: always
 
   db:
-    image: ${REGISTRY_PATH}iqbberlin/coding-box-db:${TAG}
+    image: ${REGISTRY_PATH}iqbberlin/coding-box-db:${TAG}${POSTGRES_IMAGE_SUFFIX:-}
     restart: always
 
   liquibase:
