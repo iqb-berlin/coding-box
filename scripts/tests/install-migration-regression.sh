@@ -4,7 +4,6 @@ set -euo pipefail
 repo_root=$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)
 set -- test-target
 source "${repo_root}/scripts/install.sh"
-source "${repo_root}/scripts/migration/2.0.0.sh"
 
 test_dir=$(mktemp -d)
 trap 'rm -rf "${test_dir}"' EXIT
@@ -25,83 +24,183 @@ grep -Fxq 'POSTGRES_USER=selected-user' "${env_file}"
 grep -Fxq "JWT_SECRET=${jwt_secret}" "${env_file}"
 ! grep -Fq 'JWT_SECRET=random_string' "${env_file}"
 
-# A recently edited existing infrastructure must not be taken for a new one.
+print_keycloak_theme_mount() {
+  cat <<EOF
+services:
+  keycloak:
+    volumes:
+      - type: bind
+        source: ./config/keycloak/themes${1:-}
+        target: /opt/keycloak/themes${1:-}
+        read_only: ${2:-true}
+EOF
+}
+
+# Only a new installation using the bundled Keycloak creates a pending marker.
 (
   mkdir -p "${test_dir}/infrastructure-discovery"
   cd "${test_dir}/infrastructure-discovery"
   TRAEFIK_DIR=
   EXISTING_TRAEFIK_CONFIGS=("$PWD/existing/.env.traefik")
+  APP_DIR="$PWD/coding-box"
+  mkdir -p "${APP_DIR}/config/keycloak"
+  pending_theme="${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}"
+
+  read() {
+    case "${*: -1}" in
+      identity_provider_choice) identity_provider_choice="${provider_answer}"; return ;;
+      release) release= ;;
+      *) builtin read "$@"; return ;;
+    esac
+  }
 
   curl() {
-    if [[ "$*" == */releases/latest ]]; then
-      printf '{"tag_name": "fixture"}\n'
-    else
-      cat >install_traefik.sh <<'EOF'
+    case "$*" in
+      */releases/latest) printf '{"tag_name": "2.6.2"}\n' ;;
+      */2.6.2/scripts/install.sh)
+        cat >"$5" <<'EOF'
 #!/usr/bin/env bash
-mkdir -p new
+set -e
+[[ "$#" -eq 1 ]]
+mkdir -p new/config/keycloak
 touch new/.env.traefik
+printf '%s\n' "$1" >new/selected-tag
 EOF
-    fi
+        ;;
+      *) return 99 ;;
+    esac
   }
+
   find() {
     printf '%s\0' "${EXISTING_TRAEFIK_CONFIGS[0]}" "$PWD/new/.env.traefik"
   }
 
-  install_application_infrastructure
-  [[ "${TRAEFIK_DIR}" == "$PWD/new" && "${INSTALLED_TRAEFIK}" == true ]]
+  install_application_infrastructure true
+  [[ "${TRAEFIK_DIR}" == "$PWD/new" ]]
+  grep -Fxq '2.6.2' new/selected-tag
+  grep -Fxq "${TRAEFIK_DIR}" "${pending_theme}"
+
+  check_prerequisites() { :; }
+  prepare_installation_dir() { :; }
+  download_files() { exit 91; }
+  customize_settings() {
+    [[ "$1" == "${expected_keycloak}" && "${setup_status:-0}" == 0 ]]
+  }
+  application_start() { touch "${test_dir}/application-started"; }
+  provider_answer=y
+  expected_keycloak=true
+  if (main); then
+    printf 'A failed application download should abort installation.\n' >&2
+    exit 1
+  fi
+  has_pending_keycloak_theme
+  if TRAEFIK_DIR="$PWD/different" has_pending_keycloak_theme; then
+    printf 'The marker should match the selected infrastructure.\n' >&2
+    exit 1
+  fi
+
+  download_files() { :; }
+  if (setup_status=1 main); then
+    printf 'A failed Keycloak setup should abort installation.\n' >&2
+    exit 1
+  fi
+  [[ ! -e "${test_dir}/application-started" ]]
+  has_pending_keycloak_theme
+
+  # External OIDC must leave a pending bundled Keycloak setup available for retry.
+  (
+    provider_answer=n
+    expected_keycloak=false
+    main
+    has_pending_keycloak_theme
+  )
+  (main)
+  [[ ! -e "${pending_theme}" ]]
+
+  mkdir -p "${test_dir}/external-infrastructure"
+  cd "${test_dir}/external-infrastructure"
+  TRAEFIK_DIR=
+  APP_DIR="$PWD/coding-box"
+  mkdir -p "${APP_DIR}/config/keycloak"
+  provider_answer=n
+  expected_keycloak=false
+  (main)
+  grep -Fxq '2.6.2' new/selected-tag
+  [[ ! -e "${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}" ]]
 )
 
-# Install the release theme into a fresh infrastructure fixture and validate the
-# candidate Compose file before it replaces the file used by regular starts.
+# Validate both the released Traefik mount layout and a preconfigured shared mount.
 (
-  APP_DIR="${test_dir}/theme-app"
   TRAEFIK_DIR="${test_dir}/theme-infra"
-  mkdir -p "${APP_DIR}/config/keycloak" "${TRAEFIK_DIR}"
+  mkdir -p "${TRAEFIK_DIR}/config/keycloak"
+  cd "${test_dir}"
+  read() { APP_DIR=theme-app; }
+  prepare_installation_dir
+  unset -f read
+  [[ "${APP_DIR}" == "$(pwd -P)/theme-app" ]]
+  cd "${APP_DIR}"
   realm_file="${APP_DIR}/config/keycloak/coding-box-realm.json"
   compose_file="${TRAEFIK_DIR}/docker-compose.traefik.yaml"
+  themes_dir="${TRAEFIK_DIR}/config/keycloak/themes"
+  pending_theme="${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}"
   cp "${repo_root}/config/keycloak/realm/coding-box-realm.json" "${realm_file}"
   cat >"${compose_file}" <<'EOF'
 services:
-  frontend:
-    volumes:
-      - "./site:/site"
   keycloak:
     image: quay.io/keycloak/keycloak:26.4
     volumes:
       - "./config/keycloak/themes/iqb:/opt/keycloak/themes/iqb"
-  keycloak-db:
-    volumes:
-      - "database:/var/lib/postgresql/data"
 EOF
-
   download_file() {
     cp "${repo_root}/$2" "$1"
   }
 
   docker() {
-    [[ "$1" == compose && "$2" == --env-file && "$3" == "${TRAEFIK_DIR}/.env.traefik" ]]
-    [[ "$4" == --file && "$6" == --file && "$8" == config && "$9" == --quiet ]]
-    grep -Fq '/opt/keycloak/themes/kodierbox:ro' "$5"
-    return "${compose_status:-0}"
+    [[ "${PWD}" == "${TRAEFIK_DIR}" && "$1 $2 $3 $4" == 'compose --env-file .env.traefik --file' &&
+      "${*:6}" == '--file docker-compose.traefik.prod.yaml config --no-path-resolution keycloak' ]] ||
+      return 99
+    if [[ "$5" == .compose-theme.* && "${reject_candidate:-false}" == true ]]; then return 99; fi
+    if command grep -Fq 'themes/kodierbox:/opt/keycloak/themes/kodierbox:ro' "$5"; then
+      print_keycloak_theme_mount /kodierbox
+    elif command grep -Fq 'themes:/opt/keycloak/themes:ro' "$5"; then
+      print_keycloak_theme_mount
+    else
+      print_keycloak_theme_mount /iqb false
+    fi
   }
 
   cp "${compose_file}" "${compose_file}.before"
   cp "${realm_file}" "${realm_file}.before"
-  if compose_status=1 configure_keycloak_login_theme; then
-    printf 'Theme installation should fail if Compose rejects the mount.\n' >&2
+
+  printf '%s\n' "${TRAEFIK_DIR}" >"${pending_theme}"
+  if reject_candidate=true import_keycloak_realm; then
+    printf 'An invalid staged Compose file must abort the pending setup.\n' >&2
     exit 1
   fi
+  [[ -f "${pending_theme}" && ! -e "${themes_dir}/kodierbox" ]]
   cmp "${compose_file}" "${compose_file}.before"
   cmp "${realm_file}" "${realm_file}.before"
 
-  configure_keycloak_login_theme
-  configure_keycloak_login_theme
-  diff -r "${repo_root}/config/keycloak/themes/kodierbox" "${TRAEFIK_DIR}/config/keycloak/themes/kodierbox"
-  [[ $(grep -cF '/opt/keycloak/themes/kodierbox:ro' "${compose_file}") -eq 1 ]]
-  sed '\|/opt/keycloak/themes/kodierbox:ro|d' "${compose_file}" | cmp - "${compose_file}.before"
+  mkdir -p "${themes_dir}/iqb"
+  printf 'iqb\n' >"${themes_dir}/iqb/original"
+  install_keycloak_theme_files
+  cp "${compose_file}" "${compose_file}.configured"
+  install_keycloak_theme_files
+  cmp "${compose_file}" "${compose_file}.configured"
+  diff -r "${repo_root}/config/keycloak/themes/kodierbox" "${themes_dir}/kodierbox"
+  grep -Fxq 'iqb' "${themes_dir}/iqb/original"
+  sed '/themes\/kodierbox:\/opt\/keycloak\/themes\/kodierbox:ro/d' "${compose_file}" |
+    cmp - "${compose_file}.before"
   sed 's/"login_theme": "kodierbox"/"login_theme": "iqb"/' "${realm_file}" | cmp - "${realm_file}.before"
   grep -Fq '"login_theme": "kodierbox"' "${realm_file}"
+
+  sed 's@themes/iqb:/opt/keycloak/themes/iqb@themes:/opt/keycloak/themes:ro@' "${compose_file}.before" >"${compose_file}"
+  cp "${compose_file}" "${compose_file}.shared"
+  install_keycloak_theme_files
+  cmp "${compose_file}" "${compose_file}.shared"
 )
+
+source "${repo_root}/scripts/migration/2.0.0.sh"
 
 migration_legacy_env="${test_dir}/.env.legacy"
 printf 'JWT_SECRET=random_string\n' >"${migration_legacy_env}"

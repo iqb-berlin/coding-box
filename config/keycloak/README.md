@@ -1,4 +1,4 @@
-# Kodierbox Login-Theme
+# Kodierbox-Themes für Keycloak
 
 Das Theme `kodierbox` verwendet das IQB-Logo und die Cyan-Hauptfarbe der
 Anwendung (`#006064`). Es erweitert das mit Keycloak ausgelieferte Theme
@@ -6,6 +6,9 @@ Anwendung (`#006064`). Es erweitert das mit Keycloak ausgelieferte Theme
 Feldfehler, Passwort-Reset, E-Mail-Verifizierung und weitere Anmeldeschritte
 verwenden die Templates der installierten Keycloak-Version. Es gibt keine
 eigenen FreeMarker-Templates und keine ALTCHA-Abhaengigkeit.
+
+Das Admin-Theme erweitert `keycloak.v2` und verwendet dasselbe IQB-Logo,
+das Kodierbox-Favicon und die Farbpalette des Login-Themes.
 
 Die Styles des Eltern-Themes werden vor `css/kodierbox.css` geladen. Das Logo
 stammt aus `apps/frontend/src/assets/images/IQB-LogoA.png`; bei einem neuen
@@ -50,24 +53,27 @@ docker compose -f config/keycloak/docker-compose.theme-preview.yaml down
 ## Neuinstallation mit eigenem Keycloak
 
 Wenn der Kodierbox-Installer die Traefik-Infrastruktur neu einrichtet und
-deren Keycloak fuer die Anmeldung ausgewaehlt wird, laedt er das Theme aus
-dem ausgewaehlten Kodierbox-Release. Er speichert es unter
-`config/keycloak/themes/kodierbox` im Traefik-Installationsverzeichnis,
-bindet es schreibgeschuetzt in der lokalen `docker-compose.traefik.yaml`
-ein und setzt das Login-Theme des neuen Kodierbox-Clients auf `kodierbox`.
+deren Keycloak für die Anmeldung ausgewählt wird, lädt er die Themes aus
+dem ausgewählten Kodierbox-Release. Der Installer nutzt einen vorhandenen
+schreibgeschützten Theme-Mount oder ergänzt ihn in der lokalen
+`docker-compose.traefik.yaml`. Er aktiviert die Themes für den
+Kodierbox-Client, den Admin-Login und die Admin-Konsole des `master`-Realms
+sowie die Admin-Konsole des `coding-box`-Realms.
 
-Der Mount gilt auch beim regelmaessigen Start mit den installierten
-Traefik-Make-Targets. Das Traefik-Update ersetzt die lokale Compose-Datei.
-Vor dem Neustart nach einem Traefik-Update den folgenden Eintrag unter
-`services.keycloak.volumes` wieder ergaenzen oder das unten beschriebene
-Compose-Override mitladen.
+Die Aktivierung im `master`-Realm erfolgt nach dem Start des neuen
+Keycloaks über die mitgelieferte Admin-CLI. Bei einer unterbrochenen
+Installation das bisherige Kodierbox-Verzeichnis und die zuvor eingerichtete
+Infrastruktur erneut auswählen. Die automatische Theme-Einrichtung gilt für
+neu eingerichtete Infrastruktur mit ausgewähltem Keycloak.
+
+Ein Traefik-Update kann die lokale Compose-Datei ersetzen. Falls die neue
+Datei keinen gemeinsamen Theme-Mount enthält, vor dem Neustart den folgenden
+Eintrag unter `services.keycloak.volumes` wieder ergänzen oder das unten
+beschriebene Compose-Override mitladen.
 
 ```yaml
       - "./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro"
 ```
-
-Bei einer bestehenden Infrastruktur koennen Betreiber das Theme gezielt im
-Keycloak einbinden, der die Kodierbox-Anmeldung bedient.
 
 ## In Bestehenden Keycloak Einbinden
 
@@ -78,7 +84,12 @@ betrieben. Die Exporte unter `local/realm/iqb.json` und `remote/realm/iqb.json`
 betreffen den Infrastruktur-Realm `iqb` und aktivieren das Theme nicht fuer
 den Anwendungs-Realm `coding-box`.
 
-In der Traefik-Compose-Konfiguration kann
+Wenn die installierte Traefik-Version den gemeinsamen Ordner bereits
+einbindet, genuegt es, das Verzeichnis `themes/kodierbox` nach
+`config/keycloak/themes/kodierbox` im Traefik-Installationsverzeichnis zu
+kopieren. Keycloak beim naechsten regulaeren Start mit dem Theme laden.
+
+Fuer einen Keycloak ohne gemeinsamen Theme-Ordner kann
 `config/keycloak/docker-compose.theme.yaml` als zusaetzliches Override verwendet
 werden. `KODIERBOX_THEME_DIR` muss ein absoluter Pfad auf dem Docker-Host sein,
 zum Beispiel `/home/iqb/coding-box/config/keycloak/themes/kodierbox`. Der
@@ -90,7 +101,7 @@ Installation beibehalten und das Override als letzte Datei hinzufuegen:
 export KODIERBOX_THEME_DIR=/home/iqb/coding-box/config/keycloak/themes/kodierbox
 # Im Verzeichnis der Traefik-Installation:
 docker compose --env-file .env.traefik \
-  -f docker-compose.yaml -f docker-compose.traefik.prod.yaml \
+  -f docker-compose.traefik.yaml -f docker-compose.traefik.prod.yaml \
   -f /home/iqb/coding-box/config/keycloak/docker-compose.theme.yaml \
   up -d keycloak
 ```

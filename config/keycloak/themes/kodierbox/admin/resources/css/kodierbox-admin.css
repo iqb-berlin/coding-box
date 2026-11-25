@@ -1,0 +1,152 @@
+:root {
+  --kodierbox-primary: #006064;
+  --kodierbox-primary-hover: #004d50;
+  --kodierbox-text: #263238;
+  --kodierbox-muted: #526168;
+  --kodierbox-border: #dce2e4;
+  --kodierbox-surface: #f3f5f6;
+  --kodierbox-active-surface: #e5f2f2;
+  --pf-global--primary-color--100: var(--kodierbox-primary);
+  --pf-global--primary-color--200: var(--kodierbox-primary-hover);
+  --pf-global--link--Color: var(--kodierbox-primary);
+  --pf-global--link--Color--hover: var(--kodierbox-primary-hover);
+  --pf-global--FontFamily--sans-serif: Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.pf-c-page {
+  --pf-c-page--BackgroundColor: var(--kodierbox-surface);
+  color: var(--kodierbox-text);
+}
+
+.pf-c-page__header,
+.pf-c-page__sidebar {
+  --pf-global--Color--100: var(--kodierbox-text);
+  --pf-global--Color--200: var(--kodierbox-muted);
+  --pf-global--BorderColor--100: var(--kodierbox-border);
+  --pf-global--BackgroundColor--100: #fff;
+  --pf-global--link--Color: var(--kodierbox-primary);
+  --pf-global--link--Color--hover: var(--kodierbox-primary-hover);
+  --pf-global--primary-color--100: var(--kodierbox-primary);
+}
+
+.pf-c-page__header {
+  --pf-c-page__header--BackgroundColor: #fff;
+  border-bottom: 3px solid var(--kodierbox-primary);
+  color: var(--kodierbox-text);
+}
+
+.pf-c-page__header-brand-link .pf-c-brand {
+  display: block;
+  width: 92px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.pf-c-page__header .pf-c-button.pf-m-plain,
+.pf-c-page__header .pf-c-dropdown__toggle {
+  color: var(--kodierbox-text);
+}
+
+.pf-c-page__sidebar {
+  --pf-c-page__sidebar--BackgroundColor: #fff;
+  border-inline-end: 1px solid var(--kodierbox-border);
+}
+
+.pf-c-page__sidebar .pf-c-dropdown__toggle {
+  background-color: #fff;
+  color: var(--kodierbox-text);
+}
+
+.pf-c-page__sidebar .pf-c-nav {
+  --pf-c-nav__link--Color: var(--kodierbox-text);
+  --pf-c-nav__link--hover--Color: var(--kodierbox-primary-hover);
+  --pf-c-nav__link--focus--Color: var(--kodierbox-primary-hover);
+  --pf-c-nav__link--active--Color: var(--kodierbox-primary-hover);
+  --pf-c-nav__link--m-current--Color: var(--kodierbox-primary-hover);
+  --pf-c-nav__link--hover--BackgroundColor: var(--kodierbox-surface);
+  --pf-c-nav__link--focus--BackgroundColor: var(--kodierbox-surface);
+  --pf-c-nav__link--active--BackgroundColor: var(--kodierbox-active-surface);
+  --pf-c-nav__link--m-current--BackgroundColor: var(--kodierbox-active-surface);
+  --pf-c-nav__link--m-current--after--BorderColor: var(--kodierbox-primary);
+  --pf-c-nav__section-title--Color: var(--kodierbox-muted);
+}
+
+.pf-c-page__main .pf-c-card {
+  border: 1px solid var(--kodierbox-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(38 50 56 / 8%);
+}
+
+.pf-c-button.pf-m-primary {
+  --pf-c-button--m-primary--BackgroundColor: var(--kodierbox-primary);
+  --pf-c-button--m-primary--hover--BackgroundColor: var(--kodierbox-primary-hover);
+  --pf-c-button--m-primary--focus--BackgroundColor: var(--kodierbox-primary-hover);
+  --pf-c-button--m-primary--active--BackgroundColor: var(--kodierbox-primary-hover);
+  border-radius: 4px;
+}
+
+.pf-c-page a:focus-visible,
+.pf-c-page button:focus-visible {
+  outline: 2px solid var(--kodierbox-primary);
+  outline-offset: 2px;
+}
+
+/* Keycloak 26 uses PatternFly 5 and a masthead in place of the page header. */
+.pf-v5-c-page {
+  --pf-v5-c-page--BackgroundColor: var(--kodierbox-surface);
+  --pf-v5-global--primary-color--100: var(--kodierbox-primary);
+  --pf-v5-global--primary-color--200: var(--kodierbox-primary-hover);
+  --pf-v5-global--link--Color: var(--kodierbox-primary);
+  --pf-v5-global--link--Color--hover: var(--kodierbox-primary-hover);
+  --pf-v5-global--FontFamily--sans-serif: Roboto, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.pf-v5-c-masthead {
+  --pf-v5-c-masthead--BackgroundColor: #fff;
+  --pf-v5-global--Color--100: var(--kodierbox-text);
+  --pf-v5-global--Color--200: var(--kodierbox-muted);
+  --pf-v5-global--link--Color: var(--kodierbox-primary);
+  border-bottom: 3px solid var(--kodierbox-primary);
+  color: var(--kodierbox-text);
+}
+
+.pf-v5-c-masthead .pf-v5-c-brand {
+  display: block;
+  width: 92px;
+  height: 48px;
+  object-fit: contain;
+}
+
+.pf-v5-c-masthead .pf-v5-c-button.pf-m-plain,
+.pf-v5-c-masthead .pf-v5-c-dropdown__toggle {
+  color: var(--kodierbox-text);
+}
+
+.pf-v5-c-page__sidebar {
+  --pf-v5-c-page__sidebar--BackgroundColor: #fff;
+  border-inline-end: 1px solid var(--kodierbox-border);
+}
+
+.pf-v5-c-page__sidebar .pf-v5-c-nav {
+  --pf-v5-c-nav__link--Color: var(--kodierbox-text);
+  --pf-v5-c-nav__link--hover--Color: var(--kodierbox-primary-hover);
+  --pf-v5-c-nav__link--focus--Color: var(--kodierbox-primary-hover);
+  --pf-v5-c-nav__link--m-current--Color: var(--kodierbox-primary-hover);
+  --pf-v5-c-nav__link--hover--BackgroundColor: var(--kodierbox-surface);
+  --pf-v5-c-nav__link--focus--BackgroundColor: var(--kodierbox-surface);
+  --pf-v5-c-nav__link--m-current--BackgroundColor: var(--kodierbox-active-surface);
+  --pf-v5-c-nav__link--m-current--after--BorderColor: var(--kodierbox-primary);
+  --pf-v5-c-nav__section-title--Color: var(--kodierbox-muted);
+}
+
+.pf-v5-c-page__main .pf-v5-c-card {
+  border: 1px solid var(--kodierbox-border);
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgb(38 50 56 / 8%);
+}
+
+.pf-v5-c-page a:focus-visible,
+.pf-v5-c-page button:focus-visible {
+  outline: 2px solid var(--kodierbox-primary);
+  outline-offset: 2px;
+}

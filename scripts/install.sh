@@ -14,10 +14,9 @@ declare OPTIONAL_PACKAGES=("make -v")
 
 declare TRAEFIK_DIR
 declare -a EXISTING_TRAEFIK_CONFIGS=()
-declare INSTALLED_TRAEFIK=false
 declare TRAEFIK_REPO_URL="https://raw.githubusercontent.com/iqb-berlin/traefik"
 declare TRAEFIK_REPO_API="https://api.github.com/repos/iqb-berlin/traefik"
-declare ARE_KEYCLOAK_SERVICES_UP=false
+declare KEYCLOAK_THEME_PENDING_FILE='config/keycloak/.kodierbox-theme-pending'
 
 set_env_value() {
   local env_file="$1"
@@ -176,33 +175,88 @@ check_prerequisites() {
   printf "\nPrerequisites check finished successfully.\n\n"
 }
 
-install_application_infrastructure() {
-  if [ -z "${TRAEFIK_DIR}" ]; then
-    LATEST_TRAEFIK_RELEASE=$(curl --silent "${TRAEFIK_REPO_API}/releases/latest" |
-      grep tag_name |
-      cut -d : -f 2,3 |
-      tr -d \" |
-      tr -d , |
-      tr -d " ")
+has_keycloak_theme_mount() {
+  awk '
+    /^  [^[:space:]]/ { keycloak = ($1 == "keycloak:"); volumes = 0 }
+    keycloak && /^    [^[:space:]]/ { volumes = ($1 == "volumes:") }
+    volumes && /^      - / { bind = source = target = read_only = 0 }
+    volumes && /^(      - |        )type: bind$/ { bind = 1 }
+    volumes && /^(      - |        )source: \.\/config\/keycloak\/themes(\/kodierbox)?$/ {
+      source = $NF; sub(/^\.\/config/, "/opt", source)
+    }
+    volumes && /^(      - |        )target: \/opt\/keycloak\/themes(\/kodierbox)?$/ { target = $NF }
+    volumes && /^(      - |        )read_only: true$/ { read_only = 1 }
+    volumes && bind && source && source == target && read_only { found = 1 }
+    END { exit !found }
+  '
+}
 
-    printf "2.4 Installing missing application infrastructure software:\n"
-    printf "Downloading traefik installation script version %s ...\n" "${LATEST_TRAEFIK_RELEASE}"
-    if curl -s --fail -o install_traefik.sh "${TRAEFIK_REPO_URL}/${LATEST_TRAEFIK_RELEASE}/scripts/install.sh"; then
-      chmod +x install_traefik.sh
-      printf 'Download successful!\n\n'
-    else
-      printf 'Download failed!\n'
-      printf 'Traefik installation script finished with error\n'
-      exit 1
+ensure_keycloak_theme_mount() (
+  cd "${TRAEFIK_DIR}" || return 1
+  local compose_file=docker-compose.traefik.yaml
+  local -a compose=(docker compose --env-file .env.traefik)
+  local config staged_compose
+  config=$("${compose[@]}" --file "${compose_file}" --file docker-compose.traefik.prod.yaml \
+    config --no-path-resolution keycloak) || return 1
+  if has_keycloak_theme_mount <<<"${config}"; then
+    return 0
+  fi
+
+  # Keep the bind mount in the local file used by the regular Traefik start commands.
+  staged_compose=$(mktemp .compose-theme.XXXXXXXX) || return 1
+  trap 'rm -f "${staged_compose}"' EXIT
+  cp -p "${compose_file}" "${staged_compose}" || return 1
+  awk '
+    /^  [^[:space:]]/ { keycloak = ($1 == "keycloak:") }
+    { print }
+    keycloak && /^    volumes:[[:space:]]*$/ {
+      print "      - \"./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro\""
+      mounts++
+    }
+    END { if (mounts != 1) exit 1 }
+  ' "${compose_file}" >"${staged_compose}" || return 1
+
+  config=$("${compose[@]}" --file "${staged_compose}" --file docker-compose.traefik.prod.yaml \
+    config --no-path-resolution keycloak) || return 1
+  has_keycloak_theme_mount <<<"${config}" || return 1
+  mv "${staged_compose}" "${compose_file}"
+)
+
+install_application_infrastructure() {
+  local use_infrastructure_keycloak="$1"
+  if [ -z "${TRAEFIK_DIR}" ]; then
+    printf "3.1 Installing missing application infrastructure software:\n"
+    local latest_release release installer
+    local selected_release=''
+    latest_release=$(curl --silent "${TRAEFIK_REPO_API}/releases/latest" |
+      sed -nE 's/.*"tag_name"[[:space:]]*:[[:space:]]*"([^"]+)".*/\1/p')
+    installer=$(mktemp) || return 1
+    while read -er -i "${latest_release}" -p 'Please name the desired Traefik release tag: ' release; do
+      release="${release:-${latest_release}}"
+      if [[ -z "${release}" ]]; then
+        continue
+      fi
+      printf "Downloading Traefik installation script version %s ...\n" "${release}"
+      if curl --fail --silent --show-error --output "${installer}" \
+        "${TRAEFIK_REPO_URL}/${release}/scripts/install.sh"; then
+        selected_release="${release}"
+        break
+      fi
+      printf 'Traefik release %s could not be downloaded. Select another release.\n' "${release}" >&2
+    done
+    if [[ -z "${selected_release}" ]]; then
+      rm "${installer}"
+      printf 'No Traefik release selected.\n' >&2
+      return 1
     fi
 
     printf 'Downloaded installation script will be started now.\n\n'
-    if ! (./install_traefik.sh); then
-      rm ./install_traefik.sh
+    if ! bash "${installer}" "${selected_release}"; then
+      rm "${installer}"
       printf 'Traefik installation script finished with error\n' >&2
-      exit 1
+      return 1
     fi
-    rm ./install_traefik.sh
+    rm "${installer}"
 
     printf '\nChecking Infrastructure installation ...\n'
     declare -a traefik_dir_array=()
@@ -240,7 +294,13 @@ install_application_infrastructure() {
       done
     fi
 
-    INSTALLED_TRAEFIK=true
+    if [[ -z "${TRAEFIK_DIR}" ]]; then
+      printf 'No Traefik installation selected.\n' >&2
+      return 1
+    fi
+    if ${use_infrastructure_keycloak}; then
+      printf '%s\n' "${TRAEFIK_DIR}" >"${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}" || return 1
+    fi
     printf "Infrastructure installation checked.\n"
     printf "\n"
     printf "Missing application infrastructure successfully installed.\n"
@@ -283,7 +343,7 @@ prepare_installation_dir() {
   mkdir -p "${APP_DIR}/scripts/make"
   mkdir -p "${APP_DIR}/scripts/migration"
 
-  cd "${APP_DIR}"
+  APP_DIR=$(cd "${APP_DIR}" && pwd -P)
 }
 
 download_file() {
@@ -316,60 +376,98 @@ download_files() {
   printf "Downloads done!\n\n"
 }
 
-configure_keycloak_login_theme() {
+install_keycloak_theme_files() {
   local theme_path=config/keycloak/themes/kodierbox
   local theme_dir="${TRAEFIK_DIR}/${theme_path}"
-  local compose_file="${TRAEFIK_DIR}/docker-compose.traefik.yaml"
   local realm_file="${APP_DIR}/config/keycloak/${APP_NAME}-realm.json"
-  local volume_line='      - "./config/keycloak/themes/kodierbox:/opt/keycloak/themes/kodierbox:ro"'
   local -a theme_files=(
     login/theme.properties
     login/messages/messages_de.properties
     login/messages/messages_en.properties
     login/resources/css/kodierbox.css
     login/resources/img/iqb-logo.png
+    login/resources/img/favicon.ico
+    admin/theme.properties
+    admin/resources/css/kodierbox-admin.css
   )
-  local theme_file staged_compose
+  local theme_file
 
   if ! grep -Eq '"login_theme": "(iqb|kodierbox)"' "${realm_file}"; then
     printf "Could not find the login theme setting for the Kodierbox client in %s.\n" "${realm_file}" >&2
     return 1
   fi
 
-  printf "Installing the Kodierbox login theme for the new Keycloak.\n"
+  if ! ensure_keycloak_theme_mount; then
+    printf 'Could not configure the read-only Kodierbox theme mount in %s.\n' "${TRAEFIK_DIR}" >&2
+    return 1
+  fi
+
+  printf "Installing the Kodierbox login and administration themes for the new Keycloak.\n"
   for theme_file in "${theme_files[@]}"; do
     install -d -m 0755 "${theme_dir}/$(dirname "${theme_file}")" || return 1
     download_file "${theme_dir}/${theme_file}" "${theme_path}/${theme_file}"
     chmod 0644 "${theme_dir}/${theme_file}" || return 1
   done
 
-  staged_compose=$(mktemp "${TRAEFIK_DIR}/.compose-theme.XXXXXXXX") || return 1
-  # Keep the local mount in the file used by the infrastructure's regular start commands.
-  if ! cp -p "${compose_file}" "${staged_compose}" ||
-    ! awk -v mount="${volume_line}" '
-      /^  [^[:space:]]/ { in_keycloak = ($1 == "keycloak:") }
-      in_keycloak && $0 == mount { next }
-      { print }
-      in_keycloak && /^    volumes:[[:space:]]*$/ { print mount; mounts++ }
-      END { if (mounts != 1) exit 1 }
-    ' "${compose_file}" >"${staged_compose}" ||
-    ! docker compose --env-file "${TRAEFIK_DIR}/.env.traefik" \
-      --file "${staged_compose}" --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" config --quiet ||
-    ! mv "${staged_compose}" "${compose_file}"; then
-    rm -f "${staged_compose}"
-    printf "Could not configure the Kodierbox theme mount in %s.\n" "${compose_file}" >&2
-    return 1
-  fi
-
   # The downloaded realm assigns its login theme to the Kodierbox client.
   sed -i.bak 's/"login_theme": "iqb"/"login_theme": "kodierbox"/' "${realm_file}" &&
     rm "${realm_file}.bak"
 }
 
+has_pending_keycloak_theme() {
+  local pending_theme="${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}"
+  [[ -n "${TRAEFIK_DIR}" && -f "${pending_theme}" && $(cat "${pending_theme}") == "${TRAEFIK_DIR}" ]]
+}
+
+wait_for_keycloak() {
+  "$@" exec -T keycloak bash -c '
+    port=${KC_HTTP_PORT:-8080}
+    deadline=$((SECONDS + 180))
+    until (
+      exec 3<>"/dev/tcp/127.0.0.1/${port}" &&
+      printf "GET /realms/master/.well-known/openid-configuration HTTP/1.0\r\nHost: localhost\r\n\r\n" >&3 &&
+      IFS= read -r -t 2 status <&3 &&
+      [[ ${status} == HTTP/*" 200 "* ]]
+    ) 2>/dev/null; do
+      if (( SECONDS >= deadline )); then
+        printf "Keycloak did not become ready for theme configuration.\n" >&2
+        exit 1
+      fi
+      sleep 2
+    done
+  ' </dev/null
+}
+
+configure_keycloak_admin_theme() {
+  wait_for_keycloak "$@" || return 1
+  # Keycloak 26 reads the password from the environment. Older releases read stdin.
+  "$@" exec -T keycloak bash -ec '
+    admin_name=${KC_BOOTSTRAP_ADMIN_USERNAME:-${KEYCLOAK_ADMIN:?Missing Keycloak admin username}}
+    admin_password=${KC_BOOTSTRAP_ADMIN_PASSWORD:-${KEYCLOAK_ADMIN_PASSWORD:?Missing Keycloak admin password}}
+    port=${KC_HTTP_PORT:-8080}
+
+    update_realm() {
+      printf "%s\n" "${admin_password}" |
+        KC_CLI_PASSWORD="${admin_password}" /opt/keycloak/bin/kcadm.sh update "$@" --no-config \
+          --server "http://127.0.0.1:${port}" --realm master --user "${admin_name}"
+    }
+
+    update_realm realms/master -s loginTheme=kodierbox -s adminTheme=kodierbox
+    update_realm realms/coding-box -s adminTheme=kodierbox
+  ' </dev/null || return 1
+  printf "Kodierbox administration themes configured.\n"
+}
+
 import_keycloak_realm() {
-  if ${INSTALLED_TRAEFIK}; then
-    configure_keycloak_login_theme || return 1
+  local install_theme=false
+  if has_pending_keycloak_theme; then
+    install_keycloak_theme_files || return 1
+    install_theme=true
   fi
+  local -a keycloak_compose=(docker compose --progress quiet
+    --env-file "${TRAEFIK_DIR}/.env.traefik"
+    --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml"
+    --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml")
 
   # Copy Coding Box realm
   declare realm_file="${TRAEFIK_DIR}/config/keycloak/${APP_NAME}-realm.json"
@@ -399,36 +497,30 @@ import_keycloak_realm() {
 
   # Start/Stop Keycloak Services
   local running_services
-  running_services=$(docker compose \
-    --env-file "${TRAEFIK_DIR}/.env.traefik" \
-    --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-    --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-    ps -q keycloak keycloak-db)
-  if [ "$(wc -w <<<"${running_services}")" -ne 2 ]; then
-    printf "\nOne or more Keycloak services are down ...\n"
-
-    printf -- "- Starting Keycloak DB\n"
-    docker compose \
-        --progress quiet \
-        --env-file "${TRAEFIK_DIR}/.env.traefik" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-      up --detach keycloak-db
-    sleep 15 # waiting keycloak started completely
-    printf "Keycloak DB is up.\n\n"
-  else
-    printf "Keycloak services are up ...\n"
-    ARE_KEYCLOAK_SERVICES_UP=true
-
-    # Stop Keycloak
+  running_services=$("${keycloak_compose[@]}" ps -q keycloak keycloak-db) || return 1
+  local keycloak_was_running=false
+  if [ "$(wc -w <<<"${running_services}")" -eq 2 ]; then
+    keycloak_was_running=true
+  fi
+  if ${install_theme} && ! ${keycloak_was_running}; then
+    # On a fresh database, bootstrap the master administrator before the offline realm import.
+    "${keycloak_compose[@]}" up --detach keycloak || return 1
+  fi
+  if ${keycloak_was_running} || ${install_theme}; then
+    if ${install_theme} && ! wait_for_keycloak "${keycloak_compose[@]}"; then
+      if ! ${keycloak_was_running}; then
+        "${keycloak_compose[@]}" down keycloak keycloak-db
+      fi
+      return 1
+    fi
     printf -- "- Shutting down all Keycloak services except Keycloak DB\n"
-    docker compose \
-        --progress quiet \
-        --env-file "${TRAEFIK_DIR}/.env.traefik" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-      down keycloak
+    "${keycloak_compose[@]}" down keycloak || return 1
     printf "Only Keycloak DB is up.\n\n"
+  else
+    printf -- "- Starting Keycloak DB\n"
+    "${keycloak_compose[@]}" up --detach keycloak-db || return 1
+    sleep 15
+    printf "Keycloak DB is up.\n\n"
   fi
 
   # Import Coding Box Realm
@@ -468,29 +560,26 @@ import_keycloak_realm() {
   fi
 
   # Start/Stop Keycloak Services
-  if ! ${ARE_KEYCLOAK_SERVICES_UP}; then
-    printf "Shutting down Keycloak DB ...\n"
-    docker compose \
-        --progress quiet \
-        --env-file "${TRAEFIK_DIR}/.env.traefik" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-      down keycloak-db
-    printf "Keycloak DB is down again.\n\n"
-  else
+  if ${keycloak_was_running} || { ${install_theme} && [[ "${import_status}" -eq 0 ]]; }; then
     printf "Starting Keycloak Services ...\n"
-    docker compose \
-        --progress quiet \
-        --env-file "${TRAEFIK_DIR}/.env.traefik" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.yaml" \
-        --file "${TRAEFIK_DIR}/docker-compose.traefik.prod.yaml" \
-      up --detach keycloak || return 1
-    printf "All Keycloak Services are up again.\n\n"
+    "${keycloak_compose[@]}" up --detach keycloak || return 1
+    if ${install_theme} && [[ "${import_status}" -eq 0 ]]; then
+      configure_keycloak_admin_theme "${keycloak_compose[@]}" || import_status=$?
+    fi
+    if ! ${keycloak_was_running}; then
+      "${keycloak_compose[@]}" down keycloak || return 1
+    fi
+  fi
+  if ! ${keycloak_was_running}; then
+    printf "Shutting down Keycloak DB ...\n"
+    "${keycloak_compose[@]}" down keycloak-db || return 1
+    printf "Keycloak DB is down again.\n\n"
   fi
   return "${import_status}"
 }
 
 customize_settings() {
+  local use_infrastructure_keycloak="$1"
   # Activate environment file
   cp ".env.${APP_NAME}.template" ".env.${APP_NAME}"
 
@@ -565,10 +654,7 @@ customize_settings() {
   env_vars_oidc[oauth2_client_secret]=$(tr -dc 'a-zA-Z0-9' </dev/urandom | fold -w 16 | head -n 1)
   env_vars_oidc[oauth2_redirect_url]="//${server_name}/api/auth/callback"
 
-  declare is_keycloak
-  read -p "Do you want to use the Keycloak identity provider included in the infrastructure? [Y/n] " -er -n 1 is_keycloak
-
-  if [[ ! ${is_keycloak} =~ [nN] ]]; then
+  if ${use_infrastructure_keycloak}; then
     # Init coding box realm configuration
     cp config/keycloak/${APP_NAME}-realm.config.template config/keycloak/${APP_NAME}-realm.config
 
@@ -631,7 +717,7 @@ customize_settings() {
       "config/keycloak/${APP_NAME}-realm.config" && rm "config/keycloak/${APP_NAME}-realm.config.bak"
 
     printf "\nKeycloak Realm Import\n"
-    import_keycloak_realm
+    import_keycloak_realm || return 1
 
   else
     env_vars_oidc[oidc_provider_url]=https://oidc_provider_url
@@ -698,7 +784,6 @@ application_start() {
       up -d
   else
     printf "'%s' installation script finished.\n" "${APP_NAME}"
-    exit 0
   fi
 }
 
@@ -710,33 +795,25 @@ main() {
     printf "\n"
 
     get_release_version
+  fi
 
-    check_prerequisites
+  check_prerequisites
+  prepare_installation_dir
+  local identity_provider_choice
+  local use_infrastructure_keycloak=true
+  read -p "Do you want to use the Keycloak identity provider included in the infrastructure? [Y/n] " -er -n 1 identity_provider_choice
+  if [[ "${identity_provider_choice}" =~ ^[nN]$ ]]; then
+    use_infrastructure_keycloak=false
+  fi
 
-    install_application_infrastructure
+  install_application_infrastructure "${use_infrastructure_keycloak}" || return 1
+  cd "${APP_DIR}" || return 1
+  download_files
+  customize_settings "${use_infrastructure_keycloak}" || return 1
+  application_start || return 1
 
-    prepare_installation_dir
-
-    download_files
-
-    customize_settings
-
-    application_start
-
-  else
-
-    check_prerequisites
-
-    install_application_infrastructure
-
-    prepare_installation_dir
-
-    download_files
-
-    customize_settings
-
-    application_start
-
+  if ${use_infrastructure_keycloak} && has_pending_keycloak_theme; then
+    rm "${APP_DIR}/${KEYCLOAK_THEME_PENDING_FILE}"
   fi
 }
 
