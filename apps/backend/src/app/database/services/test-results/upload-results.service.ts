@@ -437,18 +437,15 @@ export class UploadResultsService {
                 if (scope !== 'response') {
                   return u;
                 }
-                return {
-                  ...u,
-                  subforms: (u.subforms || []).map(sf => {
-                    if ((sf.id || '') !== subform) {
-                      return { ...sf, responses: [] };
-                    }
-                    return {
-                      ...sf,
-                      responses: (sf.responses || []).filter(r => (r.id || '') === variableId)
-                    };
-                  })
-                };
+                const subforms = u.subforms.filter(sf => sf.id === subform).map(sf => ({
+                  ...sf,
+                  responses: sf.responses.filter(response => response.id === variableId)
+                })).filter(sf => sf.responses.length);
+                const sources = new Set(subforms.map(sf => sf.sourceChunkKey));
+                const chunks = u.chunks.filter(chunk => sources.has(chunk.id) &&
+                  (chunk.subform === undefined || chunk.subform === subform) && chunk.variables.includes(variableId))
+                  .map(chunk => ({ ...chunk, variables: [variableId] }));
+                return { ...u, chunks, subforms };
               })
           }))
       }));
@@ -685,7 +682,7 @@ export class UploadResultsService {
               const personsWithUnits = await Promise.all(
                 basePersons.map(async person => {
                   const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
-                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
+                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues, true);
                 })
               );
 

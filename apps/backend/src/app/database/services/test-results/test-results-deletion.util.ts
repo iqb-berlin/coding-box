@@ -18,8 +18,10 @@ export function responseMatchesChunkCondition(
 ): string {
   const matchesVariable = `${responseAlias}.variableid = ANY(string_to_array(COALESCE(${chunkAlias}.variables, ''), ','))`;
   return `(
-      (${responseAlias}.source_chunk_key = ${chunkAlias}.key AND (${matchesVariable} OR COALESCE(${chunkAlias}.variables, '') = ''))
-      OR (${responseAlias}.source_chunk_key IS NULL AND (
+      (${responseAlias}.source_chunk_key = ${chunkAlias}.key AND (
+        ${chunkAlias}.subform IS NULL OR ${chunkAlias}.subform = COALESCE(${responseAlias}.subform, '')
+      ) AND (${matchesVariable} OR COALESCE(${chunkAlias}.variables, '') = ''))
+      OR (${responseAlias}.source_chunk_key IS NULL AND ${chunkAlias}.subform IS NULL AND (
         ${matchesVariable} OR (
           COALESCE(${chunkAlias}.variables, '') = ''
           AND COALESCE(${chunkAlias}.key, '') = COALESCE(${responseAlias}.subform, '')

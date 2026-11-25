@@ -588,9 +588,9 @@ export class PersonPersistenceService {
           id: true, variableid: true, subform: true, source_chunk_key: true
         }
       });
-      const hasLegacySources = existing.some(row => row.source_chunk_key == null) && incoming.some(item => item.legacySubform !== undefined);
+      const needsChunkHistory = existing.length > 0 && incoming.some(item => item.chunkKey !== undefined);
       const chunkRepository = manager?.getRepository(ChunkEntity) || this.chunkRepository;
-      const previousChunks = hasLegacySources ? await chunkRepository.findBy({ unitid: savedUnit.id }) : [];
+      const previousChunks = needsChunkHistory ? await chunkRepository.findBy({ unitid: savedUnit.id }) : [];
       const plan = matchImportedResponses(incoming, existing, overwriteMode, previousChunks);
       result.skipped = plan.skipped;
       for (const { row, entry } of plan.matches) {

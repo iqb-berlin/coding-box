@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { extractResponseGroups } from './response-chunks';
+import { chunkMemberships, extractResponseGroups } from './response-chunks';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
@@ -7,7 +7,6 @@ import {
   Person,
   TcMergeBooklet,
   TcMergeLastState,
-  TcMergeResponse,
   TcMergeSubForms,
   TcMergeUnit, Response
 } from '../shared';
@@ -412,7 +411,7 @@ export class PersonService {
     }
   }
 
-  async assignUnitsToBookletAndPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = []): Promise<Person> {
+  async assignUnitsToBookletAndPerson(person: Person, rows: Response[], issues: TestResultsUploadIssueDto[] = [], fromCsv = false): Promise<Person> {
     for (const row of rows) {
       try {
         if (!this.doesRowMatchPerson(row, person)) continue;
@@ -427,7 +426,7 @@ export class PersonService {
         }
 
         const parsedResponses = this.parseResponses(row.responses);
-        const subforms = this.extractSubforms(parsedResponses);
+        const subforms = this.extractSubforms(parsedResponses, fromCsv);
         const variables = this.extractVariablesFromSubforms(subforms);
         const laststate = this.parseLastState(row.laststate, row, issues);
 
@@ -461,10 +460,10 @@ export class PersonService {
     }
   }
 
-  private extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
+  private extractSubforms(parsedResponses: Chunk[], fromCsv = false): TcMergeSubForms[] {
     return extractResponseGroups(parsedResponses, (chunk, error) => {
       this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-    });
+    }, fromCsv);
   }
 
   private extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
@@ -527,44 +526,9 @@ export class PersonService {
     variables: Set<string>,
     parsedResponses: Chunk[]
   ): TcMergeUnit {
-    const chunks = parsedResponses
-      .map(chunk => {
-        const chunkId = String(chunk.id || chunk.subForm || '');
-        const chunkType = String(chunk.responseType || '').trim();
-        const chunkTs = Number(chunk.ts) || 0;
-        let chunkVariables: string[] = [];
-
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          if (Array.isArray(chunkContent)) {
-            chunkVariables = Array.from(new Set(
-              chunkContent
-                .map(response => String(response?.id || '').trim())
-                .filter(Boolean)
-            ));
-          }
-        } catch (error) {
-          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-        }
-
-        // Keep backward compatibility: if there is only one chunk, keep the old
-        // variable-source behavior to avoid writing empty chunk variables.
-        if (chunkVariables.length === 0 && parsedResponses.length === 1 && variables.size > 0) {
-          chunkVariables = Array.from(new Set(
-            Array.from(variables)
-              .map(variable => String(variable || '').trim())
-              .filter(Boolean)
-          ));
-        }
-
-        return {
-          id: chunkId,
-          type: chunkType,
-          ts: chunkTs,
-          variables: chunkVariables
-        };
-      })
-      .filter(chunk => chunk.id || chunk.type || chunk.ts || chunk.variables.length > 0);
+    const chunks = chunkMemberships(parsedResponses, variables, (chunk, error) => {
+      this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
+    });
 
     return {
       id: row.unitname,

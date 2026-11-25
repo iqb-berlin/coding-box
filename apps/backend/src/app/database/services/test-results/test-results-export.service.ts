@@ -1,4 +1,3 @@
-import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import {
   Inject,
   Injectable, Logger
@@ -12,7 +11,7 @@ import {
   DataSource,
   Repository
 } from 'typeorm';
-import { chunkResolver } from './response-chunks';
+import { exportResponseChunks } from './export-response-chunks';
 import { Booklet } from '../../entities/booklet.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
@@ -23,15 +22,11 @@ import { Unit } from '../../entities/unit.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import {
-  statusNumberToString
-} from '../../utils/response-status-converter';
-import { Chunk, TcMergeResponse } from '../shared';
-import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import {
-  applyExclusionsToQuery, applyIgnoredBookletsToQuery, createGeoGebraValueCondition, nonAutocoderGeneratedResponseCondition, parseStoredResponseValue
+  applyExclusionsToQuery, applyIgnoredBookletsToQuery, createGeoGebraValueCondition, nonAutocoderGeneratedResponseCondition
 } from './test-results.util';
 import { LogAnomalySummary, TestResultsExportFilters } from './workspace-test-results.types';
 
@@ -95,12 +90,11 @@ export class TestResultsExportService {
       `Exporting test results for workspace ${workspaceId} to file ${filePath}`
     );
     const fileStream = fs.createWriteStream(filePath);
-    await this.exportTestResultsToStream(
-      workspaceId,
-      fileStream,
-      filters,
-      progressCallback
-    );
+    try {
+      await this.exportTestResultsToStream(workspaceId, fileStream, filters, progressCallback);
+    } finally {
+      fileStream.destroy();
+    }
   }
 
   async exportTestResultsToStream(
@@ -232,7 +226,8 @@ export class TestResultsExportService {
           'chunk.key',
           'chunk.variables',
           'chunk.ts',
-          'chunk.type'
+          'chunk.type',
+          'chunk.subform'
         ])
         .where('chunk.unitid IN (:...unitIds)', { unitIds })
         .getMany();
@@ -288,51 +283,6 @@ export class TestResultsExportService {
         const unitChunks = chunksByUnitId.get(unit.id) || [];
         const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
 
-        const resolveChunk = chunkResolver(unitChunks);
-        const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
-
-        unitChunks.forEach(chunk => {
-          // Store timestamp and type for each chunk key so we can use it in the export
-          if (!chunkMetaByKey.has(chunk.key) || Number(chunk.ts) >= chunkMetaByKey.get(chunk.key)!.ts) {
-            chunkMetaByKey.set(chunk.key, {
-              ts: Number(chunk.ts) || 0,
-              type: chunk.type || 'state'
-            });
-          }
-        });
-
-        const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
-
-        unitResponses.forEach(r => {
-          const chunkKey = resolveChunk(r);
-          if (!responsesByChunkKey.has(chunkKey)) {
-            responsesByChunkKey.set(chunkKey, []);
-          }
-
-          const value = parseStoredResponseValue(
-            r.value,
-            r.variableid
-          ) as ResponseValueType;
-
-          responsesByChunkKey.get(chunkKey)!.push({
-            id: r.variableid,
-            value: value,
-            status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform || undefined
-          });
-        });
-
-        const exportChunks: Chunk[] = [];
-        responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
-          const meta = chunkMetaByKey.get(chunkKey);
-          exportChunks.push({
-            id: chunkKey,
-            responseType: meta?.type || 'state',
-            ts: meta?.ts || 0,
-            content: JSON.stringify(chunkResponses)
-          });
-        });
-
         const lastStateMap: { [key: string]: unknown } = {};
         unitLastStates.forEach(ls => {
           lastStateMap[ls.key] = ls.value;
@@ -344,7 +294,7 @@ export class TestResultsExportService {
           code: unit.booklet.person.code,
           bookletname: unit.booklet.bookletinfo.name,
           unitname: unit.name,
-          responses: JSON.stringify(exportChunks),
+          responses: JSON.stringify(exportResponseChunks(unitResponses, unitChunks)),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
         };

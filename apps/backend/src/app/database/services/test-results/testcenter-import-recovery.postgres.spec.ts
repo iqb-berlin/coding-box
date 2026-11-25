@@ -1,4 +1,11 @@
 import { CodingScheme } from '@iqbspecs/coding-scheme';
+import {
+  mkdtemp, readFile, rm, writeFile
+} from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import type { Job } from 'bullmq';
+import { writeToBuffer } from 'fast-csv';
 import { createServer, Server } from 'node:http';
 import { createMock } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
@@ -31,7 +38,11 @@ import { WorkspaceFilesService } from '../workspace/workspace-files.service';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { JournalService } from '../shared/journal.service';
-import { Response } from '../shared';
+import { Chunk, Response, TcMergeResponse } from '../shared';
+import { TestResultsExportService } from './test-results-export.service';
+import { UploadResultsService } from './upload-results.service';
+import { TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
+import { responseMatchesChunkCondition } from './test-results-deletion.util';
 import { CacheService } from '../../../cache/cache.service';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
 
@@ -60,21 +71,94 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     metadata: 'false'
   };
 
-  const createService = () => {
-    const repo = <T extends object>(entity: new () => T) => connection.getRepository(entity);
+  const repository = <T extends object>(entity: new () => T) => connection.getRepository(entity);
+  const createPersonService = () => {
     const persistence = new PersonPersistenceService(
-      repo(Persons), repo(Booklet), repo(Unit), repo(UnitLastState), repo(BookletInfo), repo(ResponseEntity), repo(ChunkEntity), repo(BookletLog), repo(Session), repo(UnitLog)
+      repository(Persons), repository(Booklet), repository(Unit), repository(UnitLastState), repository(BookletInfo), repository(ResponseEntity), repository(ChunkEntity), repository(BookletLog), repository(Session), repository(UnitLog)
     );
     const query = new PersonQueryService(
-      repo(Persons), repo(Booklet), repo(Unit), repo(ResponseEntity), repo(BookletLog), createMock<WorkspaceExclusionService>()
+      repository(Persons), repository(Booklet), repository(Unit), repository(ResponseEntity), repository(BookletLog), createMock<WorkspaceExclusionService>()
     );
-    return new TestcenterService(
-      new PersonService(query, persistence), new HttpService(), createMock<WorkspaceFilesService>(), createMock<CacheService>({ get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(false) }), createMock<WorkspaceTestResultsService>(), connection, undefined, undefined, new ConfigService({ TESTCENTER_ALLOWED_URLS: upstreamUrl })
-    );
+    return new PersonService(query, persistence);
   };
+  const createService = () => new TestcenterService(
+    createPersonService(), new HttpService(), createMock<WorkspaceFilesService>(), createMock<CacheService>({ get: jest.fn().mockResolvedValue(null), set: jest.fn().mockResolvedValue(false) }), createMock<WorkspaceTestResultsService>(), connection, undefined, undefined, new ConfigService({ TESTCENTER_ALLOWED_URLS: upstreamUrl })
+  );
 
   const importRun = (service: TestcenterService, runId: string, mode: 'skip' | 'merge' | 'replace' = 'skip') => service.importWorkspaceFiles(
     String(workspaceId), 'tc', '', upstreamUrl, 'fixture-token', options, 'g1', true, undefined, runId, mode, 7
+  );
+
+  const storedResponses = (target = workspaceId) => repository(ResponseEntity).createQueryBuilder('r')
+    .innerJoin('r.unit', 'u').innerJoin('u.booklet', 'b')
+    .innerJoin('b.person', 'p')
+    .where('p.workspace_id = :target', { target })
+    .orderBy('r.id')
+    .getMany();
+
+  const answer = (id: string, value: string, subform?: string): TcMergeResponse => ({
+    id, value, subform, status: 'VALUE_CHANGED'
+  });
+  const part = (id: string, ts: number, answers: TcMergeResponse[], subForm?: string, responseType = 'state'): Chunk => ({
+    id, ts, subForm, responseType, content: JSON.stringify(answers)
+  });
+
+  const exportCsv = async () => {
+    const exporter = new TestResultsExportService(
+      repository(Persons), repository(Unit), repository(Booklet), repository(ResponseEntity), repository(BookletLog), repository(Session), repository(UnitLog), repository(ChunkEntity), connection, createMock<WorkspaceExclusionService>({
+        resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+      }), createMock()
+    );
+    const directory = await mkdtemp(join(tmpdir(), 'response-export-'));
+    try {
+      const file = join(directory, 'responses.csv');
+      await exporter.exportTestResultsToFile(workspaceId, file);
+      return await readFile(file);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+
+  const uploadCsv = async (csv: Buffer, mode: 'skip' | 'merge' | 'replace', target = workspaceId, scopeFilters?: TestResultsUploadJobData['scopeFilters']) => {
+    const directory = await mkdtemp(join(tmpdir(), 'response-import-'));
+    try {
+      const path = join(directory, 'responses.csv');
+      await writeFile(path, csv);
+      const service = new UploadResultsService(createPersonService(), createMock(), createMock(), connection);
+      const result = await service.processUpload(createMock<Job<TestResultsUploadJobData>>({
+        id: 'csv-reimport',
+        data: {
+          workspaceId: target,
+          overwriteMode: mode,
+          resultType: 'responses',
+          scope: scopeFilters ? 'response' : 'person',
+          scopeFilters,
+          personMatchMode: 'strict',
+          file: {
+            path, size: csv.length, mimetype: 'text/csv', originalname: 'responses.csv'
+          }
+        }
+      }));
+      expect(result.importSummary?.responseRows).toBe(1);
+      return (result.issues || []).filter(issue => issue.level === 'error').map(issue => issue.message);
+    } finally {
+      await rm(directory, { recursive: true, force: true });
+    }
+  };
+
+  const addManualCases = async (assignments: { id: number; code: number }[]) => {
+    const [job] = await connection.query('INSERT INTO coding_job (workspace_id, name) VALUES ($1, $2) RETURNING id', [workspaceId, 'manual']);
+    for (const { id, code } of assignments) {
+      await repository(ResponseEntity).update(id, { code_v2: code });
+      await connection.query(`INSERT INTO coding_job_unit (coding_job_id, response_id, unit_name, variable_id,
+        variable_anchor, booklet_name, person_login, person_code, code)
+        SELECT $1,id,'U1',variableid,'','B','L','C',$2 FROM response WHERE id=$3`, [job.id, code, id]);
+    }
+    return job.id;
+  };
+
+  const manualCases = (job: number) => connection.query(
+    'SELECT response_id AS id, code FROM coding_job_unit WHERE coding_job_id=$1 ORDER BY code', [job]
   );
 
   const counts = async () => {
@@ -194,16 +278,16 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
   }, 30000);
 
   it('codes SUM_CODE across persisted aspect data parts and keeps equal variable IDs in separate subforms', async () => {
-    const answer = (id: string, subform?: string) => ({
+    const numericAnswer = (id: string, subform?: string) => ({
       id, value: 1, status: 'VALUE_CHANGED', subform
     });
     rows = [rows[0]];
     rows[0].responses = [
       {
-        id: 'elementCodes', responseType: 'state', ts: 1, content: JSON.stringify([answer('a'), answer('x', 'left')])
+        id: 'elementCodes', responseType: 'state', ts: 1, content: JSON.stringify([numericAnswer('a'), numericAnswer('x', 'left')])
       },
       {
-        id: 'stateVariableCodes', responseType: 'state', ts: 2, content: JSON.stringify([answer('s'), answer('x', 'right')])
+        id: 'stateVariableCodes', responseType: 'state', ts: 2, content: JSON.stringify([numericAnswer('s'), numericAnswer('x', 'right')])
       }
     ];
     expect((await importRun(createService(), 'split')).success).toBe(true);
@@ -297,6 +381,139 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
         .toEqual([{ code: 7, response_id: original.id }]);
     } finally {
       await connection.query('DELETE FROM coding_job WHERE id=$1', [job.id]);
+    }
+  });
+
+  it.each(['skip', 'merge', 'replace'] as const)('keeps both manual cases with crossed historical wrapper names on %s', async mode => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('A', 10, [answer('x', 'first', 'left')], 'B'), part('B', 11, [answer('x', 'second', 'right')], 'A')];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const normalizedCsv = await exportCsv();
+    const [left, right] = await storedResponses();
+    await repository(ChunkEntity).update({ unitid: left.unitid }, { subform: null });
+    await repository(ResponseEntity).update(left.id, { source_chunk_key: null, subform: 'B' });
+    await repository(ResponseEntity).update(right.id, { source_chunk_key: null, subform: 'A' });
+    const cases = [{ id: left.id, code: 7 }, { id: right.id, code: 9 }];
+    const job = await addManualCases(cases);
+    try {
+      const first = part('A', 20, [answer('x', 'new first', 'left')], 'B');
+      rows[0].responses = [first];
+      if (mode !== 'skip') {
+        await expect(exportCsv()).rejects.toThrow('nicht eindeutig');
+        expect(await uploadCsv(normalizedCsv, mode)).toEqual([expect.stringContaining('nicht eindeutig')]);
+        expect((await importRun(service, 'partial', mode)).success).toBe(false);
+        expect(await storedResponses()).toMatchObject([{ id: left.id, subform: 'B' }, { id: right.id, subform: 'A' }]);
+      }
+      rows[0].responses = [part('B', 21, [answer('x', 'new second', 'right')], 'A'), first];
+      expect((await importRun(service, 'crossed', mode)).success).toBe(true);
+      expect(await storedResponses()).toMatchObject([
+        {
+          id: left.id, subform: mode === 'skip' ? 'B' : 'left', source_chunk_key: mode === 'skip' ? null : 'A', code_v2: 7, value: mode === 'replace' ? 'new first' : 'first'
+        },
+        {
+          id: right.id, subform: mode === 'skip' ? 'A' : 'right', source_chunk_key: mode === 'skip' ? null : 'B', code_v2: 9, value: mode === 'replace' ? 'new second' : 'second'
+        }
+      ]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+    }
+  });
+
+  it.each(['skip', 'merge', 'replace'] as const)('round-trips unresolved history through CSV %s and reconciles the same manual case with raw data', async mode => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('elementCodes', 10, [answer('x', 'old'), answer('y', 'genuine', 'elementCodes')])];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const [old, genuine] = await storedResponses();
+    await repository(ResponseEntity).update(old.id, { source_chunk_key: null, subform: 'elementCodes' });
+    await repository(ChunkEntity).update({ unitid: old.unitid, variables: 'x' }, { subform: null });
+    const cases = [{ id: old.id, code: 7 }];
+    const job = await addManualCases(cases);
+    try {
+      const csv = await exportCsv();
+      expect(await uploadCsv(csv, mode)).toEqual([]);
+      expect(await storedResponses()).toMatchObject([
+        {
+          id: old.id, subform: 'elementCodes', source_chunk_key: null, code_v2: 7
+        },
+        { id: genuine.id, subform: 'elementCodes', source_chunk_key: 'elementCodes' }
+      ]);
+      expect((await importRun(service, 'raw-again', 'merge')).success).toBe(true);
+      expect(await storedResponses()).toMatchObject([
+        {
+          id: old.id, subform: '', source_chunk_key: 'elementCodes', code_v2: 7
+        },
+        { id: genuine.id, subform: 'elementCodes', source_chunk_key: 'elementCodes' }
+      ]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+    }
+  });
+
+  it('restores marked archives and rejects unmarked repeated labels that conflict with a manual case', async () => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('page', 10, [answer('x', 'old')])];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const [old] = await storedResponses();
+    await repository(ResponseEntity).update(old.id, { source_chunk_key: null, subform: 'page' });
+    await repository(ChunkEntity).update({ unitid: old.unitid }, { subform: null });
+    const cases = [{ id: old.id, code: 7 }];
+    const job = await addManualCases(cases);
+    const other = await repository(Workspace).save({ name: 'unmarked-archive' });
+    try {
+      const archived = [part('page', 10, [answer('x', 'old', 'page')], 'page')];
+      const oldCsv = await writeToBuffer([{ ...rows[0], responses: JSON.stringify(archived) }], { headers: true, delimiter: ';' });
+      expect(await uploadCsv(oldCsv, 'replace')).toEqual([expect.stringContaining('nicht eindeutig')]);
+      expect(await storedResponses()).toMatchObject([{ id: old.id, subform: 'page', source_chunk_key: null }]);
+      const markedCsv = await exportCsv();
+      expect(await uploadCsv(markedCsv, 'merge', other.id)).toEqual([]);
+      expect(await storedResponses(other.id)).toMatchObject([{ subform: 'page', source_chunk_key: null }]);
+      expect((await importRun(service, 'raw-again', 'merge')).success).toBe(true);
+      expect(await uploadCsv(markedCsv, 'replace')).toEqual([expect.stringContaining('nicht eindeutig')]);
+      expect(await uploadCsv(oldCsv, 'replace')).toEqual([expect.stringContaining('nicht eindeutig')]);
+      expect(await storedResponses()).toMatchObject([{ id: old.id, subform: '', source_chunk_key: 'page' }]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+      await repository(JournalEntry).delete({ workspaceId: other.id });
+      await repository(Workspace).delete(other.id);
+    }
+  });
+
+  it('preserves per-response timestamps and types across partial replacement and CSV import into a fresh workspace', async () => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('page', 10, [answer('x', 'first'), answer('y', 'second'), answer('v', 'left', 'L'), answer('v', 'right', 'R')])];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    rows[0].responses = [part('page', 20, [answer('y', 'updated'), answer('v', 'right updated', 'R')], undefined, 'updated-type')];
+    expect((await importRun(service, 'partial', 'replace')).success).toBe(true);
+    const expected = [
+      ['v', 'L', 'left', 10, 'state'], ['v', 'R', 'right updated', 20, 'updated-type'],
+      ['x', '', 'first', 10, 'state'], ['y', '', 'updated', 20, 'updated-type']
+    ];
+    const memberships = async (target: number) => {
+      const [row] = await storedResponses(target);
+      const data = await connection.query(`SELECT r.variableid, r.subform, r.value, c.ts, c.type
+        FROM response r JOIN chunk c ON r.unitid = c.unitid AND ${responseMatchesChunkCondition('c', 'r')}
+        WHERE r.unitid = $1 ORDER BY r.variableid, r.subform`, [row.unitid]);
+      return data.map(r => [r.variableid, r.subform, r.value, Number(r.ts), r.type]);
+    };
+    expect(await memberships(workspaceId)).toEqual(expected);
+    const other = await repository(Workspace).save({ name: 'csv-roundtrip' });
+    try {
+      expect(await uploadCsv(await exportCsv(), 'replace', other.id)).toEqual([]);
+      expect(await memberships(other.id)).toEqual(expected);
+      rows[0].responses = [part('page', 30, [answer('v', 'new left', 'L'), answer('v', 'new right', 'R')])];
+      expect((await importRun(service, 'both-forms', 'replace')).success).toBe(true);
+      expect(await uploadCsv(await exportCsv(), 'replace', other.id, { variableId: 'v', subform: 'R' })).toEqual([]);
+      expect(await memberships(other.id)).toEqual([expected[0], ['v', 'R', 'new right', 30, 'state'], ...expected.slice(2)]);
+    } finally {
+      await repository(JournalEntry).delete({ workspaceId: other.id });
+      await repository(Workspace).delete(other.id);
     }
   });
 

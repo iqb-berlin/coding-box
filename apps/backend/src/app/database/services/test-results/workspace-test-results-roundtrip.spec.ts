@@ -418,11 +418,12 @@ describe('test results export/import roundtrip', () => {
     expect(responseUnit.chunks).toEqual([
       {
         id: 'chunk-a',
+        subform: 'subform-a',
         type: 'state',
         ts: 123456,
         variables: ['var-a']
       }, {
-        id: 'chunk-b', type: 'state', ts: 123456, variables: ['var-a']
+        id: 'chunk-b', subform: 'subform-b', type: 'state', ts: 123456, variables: ['var-a']
       }
     ]);
 

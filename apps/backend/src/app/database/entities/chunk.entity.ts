@@ -22,6 +22,9 @@ export class ChunkEntity {
   @Column({ type: 'text', nullable: true })
   variables: string;
 
+  @Column({ type: 'text', nullable: true })
+  subform?: string | null;
+
   @Column({ type: 'bigint', nullable: true })
   ts: number;
 
