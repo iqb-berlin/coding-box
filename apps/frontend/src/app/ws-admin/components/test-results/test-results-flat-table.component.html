@@ -216,7 +216,14 @@
         <mat-spinner class="mat-spinner"></mat-spinner>
         <p class="loading-text">{{ 'test-results-table.loading' | translate }}</p>
       </div>
-      } @if (!isLoadingFlat()) {
+      } @else if (flatLoadFailed()) {
+      <div role="alert" class="loading-container">
+        <p>{{ 'ui-text.test-results.flat-load-failed' | translate }}</p>
+        <button mat-button type="button" (click)="retryFlatLoad()">
+          {{ 'ui-text.test-results.flat-load-retry' | translate }}
+        </button>
+      </div>
+      } @else {
       <div class="table-container">
         <table mat-table [dataSource]="flatData()" [trackBy]="trackByRow" class="persons-table">
           <ng-container matColumnDef="code">
@@ -375,7 +382,7 @@
         }
       </div>
 
-      <mat-paginator [length]="flatTotalRecords()" [pageSize]="flatPageSize()" [pageIndex]="flatPageIndex()"
+      <mat-paginator [hidden]="flatLoadFailed()" [length]="flatTotalRecords()" [pageSize]="flatPageSize()" [pageIndex]="flatPageIndex()"
         [pageSizeOptions]="[50, 100, 200, 500]" showFirstLastButtons (page)="onFlatPaginatorChange($event)"
         class="paginator">
       </mat-paginator>

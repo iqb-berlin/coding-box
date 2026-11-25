@@ -53,6 +53,18 @@ export class CodingReplayAnchorService {
       return result;
     }
 
+    const overridesByUnit = await this.getWorkspaceVariableAnchorMaps(workspaceId);
+    normalizedUnitNames.forEach((normalizedUnitName, unitName) => {
+      result.set(
+        unitName,
+        overridesByUnit.get(normalizedUnitName) ?? new Map<string, string>()
+      );
+    });
+
+    return result;
+  }
+
+  async getWorkspaceVariableAnchorMaps(workspaceId: number): Promise<Map<string, Map<string, string>>> {
     const overrides = await this.getOverrides(workspaceId);
     const overridesByUnit = new Map<string, Map<string, string>>();
 
@@ -65,15 +77,7 @@ export class CodingReplayAnchorService {
         override.replayAnchor
       );
     });
-
-    normalizedUnitNames.forEach((normalizedUnitName, unitName) => {
-      result.set(
-        unitName,
-        overridesByUnit.get(normalizedUnitName) ?? new Map<string, string>()
-      );
-    });
-
-    return result;
+    return overridesByUnit;
   }
 
   async resolveVariableAnchor(

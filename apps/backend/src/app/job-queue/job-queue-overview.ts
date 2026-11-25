@@ -1,3 +1,5 @@
+import { readTestResultsUploadProgress } from '../../../../../api-dto/files/test-results-upload-progress.dto';
+
 export function sanitizeJobData(data: unknown): Record<string, unknown> | undefined {
   if (!data || typeof data !== 'object') return undefined;
 
@@ -70,6 +72,7 @@ export function sanitizeJobData(data: unknown): Record<string, unknown> | undefi
 }
 
 export function overviewProgress(queueName: string, raw: unknown): { progress: unknown; message?: string } {
+  if (queueName === 'test-results-upload') return { progress: readTestResultsUploadProgress(raw).progress };
   if (queueName !== 'content-pool' || !raw || typeof raw !== 'object') return { progress: raw };
   const data = raw as { progress?: unknown; message?: unknown };
   return { progress: data.progress, message: typeof data.message === 'string' ? data.message : undefined };

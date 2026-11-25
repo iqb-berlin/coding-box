@@ -8,7 +8,7 @@ export async function* readPostgresQueryBatches<T extends ObjectLiteral>(
   if (!Number.isSafeInteger(batchSize) || batchSize < 1 || batchSize > 10000) {
     throw new Error('Invalid PostgreSQL cursor batch size');
   }
-  const runner = query.connection.createQueryRunner();
+  const runner = query.dataSource.createQueryRunner();
   try {
     await runner.connect();
     await runner.startTransaction('REPEATABLE READ');

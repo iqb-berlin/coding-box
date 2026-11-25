@@ -1,7 +1,8 @@
 import { CommonModule } from '@angular/common';
 import {
-  Component, viewChild, ChangeDetectionStrategy, OnDestroy, inject
+  Component, viewChild, ChangeDetectionStrategy, DestroyRef, OnDestroy, inject, signal
 } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { MAT_DIALOG_DATA, MatDialogModule, MatDialogRef } from '@angular/material/dialog';
 import { MatButtonModule } from '@angular/material/button';
 import { MatTabsModule } from '@angular/material/tabs';
@@ -13,6 +14,7 @@ import { MatOptionModule } from '@angular/material/core';
 import { FormsModule } from '@angular/forms';
 import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { CdkVirtualScrollViewport, ScrollingModule } from '@angular/cdk/scrolling';
+import { finalize, type Observable } from 'rxjs';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { buildCsv, downloadCsvFile } from '../validation-dialog/shared/validation-export.util';
@@ -38,12 +40,14 @@ import {
   ManualCodingCompletionOverview,
   SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS
 } from '../../../shared/utils/coding-freshness-text.util';
+import type { UploadCodingContext } from '../../services/test-results-upload-coding-context';
 
 export type TestResultsUploadResultDialogData = {
   resultType: 'logs' | 'responses';
   result: TestResultsUploadResultDto;
   manualAppliedResultsOverview: ManualCodingCompletionOverview | null;
   manualAppliedResultsOverviewLoadFailed: boolean;
+  reloadCodingContext?: () => Observable<UploadCodingContext>;
 };
 
 type LogBookletDetail = { name: string; hasLog: boolean };
@@ -77,6 +81,30 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
   private dialogRef = inject<MatDialogRef<TestResultsUploadResultDialogComponent>>(MatDialogRef);
   private translateService = inject(TranslateService);
   data = inject<TestResultsUploadResultDialogData>(MAT_DIALOG_DATA);
+
+  private readonly destroyRef = inject(DestroyRef);
+  private readonly reloadedCodingContext = signal<UploadCodingContext | null>(null);
+  protected readonly isReloadingCodingContext = signal(false);
+
+  protected hasMissingCodingFreshness(): boolean {
+    return this.reloadedCodingContext()?.codingFreshnessLoadFailed ?? !!this.data.reloadCodingContext;
+  }
+
+  protected retryCodingContext(): void {
+    if (!this.data.reloadCodingContext || this.isReloadingCodingContext()) return;
+    this.isReloadingCodingContext.set(true);
+    this.data.reloadCodingContext().pipe(
+      takeUntilDestroyed(this.destroyRef),
+      finalize(() => this.isReloadingCodingContext.set(false))
+    ).subscribe(context => this.reloadedCodingContext.set(context));
+  }
+
+  private get manualOverview() {
+    return this.reloadedCodingContext()?.manualOverview ?? {
+      overview: this.data.manualAppliedResultsOverview,
+      loadFailed: this.data.manualAppliedResultsOverviewLoadFailed
+    };
+  }
 
   private readonly viewportRefreshTimers = new Set<number>();
 
@@ -354,7 +382,8 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
   }
 
   private get allCodingFreshnessWarnings(): CodingFreshnessSummaryItemDto[] {
-    return (this.result.codingFreshness?.items || [])
+    const freshness = this.reloadedCodingContext()?.codingFreshness ?? this.result.codingFreshness;
+    return (freshness?.items || [])
       .filter(isCodingFreshnessOpenWarning)
       .sort((a, b) => a.version.localeCompare(b.version) || a.state.localeCompare(b.state));
   }
@@ -452,8 +481,8 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
   private get isSecondAutocodingWaitingForManualCoding(): boolean {
     return isSecondAutocodingWaitingForManualCoding(
       this.allCodingFreshnessWarnings,
-      this.data.manualAppliedResultsOverview,
-      this.data.manualAppliedResultsOverviewLoadFailed
+      this.manualOverview.overview,
+      this.manualOverview.loadFailed
     );
   }
 
@@ -463,11 +492,11 @@ export class TestResultsUploadResultDialogComponent implements OnDestroy {
   }
 
   private getSecondAutocodingWaitingSummaryText(): string {
-    if (this.data.manualAppliedResultsOverviewLoadFailed) {
+    if (this.manualOverview.loadFailed) {
       return this.translateService.instant(SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.loadFailed);
     }
 
-    const remaining = this.data.manualAppliedResultsOverview?.remainingResponses || 0;
+    const remaining = this.manualOverview.overview?.remainingResponses || 0;
     const remainingText = remaining > 0 ?
       this.translateService.instant(
         SECOND_AUTOCODING_WAITING_TRANSLATION_KEYS.remaining,

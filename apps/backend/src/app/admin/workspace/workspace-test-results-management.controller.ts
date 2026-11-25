@@ -1,5 +1,5 @@
 import {
-  Controller, Delete, Get, Post, Param, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe
+  Controller, Delete, Get, Post, Param, Query, Req, UseGuards, ParseIntPipe, DefaultValuePipe, ParseBoolPipe
 } from '@nestjs/common';
 import {
   ApiBearerAuth,
@@ -24,6 +24,7 @@ import {
   UnitSearchResult,
   QuickSearchResult
 } from './dto/workspace-test-results.interfaces';
+import type { QuickSearchResultKind } from '../../database/services/test-results/workspace-test-results.types';
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 import { ValidationTaskService } from '../../database/services/validation';
@@ -145,6 +146,18 @@ export class WorkspaceTestResultsManagementController {
     description: 'Maximum results per category',
     type: Number
   })
+  @ApiQuery({
+    name: 'kind',
+    required: false,
+    enum: ['person', 'booklet', 'unit', 'response'],
+    description: 'Restrict the search to one category'
+  })
+  @ApiQuery({
+    name: 'responsePreview',
+    required: false,
+    type: Boolean,
+    description: 'Return a limited response preview without counting every match'
+  })
   @ApiOkResponse({
     description: 'Quick search results retrieved successfully.'
   })
@@ -154,12 +167,16 @@ export class WorkspaceTestResultsManagementController {
   async quickSearchTestResults(
     @Param('workspace_id', ParseIntPipe) workspaceId: number,
     @Query('q') query: string,
-    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8
+    @Query('limit', new DefaultValuePipe(8), ParseIntPipe) limit: number = 8,
+    @Query('kind') kind?: QuickSearchResultKind,
+    @Query('responsePreview', new DefaultValuePipe(false), ParseBoolPipe) responsePreview = false
   ): Promise<QuickSearchResult> {
     return this.workspaceTestResultsService.quickSearchTestResults(
       workspaceId,
       query,
-      limit
+      limit,
+      kind,
+      responsePreview
     );
   }
 

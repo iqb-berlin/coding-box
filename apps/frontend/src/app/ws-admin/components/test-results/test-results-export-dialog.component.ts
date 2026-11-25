@@ -1,5 +1,8 @@
+import { DatePipe } from '@angular/common';
 import { TranslateModule } from '@ngx-translate/core';
-import { Component, ChangeDetectionStrategy, inject } from '@angular/core';
+import {
+  Component, ChangeDetectionStrategy, computed, inject, Signal
+} from '@angular/core';
 
 import {
   MAT_DIALOG_DATA,
@@ -11,6 +14,7 @@ import { MatIconModule } from '@angular/material/icon';
 import { MatDividerModule } from '@angular/material/divider';
 import { MatListModule } from '@angular/material/list';
 import { MatProgressBarModule } from '@angular/material/progress-bar';
+import type { TestResultExportJob } from '../../../shared/services/test-result/test-result-backend.service';
 
 export type TestResultsExportDialogResult =
   | { type: 'results' }
@@ -18,19 +22,24 @@ export type TestResultsExportDialogResult =
   | { type: 'download'; jobId?: string | null }
   | { type: 'cancel'; jobId?: string | null };
 
-export type TestResultsExportDialogData = {
+type TestResultsExportDialogState = {
   isExporting?: boolean;
   exportTypeInProgress?: 'test-results' | 'test-logs' | null;
   exportJobStatus?: string | null;
   exportJobProgress?: number;
   exportJobId?: string | null;
+  completedJobs?: TestResultExportJob[];
+};
+
+export type TestResultsExportDialogData = TestResultsExportDialogState & {
+  state?: Signal<TestResultsExportDialogState>;
 };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
   selector: 'coding-box-test-results-export-dialog',
   standalone: true,
-  imports: [TranslateModule,
+  imports: [TranslateModule, DatePipe,
     MatDialogModule,
     MatButtonModule,
     MatIconModule,
@@ -39,9 +48,10 @@ export type TestResultsExportDialogData = {
     MatProgressBarModule
   ],
   template: `
+    @let exportState = state();
     <h2 mat-dialog-title>{{ 'ui-text.test-results-export-dialog.title' | translate }}</h2>
     <mat-dialog-content>
-      @if (!data.isExporting) {
+      @if (!exportState.isExporting) {
         <mat-list>
           <mat-list-item (click)="selectExportType('results')">
             <mat-icon matListItemIcon>download</mat-icon>
@@ -60,29 +70,36 @@ export type TestResultsExportDialogData = {
       <mat-divider class="export-divider"></mat-divider>
 
       <!-- Export Progress Section -->
-      @if (data.isExporting) {
+      @if (exportState.isExporting) {
         <div class="export-progress-section">
           <div class="export-progress-header">
             <span class="export-status">
               {{
-              data.exportTypeInProgress === 'test-logs' ? ('ui-text.test-center-options-step.logs' | translate) : ('ui-text.apply-coding-results-dialog.results' | translate)
+              exportState.exportTypeInProgress === 'test-logs' ? ('ui-text.test-center-options-step.logs' | translate) : ('ui-text.apply-coding-results-dialog.results' | translate)
               }}:
-              {{ data.exportJobStatus || '...' }}
+              {{ (exportState.exportJobStatus === 'active' ? 'process-overview.status.active' : 'process-overview.status.waiting') | translate }}
             </span>
-            <span class="export-percentage">{{ data.exportJobProgress }}%</span>
+            <span class="export-percentage">{{ exportState.exportJobProgress }}%</span>
           </div>
           <mat-progress-bar
-            mode="determinate"
-            [value]="data.exportJobProgress"
+            [mode]="exportState.exportJobStatus === 'active' ? 'determinate' : 'indeterminate'"
+            [value]="exportState.exportJobProgress"
           ></mat-progress-bar>
         </div>
       }
 
-      <!-- Download Ready Section -->
+      @for (job of exportState.completedJobs ?? []; track job.jobId) {
+        <button mat-button type="button" (click)="downloadExport(job.jobId)">
+          <mat-icon>file_download</mat-icon>
+          {{ (job.exportType === 'test-logs' ? 'ui-text.test-center-options-step.logs' : 'ui-text.apply-coding-results-dialog.results') | translate }}
+          {{ job.createdAt | date:'short' }}
+        </button>
+      }
       @if (
-        data.exportJobStatus === 'completed' &&
-        !data.isExporting &&
-        data.exportJobId
+        exportState.completedJobs === undefined &&
+        exportState.exportJobStatus === 'completed' &&
+        !exportState.isExporting &&
+        exportState.exportJobId
         ) {
         <div
           class="download-ready-section"
@@ -99,7 +116,7 @@ export type TestResultsExportDialogData = {
     <mat-dialog-actions align="end">
       <button mat-button (click)="cancel()">
         {{
-        data.isExporting && data.exportJobId ?
+        exportState.isExporting && exportState.exportJobId ?
         'Export abbrechen' :
         ('cancel' | translate)
         }}
@@ -174,19 +191,21 @@ export type TestResultsExportDialogData = {
 })
 export class TestResultsExportDialogComponent {
   private dialogRef = inject<MatDialogRef<TestResultsExportDialogComponent>>(MatDialogRef);
-  protected data = inject<TestResultsExportDialogData>(MAT_DIALOG_DATA);
+  private readonly data = inject<TestResultsExportDialogData>(MAT_DIALOG_DATA);
+  protected readonly state = computed(() => this.data.state?.() ?? this.data);
 
   protected selectExportType(type: 'results' | 'logs'): void {
     this.dialogRef.close({ type });
   }
 
-  protected downloadExport(): void {
-    this.dialogRef.close({ type: 'download', jobId: this.data.exportJobId });
+  protected downloadExport(jobId = this.state().exportJobId): void {
+    this.dialogRef.close({ type: 'download', jobId });
   }
 
   protected cancel(): void {
-    if (this.data.isExporting && this.data.exportJobId) {
-      this.dialogRef.close({ type: 'cancel', jobId: this.data.exportJobId });
+    const { isExporting, exportJobId } = this.state();
+    if (isExporting && exportJobId) {
+      this.dialogRef.close({ type: 'cancel', jobId: exportJobId });
       return;
     }
 

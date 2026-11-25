@@ -1,7 +1,7 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, Connection, EntityManager, FindOneOptions,
+  Repository, DataSource, EntityManager, FindOneOptions,
   FindOptionsWhere
 } from 'typeorm';
 import { assertCodingResourceMutation } from '../shared/coding-ownership.policy';
@@ -25,7 +25,7 @@ export class CodingJobProgressService {
     private readonly codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobUnit)
     private readonly codingJobUnitRepository: Repository<CodingJobUnit>,
-    private readonly connection: Connection,
+    private readonly connection: DataSource,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly access: CodingJobAccessService,
     private readonly mutation: CodingJobMutationService,

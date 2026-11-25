@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { CodingResultsService } from './coding-results.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CodingJobService, ResponseMatchingFlag } from './coding-job.service';
@@ -9,7 +9,7 @@ import { CodingValidationService } from './coding-validation.service';
 import { MissingsProfilesService } from './missings-profiles.service';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
-import { EmptyResponseSelectionService } from './empty-response-selection.service';
+import { EmptyResponseSelectionService, type EmptyResponseSelectionContext } from './empty-response-selection.service';
 import { JournalService } from '../shared/journal.service';
 
 describe('CodingResultsService', () => {
@@ -33,10 +33,11 @@ describe('CodingResultsService', () => {
   let codingStatisticsService: jest.Mocked<CodingStatisticsService>;
   let codingValidationService: jest.Mocked<Pick<CodingValidationService, 'invalidateIncompleteVariablesCache'>>;
   let codingAnalysisService: jest.Mocked<Pick<CodingAnalysisService, 'invalidateCache'>>;
-  let emptyResponseSelectionService: jest.Mocked<Pick<
-    EmptyResponseSelectionService,
-  'createContext' | 'filterEffectivelyEmptyResponses'
-  >>;
+  let emptyResponseSelectionService: jest.Mocked<Pick<EmptyResponseSelectionService, 'createContext'>> & {
+    filterEffectivelyEmptyResponses: jest.Mock<Promise<ResponseEntity[]>, [
+      ResponseEntity[], EmptyResponseSelectionContext, EntityManager?
+    ]>;
+  };
   let missingsProfilesService: jest.Mocked<Pick<
     MissingsProfilesService,
   'getMissingByIdForProfileOrDefault' | 'getMissingByCodeForProfileOrDefault'
@@ -80,7 +81,7 @@ describe('CodingResultsService', () => {
       createQueryBuilder: jest.fn(),
       manager: {
         query: jest.fn().mockResolvedValue([]),
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn(() => queryRunner)
         }
       }

@@ -1,3 +1,5 @@
+import type { ResponseStatusType } from '@iqbspecs/response/response.interface';
+
 type ReplayExpected = {
   unitName: string;
   unitAlias: string;
@@ -18,13 +20,13 @@ type ReplayPersonExpectation = {
   connector: string;
   responseChunkId: string;
   responseVariable: string;
-  responseStatus: number;
+  responseStatus: ResponseStatusType;
   responseValue: string;
 };
 
 type ReplayResponseVariable = {
   id: string;
-  status: number;
+  status: ResponseStatusType;
   value: string;
 };
 

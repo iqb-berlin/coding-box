@@ -345,17 +345,10 @@ describe('DoubleCodingReviewQueryService', () => {
     expect(queryBuilder.having).toHaveBeenCalledWith('COUNT(DISTINCT review_coder.user_id) > 1');
     expect(codingJobUnitRepository.find).toHaveBeenCalledWith({
       where: { response_id: expect.any(Object) },
-      relations: [
-        'coding_job',
-        'coding_job.training',
-        'coding_job.codingJobVariableBundles',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.person'
-      ]
+      relations: {
+        coding_job: { training: true, codingJobVariableBundles: true, codingJobCoders: { user: true } },
+        response: { unit: { booklet: { person: true } } }
+      }
     });
     expect(result).toMatchObject({
       total: 1,
@@ -1364,7 +1357,7 @@ describe('DoubleCodingReviewQueryService', () => {
         id: expect.any(Object),
         workspace_id: workspaceId
       },
-      select: ['id', 'variables']
+      select: { id: true, variables: true }
     });
     expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('variable_bundle scope_vb');
     expect(queryBuilder.andWhere.mock.calls[1][0]).toContain('scope_vb.variables');

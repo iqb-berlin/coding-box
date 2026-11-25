@@ -19,7 +19,7 @@ import { WorkspaceTestFilesValidationService } from '../validation/workspace-tes
 import { WorkspaceFileCacheService } from './workspace-file-cache.service';
 import { WorkspaceFileQueryService } from './workspace-file-query.service';
 import { WorkspaceFileMutationService } from './workspace-file-mutation.service';
-import { WorkspaceFileUploadService } from './workspace-file-upload.service';
+import { WorkspaceFileUploadOptions, WorkspaceFileUploadService } from './workspace-file-upload.service';
 import { WorkspaceTestcenterFileImportService } from './workspace-testcenter-file-import.service';
 import { WorkspaceTestTakersValidationService } from './workspace-test-takers-validation.service';
 import { WorkspaceFilesMutationContext } from './workspace-file-write.util';
@@ -116,9 +116,10 @@ export class WorkspaceFilesService {
     workspace_id: number,
     originalFiles: FileIo[],
     overwriteExisting: boolean,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    options?: WorkspaceFileUploadOptions
   ): Promise<TestFilesUploadResultDto> {
-    return this.uploads.uploadTestFiles(workspace_id, originalFiles, overwriteExisting, overwriteFileIds);
+    return this.uploads.uploadTestFiles(workspace_id, originalFiles, overwriteExisting, overwriteFileIds, options);
   }
 
   async downloadTestFile(
@@ -205,7 +206,7 @@ export class WorkspaceFilesService {
 
   async validateTestTakers(
     workspaceId: number,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void | Promise<void>
   ): Promise<TestTakersValidationDto> {
     return this.testTakers.validateTestTakers(workspaceId, onProgress);
   }

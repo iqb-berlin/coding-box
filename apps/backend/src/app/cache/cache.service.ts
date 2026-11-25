@@ -152,6 +152,38 @@ export class CacheService {
     }
   }
 
+  // Read results written by the previous response analysis worker during rollout.
+  async getListItems<T>(key: string, start: number, limit: number): Promise<T[]> {
+    if (limit <= 0) return [];
+    const values = await this.redis.lrange(key, start, start + limit - 1);
+    return values.map(value => JSON.parse(value) as T);
+  }
+
+  async acquireShortLock(key: string, owner: string, ttlSeconds: number): Promise<boolean> {
+    return (await this.redis.set(key, JSON.stringify({ owner }), 'EX', ttlSeconds, 'NX')) === 'OK';
+  }
+
+  async publishIfMarkerMatches<T>(
+    key: string, value: T, ttl: number, marker: { key: string; value: string }
+  ): Promise<boolean> {
+    const command = `
+      if redis.call('GET', KEYS[2]) ~= ARGV[1] then return 0 end
+      redis.call('SET', KEYS[1], ARGV[2], 'EX', ARGV[3])
+      return 1`;
+    return (await this.redis.eval(
+      command, 2, key, marker.key, JSON.stringify(marker.value), JSON.stringify(value), ttl
+    )) === 1;
+  }
+
+  async deleteIfMarkerMatches(key: string, marker: string): Promise<void> {
+    await this.redis.eval(
+      'if redis.call("GET", KEYS[1]) == ARGV[1] then redis.call("DEL", KEYS[1]) end',
+      1,
+      key,
+      JSON.stringify(marker)
+    );
+  }
+
   /**
    * Delete a value from the cache
    * @param key The cache key

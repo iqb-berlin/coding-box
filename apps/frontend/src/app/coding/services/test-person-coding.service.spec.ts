@@ -526,7 +526,8 @@ describe('TestPersonCodingService', () => {
           request.params.get('emptyPage') === '2' &&
           request.params.get('emptyLimit') === '25' &&
           request.params.get('duplicatePage') === '3' &&
-          request.params.get('duplicateLimit') === '50'
+          request.params.get('duplicateLimit') === '50' &&
+          request.params.get('occurrencesLimit') === '5'
       );
       expect(req.request.method).toBe('GET');
       req.flush(mockResponse);
@@ -542,7 +543,7 @@ describe('TestPersonCodingService', () => {
       });
 
       const req = httpMock.expectOne(
-        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis`
+        `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding/response-analysis?occurrencesLimit=5`
       );
       req.flush(
         { message: 'analysis failed' },

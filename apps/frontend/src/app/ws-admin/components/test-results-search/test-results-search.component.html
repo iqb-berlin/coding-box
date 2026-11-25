@@ -20,12 +20,13 @@
         mat-stroked-button
         type="button"
         [class.active]="isKindSelected(option.kind)"
+        [attr.aria-pressed]="isKindSelected(option.kind)"
         (click)="toggleKind(option.kind)"
       >
         <mat-icon>{{ option.icon }}</mat-icon>
         <span>{{ option.label }}</span>
-        @if (hasSearched) {
-        <span class="type-count">{{ getTotal(option.kind) }}</span>
+        @if (hasSearched && !loadingKinds.has(option.kind) && !failedKinds.has(option.kind) && isKindSelected(option.kind)) {
+        <span class="type-count">{{ getTotal(option.kind) }}{{ hasMore(option.kind) ? '+' : '' }}</span>
         }
       </button>
       }
@@ -37,12 +38,19 @@
         <mat-spinner diameter="40"></mat-spinner>
         <p>{{ 'test-results-search.loading' | translate }}</p>
       </div>
-      } @else if (searchText.trim().length < MIN_SEARCH_LENGTH) {
+      }
+      @if (failedKinds.size > 0) {
+      <div role="alert">
+        {{ 'ui-text.test-results-search.load-failed' | translate }}
+        <button mat-button type="button" (click)="retrySearch()">{{ 'ui-text.test-results.flat-load-retry' | translate }}</button>
+      </div>
+      }
+      @if (searchText.trim().length < MIN_SEARCH_LENGTH) {
       <div class="state-container">
         <mat-icon>manage_search</mat-icon>
         <p>{{ 'ui-text.test-results-search.minimum-search-length' | translate: { MIN_SEARCH_LENGTH: (MIN_SEARCH_LENGTH) } }}</p>
       </div>
-      } @else if (hasSearched && getVisibleCount() === 0) {
+      } @else if (hasSearched && !isLoading && failedKinds.size === 0 && getVisibleCount() === 0) {
       <div class="state-container">
         <mat-icon>search_off</mat-icon>
         <p>{{ 'ui-text.test-results-search.no-matches' | translate }}</p>
@@ -57,7 +65,11 @@
             <span>{{ option.label }}</span>
           </div>
           <span>
-            {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
+            @if (hasMore(option.kind)) {
+              {{ 'ui-text.test-results-search.preview-count' | translate: { count: getVisibleResults(option.kind).length } }}
+            } @else {
+              {{ 'ui-text.test-results-search.result-count' | translate: { value1: (getVisibleResults(option.kind).length), value2: (getTotal(option.kind)) } }}
+            }
           </span>
         </div>
 

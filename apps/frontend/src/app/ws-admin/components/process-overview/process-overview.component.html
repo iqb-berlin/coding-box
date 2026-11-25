@@ -182,7 +182,14 @@
           [attr.aria-label]="'ui-text.process-overview.pagination' | translate">
         </mat-paginator>
 
-        @if (processes.filteredData.length === 0 && !isLoading()) {
+        @if (loadFailed()) {
+          <div class="no-data" role="alert">
+            {{ 'process-overview.messages.load-error' | translate }}
+            <button mat-button type="button" (click)="loadProcesses()">
+              {{ 'process-overview.refresh' | translate }}
+            </button>
+          </div>
+        } @else if (processes.filteredData.length === 0 && !isLoading()) {
           <div class="no-data">
             {{
             processes.data.length === 0 ?

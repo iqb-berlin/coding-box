@@ -138,6 +138,24 @@ describe('Validation panels inside their real parent dialog', () => {
     expect(panel.textContent).toContain(`Delayed ${type} failure`);
   });
 
+  it.each([
+    ['variables', VariablesValidationPanelComponent, 'Variablen'],
+    ['variableTypes', VariableTypesValidationPanelComponent, 'Variablenwerte'],
+    ['responseStatus', ResponseStatusValidationPanelComponent, 'Antwortstatus']
+  ] as const)('renders the number of invalid %s results', async (type, panelType, label) => {
+    state.setValidationResult(5, type, {
+      status: 'failed',
+      timestamp: 1,
+      details: {
+        data: [], total: 23, page: 1, limit: 10
+      }
+    });
+    await fixture.whenStable();
+    const panel = fixture.debugElement.query(By.directive(panelType));
+    expect(panel.nativeElement.querySelector('.validation-error').textContent)
+      .toContain(`23 ungültige ${label} gefunden.`);
+  });
+
   it.each(panels)('renders delayed %s task progress and completion', async (type, selector) => {
     for (const progress of [10, 55, 100]) {
       state.setTaskId(5, type, {
@@ -158,6 +176,20 @@ describe('Validation panels inside their real parent dialog', () => {
     await fixture.whenStable();
     expect(fixture.nativeElement.querySelector(':scope > .info-banner')).toBeNull();
   });
+  it('shows a missing TestTakers file as a failed check without a false zero count', async () => {
+    state.setValidationResult(5, 'testTakers', {
+      status: 'failed',
+      timestamp: 2,
+      details: {
+        testTakersFound: false, totalGroups: 0, totalLogins: 0, totalBookletCodes: 0, missingPersons: []
+      }
+    });
+    await fixture.whenStable();
+    const panel: HTMLElement = fixture.nativeElement.querySelector('coding-box-test-takers-validation-panel');
+    expect(panel.querySelector('.validation-error')).not.toBeNull();
+    expect(panel.textContent).not.toContain('0 Fehler');
+  });
+
   describe.each([
     ['variables', VariablesValidationPanelComponent],
     ['variableTypes', VariableTypesValidationPanelComponent],

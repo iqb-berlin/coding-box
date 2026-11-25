@@ -59,6 +59,25 @@ describe('Zoneless asynchronous coding dialogs', () => {
     cy.get('coding-box-statistics-card .statistics-card').should('be.visible');
   }
 
+  it('shows the coding statistics after retrying a temporary status failure', () => {
+    const jobPath = '/api/admin/workspace/5/coding/statistics/job';
+    const statusPath = `${jobPath}/statistics-job`;
+    cy.intercept({ method: 'POST', pathname: jobPath }, {
+      body: { jobId: 'statistics-job', message: 'Started' }
+    });
+    cy.intercept({ method: 'GET', pathname: statusPath }, {
+      body: { status: 'completed', progress: 100, result: { totalResponses: 42, statusCounts: { CODING_COMPLETE: 42 } } }
+    }).as('completedStatistics');
+    cy.intercept({ method: 'GET', pathname: statusPath, times: 1 }, { statusCode: 503 }).as('temporaryFailure');
+
+    openManagement();
+    cy.get('coding-box-statistics-card .statistics-load-button').click();
+    cy.wait('@temporaryFailure');
+    cy.get('coding-box-statistics-card .loading-container').should('be.visible');
+    cy.wait('@completedStatistics');
+    cy.get('coding-box-statistics-card .statistics-card .statistic-value').first().invoke('text').should('match', /^\s*42\s*$/);
+  });
+
   it('renders delayed distribution rows and updates the page without another interaction', () => {
     cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/coding/variable-analysis' }, request => {
       const page = Number(request.query.page);

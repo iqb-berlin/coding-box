@@ -3,9 +3,10 @@ import {
   ParseBoolPipe
 } from '@nestjs/common';
 import {
-  ApiOkResponse, ApiParam, ApiQuery, ApiTags
+  ApiOkResponse, ApiParam, ApiQuery, ApiTags, type SchemaObject
 } from '@nestjs/swagger';
 import { Response } from 'express';
+import { RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE } from '../../../../../../api-dto/coding/response-analysis.dto';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -19,6 +20,37 @@ import { VariableAnalysisItemDto } from '../../../../../../api-dto/coding/variab
 import { ValidateCodingCompletenessResponseDto } from '../../../../../../api-dto/coding/validate-coding-completeness-response.dto';
 import { ManualCodeAvailabilityValidationDto } from '../../../../../../api-dto/coding/manual-code-availability.dto';
 import { WorkspaceSettingsService } from '../../workspace/workspace-settings.service';
+
+const DUPLICATE_VALUE_GROUPS_SCHEMA: SchemaObject = {
+  type: 'array',
+  items: {
+    type: 'object',
+    properties: {
+      unitName: { type: 'string' },
+      unitAlias: { type: 'string', nullable: true },
+      variableId: { type: 'string' },
+      normalizedValue: { type: 'string' },
+      originalValue: { type: 'string' },
+      occurrenceCount: {
+        type: 'number',
+        description: 'Total occurrences in the group when requesting an occurrence page'
+      },
+      occurrences: {
+        type: 'array',
+        items: {
+          type: 'object',
+          properties: {
+            personLogin: { type: 'string' },
+            personCode: { type: 'string' },
+            bookletName: { type: 'string' },
+            responseId: { type: 'number' },
+            value: { type: 'string' }
+          }
+        }
+      }
+    }
+  }
+};
 
 @ApiTags('Admin Workspace Coding')
 @Controller('admin/workspace')
@@ -494,6 +526,12 @@ export class WorkspaceCodingAnalysisController {
   @RequireAccessLevel(2)
   @ApiTags('coding')
   @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiQuery({
+    name: 'occurrencesPage', required: false, type: Number, description: 'Occurrence page within each duplicate group'
+  })
+  @ApiQuery({
+    name: 'occurrencesLimit', required: false, type: Number, description: 'Occurrences per group (1 to 100). Omit for the full occurrence lists.'
+  })
   @ApiOkResponse({
     description:
       'Response analysis retrieved successfully. Identifies empty responses and duplicate values based on response matching settings.',
@@ -535,32 +573,7 @@ export class WorkspaceCodingAnalysisController {
               type: 'number',
               description: 'Total number of responses in duplicate groups'
             },
-            groups: {
-              type: 'array',
-              items: {
-                type: 'object',
-                properties: {
-                  unitName: { type: 'string' },
-                  unitAlias: { type: 'string', nullable: true },
-                  variableId: { type: 'string' },
-                  normalizedValue: { type: 'string' },
-                  originalValue: { type: 'string' },
-                  occurrences: {
-                    type: 'array',
-                    items: {
-                      type: 'object',
-                      properties: {
-                        personLogin: { type: 'string' },
-                        personCode: { type: 'string' },
-                        bookletName: { type: 'string' },
-                        responseId: { type: 'number' },
-                        value: { type: 'string' }
-                      }
-                    }
-                  }
-                }
-              }
-            }
+            groups: DUPLICATE_VALUE_GROUPS_SCHEMA
           }
         },
         aggregationSummary: {
@@ -619,13 +632,15 @@ export class WorkspaceCodingAnalysisController {
     @Query('emptyPage') emptyPage?: number,
     @Query('emptyLimit') emptyLimit?: number,
     @Query('duplicatePage') duplicatePage?: number,
-    @Query('duplicateLimit') duplicateLimit?: number
+    @Query('duplicateLimit') duplicateLimit?: number,
+    @Query('occurrencesPage') occurrencesPage?: number,
+    @Query('occurrencesLimit') occurrencesLimit?: number
   ) {
     const validThreshold = this.normalizeIntegerParam(threshold, 2, 2, 100);
     const vEmptyPage = this.normalizeIntegerParam(emptyPage, 1, 1);
-    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1);
+    const vEmptyLimit = this.normalizeIntegerParam(emptyLimit, 50, 1, 500);
     const vDuplicatePage = this.normalizeIntegerParam(duplicatePage, 1, 1);
-    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1);
+    const vDuplicateLimit = this.normalizeIntegerParam(duplicateLimit, 50, 1, 500);
 
     return this.codingAnalysisService.getResponseAnalysis(
       workspace_id,
@@ -633,7 +648,11 @@ export class WorkspaceCodingAnalysisController {
       vEmptyPage,
       vEmptyLimit,
       vDuplicatePage,
-      vDuplicateLimit
+      vDuplicateLimit,
+      occurrencesLimit === undefined ? undefined : {
+        page: this.normalizeIntegerParam(occurrencesPage, 1, 1),
+        limit: this.normalizeIntegerParam(occurrencesLimit, RESPONSE_ANALYSIS_OCCURRENCE_PREVIEW_SIZE, 1, 100)
+      }
     );
   }
 

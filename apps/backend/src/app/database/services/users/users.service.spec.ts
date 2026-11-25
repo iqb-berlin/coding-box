@@ -304,7 +304,7 @@ describe('UsersService', () => {
         canCode: true,
         accessLevel: expect.any(Object)
       }),
-      select: ['userId']
+      select: { userId: true }
     }));
 
     workspaceUserRepository.find.mockResolvedValueOnce([{ userId: 1 }]);
@@ -322,7 +322,7 @@ describe('UsersService', () => {
         accessLevel: expect.any(Object),
         canCode: true
       }),
-      select: ['userId']
+      select: { userId: true }
     }));
 
     workspaceUserRepository.findOne.mockResolvedValueOnce(null);

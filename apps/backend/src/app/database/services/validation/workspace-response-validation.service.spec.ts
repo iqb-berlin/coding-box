@@ -1,4 +1,6 @@
-import { Repository, DeleteResult, In } from 'typeorm';
+import {
+  Repository, DeleteResult, In
+} from 'typeorm';
 import { WorkspaceResponseValidationService } from './workspace-response-validation.service';
 import FileUpload from '../../entities/file_upload.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -45,8 +47,48 @@ describe('WorkspaceResponseValidationService.validateVariables', () => {
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue(units),
     getRawMany: jest.fn().mockResolvedValue(units.map(u => ({ unit_id: u.id })))
+  });
+
+  it('scans bounded response pages while counting findings beyond the requested page', async () => {
+    const persons = { find: jest.fn().mockResolvedValue([{ id: 1 }]) };
+    const units = makeQueryBuilder([{ id: 10, name: 'UNIT1' } as Unit]);
+    const makeResponse = (id: number) => ({
+      id, unitid: 10, variableid: 'UNKNOWN', value: 'x'
+    });
+    const responses = {
+      find: jest.fn()
+        .mockResolvedValueOnce(Array.from({ length: 1000 }, (_, index) => makeResponse(index + 1)))
+        .mockResolvedValueOnce([makeResponse(1001)])
+    };
+    const files = { find: jest.fn().mockResolvedValue([{ data: makeUnitXml('UNIT1', []) }]) };
+    const service = new WorkspaceResponseValidationService(
+      responses as never,
+      { createQueryBuilder: () => units } as never,
+      persons as never,
+      {} as never,
+      files as never
+    );
+
+    await expect(service.validateVariables(1, 1001, 1)).resolves.toMatchObject({
+      total: 1001,
+      data: [{ responseId: 1001 }],
+      summary: { variableNotDefinedInUnit: 1001 }
+    });
+    expect(persons.find).toHaveBeenCalledWith(expect.objectContaining({ select: { id: true } }));
+    expect(responses.find).toHaveBeenNthCalledWith(2, expect.objectContaining({
+      where: {
+        unitid: In([10]),
+        id: expect.objectContaining({
+          type: 'raw',
+          objectLiteralParameters: { unitId: 10, responseId: 1000 }
+        })
+      },
+      order: { unitid: 'ASC', id: 'ASC' },
+      take: 1000
+    }));
   });
 
   it('accepts response variableid matching variable alias in unit xml', async () => {
@@ -642,6 +684,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -700,6 +744,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
       createQueryBuilder: jest.fn().mockReturnValue({
         innerJoin: jest.fn().mockReturnThis(),
         where: jest.fn().mockReturnThis(),
+        select: jest.fn().mockReturnThis(),
+        orderBy: jest.fn().mockReturnThis(),
         getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
       })
     } as unknown as Repository<Unit>;
@@ -759,6 +805,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -830,6 +878,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -908,6 +958,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -1029,6 +1081,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -1088,6 +1142,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -1153,6 +1209,8 @@ describe('WorkspaceResponseValidationService.validateVariableTypes', () => {
         .mockReturnValue({
           innerJoin: jest.fn().mockReturnThis(),
           where: jest.fn().mockReturnThis(),
+          select: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
           getMany: jest.fn().mockResolvedValue([{ id: 10, name: 'U1' }])
         })
     } as unknown as Repository<Unit>;
@@ -1226,7 +1284,7 @@ describe('WorkspaceResponseValidationService.validateDuplicateResponses', () => 
     expect(result.data).toEqual([]);
   });
 
-  it('detects duplicate responses for same unit and variable', async () => {
+  it('detects duplicates across physical units in different booklets of the same person', async () => {
     const personsRepo = {
       find: jest
         .fn()
@@ -1240,11 +1298,15 @@ describe('WorkspaceResponseValidationService.validateDuplicateResponses', () => 
       find: jest
         .fn()
         .mockResolvedValue([
-          { id: 20, personid: 1, bookletinfo: { name: 'B1' } }
+          { id: 20, personid: 1, bookletinfo: { name: 'B1' } },
+          { id: 21, personid: 1, bookletinfo: { name: 'B2' } }
         ])
     } as unknown as Repository<Booklet>;
     const unitRepo = {
-      find: jest.fn().mockResolvedValue([{ id: 10, name: 'U1', bookletid: 20 }])
+      find: jest.fn().mockResolvedValue([
+        { id: 10, name: 'U1', bookletid: 20 },
+        { id: 11, name: 'U1', bookletid: 21 }
+      ])
     } as unknown as Repository<Unit>;
     const responseRepo = {
       find: jest.fn().mockResolvedValue([
@@ -1252,7 +1314,7 @@ describe('WorkspaceResponseValidationService.validateDuplicateResponses', () => 
           id: 100, unitid: 10, variableid: 'A1', value: 'x', status: 1
         },
         {
-          id: 101, unitid: 10, variableid: 'A1', value: 'y', status: 2
+          id: 101, unitid: 11, variableid: 'A1', value: 'y', status: 2
         }
       ])
     } as unknown as Repository<ResponseEntity>;
@@ -1291,6 +1353,7 @@ describe('WorkspaceResponseValidationService.validateResponseStatus', () => {
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue(units),
     getRawMany: jest.fn().mockResolvedValue(units.map(u => ({ unit_id: u.id })))
   });
@@ -1403,7 +1466,7 @@ const createMutationLockMock = () => {
 
   return {
     connection,
-    manager: { connection },
+    manager: { dataSource: connection },
     queryRunner
   };
 };
@@ -1546,6 +1609,7 @@ describe('WorkspaceResponseValidationService.deleteAllInvalidResponses', () => {
     innerJoin: jest.fn().mockReturnThis(),
     select: jest.fn().mockReturnThis(),
     where: jest.fn().mockReturnThis(),
+    orderBy: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue(units),
     getRawMany: jest.fn().mockResolvedValue(units.map(u => ({ unit_id: u.id })))
   });

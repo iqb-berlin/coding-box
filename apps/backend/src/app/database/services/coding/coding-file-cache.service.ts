@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { getErrorMessage } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
 import { resolveVariablePageMap } from '../../../utils/voud/resolveVariablePageMap';
@@ -64,11 +64,26 @@ export class CodingFileCacheService {
     return request;
   }
 
+  // Cursor metadata must use its transaction's connection, even on a cache miss.
+  createSnapshotPageResolver(workspaceId: number, manager: EntityManager): (unitName: string, variableId: string) => Promise<string> {
+    const pagesByUnit = new LRUCache<Map<string, string>>(1024);
+    const repository = manager.getRepository(FileUpload);
+    return async (unitName: string, variableId: string): Promise<string> => {
+      let pages = pagesByUnit.get(unitName);
+      if (!pages) {
+        pages = await this.loadVoudDataUncached(unitName, workspaceId, repository);
+        pagesByUnit.set(unitName, pages);
+      }
+      return pages.get(variableId) || '0';
+    };
+  }
+
   private async loadVoudDataUncached(
     unitName: string,
-    workspaceId: number
+    workspaceId: number,
+    repository: Repository<FileUpload> = this.fileUploadRepository
   ): Promise<Map<string, string>> {
-    const voudFile = await this.fileUploadRepository.findOne({
+    const voudFile = await repository.findOne({
       where: {
         workspace_id: workspaceId,
         file_type: 'Resource',
@@ -90,7 +105,8 @@ export class CodingFileCacheService {
 
     const vocsPageOverrides = await this.loadVocsPageOverrides(
       unitName,
-      workspaceId
+      workspaceId,
+      repository
     );
     vocsPageOverrides.forEach((page, variableId) => {
       variablePageMap.set(variableId, page);
@@ -101,9 +117,10 @@ export class CodingFileCacheService {
 
   private async loadVocsPageOverrides(
     unitName: string,
-    workspaceId: number
+    workspaceId: number,
+    repository: Repository<FileUpload>
   ): Promise<Map<string, string>> {
-    const vocsFile = await this.fileUploadRepository.findOne({
+    const vocsFile = await repository.findOne({
       where: {
         workspace_id: workspaceId,
         file_type: 'Resource',

@@ -1,4 +1,4 @@
-import { Repository } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { CodingFileCacheService } from './coding-file-cache.service';
 import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
@@ -20,6 +20,20 @@ describe('CodingFileCacheService', () => {
       data: typeof data === 'string' ? data : JSON.stringify(data)
     };
   }
+
+  it('reuses snapshot page metadata across rows without querying the default repository', async () => {
+    const repository = createRepository({});
+    const snapshot = createRepository({
+      'UNIT.VOCS': createFile('UNIT.VOCS', { variableCodings: [{ id: 'VAR1', page: '3' }, { id: 'VAR2', page: '5' }] })
+    });
+    const manager = { getRepository: () => snapshot } as unknown as EntityManager;
+    const resolvePage = new CodingFileCacheService(repository).createSnapshotPageResolver(1, manager);
+
+    await expect(resolvePage('UNIT', 'VAR1')).resolves.toBe('2');
+    await expect(resolvePage('UNIT', 'VAR2')).resolves.toBe('4');
+    expect(snapshot.findOne).toHaveBeenCalledTimes(2); // One VOUD and one VOCS lookup for the unit.
+    expect(repository.findOne).not.toHaveBeenCalled();
+  });
 
   it('uses the explicit VOCS page before the automatic VOUD page', async () => {
     const repository = createRepository({

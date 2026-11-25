@@ -1,7 +1,7 @@
 import {
   Component, DestroyRef, OnDestroy, OnInit, inject, signal, computed, ChangeDetectionStrategy
 } from '@angular/core';
-import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
+import { takeUntilDestroyed, toSignal } from '@angular/core/rxjs-interop';
 import { TranslateService, TranslateModule } from '@ngx-translate/core';
 import { MatDialog } from '@angular/material/dialog';
 import { FormsModule } from '@angular/forms';
@@ -26,11 +26,12 @@ import { MatCheckbox } from '@angular/material/checkbox';
 import { MatTooltip } from '@angular/material/tooltip';
 import { MatAnchor, MatButton, MatIconButton } from '@angular/material/button';
 import { DatePipe } from '@angular/common';
-import { HttpEventType, HttpResponse } from '@angular/common/http';
 import { MatFormField, MatLabel } from '@angular/material/form-field';
 import { MatOption, MatSelect } from '@angular/material/select';
 import { MatProgressBar } from '@angular/material/progress-bar';
 import {
+  Observable,
+  BehaviorSubject,
   Subject,
   Subscription,
   timer
@@ -38,6 +39,7 @@ import {
 import {
   debounceTime,
   filter,
+  map,
   finalize,
   switchMap,
   takeUntil
@@ -52,6 +54,7 @@ import { FileValidationProgressFacade, ValidationProgressStep } from './file-val
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { FilesValidationDialogComponent } from '../files-validation-result/files-validation.component';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
+import { openWorkspaceProcessOverview } from '../process-overview/process-overview.component';
 import { ResourcePackagesDialogComponent } from '../resource-packages-dialog/resource-packages-dialog.component';
 import { SchemeEditorDialogComponent } from '../../../coding/components/scheme-editor-dialog/scheme-editor-dialog.component';
 import { AppService } from '../../../core/services/app.service';
@@ -68,6 +71,7 @@ import { FileDownloadDto } from '../../../../../../../api-dto/files/file-downloa
 import { TestFilesUploadResultDto } from '../../../../../../../api-dto/files/test-files-upload-result.dto';
 import { ContentDialogComponent } from '../../../shared/dialogs/content-dialog/content-dialog.component';
 import { ConfirmDialogComponent } from '../../../shared/dialogs/confirm-dialog.component';
+import { downloadInBrowser } from '../../../shared/utils/browser-download';
 import {
   TestFilesUploadConflictsDialogComponent,
   TestFilesUploadConflictsDialogResult
@@ -103,6 +107,8 @@ import {
   ContentPoolUploadDialogComponent,
   ContentPoolUploadDialogResult
 } from '../content-pool-upload-dialog/content-pool-upload-dialog.component';
+
+type TrackedUpload = { workspaceId: number };
 
 @Component({
   changeDetection: ChangeDetectionStrategy.OnPush,
@@ -177,10 +183,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   readonly isLoadingContentPoolConfig = signal(false);
   readonly isDeleting = signal(false);
   readonly isUploading = signal(false);
-  readonly downloadProgressPercent = signal(0);
-  readonly downloadProgressLoadedBytes = signal(0);
-  readonly downloadProgressTotalBytes = signal(0);
-  readonly downloadProgressStatus = signal<'preparing' | 'downloading'>('preparing');
+  private readonly uploads = new BehaviorSubject<TrackedUpload | null>(null);
+  protected readonly trackedUpload = toSignal(this.uploads, { requireSync: true });
   protected readonly validationProgress = this.validationState.progress;
   protected readonly validationProgressMessage = this.validationState.message;
   protected get validationProgressSteps(): ValidationProgressStep[] { return this.validationState.steps(); }
@@ -271,14 +275,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
       return this.uiTranslate('ui-text.test-files.deleting');
     }
     if (this.isDownloadingAllFiles()) {
-      if (this.downloadProgressStatus() === 'preparing') {
-        return this.uiTranslate('ui-text.test-files.preparing-zip');
-      }
-
-      const totalText = this.downloadProgressTotalBytes() > 0 ?
-        ` / ${this.formatBytes(this.downloadProgressTotalBytes())}` :
-        '';
-      return `ZIP-Download: ${this.downloadProgressPercent()}% (${this.formatBytes(this.downloadProgressLoadedBytes())}${totalText})`;
+      return this.uiTranslate('ui-text.test-files.preparing-zip');
     }
     if (this.isValidating()) {
       return this.validationProgressMessage() ||
@@ -681,13 +678,9 @@ export class TestFilesComponent implements OnInit, OnDestroy {
   }
 
   private showUploadSummary(result: TestFilesUploadResultDto): void {
-    const conflicts = result.conflicts || [];
-    const conflictInfo =
-      conflicts.length > 0 ? `, Konflikte: ${conflicts.length}` : '';
-    const failedCount =
-      result.failedFiles && result.failedFiles.length > 0 ?
-        deduplicateTestFilesUploadFailedFiles(result.failedFiles).length :
-        result.failed;
+    const conflictCount = result.conflicts?.length ?? 0;
+    const conflictInfo = conflictCount ? `, Konflikte: ${conflictCount}` : '';
+    const failedCount = deduplicateTestFilesUploadFailedFiles(result.failedFiles).length || result.failed;
     this.snackBar.open(
       this.uiTranslate('ui-text.test-files.upload-complete', { uploaded: result.uploaded, failedCount: failedCount, conflictInfo: conflictInfo }),
       'OK',
@@ -731,23 +724,8 @@ export class TestFilesComponent implements OnInit, OnDestroy {
 
     ref.afterClosed().pipe(takeUntilDestroyed(this.destroyRef)).subscribe(resultChoice => {
       if (resultChoice?.overwrite === true) {
-        this.isLoading.set(true);
-        this.isUploading.set(true);
-        const overwriteSelectedCount = (resultChoice.overwriteFileIds || [])
-          .length;
-        this.fileService
-          .uploadTestFiles(
-            workspaceId,
-            files,
-            true,
-            resultChoice.overwriteFileIds
-          )
-          .pipe(
-            finalize(() => {
-              this.isLoading.set(false);
-              this.isUploading.set(false);
-            })
-          ).pipe(takeUntilDestroyed(this.destroyRef))
+        const overwriteSelectedCount = (resultChoice.overwriteFileIds || []).length;
+        this.trackUpload(workspaceId, this.fileService.uploadTestFiles(workspaceId, files, true, resultChoice.overwriteFileIds))
           .subscribe({
             next: overwriteResult => {
               this.showUploadSummary(overwriteResult);
@@ -802,22 +780,30 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     });
   }
 
+  private trackUpload(workspaceId: number, request: Observable<TestFilesUploadResultDto>): Observable<TestFilesUploadResultDto> {
+    const upload = { workspaceId };
+    this.uploads.next(upload);
+    this.isUploading.set(true);
+    this.isLoading.set(true);
+    return request.pipe(takeUntilDestroyed(this.destroyRef), finalize(() => {
+      if (this.uploads.value === upload) {
+        this.uploads.next(null);
+        this.isUploading.set(false);
+        this.isLoading.set(false);
+      }
+    }));
+  }
+
+  protected openProcessOverview({ workspaceId }: TrackedUpload): void {
+    const uploadPending$ = this.uploads.pipe(map(upload => upload?.workspaceId === workspaceId));
+    openWorkspaceProcessOverview(this.dialog, { workspaceId, uploadPending$ });
+  }
+
   onFileSelected(target: EventTarget | null): void {
-    if (!target) return;
-    const inputElement = target as HTMLInputElement;
-    const files = inputElement.files;
-    if (files && files.length) {
-      this.isLoading.set(true);
-      this.isUploading.set(true);
+    const files = (target as HTMLInputElement | null)?.files;
+    if (files?.length) {
       const workspaceId = this.appService.selectedWorkspaceId;
-      this.fileService
-        .uploadTestFiles(workspaceId, files, false)
-        .pipe(
-          finalize(() => {
-            this.isLoading.set(false);
-            this.isUploading.set(false);
-          })
-        ).pipe(takeUntilDestroyed(this.destroyRef))
+      this.trackUpload(workspaceId, this.fileService.uploadTestFiles(workspaceId, files, false))
         .subscribe({
           next: result => {
             this.handleUploadResult(workspaceId, files, result);
@@ -942,14 +928,7 @@ export class TestFilesComponent implements OnInit, OnDestroy {
           const blob = new Blob([byteArray], {
             type: res.mimeType || 'application/xml'
           });
-          const url = window.URL.createObjectURL(blob);
-          const anchor = document.createElement('a');
-          anchor.href = url;
-          anchor.download = row.filename || 'download';
-          document.body.appendChild(anchor);
-          anchor.click();
-          document.body.removeChild(anchor);
-          window.URL.revokeObjectURL(url);
+          downloadInBrowser(blob, row.filename || 'download');
         }
       });
   }
@@ -975,80 +954,29 @@ export class TestFilesComponent implements OnInit, OnDestroy {
         return;
       }
 
+      const workspaceId = this.appService.selectedWorkspaceId;
       this.isDownloadingAllFiles.set(true);
-      this.downloadProgressPercent.set(0);
-      this.downloadProgressLoadedBytes.set(0);
-      this.downloadProgressTotalBytes.set(0);
-      this.downloadProgressStatus.set('preparing');
-      this.fileBackendService
-        .downloadWorkspaceFilesAsZipWithProgress(
-          this.appService.selectedWorkspaceId,
-          result.fileTypes
-        ).pipe(takeUntilDestroyed(this.destroyRef))
-        .subscribe({
-          next: event => {
-            if (event.type === HttpEventType.DownloadProgress) {
-              this.downloadProgressStatus.set('downloading');
-              this.downloadProgressLoadedBytes.set(event.loaded);
-              this.downloadProgressTotalBytes.set(event.total || 0);
-              this.downloadProgressPercent.set(event.total && event.total > 0 ?
-                Math.min(100, Math.round((event.loaded / event.total) * 100)) :
-                0);
-              return;
-            }
-
-            if (event instanceof HttpResponse) {
-              const blob = event.body;
-              if (!blob) {
-                throw new Error(this.uiTranslate('ui-text.test-files.empty-zip-response'));
-              }
-
-              const url = window.URL.createObjectURL(blob);
-              const anchor = document.createElement('a');
-              anchor.href = url;
-              anchor.download = `workspace-${this.appService.selectedWorkspaceId}-files.zip`;
-              document.body.appendChild(anchor);
-              anchor.click();
-              document.body.removeChild(anchor);
-              window.URL.revokeObjectURL(url);
-              this.downloadProgressPercent.set(100);
-              this.downloadProgressLoadedBytes.set(blob.size);
-              this.downloadProgressTotalBytes.set(blob.size);
-              this.isDownloadingAllFiles.set(false);
-
-              this.snackBar.open(
-                this.uiTranslate('ui-text.test-files.zip-download-success'),
-                'OK',
-                { duration: 3000 }
-              );
-            }
-          },
-          error: () => {
-            this.isDownloadingAllFiles.set(false);
-            this.snackBar.open(
-              this.uiTranslate('ui-text.test-files.zip-download-failed'),
-              'OK',
-              { duration: 3000 }
-            );
-          }
-        });
+      const transfer: Observable<string | Blob> = window.isSecureContext ?
+        this.fileBackendService.prepareWorkspaceZip(workspaceId, result.fileTypes) :
+        this.fileBackendService.downloadWorkspaceFilesAsZip(workspaceId, result.fileTypes);
+      transfer.pipe(
+        takeUntilDestroyed(this.destroyRef),
+        finalize(() => this.isDownloadingAllFiles.set(false))
+      ).subscribe({
+        next: archive => {
+          downloadInBrowser(archive, `workspace-${workspaceId}-files.zip`);
+          this.snackBar.open(this.uiTranslate('ui-text.test-files.zip-download-started'), 'OK', {
+            duration: 5000
+          });
+        },
+        error: () => {
+          this.snackBar.open(this.uiTranslate('ui-text.test-files.zip-download-failed'), 'OK', {
+            duration: 3000
+          });
+        }
+      });
     });
   }
-
-  readonly downloadProgressValue = computed<number>(() => (this.downloadProgressStatus() === 'downloading' ?
-    this.downloadProgressPercent() :
-    0));
-
-  readonly isDownloadProgressIndeterminate = computed<boolean>(() => (
-    this.isDownloadingAllFiles() &&
-      this.downloadProgressStatus() === 'preparing'
-  ));
-
-  protected readonly busyProgressValue = computed<number>(() => (this.isValidating() ?
-    this.validationProgress() :
-    this.downloadProgressValue()));
-
-  protected readonly isBusyProgressIndeterminate = computed<boolean>(() => (this.isValidating() ? false : this.isDownloadProgressIndeterminate()));
 
   protected get completedValidationStepCount(): number {
     return this.validationProgressSteps.filter(
@@ -1068,26 +996,6 @@ export class TestFilesComponent implements OnInit, OnDestroy {
     const nextStep = this.validationProgressSteps[index + 1];
     return this.validationProgress() >= step.threshold &&
       (!nextStep || this.validationProgress() < nextStep.threshold);
-  }
-
-  private formatBytes(bytes: number): string {
-    if (!bytes || bytes < 0) {
-      return '0 B';
-    }
-    if (bytes < 1024) {
-      return `${bytes} B`;
-    }
-
-    const units = ['KB', 'MB', 'GB', 'TB'];
-    let value = bytes / 1024;
-    let unitIndex = 0;
-
-    while (value >= 1024 && unitIndex < units.length - 1) {
-      value /= 1024;
-      unitIndex += 1;
-    }
-
-    return `${value.toFixed(value >= 10 ? 0 : 1)} ${units[unitIndex]}`;
   }
 
   protected validateFiles(): void {

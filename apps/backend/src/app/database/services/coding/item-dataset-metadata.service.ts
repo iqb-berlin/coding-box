@@ -29,6 +29,7 @@ import {
 import { WORKSPACE_FILE_METADATA_READER, type WorkspaceFileMetadataReader } from '../workspace/workspace-file-metadata-reader.token';
 import { PsychometricMetadataResolver } from './psychometric-metadata-resolver.service';
 import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
+import { ImportedBookletUnitAlias, resolveItemDatasetBookletAliases } from './item-dataset-booklet-aliases';
 
 const fixedHeaders = [
   'person_login',
@@ -277,14 +278,18 @@ export class ItemDatasetMetadataService {
     workspaceId: number,
     checkCancellation?: () => Promise<void>
   ): Promise<Map<string, ItemDatasetBookletDesign>> {
-    const [files, exclusions] = await Promise.all([
+    const [files, exclusions, aliases, variables] = await Promise.all([
       this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' },
-        select: ['file_id', 'data'],
+        select: { file_id: true, data: true },
         order: { file_id: 'ASC' }
       }),
-      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId)
+      this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId),
+      this.getBookletUnitAliases(workspaceId),
+      this.workspaceFilesService.getUnitVariableMap(workspaceId)
     ]);
+    await checkCancellation?.();
+    const canonicalIds = new Set(Array.from(variables.keys(), normalizeItemDatasetUnitId));
     const result = new Map<string, ItemDatasetBookletDesign>();
 
     for (let fileIndex = 0; fileIndex < files.length; fileIndex += 1) {
@@ -323,7 +328,14 @@ export class ItemDatasetMetadataService {
             testletKey: `${testletIndex}:${testletId}`
           });
         });
-        result.set(bookletId, { units });
+        const ambiguousUnitPositions = resolveItemDatasetBookletAliases(
+          aliases.get(bookletId) ?? [],
+          canonicalIds,
+          units,
+          unitId => !isExcludedByResolvedExclusions(exclusions, bookletId, unitId),
+          message => this.logger.warn(`Workspace ${workspaceId}, booklet '${bookletId}': ${message}`)
+        );
+        result.set(bookletId, { units, ambiguousUnitPositions });
       } catch (error) {
         throw new BadRequestException(
           `Booklet-Struktur '${file.file_id}' konnte nicht gelesen werden: ` +
@@ -436,7 +448,7 @@ export class ItemDatasetMetadataService {
     }
     const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
     return new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
   }
@@ -448,7 +460,7 @@ export class ItemDatasetMetadataService {
   ): Promise<Map<string, UnitPositionMetadata>> {
     const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
     const result = new Map<string, UnitPositionMetadata>();
     for (let index = 0; index < files.length; index += 1) {
@@ -485,6 +497,31 @@ export class ItemDatasetMetadataService {
   private getCodingSchemeResourceIds(reference: string): string[] {
     const fileId = this.normalizeResourceRef(reference);
     return fileId.endsWith('.VOCS') ? [fileId] : [fileId, `${fileId}.VOCS`];
+  }
+
+  private async getBookletUnitAliases(workspaceId: number): Promise<Map<string, ImportedBookletUnitAlias[]>> {
+    const rows = await this.unitRepository
+      .createQueryBuilder('unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.person', 'person')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .select('bookletinfo.name', 'bookletName')
+      .addSelect('unit.name', 'unitName')
+      .addSelect('unit.alias', 'unitAlias')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = true')
+      .andWhere("unit.alias != ''")
+      .distinct(true)
+      .getRawMany<ImportedBookletUnitAlias>();
+
+    const byBooklet = new Map<string, ImportedBookletUnitAlias[]>();
+    for (const row of rows) {
+      const bookletId = normalizeExclusionBookletId(row.bookletName);
+      const aliases = byBooklet.get(bookletId) ?? [];
+      aliases.push(row);
+      byBooklet.set(bookletId, aliases);
+    }
+    return byBooklet;
   }
 
   private async getUnitAliases(

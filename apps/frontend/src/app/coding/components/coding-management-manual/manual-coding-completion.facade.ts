@@ -6,12 +6,13 @@ import { MatDialog } from '@angular/material/dialog';
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import { finalize, Subject } from 'rxjs';
+import { formatApplyCodingResultsMessage } from '../../utils/coding-results-message';
 import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AppService } from '../../../core/services/app.service';
 import { ConfirmDialogComponent } from '../../../shared/confirm-dialog/confirm-dialog.component';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { CodingJob } from '../../models/coding-job.model';
-import { ApplyCodingResultsResponse, BulkApplyCodingResultsResponse, CodingJobBackendService } from '../../services/coding-job-backend.service';
+import { BulkApplyCodingResultsResponse, CodingJobBackendService } from '../../services/coding-job-backend.service';
 import { ApplyCodingResultsDialogComponent, ApplyCodingResultsDialogResult } from '../coding-jobs/apply-coding-results-dialog.component';
 import { ManualCodingStatisticsFacade } from './manual-coding-statistics.facade';
 
@@ -96,7 +97,7 @@ export class ManualCodingCompletionFacade {
         .subscribe({
           next: result => {
             if (result.success) {
-              this.showSuccess(this.formatApplyCodingResultsMessage(result));
+              this.showSuccess(formatApplyCodingResultsMessage(result, this.uiTranslate));
               this.appliedSubject.next();
               return;
             }
@@ -191,34 +192,6 @@ export class ManualCodingCompletionFacade {
           );
         }
       });
-  }
-
-  private formatApplyCodingResultsMessage(
-    result: ApplyCodingResultsResponse
-  ): string {
-    const parts = [
-      this.uiTranslate('ui-text.coding-jobs.apply-success', { updatedResponsesCount: result.updatedResponsesCount })
-    ];
-
-    if (result.skippedAlreadyCodedCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.preserved-responses', { skippedAlreadyCodedCount: result.skippedAlreadyCodedCount })
-      );
-    }
-
-    if (result.overwrittenExistingCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.overwritten-responses', { overwrittenExistingCount: result.overwrittenExistingCount })
-      );
-    }
-
-    if (result.skippedReviewCount > 0) {
-      parts.push(
-        this.uiTranslate('ui-text.coding-jobs.review-skipped-responses', { skippedReviewCount: result.skippedReviewCount })
-      );
-    }
-
-    return parts.join('\n');
   }
 
   private formatBulkApplyCodingResultsMessage(

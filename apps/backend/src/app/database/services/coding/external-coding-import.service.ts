@@ -162,7 +162,7 @@ export class ExternalCodingImportService {
   ): ReturnType<ExternalCodingImportService['importExternalCodingInPool']> {
     const importCoding = () => this.importExternalCodingInPool(workspaceId, body, progressCallback, requestedByUserId);
     return body.previewOnly ? importCoding() :
-      withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection, importCoding);
+      withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.dataSource, importCoding);
   }
 
   private async importExternalCodingInPool(
@@ -271,7 +271,7 @@ export class ExternalCodingImportService {
       progressCallback?.(25, `Starting to process ${parsedData.length} rows in ${totalBatches} batches`);
 
       if (!body.previewOnly) {
-        queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+        queryRunner = this.responseRepository.manager.dataSource.createQueryRunner();
         await queryRunner.connect();
         await queryRunner.startTransaction('READ COMMITTED');
         await lockWorkspaceTestResultsMutationInTransaction(queryRunner.manager, workspaceId);

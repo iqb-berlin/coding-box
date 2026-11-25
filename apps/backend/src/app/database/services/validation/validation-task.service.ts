@@ -154,23 +154,59 @@ export class ValidationTaskService {
         throw new Error(`Task with ID ${taskId} not found`);
       }
     }
+    if (workspaceId !== undefined) await this.reconcileQueueStatus([task]);
     return task;
+  }
+
+  async markInterruptedTaskFailed(taskId: number, reason: string): Promise<boolean> {
+    const update = await this.taskRepository.update(
+      { id: taskId, status: In(['pending', 'processing']) },
+      { status: 'failed', error: reason, progress_message: 'Der Hintergrundauftrag wurde unterbrochen.' }
+    );
+    return Boolean(update.affected);
   }
 
   async getWorkspaceIdsForTaskIds(taskIds: number[]): Promise<Map<number, number>> {
     if (taskIds.length === 0) return new Map();
     const tasks = await this.taskRepository.find({
       where: { id: In(taskIds) },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
     return new Map(tasks.map(t => [t.id, t.workspace_id]));
   }
 
   async getValidationTasks(workspaceId: number): Promise<ValidationTask[]> {
-    return this.taskRepository.find({
+    const tasks = await this.taskRepository.find({
       where: { workspace_id: workspaceId },
       order: { created_at: 'DESC' }
     });
+    await this.reconcileQueueStatus(tasks);
+    return tasks;
+  }
+
+  private async reconcileQueueStatus(tasks: ValidationTask[]): Promise<void> {
+    const pending = tasks.filter(task => (
+      task.status === 'processing' || (task.status === 'pending' &&
+      task.updated_at instanceof Date && Date.now() - task.updated_at.getTime() > 60_000)
+    ));
+    if (!pending.length) return;
+    const recovery = await this.jobQueueService.getValidationTaskRecovery(pending.map(task => task.id))
+      .catch(error => {
+        this.logger.warn(`Could not load validation queue state: ${getErrorMessage(error)}`);
+        return null;
+      });
+    for (const task of pending) {
+      const state = recovery?.get(task.id);
+      if (state?.status === 'failed' && await this.markInterruptedTaskFailed(task.id, state.reason)) {
+        task.status = 'failed';
+        task.error = state.reason;
+        task.progress_message = 'Der Hintergrundauftrag wurde unterbrochen.';
+      } else if (state?.status === 'pending' && task.status === 'processing') {
+        task.status = 'pending';
+        task.progress = 0;
+        task.progress_message = 'Die Verarbeitung wurde unterbrochen. Der Auftrag wartet auf den Wiederanlauf.';
+      }
+    }
   }
 
   private static parseResponseIds(value: unknown): number[] {

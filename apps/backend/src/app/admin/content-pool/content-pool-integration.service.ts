@@ -497,7 +497,7 @@ export class ContentPoolIntegrationService {
     this.assertFeatureEnabled(settings);
 
     const workspaceFiles = await this.fileUploadRepository.find({
-      select: ['id', 'filename', 'workspace_id'],
+      select: { id: true, filename: true, workspace_id: true },
       where: {
         id: In(input.fileIds),
         workspace_id: input.workspaceId
@@ -1209,7 +1209,7 @@ export class ContentPoolIntegrationService {
     let totalBytes = 0;
     for (const plan of replacementPlan) {
       const stored = await this.fileUploadRepository.findOne({
-        select: ['data'],
+        select: { data: true },
         where: {
           id: plan.workspaceFile.id,
           workspace_id: plan.workspaceFile.workspace_id,

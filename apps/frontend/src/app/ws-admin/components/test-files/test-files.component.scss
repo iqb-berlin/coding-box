@@ -150,10 +150,6 @@
   color: #666;
 }
 
-.busy-overlay .download-progress-bar {
-  width: min(420px, 70vw);
-}
-
 .busy-overlay .validation-busy-card {
   width: min(720px, calc(100vw - 40px));
   max-height: calc(100vh - 40px);

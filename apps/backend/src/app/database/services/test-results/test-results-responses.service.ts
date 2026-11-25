@@ -122,22 +122,25 @@ export class TestResultsResponsesService {
       repeatedStartThreshold: options.repeatedStartThreshold
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
-    const createQuery = (purpose: 'rows' | 'count') => {
-      const query = this.createFlatResponseQuery(workspaceId, filters, purpose, queryRunner);
+    const createQuery = () => {
+      const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
       applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
       this.anomalies.applyLogAnomalyFilters(query, logAnomalyCodes, logAnomalyThresholds, exclusions);
       return query;
     };
-    const qb = createQuery('rows');
-    const countQb = createQuery('count');
-    const total = await countQb
+    const rowQuery = createQuery();
+    const countRows = () => createQuery()
       .select('COUNT(response.id)', 'cnt')
       .getRawOne()
       .then(r => Number(r?.cnt || 0));
-
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const raw = await this.selectFlatResponseRows(qb, validPage, validLimit);
+    const selectRows = () => this.selectFlatResponseRows(
+      rowQuery, validPage, validLimit, Boolean(filters.tags)
+    );
+    const [total, raw] = queryRunner ?
+      [await countRows(), await selectRows()] :
+      await Promise.all([countRows(), selectRows()]);
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
@@ -188,7 +191,6 @@ export class TestResultsResponsesService {
   private createFlatResponseQuery(
     workspaceId: number,
     filters: FlatResponseFilters,
-    purpose: 'rows' | 'count',
     queryRunner?: QueryRunner
   ): SelectQueryBuilder<ResponseEntity> {
     const query = this.responseRepository.createQueryBuilder('response', queryRunner)
@@ -198,13 +200,19 @@ export class TestResultsResponsesService {
       .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
       .where('person.workspace_id = :workspaceId', { workspaceId })
       .andWhere('person.consider = :consider', { consider: true });
-    if (purpose === 'rows') query.leftJoin('unit.tags', 'unitTag');
     excludeAutocoderGeneratedResponses(query);
-    applyFlatResponseFilters(query, filters, purpose);
+    applyFlatResponseFilters(query, filters);
     return query;
   }
 
-  private selectFlatResponseRows(qb: SelectQueryBuilder<ResponseEntity>, validPage: number, validLimit: number) {
+  private selectFlatResponseRows(
+    qb: SelectQueryBuilder<ResponseEntity>,
+    validPage: number,
+    validLimit: number,
+    filterTags: boolean
+  ) {
+    // Only aggregate tags for the selected response rows.
+    const tagPredicate = filterTags ? 'AND page_tag.tag ILIKE :tags' : '';
     return qb
       .select([
         'bookletEntity.id AS "bookletId"',
@@ -219,28 +227,21 @@ export class TestResultsResponsesService {
         'response.variableid AS "response"',
         'response.status AS "responseStatus"',
         'SUBSTRING(response.value, 1, :maxResponseValueLen) AS "responseValue"',
-        "COALESCE(string_agg(DISTINCT unitTag.tag, ','), '') AS \"tags\""
+        `COALESCE((
+          SELECT string_agg(DISTINCT page_tag.tag, ',')
+          FROM unit_tag page_tag
+          WHERE page_tag."unitId" = unit.id ${tagPredicate}
+        ), '') AS "tags"`
       ])
       .setParameter(
         'maxResponseValueLen',
         RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
       )
-      .groupBy('response.id')
-      .addGroupBy('unit.id')
-      .addGroupBy('bookletEntity.id')
-      .addGroupBy('person.id')
-      .addGroupBy('bookletinfo.name')
-      .addGroupBy('unit.alias')
-      .addGroupBy('unit.name')
-      .addGroupBy('person.code')
-      .addGroupBy('person.group')
-      .addGroupBy('person.login')
-      .addGroupBy('response.variableid')
-      .addGroupBy('response.status')
       .orderBy('person.code', 'ASC')
       .addOrderBy('bookletinfo.name', 'ASC')
       .addOrderBy('unit.alias', 'ASC')
       .addOrderBy('response.variableid', 'ASC')
+      .addOrderBy('response.id', 'ASC')
       .offset((validPage - 1) * validLimit)
       .limit(validLimit)
       .getRawMany();

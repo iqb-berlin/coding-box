@@ -1,10 +1,9 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { In, MoreThan, Repository } from 'typeorm';
 import * as cheerio from 'cheerio';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import FileUpload from '../../entities/file_upload.entity';
-import { Unit } from '../../entities/unit.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { MissingPersonDto, TestTakerLoginDto, TestTakersValidationDto } from '../../../../../../../api-dto/files/testtakers-validation.dto';
 import Persons from '../../entities/persons.entity';
@@ -16,16 +15,15 @@ export class WorkspaceTestTakersValidationService {
   constructor(
     @InjectRepository(FileUpload) private readonly fileUploadRepository: Repository<FileUpload>,
     @InjectRepository(Persons) private readonly personsRepository: Repository<Persons>,
-    @InjectRepository(Unit) private readonly unitRepository: Repository<Unit>,
     @InjectRepository(ResponseEntity) private readonly responseRepository: Repository<ResponseEntity>
   ) {}
 
   async validateTestTakers(
     workspaceId: number,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void | Promise<void>
   ): Promise<TestTakersValidationDto> {
     try {
-      if (onProgress) onProgress(10);
+      await onProgress?.(10);
       const testTakers = await this.fileUploadRepository.find({
         where: {
           workspace_id: workspaceId,
@@ -46,39 +44,53 @@ export class WorkspaceTestTakersValidationService {
         };
       }
 
-      if (onProgress) onProgress(30);
+      await onProgress?.(30);
 
       const {
         testTakerLogins, totalGroups, totalLogins, totalBookletCodes
       } = this.collectLogins(testTakers);
 
-      if (onProgress) onProgress(60);
+      const loginsByGroup = new Map<string, Set<string>>();
+      for (const { group, login } of testTakerLogins) {
+        const logins = loginsByGroup.get(group) ?? new Set<string>();
+        logins.add(login);
+        loginsByGroup.set(group, logins);
+      }
 
-      const persons = await this.personsRepository.find({
-        where: { workspace_id: workspaceId, consider: true }
-      });
-
+      await onProgress?.(60);
+      const personScope = { workspace_id: workspaceId, consider: true };
+      const totalPersons = await this.personsRepository.countBy(personScope);
+      const pageSize = 500;
       const missingPersons: MissingPersonDto[] = [];
-      const totalPersons = persons.length;
       let processedPersons = 0;
+      let afterId: number | undefined;
 
-      for (const person of persons) {
-        processedPersons += 1;
-        if (processedPersons % 50 === 0 && onProgress) {
-          onProgress(60 + Math.floor((processedPersons / totalPersons) * 35));
-        }
-        const found = testTakerLogins.some(
-          login => login.group === person.group && login.login === person.login
-        );
+      while (true) {
+        const persons = await this.personsRepository.find({
+          select: {
+            id: true, group: true, login: true, code: true
+          },
+          where: afterId === undefined ? personScope : { ...personScope, id: MoreThan(afterId) },
+          order: { id: 'ASC' },
+          take: pageSize
+        });
 
-        if (!found) {
-          missingPersons.push({
-            group: person.group,
-            login: person.login,
-            code: person.code,
-            reason: 'Person not found in TestTakers XML'
-          });
+        for (const person of persons) {
+          if (!loginsByGroup.get(person.group)?.has(person.login)) {
+            missingPersons.push({
+              group: person.group,
+              login: person.login,
+              code: person.code,
+              reason: 'Person not found in TestTakers XML'
+            });
+          }
         }
+        processedPersons += persons.length;
+        if (totalPersons > 0) {
+          await onProgress?.(60 + Math.floor(Math.min(processedPersons / totalPersons, 1) * 35));
+        }
+        if (persons.length < pageSize) break;
+        afterId = persons[persons.length - 1].id;
       }
 
       return {
@@ -103,7 +115,7 @@ export class WorkspaceTestTakersValidationService {
     workspaceId: number,
     page: number = 1,
     limit: number = 10,
-    onProgress?: (progress: number) => void
+    onProgress?: (progress: number) => void | Promise<void>
   ): Promise<{
     testTakersFound: boolean;
     groupsWithResponses: { group: string; hasResponse: boolean }[];
@@ -114,7 +126,7 @@ export class WorkspaceTestTakersValidationService {
     limit: number;
   }> {
     try {
-      if (onProgress) onProgress(10);
+      await onProgress?.(10);
       if (!workspaceId) {
         this.logger.error('Workspace ID is required');
         return this.emptyGroupResult(false, page, limit);
@@ -133,7 +145,7 @@ export class WorkspaceTestTakersValidationService {
         return this.emptyGroupResult(false, page, limit);
       }
 
-      if (onProgress) onProgress(20);
+      await onProgress?.(20);
 
       const groups = this.collectGroups(testTakers);
 
@@ -144,7 +156,7 @@ export class WorkspaceTestTakersValidationService {
         return this.emptyGroupResult(true, page, limit);
       }
 
-      if (onProgress) onProgress(40);
+      await onProgress?.(40);
 
       // Check if each group has at least one response
       const groupsWithResponses: { group: string; hasResponse: boolean }[] = [];
@@ -155,10 +167,8 @@ export class WorkspaceTestTakersValidationService {
 
       for (const group of groups) {
         processedGroups += 1;
-        if (onProgress) {
-          onProgress(40 + Math.floor((processedGroups / totalGroups) * 55));
-        }
         const hasResponse = await this.groupHasResponses(workspaceId, group);
+        await onProgress?.(40 + Math.floor((processedGroups / totalGroups) * 55));
         groupsWithResponses.push({ group, hasResponse });
 
         if (!hasResponse) {
@@ -312,71 +322,10 @@ export class WorkspaceTestTakersValidationService {
     return groups;
   }
 
-  private async groupHasResponses(workspaceId: number, group: string): Promise<boolean> {
-    // Find persons with this group ID
-    const persons = await this.personsRepository.find({
-      where: { workspace_id: workspaceId, group, consider: true }
+  private groupHasResponses(workspaceId: number, group: string): Promise<boolean> {
+    return this.responseRepository.existsBy({
+      unit: { booklet: { person: { workspace_id: workspaceId, group, consider: true } } }
     });
-
-    if (persons.length === 0) {
-      // No persons found for this group
-      return false;
-    }
-
-    // Get all person IDs
-    const personIds = persons.map(person => person.id);
-
-    if (personIds.length === 0) {
-      this.logger.warn(
-        `No person IDs found for group ${group} in workspace ${workspaceId}`
-      );
-      return false;
-    }
-
-    const batchSize = 1000;
-    let allUnits: Unit[] = [];
-
-    for (let i = 0; i < personIds.length; i += batchSize) {
-      const personIdsBatch = personIds.slice(i, i + batchSize);
-
-      // Find units for this batch of person IDs
-      const unitsBatch = await this.unitRepository
-        .createQueryBuilder('unit')
-        .innerJoin('unit.booklet', 'booklet')
-        .where('booklet.personid IN (:...personIdsBatch)', {
-          personIdsBatch
-        })
-        .getMany();
-
-      allUnits = [...allUnits, ...unitsBatch];
-    }
-
-    if (allUnits.length === 0) {
-      return false;
-    }
-
-    const unitIds = allUnits.map(unit => unit.id);
-
-    if (unitIds.length === 0) {
-      this.logger.warn(
-        `No unit IDs found for group ${group} in workspace ${workspaceId}`
-      );
-      return false;
-    }
-
-    let totalResponseCount = 0;
-
-    for (let i = 0; i < unitIds.length; i += batchSize) {
-      const unitIdsBatch = unitIds.slice(i, i + batchSize);
-
-      const responseCountBatch = await this.responseRepository.count({
-        where: { unitid: In(unitIdsBatch) }
-      });
-
-      totalResponseCount += responseCountBatch;
-    }
-
-    return totalResponseCount > 0;
   }
 
   private emptyGroupResult(testTakersFound: boolean, page: number, limit: number) {

@@ -7,6 +7,7 @@ import { JobQueueService, WorkspaceDeletionJob } from '../../../job-queue/job-qu
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { CacheService } from '../../../cache/cache.service';
 import ResourcePackage from '../../entities/resource-package.entity';
+import { removeWorkspaceCodingAnalysisResults } from '../coding/coding-analysis-result-store';
 import { withResourcePackageLock } from '../shared/resource-package-lock.util';
 
 interface CleanupManifest {
@@ -34,7 +35,7 @@ export class WorkspaceDeletionService {
     };
     const jobs = await this.jobQueueService.getJobsForWorkspaceDeletion(ids);
     const packages = await this.connection.getRepository(ResourcePackage).find({
-      select: ['name', 'workspaceId'], where: { workspaceId: In(ids), scope: 'workspace' }
+      select: { name: true, workspaceId: true }, where: { workspaceId: In(ids), scope: 'workspace' }
     });
     // Keep each durable manifest scoped to one workspace, even when a failed
     // multi-workspace request is later retried for only a subset of its IDs.
@@ -117,7 +118,10 @@ export class WorkspaceDeletionService {
         }
       });
     }
-    for (const id of resources.workspaceIds) await fs.rm(this.manifestPath(id), { force: true });
+    for (const id of resources.workspaceIds) {
+      await removeWorkspaceCodingAnalysisResults(id);
+      await fs.rm(this.manifestPath(id), { force: true });
+    }
   }
 
   private resultKeys(job: Pick<Job, 'id' | 'queueName'>): string[] {

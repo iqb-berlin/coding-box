@@ -76,6 +76,6 @@ describe('zoneless test-results quick search', () => {
 
     cy.get('coding-box-test-results-search mat-spinner').should('not.exist');
     cy.get('coding-box-test-results-search .result-item').should('not.exist');
-    cy.get('coding-box-test-results-search').should('contain.text', 'Keine Treffer gefunden.');
+    cy.get('coding-box-test-results-search').should('contain.text', 'Mindestens ein Suchbereich konnte nicht geladen werden.');
   });
 });

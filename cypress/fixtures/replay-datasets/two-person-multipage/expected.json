@@ -9,14 +9,14 @@
     "connector": "replay-login-a@replay-code-a@REPLAY-GROUP@BOOKLET-REPLAY",
     "responseChunkId": "elementCodes",
     "responseVariable": "answer_1",
-    "responseStatus": 3,
+    "responseStatus": "VALUE_CHANGED",
     "responseValue": "PERSON-A-RESPONSE"
   },
   "personB": {
     "connector": "replay-login-b@replay-code-b@REPLAY-GROUP@BOOKLET-REPLAY",
     "responseChunkId": "elementCodes",
     "responseVariable": "answer_1",
-    "responseStatus": 3,
+    "responseStatus": "VALUE_CHANGED",
     "responseValue": "PERSON-B-RESPONSE"
   },
   "missingUnitError": {

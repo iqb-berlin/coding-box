@@ -1,22 +1,21 @@
-import { Processor } from '@nestjs/bullmq';
-import { Logger, Optional } from '@nestjs/common';
+import { OnWorkerEvent, Processor } from '@nestjs/bullmq';
+import {
+  Logger, OnModuleDestroy, OnModuleInit, Optional
+} from '@nestjs/common';
 import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Brackets } from 'typeorm';
+import { EntityManager, Repository } from 'typeorm';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { ResponseEntity } from '../../database/entities/response.entity';
 import { ResponseMatchingFlag } from '../../database/services/coding/coding-job.service';
-import {
-  ResponseAnalysisDto,
-  EmptyResponseDto,
-  DuplicateValueGroupDto
-} from '../../../../../../api-dto/coding/response-analysis.dto';
+import type { EmptyResponseDto } from '../../../../../../api-dto/coding/response-analysis.dto';
 import { CacheService } from '../../cache/cache.service';
 import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../database/utils/manual-coding-candidate.util';
 import { CodingAnalysisJobData } from '../job-queue.service';
 import {
   applyResolvedExclusionsToQuery,
+  ResolvedWorkspaceExclusions,
   WorkspaceExclusionService
 } from '../../database/services/workspace/workspace-exclusion.service';
 import {
@@ -26,17 +25,42 @@ import {
   normalizeAggregationValue
 } from '../../database/services/coding/aggregation-metrics.util';
 import { EmptyResponseSelectionService } from '../../database/services/coding/empty-response-selection.service';
-import { getCodingAnalysisRunMarkerKey } from '../../database/services/coding/coding-analysis-cache-key.util';
+import {
+  getCodingAnalysisRunMarkerKey, FileCodingAnalysis
+} from '../../database/services/coding/coding-analysis-cache-key.util';
 import {
   IQB_STANDARD_MISSING_CODES,
   MissingsProfilesService
 } from '../../database/services/coding/missings-profiles.service';
 
-const CODING_ANALYSIS_CACHE_TTL_SECONDS = 600;
+import {
+  ANALYSIS_RESULT_TTL_SECONDS, cleanExpiredCodingAnalysisResults, CodingAnalysisResultWriter
+} from '../../database/services/coding/coding-analysis-result-store';
+import { readPostgresQueryBatches } from '../../database/services/shared/postgres-query-batches.util';
+import { ANALYSIS_BATCH_SIZE, DuplicateCandidate, writeDuplicateResults } from './coding-analysis-duplicates';
+
+type ResponseRow = {
+  id: number;
+  unitid: number;
+  variableid: string;
+  value: string | null;
+  status_v1: number | null;
+  status_v2: number | null;
+  code_v2: string | null;
+  unitName: string;
+  unitAlias: string | null;
+  personLogin: string;
+  personCode: string;
+  personGroup: string;
+  bookletName: string;
+};
+
+const CLEANUP_INTERVAL_MS = 5 * 60_000;
 
 @Processor('response-analysis', { concurrency: 1 })
-export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
+export class CodingAnalysisProcessor extends WorkspaceWorkerHost implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(CodingAnalysisProcessor.name);
+  private cleanupTimer?: ReturnType<typeof setInterval>;
 
   constructor(
     @InjectRepository(ResponseEntity)
@@ -50,8 +74,40 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     super();
   }
 
+  onModuleInit(): void {
+    const clean = () => cleanExpiredCodingAnalysisResults().catch(error => {
+      this.logger.warn(`Could not clean up response analysis files: ${getErrorMessage(error)}`);
+    });
+    clean();
+    this.cleanupTimer = setInterval(clean, CLEANUP_INTERVAL_MS).unref();
+  }
+
+  onModuleDestroy(): void {
+    clearInterval(this.cleanupTimer);
+  }
+
   async processWorkspaceJob(job: Job<CodingAnalysisJobData>) {
     return this.handleResponseAnalysis(job);
+  }
+
+  @OnWorkerEvent('completed')
+  async releaseCompletedRunMarker(job: Job<CodingAnalysisJobData>): Promise<void> {
+    await this.releaseRunMarker(job);
+  }
+
+  @OnWorkerEvent('failed')
+  async releaseFailedRunMarker(job: Job<CodingAnalysisJobData> | undefined): Promise<void> {
+    await this.releaseRunMarker(job, true);
+  }
+
+  private async releaseRunMarker(job: Job<CodingAnalysisJobData> | undefined, verifyFailure = false): Promise<void> {
+    if (!job?.data.runId) return;
+    try {
+      if (verifyFailure && await job.getState() !== 'failed') return;
+      await this.cacheService.deleteIfMarkerMatches(getCodingAnalysisRunMarkerKey(job.data.cacheKey), job.data.runId);
+    } catch (error) {
+      this.logger.warn(`Could not release response analysis marker for job ${job.id}: ${getErrorMessage(error)}`);
+    }
   }
 
   private async getDefaultMirCode(workspaceId: number): Promise<number> {
@@ -73,31 +129,45 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     } = job.data;
     this.logger.log(`Processing response analysis for workspace ${workspaceId}...`);
 
+    const writer = await CodingAnalysisResultWriter.create(workspaceId);
+    const refreshLease = setInterval(() => {
+      writer.refreshLease().catch(error => {
+        this.logger.warn(`Could not renew response analysis file lease for job ${job.id}: ${getErrorMessage(error)}`);
+      });
+    }, CLEANUP_INTERVAL_MS).unref();
+
+    let publicationAttempted = false;
     try {
-      const analysis = await this.computeResponseAnalysis(workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, job);
-      if (job.data.runId) {
-        const currentRunId = await this.cacheService.get<string>(
-          getCodingAnalysisRunMarkerKey(cacheKey)
-        );
-        if (currentRunId !== job.data.runId) {
-          this.logger.log(
-            `Skipping stale response analysis cache write for workspace ${workspaceId} (job ${job.id})`
-          );
-          return analysis;
-        }
-      }
-
-      await this.cacheService.set(
-        cacheKey,
-        analysis,
-        CODING_ANALYSIS_CACHE_TTL_SECONDS
+      const analysis = await this.computeResponseAnalysis(
+        workspaceId, matchingFlags as ResponseMatchingFlag[], threshold, writer, job
       );
+      clearInterval(refreshLease);
+      await writer.finish();
 
-      this.logger.log(`Response analysis for workspace ${workspaceId} completed and cached.`);
-      return analysis;
+      publicationAttempted = true;
+      const published = job.data.runId ?
+        await this.cacheService.publishIfMarkerMatches(cacheKey, analysis, ANALYSIS_RESULT_TTL_SECONDS, {
+          key: getCodingAnalysisRunMarkerKey(cacheKey), value: job.data.runId
+        }) :
+        await this.cacheService.set(cacheKey, analysis, ANALYSIS_RESULT_TTL_SECONDS);
+
+      if (!published) {
+        if (!job.data.runId) throw new Error('Could not publish response analysis');
+        this.logger.log(`Discarding stale response analysis for workspace ${workspaceId} (job ${job.id})`);
+        await writer.discard();
+        return analysis.aggregationSummary;
+      }
+      await job.updateProgress(100);
+      return analysis.aggregationSummary;
     } catch (error) {
+      // A lost Redis reply can leave the pointer published. Keep the finished file until expiry.
+      if (!publicationAttempted) {
+        await writer.discard().catch(cause => this.logger.warn(getErrorMessage(cause)));
+      }
       this.logger.error(`Response analysis failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
+    } finally {
+      clearInterval(refreshLease);
     }
   }
 
@@ -105,294 +175,127 @@ export class CodingAnalysisProcessor extends WorkspaceWorkerHost {
     workspaceId: number,
     matchingFlags: ResponseMatchingFlag[],
     threshold: number,
-    job?: Job<CodingAnalysisJobData>
-  ): Promise<ResponseAnalysisDto> {
+    writer: CodingAnalysisResultWriter,
+    job: Job<CodingAnalysisJobData>
+  ): Promise<FileCodingAnalysis> {
     const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
     const defaultMirCode = await this.getDefaultMirCode(workspaceId);
     const emptyResponseContext =
       await this.emptyResponseSelectionService.createContext(workspaceId);
-    const { derivedVariableMap } = emptyResponseContext;
+    const { query, isAggregationApplied } = await this.createAnalysisQuery(workspaceId, exclusions, defaultMirCode);
+    const totalCandidates = await query.getCount();
 
-    // 1. Identify relevant Unit+Variable combinations
-    this.logger.log(`Identifying relevant variables for analysis in workspace ${workspaceId}...`);
-    const relevantVariablesQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .select('response.unitid', 'unitId')
-      .addSelect('response.variableid', 'variableId')
-      .distinct(true)
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.status_v1 IN (:...statuses)', {
-        statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
-      });
-    applyResolvedExclusionsToQuery(relevantVariablesQuery, exclusions);
-    const relevantVariables = await relevantVariablesQuery
-      .getRawMany();
-
-    if (relevantVariables.length === 0) {
-      this.logger.warn(`No relevant variables found for analysis in workspace ${workspaceId}`);
-      return this.createEmptyAnalysisResult(matchingFlags, threshold);
-    }
-
-    this.logger.log(`Found ${relevantVariables.length} variable groups to analyze. Processing in chunks...`);
-
-    const emptyResponses: EmptyResponseDto[] = [];
-    const duplicateValueGroups: DuplicateValueGroupDto[] = [];
+    let totalEmpty = 0;
+    let totalUncoded = 0;
     let totalProcessed = 0;
+    let reportedProgress = 0;
+    let manager: EntityManager | undefined;
 
-    // Check if aggregation is already applied (marked by code_v2 = -111)
-    const aggregationAppliedQuery = this.responseRepository
-      .createQueryBuilder('response')
-      .innerJoin('response.unit', 'unit')
-      .innerJoin('unit.booklet', 'booklet')
-      .innerJoin('booklet.bookletinfo', 'bookletinfo')
-      .innerJoin('booklet.person', 'person')
-      .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 });
-    applyResolvedExclusionsToQuery(aggregationAppliedQuery, exclusions);
-    const isAggregationApplied = await aggregationAppliedQuery
-      .getCount() > 0;
-
-    // 2. Process in chunks
-    const chunkSize = 50; // Number of variable groups per query
-    for (let i = 0; i < relevantVariables.length; i += chunkSize) {
-      const chunk = relevantVariables.slice(i, i + chunkSize);
-
-      const qb = this.responseRepository.createQueryBuilder('response')
-        .leftJoinAndSelect('response.unit', 'unit')
-        .leftJoinAndSelect('unit.booklet', 'booklet')
-        .leftJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
-        .leftJoinAndSelect('booklet.person', 'person')
-        .where('person.workspace_id = :workspaceId', { workspaceId })
-        .andWhere('person.consider = :consider', { consider: true })
-        .andWhere('response.status_v1 IN (:...statuses)', {
-          statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES
-        })
-        // Exclude already-aggregated responses (non-master duplicates) so they don't reappear after aggregation
-        .andWhere(
-          '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
-          { aggregatedCode: -111, emptyCode: defaultMirCode }
-        );
-      applyResolvedExclusionsToQuery(qb, exclusions);
-
-      qb.andWhere(new Brackets(qbInside => {
-        chunk.forEach((item, index) => {
-          const params = { [`uid${index}`]: item.unitId, [`vid${index}`]: item.variableId };
-          if (index === 0) {
-            qbInside.where(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
-          } else {
-            qbInside.orWhere(`response.unitid = :uid${index} AND response.variableid = :vid${index}`, params);
-          }
-        });
-      }));
-
-      const responsesBatch = await qb.getMany();
-      totalProcessed += responsesBatch.length;
-      const effectivelyEmptyResponses =
-        await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
-          responsesBatch,
-          emptyResponseContext
-        );
-
-      this.analyzeBatch(
-        responsesBatch,
-        matchingFlags,
-        emptyResponses,
-        duplicateValueGroups,
-        derivedVariableMap,
-        new Set(effectivelyEmptyResponses.map(response => response.id))
+    for await (const rows of readPostgresQueryBatches<ResponseRow>(
+      query, ANALYSIS_BATCH_SIZE, async snapshotManager => { manager = snapshotManager; }
+    )) {
+      const emptyResponses = await this.emptyResponseSelectionService.filterEffectivelyEmptyResponses(
+        rows.map(row => ({ ...row, unit: { name: row.unitName } })),
+        emptyResponseContext,
+        manager
       );
+      await writer.appendItems('empty', emptyResponses.map(row => this.toEmptyResponse(row)));
+      totalEmpty += emptyResponses.length;
+      totalUncoded += emptyResponses.filter(row => row.status_v2 === null).length;
 
-      // Explicitly free memory if possible (though GC handles function scope)
-      if ((i + chunkSize) % 500 === 0 || (i + chunkSize) >= relevantVariables.length) {
-        const processed = Math.min(i + chunkSize, relevantVariables.length);
-        const progress = Math.round((processed / relevantVariables.length) * 100);
-        if (job) {
-          await job.updateProgress(progress);
-        }
-        this.logger.log(`Processed ${processed}/${relevantVariables.length} variable groups...`);
-        if (global.gc) { global.gc(); }
+      const emptyIds = new Set(emptyResponses.map(row => row.id));
+      const candidates: DuplicateCandidate[] = [];
+      for (const row of rows) {
+        if (emptyIds.has(row.id) || !isAggregatableValue(row.value) ||
+          isDerivedAggregationVariable(emptyResponseContext.derivedVariableMap, row.unitName, row.variableid)) continue;
+
+        candidates.push([
+          row.unitName, row.variableid, normalizeAggregationValue(row.value, matchingFlags),
+          row.unitName ? null : row.unitid, row.unitAlias || null,
+          {
+            personLogin: row.personLogin || 'Unknown',
+            personCode: row.personCode || '',
+            bookletName: row.bookletName || 'Unknown',
+            responseId: row.id,
+            value: row.value || ''
+          }
+        ]);
+      }
+      await writer.appendCandidates(candidates);
+      totalProcessed += rows.length;
+      const progress = totalCandidates ? Math.min(98, Math.round((totalProcessed / totalCandidates) * 98)) : 0;
+      if (progress > reportedProgress) {
+        await job.updateProgress(progress);
+        reportedProgress = progress;
       }
     }
 
-    const mergedGroupsMap = new Map<string, DuplicateValueGroupDto>();
-    for (const group of duplicateValueGroups) {
-      const key = `${group.unitName}_${group.variableId}_${group.normalizedValue}`;
-      if (mergedGroupsMap.has(key)) {
-        // Merge occurrences into the existing group
-        mergedGroupsMap.get(key)!.occurrences.push(...group.occurrences);
-      } else {
-        mergedGroupsMap.set(key, { ...group, occurrences: [...group.occurrences] });
-      }
-    }
-
-    // Apply threshold filter on merged groups and build the final list
-    const mergedGroups = Array.from(mergedGroupsMap.values())
-      .filter(group => group.occurrences.length >= threshold);
-
-    // Sort results
-    emptyResponses.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      if (a.variableId !== b.variableId) return a.variableId.localeCompare(b.variableId);
-      return a.personLogin.localeCompare(b.personLogin);
-    });
-
-    mergedGroups.sort((a, b) => {
-      if (a.unitName !== b.unitName) return a.unitName.localeCompare(b.unitName);
-      return a.variableId.localeCompare(b.variableId);
-    });
-
-    const totalDuplicateResponses = mergedGroups.reduce(
-      (sum, group) => sum + group.occurrences.length,
-      0
-    );
-    const aggregationSummary = createAggregationSummary(
-      mergedGroups.length,
-      totalDuplicateResponses,
-      totalProcessed,
-      threshold,
-      matchingFlags
-    );
-
-    this.logger.log(`Analysis complete. Processed ${totalProcessed} responses. Found ${mergedGroups.length} duplicate groups.`);
+    const { groups, occurrences } = await writeDuplicateResults(writer, threshold);
 
     return {
-      emptyResponses: {
-        total: emptyResponses.length,
-        totalUncoded: emptyResponses.filter(r => !r.isCoded).length,
-        items: emptyResponses
-      },
+      storage: 'file',
+      resultId: writer.resultId,
+      emptyResponses: { total: totalEmpty, totalUncoded },
       duplicateValues: {
-        total: mergedGroups.length,
-        totalResponses: totalDuplicateResponses,
-        groups: mergedGroups,
+        total: groups,
+        totalResponses: occurrences,
         isAggregationApplied
       },
-      aggregationSummary,
-      matchingFlags: matchingFlags as unknown as string[],
-      analysisTimestamp: new Date().toISOString()
-    };
-  }
-
-  private analyzeBatch(
-    responses: ResponseEntity[],
-    matchingFlags: ResponseMatchingFlag[],
-    emptyResponses: EmptyResponseDto[],
-    duplicateValueGroups: DuplicateValueGroupDto[],
-    derivedVariableMap: Map<string, Set<string>>,
-    effectivelyEmptyResponseIds: Set<number>
-  ) {
-    // We group by Unit+Variable within this batch
-    // Since our query chunked by Unit+Variable, we can treat this batch as a collection of complete groups
-
-    // Group responses by unit+variable
-    const responsesByUnitVariable = new Map<string, ResponseEntity[]>();
-
-    for (const response of responses) {
-      // Empty Check - IMPROVED LOGIC
-      const value = response.value;
-
-      if (effectivelyEmptyResponseIds.has(response.id)) {
-        emptyResponses.push({
-          unitName: response.unit?.name || '',
-          unitAlias: response.unit?.alias || null,
-          variableId: response.variableid,
-          personLogin: response.unit?.booklet?.person?.login || '',
-          personCode: response.unit?.booklet?.person?.code || '',
-          personGroup: response.unit?.booklet?.person?.group || '',
-          bookletName: response.unit?.booklet?.bookletinfo?.name || 'Unknown',
-          responseId: response.id,
-          value: response.value,
-          isCoded: response.status_v2 !== null,
-          assignedCode: response.code_v2 ?? undefined
-        });
-        continue;
-      }
-
-      if (!isAggregatableValue(value)) {
-        continue; // Skip empty for duplicates
-      }
-
-      if (isDerivedAggregationVariable(
-        derivedVariableMap,
-        response.unit?.name || '',
-        response.variableid
-      )) {
-        continue;
-      }
-
-      const key = `${response.unit?.name || response.unitid}_${response.variableid}`;
-      if (!responsesByUnitVariable.has(key)) {
-        responsesByUnitVariable.set(key, []);
-      }
-      responsesByUnitVariable.get(key)!.push(response);
-    }
-
-    for (const [, groupResponses] of responsesByUnitVariable.entries()) {
-      const valueGroups = new Map<string, ResponseEntity[]>();
-      for (const response of groupResponses) {
-        const normalizedValue = normalizeAggregationValue(
-          response.value,
-          matchingFlags
-        );
-        if (!valueGroups.has(normalizedValue)) {
-          valueGroups.set(normalizedValue, []);
-        }
-        valueGroups.get(normalizedValue)!.push(response);
-      }
-
-      for (const [normalizedValue, valGroup] of valueGroups.entries()) {
-        const first = valGroup[0];
-        duplicateValueGroups.push({
-          unitName: first.unit?.name || '',
-          unitAlias: first.unit?.alias || null,
-          variableId: first.variableid,
-          normalizedValue,
-          originalValue: first.value || '',
-          occurrences: valGroup.map(r => ({
-            personLogin: r.unit?.booklet?.person?.login || 'Unknown',
-            personCode: r.unit?.booklet?.person?.code || '',
-            bookletName: r.unit?.booklet?.bookletinfo?.name || 'Unknown',
-            responseId: r.id,
-            value: r.value || ''
-          }))
-        });
-      }
-    }
-  }
-
-  private createEmptyAnalysisResult(
-    matchingFlags: ResponseMatchingFlag[],
-    threshold: number | null = null
-  ): ResponseAnalysisDto {
-    const result: ResponseAnalysisDto = {
-      emptyResponses: {
-        total: 0,
-        totalUncoded: 0,
-        items: []
-      },
-      duplicateValues: {
-        total: 0,
-        totalResponses: 0,
-        groups: [],
-        isAggregationApplied: false
-      },
       aggregationSummary: createAggregationSummary(
-        0,
-        0,
-        0,
-        threshold,
-        matchingFlags
+        groups, occurrences, totalProcessed, threshold, matchingFlags
       ),
-      matchingFlags: matchingFlags as unknown as string[],
+      matchingFlags,
       analysisTimestamp: new Date().toISOString()
     };
+  }
 
-    return result;
+  private async createAnalysisQuery(workspaceId: number, exclusions: ResolvedWorkspaceExclusions, defaultMirCode: number) {
+    const scopedQuery = this.responseRepository.createQueryBuilder('response')
+      .innerJoin('response.unit', 'unit')
+      .innerJoin('unit.booklet', 'booklet')
+      .innerJoin('booklet.bookletinfo', 'bookletinfo')
+      .innerJoin('booklet.person', 'person')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = :consider', { consider: true });
+    applyResolvedExclusionsToQuery(scopedQuery, exclusions);
+
+    const isAggregationApplied = await scopedQuery.clone()
+      .andWhere('response.code_v2 = :aggregatedCode', { aggregatedCode: -111 })
+      .getExists();
+    const query = scopedQuery
+      .andWhere('response.status_v1 IN (:...statuses)', { statuses: MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES })
+      .andWhere(
+        '(response.code_v2 IS NULL OR (response.code_v2 != :aggregatedCode AND response.code_v2 != :emptyCode))',
+        { aggregatedCode: -111, emptyCode: defaultMirCode }
+      );
+    query.select([
+      'response.id AS id', 'response.unitid AS unitid', 'response.variableid AS variableid',
+      'response.value AS value', 'response.status_v1 AS status_v1',
+      'response.status_v2 AS status_v2', 'response.code_v2 AS code_v2',
+      'unit.name AS "unitName"', 'unit.alias AS "unitAlias"', 'person.login AS "personLogin"',
+      'person.code AS "personCode"', 'person.group AS "personGroup"', 'bookletinfo.name AS "bookletName"'
+    ])
+      .orderBy('unit.name COLLATE "C"', 'ASC')
+      .addOrderBy('response.variableid COLLATE "C"', 'ASC')
+      .addOrderBy('person.login', 'ASC')
+      .addOrderBy('response.id', 'ASC');
+
+    return { query, isAggregationApplied };
+  }
+
+  private toEmptyResponse(row: ResponseRow): EmptyResponseDto {
+    return {
+      unitName: row.unitName,
+      unitAlias: row.unitAlias || null,
+      variableId: row.variableid,
+      personLogin: row.personLogin || '',
+      personCode: row.personCode || '',
+      personGroup: row.personGroup || '',
+      bookletName: row.bookletName || 'Unknown',
+      responseId: row.id,
+      value: row.value,
+      isCoded: row.status_v2 !== null,
+      assignedCode: row.code_v2 === null ? undefined : Number(row.code_v2)
+    };
   }
 }

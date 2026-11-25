@@ -196,7 +196,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
             analysis_rows."variableId" AS "variableId",
             COUNT(*) AS "totalCount",
             SUM(CASE WHEN ${this.getValidResponseSql()} THEN 1 ELSE 0 END) AS "validCount",
-            SUM(CASE WHEN ${getEmptyVariableAnalysisValueSql('analysis_rows."rawValue"')} THEN 1 ELSE 0 END) AS "emptyCount",
+            COUNT(*) FILTER (WHERE analysis_rows."rawValueIsEmpty") AS "emptyCount",
             COUNT(DISTINCT COALESCE(analysis_rows."value", '')) AS "distinctValueCount"
           FROM (${analysisSql.sql}) analysis_rows
           GROUP BY analysis_rows."unitName", analysis_rows."variableId"
@@ -766,7 +766,7 @@ export class VariableAnalysisProcessor extends WorkspaceWorkerHost {
       .addSelect('unit.name', 'unitName')
       .addSelect('response.variableid', 'variableId')
       .addSelect(columns.value, 'value')
-      .addSelect('response.value', 'rawValue')
+      .addSelect(getEmptyVariableAnalysisValueSql('response.value'), 'rawValueIsEmpty')
       .addSelect(columns.status, 'status')
       .addSelect(`(${columns.valid})`, 'analysisValid')
       .addSelect(

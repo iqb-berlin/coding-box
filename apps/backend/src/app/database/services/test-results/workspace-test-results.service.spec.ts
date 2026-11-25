@@ -350,6 +350,45 @@ describe('WorkspaceTestResultsService', () => {
     }
   });
 
+  it('answers a scoped person search without executing the answer-value scans', async () => {
+    const person = mockQueryBuilder();
+    const response = mockQueryBuilder();
+    person.getCount.mockResolvedValue(1);
+    person.getRawMany.mockResolvedValue([{ personId: 11, personLogin: 'sample-login' }]);
+    (personsRepository.createQueryBuilder as jest.Mock).mockReturnValue(person);
+    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(response);
+
+    await expect(service.quickSearchTestResults(1, 'sample-login', 8, 'person')).resolves.toMatchObject({
+      persons: [{ personLogin: 'sample-login' }],
+      totals: {
+        person: 1, booklet: 0, unit: 0, response: 0
+      }
+    });
+    expect(person.setParameter).toHaveBeenCalledWith('exactLogin', 'sample-login');
+    expect(response.getCount).not.toHaveBeenCalled();
+    expect(response.getRawMany).not.toHaveBeenCalled();
+  });
+
+  it('loads one extra response for the preview without computing an exact count or sorting the matches', async () => {
+    const response = mockQueryBuilder();
+    response.getRawMany.mockResolvedValue([
+      { responseId: 101, variableId: '01' },
+      { responseId: 102, variableId: '001' },
+      { responseId: 103, variableId: '01a' }
+    ]);
+    (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(response);
+
+    await expect(service.quickSearchTestResults(1, '01', 2, 'response', true))
+      .resolves.toMatchObject({
+        responses: [{ id: 101 }, { id: 102 }],
+        totals: { response: 2 },
+        hasMoreResponses: true
+      });
+    expect(response.getCount).not.toHaveBeenCalled();
+    expect(response.orderBy).not.toHaveBeenCalled();
+    expect(response.limit).toHaveBeenCalledWith(3);
+  });
+
   describe('hasGeogebraResponses', () => {
     it.each([true, false])('returns %s from an existence query without counting matches', async exists => {
       const qb = mockQueryBuilder();
@@ -873,7 +912,10 @@ describe('WorkspaceTestResultsService', () => {
 
       const filterOptions = new TestResultsFilterOptionsService(responseRepository, dataSource, workspaceExclusionService);
       const result = await filterOptions.findFlatResponseFilterOptions(1, {
-        responseValue: 'needle'
+        responseValue: 'needle',
+        unit: '"quoted"',
+        longLoading: 'yes',
+        sessionIds: '42'
       });
 
       expect(qb.where).toHaveBeenCalledWith(
@@ -894,6 +936,15 @@ describe('WorkspaceTestResultsService', () => {
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
       );
+
+      expect(qb.andWhere).toHaveBeenCalledWith('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: '%"quoted"%' });
+      expect(qb.andWhere).toHaveBeenCalledWith(
+        expect.stringContaining('FROM unitlog ul_started'),
+        { longLoadingThresholdMs: 5000 }
+      );
+      const filterSql = qb.andWhere.mock.calls.map(([condition]) => condition).join('\n');
+      expect(filterSql).not.toContain('s.loadcompletems');
+      expect(filterSql).not.toContain('s.id IN (:...sessionIds)');
 
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
@@ -1936,7 +1987,7 @@ describe('WorkspaceTestResultsService', () => {
 
       expect(countQb.leftJoin).not.toHaveBeenCalledWith('unit.tags', 'unitTag');
       expect(countQb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('FROM unit_tag count_unit_tag'),
+        expect.stringContaining('FROM unit_tag matching_tag'),
         { tags: '%review%' }
       );
       expect(countQb.select).toHaveBeenCalledWith(
@@ -2543,6 +2594,52 @@ describe('WorkspaceTestResultsService', () => {
         expect((error as ReplayResourceNotFoundError).code).toBe(code);
       }
     };
+
+    it('rebuilds legacy cached responses with named player statuses and reuses the updated result', async () => {
+      const connector = 'login@code@group@booklet';
+      const rows = [
+        {
+          variableid: 'answer', value: 'text', status: 3, subform: 'elementCodes'
+        },
+        {
+          variableid: 'seen', value: null, status: 2, subform: 'elementCodes'
+        },
+        {
+          variableid: 'empty', value: null, status: 0, subform: 'elementCodes'
+        },
+        {
+          variableid: 'unknown', value: null, status: 99, subform: 'elementCodes'
+        }
+      ];
+      const cached = new Map<string, { responses: { id: string; content: string }[] }>();
+      cached.set(`1:${connector}:unit:v7`, {
+        responses: [{
+          id: 'elementCodes',
+          content: JSON.stringify([{ id: 'answer', value: 'text', status: 3 }])
+        }]
+      });
+      cacheService.get.mockImplementation(key => cached.get(key));
+      cacheService.set.mockImplementation((key, result) => cached.set(key, result));
+      const unitQb = mockQueryBuilder();
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      const responseQb = mockQueryBuilder();
+      responseQb.getRawMany.mockResolvedValue(rows);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+
+      const result = await service.findUnitResponse(1, connector, 'unit');
+
+      expect(result.responses).toHaveLength(1);
+      expect(result.responses[0].id).toBe('elementCodes');
+      expect(JSON.parse(result.responses[0].content)).toEqual([
+        { id: 'answer', value: 'text', status: 'VALUE_CHANGED' },
+        { id: 'seen', value: null, status: 'DISPLAYED' },
+        { id: 'empty', value: null, status: 'UNSET' },
+        { id: 'unknown', value: null, status: 'UNSET' }
+      ]);
+      await expect(service.findUnitResponse(1, connector, 'unit')).resolves.toEqual(result);
+      expect(responseQb.getRawMany).toHaveBeenCalledTimes(1);
+    });
 
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({

@@ -2,12 +2,6 @@
   "description": "Known legacy schema/Entity differences. Do not add exceptions without checking stored data and domain optionality. New drift fails the PostgreSQL contract test.",
   "differences": [
     {
-      "table": "session",
-      "column": "bookletid",
-      "entityNullable": true,
-      "databaseNullable": false
-    },
-    {
       "table": "workspace",
       "column": "settings",
       "entityNullable": false,
@@ -28,12 +22,6 @@
     {
       "table": "persons",
       "column": "booklets",
-      "entityNullable": false,
-      "databaseNullable": true
-    },
-    {
-      "table": "persons",
-      "column": "source",
       "entityNullable": false,
       "databaseNullable": true
     },

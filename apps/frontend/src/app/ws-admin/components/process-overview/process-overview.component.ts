@@ -1,4 +1,7 @@
-import { Subscription } from 'rxjs';
+import {
+  catchError, concat, distinctUntilChanged, EMPTY, exhaustMap, map, Observable, of,
+  startWith, Subscription, switchMap, takeUntil, takeWhile, timer
+} from 'rxjs';
 import {
   Component, OnInit, inject, AfterViewInit, signal, viewChild, ChangeDetectionStrategy, DestroyRef
 } from '@angular/core';
@@ -24,6 +27,16 @@ import { ConfirmDialogComponent, ConfirmDialogData } from '../../../shared/dialo
 
 type ProcessStatus = ProcessDto['status'];
 type ProcessActionKind = 'cancel' | 'pause' | 'remove';
+type ProcessOverviewData = { workspaceId: number; uploadPending$?: Observable<boolean> };
+
+type RefreshScope = 'all' | 'upload' | 'settled';
+const PROCESS_REFRESH_INTERVAL_MS = 2000;
+const TERMINAL_REFRESH_WINDOW_MS = 12_000;
+
+function withLatestUpload(jobs: ProcessDto[], upload: ProcessDto | null): ProcessDto[] {
+  const otherJobs = jobs.filter(process => process.queueName !== 'test-files-upload');
+  return upload ? [...otherJobs, upload].sort((a, b) => b.timestamp - a.timestamp) : otherJobs;
+}
 
 interface ProcessStatusPresentation {
   labelKey: string;
@@ -118,6 +131,10 @@ const QUEUE_PRESENTATIONS: Record<string, QueuePresentation> = {
     labelKey: 'process-overview.queues.test-results-upload.label',
     descriptionKey: 'process-overview.queues.test-results-upload.description'
   },
+  'test-files-upload': {
+    labelKey: 'ui-text.process-overview.test-files-upload',
+    descriptionKey: 'ui-text.process-overview.test-files-upload-description'
+  },
   'codebook-generation': {
     labelKey: 'process-overview.queues.codebook-generation.label',
     descriptionKey: 'process-overview.queues.codebook-generation.description'
@@ -156,6 +173,9 @@ const DETAIL_LABEL_KEYS: Record<string, string> = {
   operation: 'process-overview.details.operation',
   acpId: 'process-overview.details.acpId',
   fileCount: 'process-overview.details.fileCount',
+  uploadedFileCount: 'ui-text.process-overview.uploaded-file-count',
+  failedFileCount: 'ui-text.process-overview.failed-file-count',
+  conflictCount: 'ui-text.process-overview.conflict-count',
   taskId: 'process-overview.details.taskId',
   resultType: 'process-overview.details.resultType',
   overwriteExisting: 'process-overview.details.overwriteExisting',
@@ -257,12 +277,13 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private snackBar = inject(MatSnackBar);
   private translateService = inject(TranslateService);
 
-  data: { workspaceId: number } = inject(MAT_DIALOG_DATA);
+  data: ProcessOverviewData = inject(MAT_DIALOG_DATA);
 
   workspaceId: number = this.data.workspaceId;
   processes = new MatTableDataSource<ProcessDto>([]);
   protected displayedColumns: string[] = ['queueName', 'status', 'progress', 'time', 'details', 'actions'];
   protected readonly isLoading = signal(false);
+  protected readonly loadFailed = signal(false);
   readonly lastLoadedAt = signal(Date.now());
 
   // Filter properties
@@ -275,10 +296,20 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   readonly paginator = viewChild.required(MatPaginator);
 
   ngOnInit(): void {
-    if (this.workspaceId) {
-      this.loadProcesses();
-    }
     this.setupFilterPredicate();
+    if (!this.workspaceId) return;
+    const pending = this.data.uploadPending$;
+    if (!pending) {
+      this.loadProcesses();
+      return;
+    }
+    pending.pipe(
+      distinctUntilChanged(),
+      switchMap(isPending => (isPending ?
+        timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS).pipe(map(() => 'upload' as const), startWith('all' as const)) :
+        of('settled' as const))),
+      takeUntilDestroyed(this.destroyRef)
+    ).subscribe(scope => this.loadProcesses(scope));
   }
 
   ngAfterViewInit() {
@@ -328,25 +359,43 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
     this.applyFilter();
   }
 
-  loadProcesses(): void {
+  private followSettledUpload(jobs: ProcessDto[]): Observable<ProcessDto[]> {
+    const active = jobs.find(job => job.queueName === 'test-files-upload' && job.status === 'active');
+    if (!active) return of(jobs);
+
+    // The upload response can arrive before Redis publishes the terminal state.
+    const updates = timer(PROCESS_REFRESH_INTERVAL_MS, PROCESS_REFRESH_INTERVAL_MS).pipe(
+      exhaustMap(() => this.processesService.getFileUpload(this.workspaceId).pipe(catchError(() => EMPTY))),
+      takeWhile(upload => upload?.id === active.id && upload.status === 'active', true),
+      map(upload => withLatestUpload(jobs, upload)),
+      takeUntil(timer(TERMINAL_REFRESH_WINDOW_MS))
+    );
+    return concat(of(jobs), updates);
+  }
+
+  loadProcesses(scope: RefreshScope = 'all'): void {
+    if (!this.workspaceId || (scope === 'upload' && this.loadRequest && !this.loadRequest.closed)) return;
     this.loadRequest?.unsubscribe();
-    if (!this.workspaceId) return;
-    this.isLoading.set(true);
-    this.loadRequest = this.processesService.getProcesses(this.workspaceId).pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
+    if (scope !== 'upload') {
+      this.isLoading.set(true);
+      this.loadFailed.set(false);
+    }
+    const request = scope === 'upload' ?
+      this.processesService.getFileUpload(this.workspaceId).pipe(map(upload => withLatestUpload(this.processes.data, upload))) :
+      this.processesService.getProcesses(this.workspaceId).pipe(
+        switchMap(jobs => (scope === 'settled' ? this.followSettledUpload(jobs) : of(jobs)))
+      );
+    this.loadRequest = request.pipe(takeUntilDestroyed(this.destroyRef)).subscribe({
       next: data => {
         this.processes.data = data;
         this.availableTypes.set([...new Set(data.map(d => d.queueName))]
           .sort((a, b) => this.getQueueLabel(a).localeCompare(this.getQueueLabel(b), 'de')));
         this.lastLoadedAt.set(Date.now());
+        if (this.isLoading()) this.applyFilter();
         this.isLoading.set(false);
-        this.applyFilter();
       },
       error: () => {
-        this.snackBar.open(
-          this.translateService.instant('process-overview.messages.load-error'),
-          this.translateService.instant('close'),
-          { duration: 3000 }
-        );
+        if (scope !== 'upload') this.loadFailed.set(true);
         this.isLoading.set(false);
       }
     });
@@ -579,5 +628,16 @@ export class ProcessOverviewComponent implements OnInit, AfterViewInit {
   private getDetailOrder(key: string): number {
     const index = DETAIL_ORDER.indexOf(key);
     return index === -1 ? Number.MAX_SAFE_INTEGER : index;
+  }
+}
+
+export function openWorkspaceProcessOverview(dialog: MatDialog, data: ProcessOverviewData): void {
+  if (data.workspaceId) {
+    dialog.open(ProcessOverviewComponent, {
+      width: '1200px',
+      maxWidth: '95vw',
+      maxHeight: '90vh',
+      data
+    });
   }
 }

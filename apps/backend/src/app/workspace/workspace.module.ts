@@ -11,6 +11,7 @@ import { WorkspaceTestcenterFileImportService } from '../database/services/works
 import { WorkspaceXmlFileUploadService } from '../database/services/workspace/workspace-xml-file-upload.service';
 import { WorkspaceResourceFileUploadService } from '../database/services/workspace/workspace-resource-file-upload.service';
 import { WorkspaceFileUploadService } from '../database/services/workspace/workspace-file-upload.service';
+import { WorkspaceFileUploadProcessService } from '../database/services/workspace/workspace-file-upload-process.service';
 import { WorkspaceTestTakersValidationService } from '../database/services/workspace/workspace-test-takers-validation.service';
 import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
 import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
@@ -159,6 +160,7 @@ import { CodingModule } from '../coding/coding.module';
     WorkspaceXmlFileUploadService,
     WorkspaceResourceFileUploadService,
     WorkspaceFileUploadService,
+    WorkspaceFileUploadProcessService,
     WorkspaceTestTakersValidationService,
 
     WorkspaceXmlSchemaValidationService,
@@ -208,6 +210,7 @@ import { CodingModule } from '../coding/coding.module';
     CodingModule,
     WorkspaceCoreService,
     WorkspaceFilesService,
+    WorkspaceFileUploadProcessService,
     WorkspaceTestResultsService,
     WorkspaceUsersService,
     WorkspaceCodingService,

@@ -13,6 +13,7 @@ import {
   TestResultsDeleteRequestDto,
   TestResultsResponseCleanupRequestDto
 } from '../../../../../../../api-dto/test-results/test-results-deletion.dto';
+import type { QuickSearchResult, QuickSearchResultKind } from './quick-search-result';
 
 export interface TestResultsResponse {
   data: TestResultItem[];
@@ -184,37 +185,7 @@ export interface TestResultsOverviewResponse {
   sessionScreenCounts: Record<string, number>;
 }
 
-export type QuickSearchResultKind = 'person' | 'booklet' | 'unit' | 'response';
-
-export interface QuickSearchResultItem {
-  kind: QuickSearchResultKind;
-  id: number;
-  label: string;
-  secondaryLabel?: string;
-  personId?: number;
-  personLogin?: string;
-  personCode?: string;
-  personGroup?: string;
-  bookletId?: number;
-  bookletName?: string;
-  unitId?: number;
-  unitName?: string;
-  unitAlias?: string | null;
-  responseId?: number;
-  variableId?: string;
-  responseValue?: string;
-  responseStatus?: string;
-}
-
-export interface QuickSearchResult {
-  query: string;
-  limit: number;
-  persons: QuickSearchResultItem[];
-  booklets: QuickSearchResultItem[];
-  units: QuickSearchResultItem[];
-  responses: QuickSearchResultItem[];
-  totals: Record<QuickSearchResultKind, number>;
-}
+export type { QuickSearchResult, QuickSearchResultItem, QuickSearchResultKind } from './quick-search-result';
 
 @Injectable({
   providedIn: 'root'
@@ -349,34 +320,33 @@ export class TestResultService {
   quickSearch(
     workspaceId: number,
     query: string,
-    limit: number = 8
+    limit: number = 8,
+    kind?: QuickSearchResultKind
   ): Observable<QuickSearchResult> {
     const trimmedQuery = String(query || '').trim();
-    const params = new HttpParams()
-      .set('q', trimmedQuery)
-      .set('limit', String(limit));
-
-    return this.http
-      .get<QuickSearchResult>(
-        `${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`,
-        { params }
-      )
-      .pipe(
-        catchError(() => of({
-          query: trimmedQuery,
-          limit,
-          persons: [],
-          booklets: [],
-          units: [],
-          responses: [],
-          totals: {
-            person: 0,
-            booklet: 0,
-            unit: 0,
-            response: 0
-          }
-        }))
-      );
+    const params = new HttpParams().set('q', trimmedQuery).set('limit', String(limit));
+    const scopedParams = kind ? params.set('kind', kind) : params;
+    const request = this.http
+      .get<QuickSearchResult>(`${this.serverUrl}admin/workspace/${workspaceId}/test-results/quick-search`, {
+        params: kind === 'response' ? scopedParams.set('responsePreview', 'true') : scopedParams
+      });
+    if (kind) return request;
+    return request.pipe(
+      catchError(() => of({
+        query: trimmedQuery,
+        limit,
+        persons: [],
+        booklets: [],
+        units: [],
+        responses: [],
+        totals: {
+          person: 0,
+          booklet: 0,
+          unit: 0,
+          response: 0
+        }
+      }))
+    );
   }
 
   previewDeleteTestResults(

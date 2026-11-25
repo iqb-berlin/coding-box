@@ -1,5 +1,6 @@
 import { ConflictException, Logger } from '@nestjs/common';
 import AdmZip = require('adm-zip');
+import { MoreThan } from 'typeorm';
 import FileUpload from '../../entities/file_upload.entity';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
@@ -38,21 +39,25 @@ function fixture() {
   const runner = {
     manager,
     connect: jest.fn().mockResolvedValue(undefined),
-    query: jest.fn(async (sql: string) => {
+    query: jest.fn(async (sql: string): Promise<{ locked?: boolean; upload_order?: string }[]> => {
+      if (sql.includes('pg_current_xact_id')) return [{ upload_order: '42' }];
       events.push(sql.includes('pg_try') ? 'lock' : 'unlock');
       return [{ locked: true }];
     }),
     release: jest.fn(async () => { events.push('release'); })
   };
   const ordinaryFiles = {
-    manager: { connection: { createQueryRunner: jest.fn(() => runner) } },
+    manager: { dataSource: { createQueryRunner: jest.fn(() => runner) } },
     findOne: jest.fn(),
     find: jest.fn(),
     upsert: jest.fn(),
     createQueryBuilder: jest.fn()
   };
   const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); }) };
-  const cache = { delete: jest.fn(async () => { events.push('exclusion'); }) };
+  const cache = {
+    delete: jest.fn(async () => { events.push('exclusion'); })
+  };
+  const statusRedis = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) };
   const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); }) };
   const statistics = {
     invalidateCache: jest.fn(async () => { events.push('statistics'); }),
@@ -63,10 +68,10 @@ function fixture() {
   const processCache = { invalidateWorkspaceCaches: jest.fn(() => events.push('process-cache')) };
   const schema = { validateXmlViaXsdUrl: jest.fn().mockResolvedValue({ schemaValid: true, errors: [] }) };
   const service = createWorkspaceFilesService(
-    ordinaryFiles as never, {} as never, {} as never, {} as never, statistics as never, schema as never, new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache as never, results as never, metadata as never, codingFreshness as never, codingCache as never, processCache as never
+    ordinaryFiles as never, {} as never, {} as never, {} as never, statistics as never, schema as never, new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache as never, results as never, metadata as never, codingFreshness as never, codingCache as never, processCache as never, statusRedis
   );
   return {
-    service, events, query, runner, manager, lockedFiles, ordinaryFiles, metadata, cache, results, statistics, codingFreshness, codingCache, processCache, schema
+    service, events, query, runner, manager, lockedFiles, ordinaryFiles, metadata, cache, results, statistics, codingFreshness, codingCache, processCache, schema, statusRedis
   };
 }
 
@@ -82,7 +87,7 @@ describe('workspace file workflow boundaries', () => {
     const f = fixture();
     f.runner.query.mockResolvedValue([{ locked: false }]);
     const action = {
-      upload: () => f.service.uploadTestFiles(7, [file('A.VOCS', '{}')], false),
+      upload: () => f.service.uploadTestFiles(7, [file('A.VOCS', '{}')], false, undefined, { trackProgress: true }),
       delete: () => f.service.deleteTestFiles(7, ['1']),
       dummy: () => f.service.createDummyTestTakerFile(7),
       testcenter: () => f.service.testCenterImport([{ workspace_id: 7, file_id: 'A.VOCS' }])
@@ -93,6 +98,7 @@ describe('workspace file workflow boundaries', () => {
     expect(f.manager.getRepository).not.toHaveBeenCalled();
     expect(f.lockedFiles.upsert).not.toHaveBeenCalled();
     expect(f.cache.delete).not.toHaveBeenCalled();
+    expect(f.statusRedis.eval).not.toHaveBeenCalled();
   });
 
   it('writes and marks freshness through the held lock manager, then invalidates caches before release', async () => {
@@ -136,6 +142,52 @@ describe('workspace file workflow boundaries', () => {
     expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
     expect(f.statistics.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(7);
     expect(f.runner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports intermediate progress for a single archive before processing its last batch', async () => {
+    const f = fixture();
+    const zip = new AdmZip();
+    for (let i = 0; i < 50; i += 1) {
+      zip.addFile(`${String(i).padStart(2, '0')}.voud`, Buffer.from('{}'));
+    }
+    const result = await f.service.uploadTestFiles(
+      7, [file('archive.zip', zip.toBuffer(), 'application/zip')], false, undefined, { trackProgress: true }
+    );
+
+    expect(result.uploaded).toBe(50);
+    expect(f.statusRedis.eval.mock.calls.map(([, , , , snapshot]) => {
+      const { status, progress } = JSON.parse(snapshot);
+      return [status, progress];
+    }))
+      .toEqual([['active', 0], ['active', 50], ['active', 99], ['completed', 100]]);
+    expect(f.statusRedis.eval.mock.invocationCallOrder[1]).toBeLessThan(f.lockedFiles.upsert.mock.invocationCallOrder[25]);
+  });
+
+  it('counts finished individual files while a ZIP in the same batch is still running', async () => {
+    const f = fixture();
+    const zip = new AdmZip();
+    for (let i = 0; i < 50; i += 1) zip.addFile(`entry-${i}.voud`, Buffer.from('{}'));
+    const files = [
+      ...Array.from({ length: 4 }, (_, i) => file(`single-${i}.voud`, '{}')),
+      file('archive.zip', zip.toBuffer(), 'application/zip')
+    ];
+
+    await expect(f.service.uploadTestFiles(7, files, false, undefined, { trackProgress: true }))
+      .resolves.toMatchObject({ uploaded: 54 });
+    const progress = f.statusRedis.eval.mock.calls.map(([, , , , snapshot]) => JSON.parse(snapshot).progress);
+    expect(progress).toEqual([0, 20, 40, 60, 80, 90, 99, 100]);
+  });
+
+  it('imports files and releases the workspace lock while status commands are pending', async () => {
+    const f = fixture();
+    f.statusRedis.eval.mockReturnValue(new Promise(() => {}));
+
+    await expect(f.service.uploadTestFiles(
+      7, [file('A.VOCS', '{"variableCodings":[]}')], false, undefined, { trackProgress: true }
+    )).resolves.toMatchObject({ uploaded: 1 });
+
+    expect(f.statusRedis.eval).toHaveBeenCalledTimes(3);
+    expect(f.events.slice(-2)).toEqual(['unlock', 'release']);
   });
 
   it.each(['schemer', 'player'])('keeps HTML %s identification and overwrite filtering', async kind => {
@@ -284,18 +336,18 @@ describe('TestTakers validation after workflow extraction', () => {
   </TestTakers>`;
   const makeValidation = () => {
     const files = { find: jest.fn().mockResolvedValue([{ data: xml }]) };
-    const persons = { find: jest.fn().mockResolvedValue([]) };
-    const unitsQuery = { innerJoin: jest.fn().mockReturnThis(), where: jest.fn().mockReturnThis(), getMany: jest.fn().mockResolvedValue([]) };
-    const units = { createQueryBuilder: jest.fn(() => unitsQuery) };
-    const responses = { count: jest.fn().mockResolvedValue(0) };
+    const persons = { find: jest.fn().mockResolvedValue([]), countBy: jest.fn().mockResolvedValue(0) };
+    const responses = { existsBy: jest.fn().mockResolvedValue(false) };
+    const service = new WorkspaceTestTakersValidationService(files as never, persons as never, responses as never);
     return {
-      files, persons, units, unitsQuery, responses, service: new WorkspaceTestTakersValidationService(files as never, persons as never, units as never, responses as never)
+      files, persons, responses, service
     };
   };
 
   it('counts all groups, only accepted login modes and nonempty booklet codes', async () => {
     const f = makeValidation();
     f.persons.find.mockResolvedValue([{ group: 'G1', login: 'L1', code: 'a' }, { group: 'G3', login: 'ignored', code: 'b' }]);
+    f.persons.countBy.mockResolvedValue(2);
     const progress = jest.fn();
     await expect(f.service.validateTestTakers(7, progress)).resolves.toEqual({
       testTakersFound: true,
@@ -306,15 +358,41 @@ describe('TestTakers validation after workflow extraction', () => {
         group: 'G3', login: 'ignored', code: 'b', reason: 'Person not found in TestTakers XML'
       }]
     });
-    expect(progress.mock.calls).toEqual([[10], [30], [60]]);
-    expect(f.persons.find).toHaveBeenCalledWith({ where: { workspace_id: 7, consider: true } });
+    expect(progress.mock.calls).toEqual([[10], [30], [60], [95]]);
+    expect(f.persons.find).toHaveBeenCalledWith({
+      select: {
+        id: true, group: true, login: true, code: true
+      },
+      where: { workspace_id: 7, consider: true },
+      order: { id: 'ASC' },
+      take: 500
+    });
+  });
+
+  it('reads person identifiers in bounded pages without selecting booklet raw data', async () => {
+    const f = makeValidation();
+    f.persons.countBy.mockResolvedValue(501);
+    f.persons.find
+      .mockResolvedValueOnce(Array.from({ length: 500 }, (_, i) => ({ id: i + 1, group: 'G1', login: 'L1' })))
+      .mockResolvedValueOnce([{
+        id: 501, group: 'other', login: 'L1', code: 'missing'
+      }]);
+    await expect(f.service.validateTestTakers(7)).resolves.toMatchObject({
+      missingPersons: [expect.objectContaining({ code: 'missing' })]
+    });
+    expect(f.persons.find).toHaveBeenNthCalledWith(2, {
+      select: {
+        id: true, group: true, login: true, code: true
+      },
+      where: { workspace_id: 7, consider: true, id: MoreThan(500) },
+      order: { id: 'ASC' },
+      take: 500
+    });
   });
 
   it('paginates only eligible groups while reporting totals and progress for all groups', async () => {
     const f = makeValidation();
-    f.persons.find.mockResolvedValueOnce([{ id: 10 }]).mockResolvedValueOnce([]);
-    f.unitsQuery.getMany.mockResolvedValueOnce([{ id: 100 }]);
-    f.responses.count.mockResolvedValueOnce(2);
+    f.responses.existsBy.mockResolvedValueOnce(true);
     const progress = jest.fn();
     await expect(f.service.validateGroupResponses(7, 2, 1, progress)).resolves.toEqual({
       testTakersFound: true,
@@ -325,24 +403,12 @@ describe('TestTakers validation after workflow extraction', () => {
       page: 2,
       limit: 1
     });
-    expect(f.persons.find.mock.calls).toEqual([
-      [{ where: { workspace_id: 7, group: 'G1', consider: true } }],
-      [{ where: { workspace_id: 7, group: 'G2', consider: true } }]
+    expect(f.persons.find).not.toHaveBeenCalled();
+    expect(f.responses.existsBy.mock.calls).toEqual([
+      [{ unit: { booklet: { person: { workspace_id: 7, group: 'G1', consider: true } } } }],
+      [{ unit: { booklet: { person: { workspace_id: 7, group: 'G2', consider: true } } } }]
     ]);
     expect(progress.mock.calls).toEqual([[10], [20], [40], [67], [95]]);
-    expect(f.responses.count).toHaveBeenCalledTimes(1);
-  });
-
-  it('retains 1000-ID query batches for persons and responses', async () => {
-    const f = makeValidation();
-    f.files.find.mockResolvedValue([{ data: '<TestTakers><Group id="G"><Login mode="run-hot-return"/></Group></TestTakers>' }]);
-    f.persons.find.mockResolvedValue(Array.from({ length: 1001 }, (_, id) => ({ id })));
-    f.unitsQuery.getMany.mockResolvedValueOnce(Array.from({ length: 1000 }, (_, id) => ({ id }))).mockResolvedValueOnce([{ id: 1000 }]);
-    f.responses.count.mockResolvedValueOnce(0).mockResolvedValueOnce(1);
-    await expect(f.service.validateGroupResponses(7)).resolves.toEqual(expect.objectContaining({ allGroupsHaveResponses: true }));
-    expect(f.unitsQuery.where.mock.calls[0][1].personIdsBatch).toHaveLength(1000);
-    expect(f.unitsQuery.where.mock.calls[1][1].personIdsBatch).toEqual([1000]);
-    expect(f.responses.count).toHaveBeenCalledTimes(2);
   });
 
   it('preserves early empty results without normalizing requested pagination', async () => {

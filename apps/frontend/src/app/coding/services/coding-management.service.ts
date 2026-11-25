@@ -28,6 +28,7 @@ import { CodingStatistics } from '../../../../../../api-dto/coding/coding-statis
 import { ResponseEntity } from '../../shared/models/response-entity.model';
 import { ExportFormat } from '../components/export-dialog/export-dialog.component';
 import { CodingBackgroundJobsService } from './coding-background-jobs.service';
+import { ActiveStatisticsFetch, pollCodingStatisticsStatus } from './coding-statistics-job-polling';
 
 export type StatisticsVersion = 'v1' | 'v2' | 'v3';
 export type ResponseSource = 'base' | 'derived' | 'all';
@@ -69,11 +70,6 @@ const DOWNLOAD_CANCELLED_ERROR_CODE = 'download-cancelled';
 
 type DownloadCancelledError = Error & {
   code: typeof DOWNLOAD_CANCELLED_ERROR_CODE;
-};
-
-type ActiveStatisticsFetch = {
-  workspaceId: number;
-  subscription: Subscription;
 };
 
 function createDownloadCancelledError(): DownloadCancelledError {
@@ -258,9 +254,10 @@ export class CodingManagementService {
     activeFetch: ActiveStatisticsFetch
   ): void {
     let waitsForReferenceStatistics = false;
-    const pollingSubscription = timer(0, 2000).pipe(
-      switchMap(() => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId)),
-      takeWhile(status => ['pending', 'processing'].includes(status.status), true),
+    const pollingSubscription = pollCodingStatisticsStatus(
+      () => this.executionService.getCodingStatisticsJobStatus(workspaceId, jobId),
+      () => this.snackBar.open(this.translateService.instant('ui-text.coding-statistics.status-load-failed'), undefined, { duration: 5000 })
+    ).pipe(
       finalize(() => {
         if (!waitsForReferenceStatistics) {
           this.finishStatisticsFetch(fetchKey, activeFetch);

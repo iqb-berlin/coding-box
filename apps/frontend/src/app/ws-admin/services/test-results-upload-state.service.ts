@@ -6,7 +6,7 @@ import {
   BehaviorSubject, defer, interval, Subscription, forkJoin, of, Observable
 } from 'rxjs';
 import {
-  filter, finalize, shareReplay, startWith, switchMap, take, takeWhile, tap, map, catchError
+  exhaustMap, filter, finalize, shareReplay, startWith, take, takeWhile, tap, map, catchError
 } from 'rxjs/operators';
 import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { TestResultsUploadResultDialogComponent } from '../components/test-results/test-results-upload-result-dialog.component';
@@ -22,10 +22,12 @@ import {
 import { FileService } from '../../shared/services/file/file.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../shared/services/test-result/test-result.service';
 import { TestResultsUploadResultDto, TestResultsUploadIssueDto } from '../../../../../../api-dto/files/test-results-upload-result.dto';
+import type { TestResultsUploadPhase } from '../../../../../../api-dto/files/test-results-upload-progress.dto';
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import { TestPersonCodingService } from '../../coding/services/test-person-coding.service';
-import { getSecondAutocodingFreshnessWarnings, ManualCodingCompletionOverview } from '../../shared/utils/coding-freshness-text.util';
+import { loadUploadCodingContext } from './test-results-upload-coding-context';
+import { summarizeUploadProgress, type UploadJobStatus } from './test-results-upload-progress';
 
 export interface PendingUploadBatch {
   workspaceId: number;
@@ -33,25 +35,12 @@ export interface PendingUploadBatch {
   resultType: 'logs' | 'responses';
   beforeOverview: TestResultsOverviewResponse;
   initialIssues: TestResultsUploadIssueDto[];
+  /** File-read progress reported by the queue. Completion is tracked separately. */
   progress: number;
+  phase?: TestResultsUploadPhase;
   completedCount: number;
   totalJobs: number;
 }
-
-type UploadJobStatus = {
-  id?: string;
-  status:
-  | 'completed'
-  | 'waiting'
-  | 'active'
-  | 'delayed'
-  | 'failed'
-  | 'paused'
-  | 'poll-error';
-  progress: number;
-  result?: TestResultsUploadResultDto;
-  error?: unknown;
-};
 
 type ImportSummaryNumberKey =
   | 'responseRows'
@@ -67,16 +56,6 @@ type ImportSummaryNumberKey =
   | 'savedLogs'
   | 'skippedRows'
   | 'skippedLogs';
-
-type ManualOverviewResult = {
-  overview: ManualCodingCompletionOverview | null;
-  loadFailed: boolean;
-};
-
-type UploadCodingContext = {
-  codingFreshness: TestResultsUploadResultDto['codingFreshness'] | null;
-  manualOverview: ManualOverviewResult;
-};
 
 @Injectable({
   providedIn: 'root'
@@ -126,7 +105,14 @@ export class TestResultsUploadStateService {
     return defer(() => {
       const title = resultType === 'logs' ? this.uiTranslate('ui-text.test-results-upload-state.logs-title') : this.uiTranslate('ui-text.test-results-upload-state.responses-title');
       const icon = resultType === 'logs' ? 'article' : 'upload_file';
-      const uploadState = (percent: number): TestResultsImportProgressState => ({
+      const uploadState = (percent: number): TestResultsImportProgressState => (percent >= 100 ? {
+        title,
+        icon,
+        phase: 'preparingUpload',
+        phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.preparing-upload'),
+        message: this.uiTranslate('ui-text.test-results-upload-state.transfer-complete'),
+        mode: 'indeterminate'
+      } : {
         title,
         icon,
         phase: 'uploading',
@@ -195,10 +181,9 @@ export class TestResultsUploadStateService {
         phase: 'processing',
         phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.processing'),
         message: this.uiTranslate('ui-text.test-results-upload-state.accepted'),
-        percent: batch.progress,
         completed: batch.completedCount,
         total: batch.totalJobs,
-        mode: 'determinate'
+        mode: 'indeterminate'
       });
     }
 
@@ -215,7 +200,7 @@ export class TestResultsUploadStateService {
     const sub = interval(1000)
       .pipe(
         startWith(0),
-        switchMap(() => forkJoin(
+        exhaustMap(() => forkJoin(
           batch.jobIds.map(id => this.fileService.getUploadJobStatus(batch.workspaceId, id).pipe(
             catchError(error => of({
               id,
@@ -228,9 +213,6 @@ export class TestResultsUploadStateService {
         )
         ),
         map(statuses => {
-          let totalProgress = 0;
-          let completedCount = 0;
-          const totalJobs = statuses.length;
           const currentBatch = this.batches$.value.find(b => this.isSameBatch(b, batch));
           const fallbackProgress = currentBatch?.progress || batch.progress || 0;
           const normalizedStatuses = statuses.map((status, index): UploadJobStatus => {
@@ -270,66 +252,54 @@ export class TestResultsUploadStateService {
             };
           });
 
-          normalizedStatuses.forEach(status => {
-            if (status.status === 'completed' || status.status === 'failed') {
-              completedCount += 1;
-              totalProgress += 100;
-            } else {
-              totalProgress += status.progress || 0;
-            }
-          });
-
-          return {
-            avgProgress: totalJobs > 0 ? Math.floor(totalProgress / totalJobs) : 0,
-            completedCount,
-            totalJobs,
-            jobStatuses: normalizedStatuses
-          };
+          return { ...summarizeUploadProgress(normalizedStatuses), jobStatuses: normalizedStatuses };
         }),
         takeWhile(res => res.completedCount < res.totalJobs, true)
       )
       .subscribe({
         next: res => {
-          const currentBatches = this.batches$.value.map(b => {
-            if (b.workspaceId === batch.workspaceId && JSON.stringify(b.jobIds) === JSON.stringify(batch.jobIds)) {
-              return { ...b, progress: res.avgProgress, completedCount: res.completedCount };
-            }
-            return b;
-          });
+          const currentBatches = this.batches$.value.map(b => (this.isSameBatch(b, batch) ? {
+            ...b, phase: res.phase, progress: res.avgProgress, completedCount: res.completedCount
+          } : b));
           this.batches$.next(currentBatches);
-          this.updateProgressDialog(batch, {
-            phase: 'processing',
-            phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.processing'),
-            message: this.uiTranslate('ui-text.test-results-upload-state.processing-jobs'),
-            percent: res.avgProgress,
-            completed: res.completedCount,
-            total: res.totalJobs,
-            mode: 'determinate'
-          });
-
           if (res.completedCount === res.totalJobs) {
             this.finishBatch(batch, res.jobStatuses);
             this.pollingSubscriptions.delete(batchKey);
+            return;
           }
+
+          this.updateProcessingProgressDialog(batch, res.phase, res.avgProgress, res.completedCount, res.totalJobs);
         }
       });
 
     this.pollingSubscriptions.set(batchKey, sub);
   }
 
+  private updateProcessingProgressDialog(
+    batch: PendingUploadBatch,
+    phase: TestResultsUploadPhase,
+    readProgress: number,
+    completed: number,
+    total: number
+  ): void {
+    const isReadingFile = phase === 'reading';
+    this.updateProgressDialog(batch, {
+      phase: isReadingFile ? 'readingFile' : 'processing',
+      phaseLabel: isReadingFile ?
+        this.uiTranslate('ui-text.test-results-upload-state.reading-file') :
+        this.uiTranslate('ui-text.test-results-upload-state.processing'),
+      message: this.uiTranslate('ui-text.test-results-upload-state.processing-jobs'),
+      percent: isReadingFile ? readProgress : undefined,
+      completed,
+      total,
+      mode: isReadingFile ? 'determinate' : 'indeterminate'
+    });
+  }
+
   private finishBatch(
     batch: PendingUploadBatch,
     finalJobStatuses?: UploadJobStatus[]
   ) {
-    this.updateProgressDialog(batch, {
-      phase: 'refreshingOverview',
-      phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.refreshing-overview'),
-      message: this.uiTranslate('ui-text.test-results-upload-state.completed-refreshing'),
-      percent: 100,
-      completed: batch.totalJobs,
-      total: batch.totalJobs,
-      mode: 'indeterminate'
-    });
     this.testResultService.invalidateCache(batch.workspaceId);
     this.testPersonCodingService.invalidateCodingStatusCache(batch.workspaceId);
     this.validationTaskStateService.invalidateWorkspace(batch.workspaceId);
@@ -337,38 +307,16 @@ export class TestResultsUploadStateService {
     const jobStatuses$ = this.waitForCompletedJobResults(batch, finalJobStatuses);
 
     jobStatuses$.subscribe(jobStatuses => {
-      const issues = [...batch.initialIssues];
-      let importedLogs = false;
-      let importedResponses = false;
-      const completedResults: TestResultsUploadResultDto[] = [];
-      const hasMissingCompletedResult =
-        this.hasCompletedJobsWithoutResult(jobStatuses);
-
-      jobStatuses.forEach(jobStatus => {
-        if (jobStatus.status === 'completed' && 'result' in jobStatus && jobStatus.result) {
-          completedResults.push(jobStatus.result);
-          if (jobStatus.result.issues) {
-            jobStatus.result.issues.forEach(issue => issues.push(issue));
-          }
-          if (jobStatus.result.importedLogs) importedLogs = true;
-          if (jobStatus.result.importedResponses) importedResponses = true;
-        } else if (jobStatus.status === 'failed') {
-          issues.push({
-            level: 'error',
-            category: 'other',
-            message: this.uiTranslate('ui-text.test-results-upload-state.job-failed', { value1: jobStatus.id || '' })
-          });
-        }
+      this.updateProgressDialog(batch, {
+        phase: 'refreshingOverview',
+        phaseLabel: this.uiTranslate('ui-text.test-results-upload-result-dialog.refreshing-overview'),
+        message: this.uiTranslate('ui-text.test-results-upload-state.completed-refreshing'),
+        completed: batch.totalJobs,
+        total: batch.totalJobs,
+        mode: 'indeterminate'
       });
-      if (hasMissingCompletedResult) {
-        issues.push({
-          level: 'warning',
-          category: 'other',
-          message:
-            this.uiTranslate('ui-text.test-results-upload-state.partial-overview')
-        });
-      }
 
+      const { issues, completedResults, hasMissingCompletedResult } = this.collectJobResults(batch, jobStatuses);
       const lastCompletedResult = completedResults[completedResults.length - 1];
       const expected = completedResults.length > 0 ?
         completedResults.reduce(
@@ -437,124 +385,100 @@ export class TestResultsUploadStateService {
           issues: issues,
           importSummary: this.mergeImportSummaries(completedResults),
           logMetrics: this.mergeLogMetrics(completedResults),
-          importedLogs: importedLogs || batch.resultType === 'logs',
-          importedResponses: importedResponses || batch.resultType === 'responses',
+          importedLogs: batch.resultType === 'logs' || completedResults.some(result => result.importedLogs),
+          importedResponses: batch.resultType === 'responses' || completedResults.some(result => result.importedResponses),
           overviewPending,
           overviewMessage: overviewPending ?
             this.uiTranslate('ui-text.test-results-upload-state.aggregated-overview-pending') :
             undefined
         };
 
-        if (batch.resultType === 'logs') {
-          this.showLogUploadAnomalyFeedback(batch.workspaceId);
-        } else {
-          this.snackBar.open(
-            overviewPending ?
-              this.uiTranslate('ui-text.test-results-upload-state.completed-overview-pending') :
-              this.uiTranslate('ui-text.test-results-upload-state.completed-delta', { testPersons: delta.testPersons, uniqueResponses: delta.uniqueResponses }),
-            'OK',
-            { duration: 5000 }
-          );
-        }
-
-        this.closeProgressDialog(batch);
-
-        this.loadUploadCodingContext(
-          batch.workspaceId,
-          completedResults,
-          batch.resultType === 'responses'
-        ).subscribe(codingContext => {
-          const dialogUploadResult: TestResultsUploadResultDto = {
-            ...uploadResult,
-            codingFreshness: codingContext.codingFreshness || undefined
-          };
-
-          this.dialog.open(TestResultsUploadResultDialogComponent, {
-            width: '90vw',
-            maxWidth: '95vw',
-            data: {
-              resultType: batch.resultType,
-              result: dialogUploadResult,
-              manualAppliedResultsOverview: codingContext.manualOverview.overview,
-              manualAppliedResultsOverviewLoadFailed: codingContext.manualOverview.loadFailed
-            }
-          });
-
-          this.uploadsFinishedSubject.next(batch.workspaceId);
-
-          const batchKey = this.getBatchKey(batch);
-          const remainingBatches = this.batches$.value.filter(b => this.getBatchKey(b) !== batchKey);
-          this.batches$.next(remainingBatches);
-
-          localStorage.removeItem(this.getStorageKey(batch.workspaceId));
-        });
+        this.showUploadResult(batch, uploadResult, completedResults);
       });
     });
   }
 
-  private loadUploadCodingContext(
-    workspaceId: number,
-    completedResults: TestResultsUploadResultDto[],
-    shouldLoadCodingFreshness: boolean
-  ): Observable<UploadCodingContext> {
-    const completedCodingFreshness = this.getLatestCodingFreshness(completedResults);
-    const codingFreshness$ = completedCodingFreshness || !shouldLoadCodingFreshness ?
-      of(completedCodingFreshness || null) :
-      this.testPersonCodingService.getCodingFreshness(workspaceId)
-        .pipe(catchError(() => of(null)));
+  private collectJobResults(batch: PendingUploadBatch, jobStatuses: UploadJobStatus[]) {
+    const issues = [...batch.initialIssues];
+    const completedResults: TestResultsUploadResultDto[] = [];
+    const hasMissingCompletedResult = this.hasCompletedJobsWithoutResult(jobStatuses);
 
-    return codingFreshness$.pipe(
-      switchMap(codingFreshness => {
-        const manualOverview$ = this.hasSecondAutocodingFreshnessWarning(codingFreshness) ?
-          this.loadManualAppliedResultsOverview(workspaceId) :
-          of({
-            overview: null,
-            loadFailed: false
-          });
-
-        return manualOverview$.pipe(
-          map(manualOverview => ({
-            codingFreshness,
-            manualOverview
-          }))
-        );
-      })
-    );
-  }
-
-  private getLatestCodingFreshness(
-    completedResults: TestResultsUploadResultDto[]
-  ): TestResultsUploadResultDto['codingFreshness'] | null {
-    for (let index = completedResults.length - 1; index >= 0; index -= 1) {
-      const codingFreshness = completedResults[index].codingFreshness;
-      if (codingFreshness) {
-        return codingFreshness;
+    for (const jobStatus of jobStatuses) {
+      if (jobStatus.status === 'completed' && jobStatus.result) {
+        completedResults.push(jobStatus.result);
+        // Import reports can contain too many issues to spread into a single call.
+        for (const issue of jobStatus.result.issues || []) issues.push(issue);
+      } else if (jobStatus.status === 'failed') {
+        issues.push({
+          level: 'error',
+          category: 'other',
+          message: this.uiTranslate('ui-text.test-results-upload-state.job-failed', { value1: jobStatus.id || '' })
+        });
       }
     }
-
-    return null;
+    if (hasMissingCompletedResult) {
+      issues.push({
+        level: 'warning',
+        category: 'other',
+        message: this.uiTranslate('ui-text.test-results-upload-state.partial-overview')
+      });
+    }
+    return { issues, completedResults, hasMissingCompletedResult };
   }
 
-  private hasSecondAutocodingFreshnessWarning(
-    codingFreshness: TestResultsUploadResultDto['codingFreshness'] | null
-  ): boolean {
-    return getSecondAutocodingFreshnessWarnings(codingFreshness?.items || []).length > 0;
-  }
+  private showUploadResult(
+    batch: PendingUploadBatch,
+    uploadResult: TestResultsUploadResultDto,
+    completedResults: TestResultsUploadResultDto[]
+  ): void {
+    this.updateProgressDialog(batch, {
+      phase: 'preparingResult',
+      phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.preparing-result'),
+      message: this.uiTranslate('ui-text.test-results-upload-state.loading-result-details'),
+      completed: batch.totalJobs,
+      total: batch.totalJobs,
+      mode: 'indeterminate'
+    });
+    const loadCodingContext = () => loadUploadCodingContext(
+      this.testPersonCodingService,
+      batch.workspaceId,
+      completedResults,
+      batch.resultType === 'responses'
+    );
+    loadCodingContext().subscribe(codingContext => {
+      this.closeProgressDialog(batch);
+      this.dialog.open(TestResultsUploadResultDialogComponent, {
+        width: '90vw',
+        maxWidth: '95vw',
+        data: {
+          resultType: batch.resultType,
+          result: { ...uploadResult, codingFreshness: codingContext.codingFreshness || undefined },
+          manualAppliedResultsOverview: codingContext.manualOverview.overview,
+          manualAppliedResultsOverviewLoadFailed: codingContext.manualOverview.loadFailed,
+          ...(codingContext.codingFreshnessLoadFailed ? { reloadCodingContext: loadCodingContext } : {})
+        }
+      });
 
-  private loadManualAppliedResultsOverview(
-    workspaceId: number
-  ): Observable<ManualOverviewResult> {
-    return this.testPersonCodingService.getAppliedResultsOverview(workspaceId)
-      .pipe(
-        map(overview => ({
-          overview,
-          loadFailed: overview === null
-        })),
-        catchError(() => of({
-          overview: null,
-          loadFailed: true
-        }))
-      );
+      if (batch.resultType === 'logs') {
+        this.showLogUploadAnomalyFeedback(batch.workspaceId);
+      } else {
+        const { delta, overviewPending } = uploadResult;
+        this.snackBar.open(
+          overviewPending ?
+            this.uiTranslate('ui-text.test-results-upload-state.completed-overview-pending') :
+            this.uiTranslate('ui-text.test-results-upload-state.completed-delta', { testPersons: delta.testPersons, uniqueResponses: delta.uniqueResponses }),
+          'OK',
+          { duration: 5000 }
+        );
+      }
+
+      this.uploadsFinishedSubject.next(batch.workspaceId);
+
+      const batchKey = this.getBatchKey(batch);
+      const remainingBatches = this.batches$.value.filter(b => this.getBatchKey(b) !== batchKey);
+      this.batches$.next(remainingBatches);
+      localStorage.removeItem(this.getStorageKey(batch.workspaceId));
+    });
   }
 
   private showLogUploadAnomalyFeedback(workspaceId: number): void {
@@ -691,11 +615,10 @@ export class TestResultsUploadStateService {
 
         attempts += 1;
         this.updateProgressDialog(batch, {
-          phase: 'refreshingOverview',
+          phase: 'preparingResult',
           phaseLabel: this.uiTranslate('ui-text.test-results-upload-state.reading-result'),
           message:
             this.uiTranslate('ui-text.test-results-upload-state.waiting-for-results'),
-          percent: 100,
           completed: batch.totalJobs,
           total: batch.totalJobs,
           mode: 'indeterminate'

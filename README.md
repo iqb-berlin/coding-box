@@ -12,6 +12,18 @@ Mit dieser Web-Anwendung werden Testergebnisse aus einem [Verona](https://verona
 Testsystem kodiert.
 Die Dokumentation dazu finden Sie [hier](https://iqb-berlin.github.io/tba-info/).
 
+## Player im Replay
+
+Beim Start liest die Kodierbox die Schnittstellenversion aus der Ready-Nachricht des Players. Sie akzeptiert sowohl serialisierte JSON-Metadaten als auch das Metadatenobjekt bisheriger aspect-Player.
+
+| Player-Schnittstelle | Start im Replay | Druckansicht |
+| --- | --- | --- |
+| Verona 1 | `vo.ToPlayer.DataTransfer` | gleicher Befehl ohne Druckparameter |
+| Verona 2–6 | `vopStartCommand` mit `buttons` und Fortschritt `none` | `concat-scroll`, `on` |
+| IQB plugin-player 7.0 | `vopStartCommand` mit `BUTTONS` und Fortschritt `NONE` | `CONCAT_SCROLL`, `ON` |
+
+Die Kodierbox übersetzt die Protokollwerte beim Nachrichtenaustausch mit dem Player. Für bereits gespeicherte Antworten ist dafür keine Datenmigration erforderlich. [Spezifikation für plugin-player 7.0](https://github.com/iqb-specifications/plugin-player/blob/7.0/playerapi.yaml)
+
 ## Entwicklung
 
 ### Workflow

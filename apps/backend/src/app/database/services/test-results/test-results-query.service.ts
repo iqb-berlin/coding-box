@@ -1,6 +1,6 @@
 import {
   Inject,
-  Injectable, Logger
+  BadRequestException, Injectable, Logger
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
@@ -28,7 +28,8 @@ import {
 import {
   applyExclusionsToQuery, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses, nonAutocoderGeneratedResponseCondition
 } from './test-results.util';
-import { QuickSearchResult, WorkspaceOverviewStats } from './workspace-test-results.types';
+import { QuickSearchResult, QuickSearchResultKind, WorkspaceOverviewStats } from './workspace-test-results.types';
+import { formatQuickSearchResults, selectQuickResponseRows } from './quick-search-results';
 
 @Injectable()
 export class TestResultsQueryService {
@@ -525,10 +526,16 @@ export class TestResultsQueryService {
   async quickSearchTestResults(
     workspaceId: number,
     query: string,
-    limit = 8
+    limit = 8,
+    kind?: QuickSearchResultKind,
+    responsePreview = false
   ): Promise<QuickSearchResult> {
     if (!workspaceId || workspaceId <= 0) {
       throw new Error('Invalid workspaceId provided');
+    }
+
+    if (kind !== undefined && !['person', 'booklet', 'unit', 'response'].includes(kind)) {
+      throw new BadRequestException('Invalid quick search category');
     }
 
     const normalizedQuery = String(query || '').trim();
@@ -603,6 +610,10 @@ export class TestResultsQueryService {
     applyExclusionsToQuery(responseQb, exclusions);
     excludeAutocoderGeneratedResponses(responseQb);
 
+    const run = <T>(
+      category: QuickSearchResultKind, queryFn: () => Promise<T>, fallback: T
+    ): T | Promise<T> => ((!kind || kind === category) ? queryFn() : fallback);
+
     const [
       personTotal,
       bookletTotal,
@@ -613,11 +624,11 @@ export class TestResultsQueryService {
       unitRows,
       responseRows
     ] = await Promise.all([
-      personQb.clone().getCount(),
-      bookletQb.clone().getCount(),
-      unitQb.clone().getCount(),
-      responseQb.clone().getCount(),
-      personQb
+      run('person', () => personQb.clone().getCount(), 0),
+      run('booklet', () => bookletQb.clone().getCount(), 0),
+      run('unit', () => unitQb.clone().getCount(), 0),
+      responsePreview ? 0 : run('response', () => responseQb.clone().getCount(), 0),
+      run('person', () => personQb
         .clone()
         .select([
           'person.id AS "personId"',
@@ -625,11 +636,13 @@ export class TestResultsQueryService {
           'person.group AS "personGroup"',
           'person.login AS "personLogin"'
         ])
-        .orderBy('person.code', 'ASC')
+        .orderBy('CASE WHEN lower(person.login) = lower(:exactLogin) THEN 0 ELSE 1 END', 'ASC')
+        .setParameter('exactLogin', normalizedQuery)
+        .addOrderBy('person.code', 'ASC')
         .addOrderBy('person.login', 'ASC')
         .limit(validLimit)
-        .getRawMany(),
-      bookletQb
+        .getRawMany(), []),
+      run('booklet', () => bookletQb
         .clone()
         .select([
           'booklet.id AS "bookletId"',
@@ -642,8 +655,8 @@ export class TestResultsQueryService {
         .orderBy('bookletinfo.name', 'ASC')
         .addOrderBy('person.code', 'ASC')
         .limit(validLimit)
-        .getRawMany(),
-      unitQb
+        .getRawMany(), []),
+      run('unit', () => unitQb
         .clone()
         .select([
           'unit.id AS "unitId"',
@@ -660,123 +673,23 @@ export class TestResultsQueryService {
         .orderBy('COALESCE(unit.alias, unit.name)', 'ASC')
         .addOrderBy('person.code', 'ASC')
         .limit(validLimit)
-        .getRawMany(),
-      responseQb
-        .clone()
-        .select([
-          'response.id AS "responseId"',
-          'response.variableid AS "variableId"',
-          'SUBSTRING(response.value, 1, 200) AS "responseValue"',
-          'response.status AS "responseStatus"',
-          'unit.id AS "unitId"',
-          'unit.name AS "unitName"',
-          'unit.alias AS "unitAlias"',
-          'booklet.id AS "bookletId"',
-          'bookletinfo.name AS "bookletName"',
-          'person.id AS "personId"',
-          'person.code AS "personCode"',
-          'person.group AS "personGroup"',
-          'person.login AS "personLogin"'
-        ])
-        .orderBy('person.code', 'ASC')
-        .addOrderBy('bookletinfo.name', 'ASC')
-        .addOrderBy('COALESCE(unit.alias, unit.name)', 'ASC')
-        .addOrderBy('response.variableid', 'ASC')
-        .limit(validLimit)
-        .getRawMany()
+        .getRawMany(), []),
+      run('response', () => selectQuickResponseRows(responseQb, validLimit, responsePreview), [])
     ]);
 
-    return {
-      query: normalizedQuery,
-      limit: validLimit,
-      persons: (personRows || []).map(row => ({
-        kind: 'person',
-        id: Number(row.personId),
-        label: String(row.personCode || row.personLogin || row.personId),
-        secondaryLabel: [row.personGroup, row.personLogin]
-          .filter(Boolean)
-          .join(' · '),
-        personId: Number(row.personId),
-        personCode: String(row.personCode || ''),
-        personGroup: String(row.personGroup || ''),
-        personLogin: String(row.personLogin || '')
-      })),
-      booklets: (bookletRows || []).map(row => ({
-        kind: 'booklet',
-        id: Number(row.bookletId),
-        label: String(row.bookletName || row.bookletId),
-        secondaryLabel: [row.personCode, row.personGroup, row.personLogin]
-          .filter(Boolean)
-          .join(' · '),
-        personId: Number(row.personId),
-        personCode: String(row.personCode || ''),
-        personGroup: String(row.personGroup || ''),
-        personLogin: String(row.personLogin || ''),
-        bookletId: Number(row.bookletId),
-        bookletName: String(row.bookletName || '')
-      })),
-      units: (unitRows || []).map(row => ({
-        kind: 'unit',
-        id: Number(row.unitId),
-        label: String(row.unitAlias || row.unitName || row.unitId),
-        secondaryLabel: [
-          row.bookletName,
-          row.unitAlias && row.unitAlias !== row.unitName ?
-            row.unitName :
-            '',
-          row.personCode
-        ]
-          .filter(Boolean)
-          .join(' · '),
-        personId: Number(row.personId),
-        personCode: String(row.personCode || ''),
-        personGroup: String(row.personGroup || ''),
-        personLogin: String(row.personLogin || ''),
-        bookletId: Number(row.bookletId),
-        bookletName: String(row.bookletName || ''),
-        unitId: Number(row.unitId),
-        unitName: String(row.unitName || ''),
-        unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
-        responseId: row.responseId == null ? undefined : Number(row.responseId)
-      })),
-      responses: (responseRows || []).map(row => {
-        const responseStatus = statusNumberToString(
-          Number(row.responseStatus)
-        ) || String(row.responseStatus ?? '');
-        return {
-          kind: 'response',
-          id: Number(row.responseId),
-          label: String(row.variableId || row.responseId),
-          secondaryLabel: [
-            row.bookletName,
-            row.unitAlias || row.unitName,
-            row.personCode,
-            responseStatus
-          ]
-            .filter(Boolean)
-            .join(' · '),
-          personId: Number(row.personId),
-          personCode: String(row.personCode || ''),
-          personGroup: String(row.personGroup || ''),
-          personLogin: String(row.personLogin || ''),
-          bookletId: Number(row.bookletId),
-          bookletName: String(row.bookletName || ''),
-          unitId: Number(row.unitId),
-          unitName: String(row.unitName || ''),
-          unitAlias: row.unitAlias == null ? null : String(row.unitAlias),
-          responseId: Number(row.responseId),
-          variableId: String(row.variableId || ''),
-          responseValue: String(row.responseValue || ''),
-          responseStatus
-        };
-      }),
-      totals: {
-        person: personTotal,
-        booklet: bookletTotal,
-        unit: unitTotal,
-        response: responseTotal
-      }
-    };
+    const visibleResponses = responseRows.slice(0, validLimit);
+    const result = formatQuickSearchResults(normalizedQuery, validLimit, {
+      person: personRows, booklet: bookletRows, unit: unitRows, response: visibleResponses
+    }, {
+      person: personTotal,
+      booklet: bookletTotal,
+      unit: unitTotal,
+      response: responsePreview ? visibleResponses.length : responseTotal
+    });
+    if (responsePreview && (!kind || kind === 'response')) {
+      result.hasMoreResponses = responseRows.length > validLimit;
+    }
+    return result;
   }
 
   async findWorkspaceResponses(

@@ -103,15 +103,22 @@ describe('CodingListStreamService', () => {
     scoreV3: null
   });
 
+  async function* versionedBatches(...batches: CodingItemVersionRow[][]) {
+    for (const rows of batches) yield { rows, resolvePage: async () => '1' };
+  }
+
   beforeEach(async () => {
     mockResponseFilterService = {
       getResponsesBatch: jest.fn(),
+      readCodingListResponseBatches: jest.fn(() => versionedBatches()),
       getVersionedResponsesBatchRaw: jest.fn(),
+      readVersionedResponseBatches: jest.fn(() => versionedBatches()),
       countResponses: jest.fn().mockResolvedValue(0)
     } as unknown as jest.Mocked<CodingResponseFilterService>;
 
     mockItemBuilderService = {
       buildCodingItem: jest.fn(),
+      buildCodingItemFromRow: jest.fn(),
       buildCodingItemWithVersions: jest.fn(),
       buildCodingItemWithVersionRow: jest.fn(),
       getHeadersForVersion: jest.fn().mockReturnValue([
@@ -141,6 +148,7 @@ describe('CodingListStreamService', () => {
     } as unknown as jest.Mocked<ConfigService>;
 
     mockReplayAnchorService = {
+      getWorkspaceVariableAnchorMaps: jest.fn().mockResolvedValue(new Map()),
       getVariableAnchorMaps: jest.fn().mockResolvedValue(new Map())
     } as unknown as jest.Mocked<CodingReplayAnchorService>;
     mockWorkspaceFilesService = {
@@ -213,7 +221,6 @@ describe('CodingListStreamService', () => {
       };
       mockResponseFilterService.getResponsesBatch
         .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([])
         .mockResolvedValueOnce([]);
 
       const csvStream = await service.getCodingListCsvStream(
@@ -239,7 +246,8 @@ describe('CodingListStreamService', () => {
       });
 
       expect(mockResponseFilterService.countResponses).toHaveBeenCalledTimes(3);
-      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledTimes(3);
+      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledTimes(2);
+      expect(mockResponseFilterService.readCodingListResponseBatches).toHaveBeenCalledWith(1, 500, expectedFilterOptions);
       mockResponseFilterService.countResponses.mock.calls.forEach(call => {
         expect(call).toEqual([1, expectedFilterOptions]);
       });
@@ -274,8 +282,6 @@ describe('CodingListStreamService', () => {
     });
 
     it('should create versioned CSV stream', async () => {
-      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
-
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
@@ -317,12 +323,36 @@ describe('CodingListStreamService', () => {
 
       expect(mockResponseFilterService.countResponses).not.toHaveBeenCalled();
       expect(mockResponseFilterService.getResponsesBatch).not.toHaveBeenCalled();
-      expect(mockResponseFilterService.getVersionedResponsesBatchRaw).not.toHaveBeenCalled();
+      expect(mockResponseFilterService.readVersionedResponseBatches).not.toHaveBeenCalled();
+    });
+
+    it('closes the batch iterator when the CSV stream closes during backpressure', async () => {
+      let closeBatches!: () => void;
+      const batchesClosed = new Promise<void>(resolve => { closeBatches = resolve; });
+      const rows = Array.from({ length: 250 }, (_, index) => createMockVersionRow(index + 1));
+      mockResponseFilterService.readVersionedResponseBatches.mockImplementationOnce(async function* trackBatchClosure() {
+        try {
+          yield { rows, resolvePage: async () => '1' };
+        } finally {
+          closeBatches();
+        }
+      });
+      mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
+        value: 'x'.repeat(4096)
+      } as Awaited<ReturnType<CodingItemBuilderService['buildCodingItemWithVersionRow']>>);
+      const stream = await service.getCodingResultsByVersionCsvStream(1, 'v1', 1, '', '');
+
+      for (let attempt = 0; attempt < 20 && !stream.writableNeedDrain; attempt += 1) {
+        await new Promise(resolve => { setImmediate(resolve); });
+      }
+      expect(stream.writableNeedDrain).toBe(true);
+      expect(stream.listenerCount('drain')).toBeGreaterThan(0);
+      stream.destroy();
+      await batchesClosed;
+      expect(stream.listenerCount('drain')).toBe(0);
     });
 
     it('should write headers for empty versioned CSV exports', async () => {
-      mockResponseFilterService.getVersionedResponsesBatchRaw.mockResolvedValueOnce([]);
-
       const stream = await service.getCodingResultsByVersionCsvStream(
         1,
         'v1',
@@ -398,12 +428,11 @@ describe('CodingListStreamService', () => {
         ['var1', '1']
       ]));
       mockResponseFilterService.countResponses.mockResolvedValueOnce(1);
-      mockResponseFilterService.getVersionedResponsesBatchRaw
-        .mockResolvedValueOnce([{
+      mockResponseFilterService.readVersionedResponseBatches
+        .mockReturnValueOnce(versionedBatches([{
           ...createMockVersionRow(1),
           statusV1: 1
-        }])
-        .mockResolvedValueOnce([]);
+        }]));
 
       const stream = await integrationService.getCodingResultsByVersionCsvStream(
         1,
@@ -438,9 +467,8 @@ describe('CodingListStreamService', () => {
 
     it('should include replay URL column in versioned CSV exports when requested', async () => {
       const versionRow = createMockVersionRow(1);
-      mockResponseFilterService.getVersionedResponsesBatchRaw
-        .mockResolvedValueOnce([versionRow])
-        .mockResolvedValueOnce([]);
+      mockResponseFilterService.readVersionedResponseBatches
+        .mockReturnValueOnce(versionedBatches([versionRow]));
       mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
         unit_key: 'unit1',
         unit_alias: 'Unit 1',
@@ -489,15 +517,15 @@ describe('CodingListStreamService', () => {
         true,
         false,
         expect.any(Map),
-        { v1: { code: '', score: '' } }
+        { v1: { code: '', score: '' } },
+        '1'
       );
     });
 
     it('should pass response value option to versioned CSV item builder', async () => {
       const row = createMockVersionRow(1);
-      mockResponseFilterService.getVersionedResponsesBatchRaw
-        .mockResolvedValueOnce([row])
-        .mockResolvedValueOnce([]);
+      mockResponseFilterService.readVersionedResponseBatches
+        .mockReturnValueOnce(versionedBatches([row]));
       mockItemBuilderService.buildCodingItemWithVersionRow.mockResolvedValue({
         unit_key: 'unit1',
         unit_alias: 'Unit 1',
@@ -538,11 +566,11 @@ describe('CodingListStreamService', () => {
         1,
         versionExportOptions
       );
-      expect(mockResponseFilterService.getVersionedResponsesBatchRaw).toHaveBeenCalledWith(
+      expect(mockResponseFilterService.readVersionedResponseBatches).toHaveBeenCalledWith(
         1,
-        0,
         250,
-        versionExportOptions
+        versionExportOptions,
+        false
       );
       expect(mockItemBuilderService.buildCodingItemWithVersionRow).toHaveBeenCalledWith(
         row,
@@ -554,7 +582,8 @@ describe('CodingListStreamService', () => {
         false,
         false,
         expect.any(Map),
-        { v1: { code: '', score: '' } }
+        { v1: { code: '', score: '' } },
+        '1'
       );
     });
 
@@ -567,10 +596,8 @@ describe('CodingListStreamService', () => {
       ];
       const progressCallback = jest.fn().mockResolvedValue(undefined);
       mockResponseFilterService.countResponses.mockResolvedValueOnce(rows.length);
-      mockResponseFilterService.getVersionedResponsesBatchRaw
-        .mockResolvedValueOnce(rows.slice(0, 2))
-        .mockResolvedValueOnce(rows.slice(2))
-        .mockResolvedValueOnce([]);
+      mockResponseFilterService.readVersionedResponseBatches
+        .mockReturnValueOnce(versionedBatches(rows.slice(0, 2), rows.slice(2)));
       mockItemBuilderService.buildCodingItemWithVersionRow.mockImplementation(async row => ({
         unit_key: row.unitKey,
         unit_alias: row.unitAlias,
@@ -695,8 +722,6 @@ describe('CodingListStreamService', () => {
 
   describe('Excel streaming', () => {
     it('should create Excel buffer', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
-
       const result = await service.getCodingListAsExcel(
         1,
         'token',
@@ -708,8 +733,6 @@ describe('CodingListStreamService', () => {
     });
 
     it('should include correct worksheet columns', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
-
       await service.getCodingListAsExcel(1, 'token', 'http://server');
 
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();
@@ -719,13 +742,11 @@ describe('CodingListStreamService', () => {
       mockConfigService.get.mockImplementation((key: string) => (
         key === 'EXPORT_CODING_LIST_BATCH_SIZE' ? '37' : undefined
       ));
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
 
       await service.getCodingListAsExcel(1, 'token', 'http://server');
 
-      expect(mockResponseFilterService.getResponsesBatch).toHaveBeenCalledWith(
+      expect(mockResponseFilterService.readCodingListResponseBatches).toHaveBeenCalledWith(
         1,
-        0,
         37,
         {
           manualCodingCandidatesOnly: true
@@ -736,18 +757,16 @@ describe('CodingListStreamService', () => {
     it('checks cancellation during large coding-list Excel batches', async () => {
       const responses = Array(51)
         .fill(null)
-        .map((_, index) => createMockResponse(index + 1));
+        .map((_, index) => createMockVersionRow(index + 1));
       const cancellationError = new Error('cancelled');
-      let cancellationChecks = 0;
       const checkCancellation = jest.fn(async () => {
-        cancellationChecks += 1;
-        if (cancellationChecks >= 10) {
+        if (mockItemBuilderService.buildCodingItemFromRow.mock.calls.length >= 50) {
           throw cancellationError;
         }
       });
       mockResponseFilterService.countResponses.mockResolvedValueOnce(responses.length);
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce(responses);
-      mockItemBuilderService.buildCodingItem.mockResolvedValue({
+      mockResponseFilterService.readCodingListResponseBatches.mockReturnValueOnce(versionedBatches(responses));
+      mockItemBuilderService.buildCodingItemFromRow.mockResolvedValue({
         unit_key: 'unit1',
         unit_alias: 'Unit 1',
         person_login: 'user1',
@@ -769,7 +788,7 @@ describe('CodingListStreamService', () => {
         checkCancellation
       )).rejects.toThrow('cancelled');
 
-      expect(mockItemBuilderService.buildCodingItem).toHaveBeenCalledTimes(50);
+      expect(mockItemBuilderService.buildCodingItemFromRow).toHaveBeenCalledTimes(50);
     });
 
     it('should handle versioned Excel export', async () => {
@@ -1016,7 +1035,8 @@ describe('CodingListStreamService', () => {
           validCodingVariablesOnly: true,
           givenResponsesOnly: true,
           includePartlyDisplayed: true
-        }
+        },
+        true
       );
     });
 
@@ -1331,8 +1351,6 @@ describe('CodingListStreamService', () => {
     });
 
     it('should clear caches after export', async () => {
-      mockResponseFilterService.getResponsesBatch.mockResolvedValueOnce([]);
-
       await service.getCodingListAsExcel(1, 'token', 'http://server');
 
       expect(mockFileCacheService.clearCaches).toHaveBeenCalled();

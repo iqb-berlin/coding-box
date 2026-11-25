@@ -2,6 +2,7 @@ import {
   Inject,
   Injectable, Logger
 } from '@nestjs/common';
+import type { ResponseStatusType } from '@iqbspecs/response/response.interface';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
@@ -14,6 +15,7 @@ import { ChunkEntity } from '../../entities/chunk.entity';
 import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import { Unit } from '../../entities/unit.entity';
+import { statusNumberToString } from '../../utils/response-status-converter';
 import {
   WorkspaceExclusionService,
   isExcludedByResolvedExclusions
@@ -211,7 +213,7 @@ export class TestResultsReplayService {
     const responsesByChunk = new Map<string, Map<string, {
       id: string;
       value: unknown;
-      status: number;
+      status: ResponseStatusType;
       chunkTs: number;
     }>>();
 
@@ -222,7 +224,7 @@ export class TestResultsReplayService {
       const mappedResponse = {
         id: response.variableid,
         value: parseStoredResponseValue(response.value, response.variableid),
-        status: response.status,
+        status: statusNumberToString(response.status) ?? 'UNSET',
         chunkTs
       };
 

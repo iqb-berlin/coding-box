@@ -31,7 +31,7 @@ function parseResponseStatus(raw: string): number | null {
   return /^\d+$/.test(raw) ? Number(raw) : statusStringToNumber(raw);
 }
 
-export function normalizeFlatResponseFilters(options: FlatResponseOptions) {
+export function normalizeFlatResponseFilters(options: Omit<FlatResponseOptions, 'page' | 'limit'>) {
   const responseStatus = (options.responseStatus || '').trim();
   return {
     code: (options.code || '').trim(),
@@ -74,15 +74,31 @@ export function normalizeFlatResponseFilters(options: FlatResponseOptions) {
 
 export type FlatResponseFilters = ReturnType<typeof normalizeFlatResponseFilters>;
 type ResponseQuery = SelectQueryBuilder<ResponseEntity>;
-type QueryPurpose = 'rows' | 'count';
+type QueryPurpose = 'responses' | 'options';
 
-export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
-  applyFlatResponseTextFilters(qb, filters);
+export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose = 'responses'): void {
+  if (purpose === 'options') {
+    applyFilterOptionText(qb, filters);
+  } else {
+    applyFlatResponseTextFilters(qb, filters);
+  }
   applyResponseFilters(qb, filters, purpose);
   applyProcessingFilters(qb, filters);
   applyUnitProgressFilter(qb, filters);
-  applySessionFilters(qb, filters);
-  applyLongLoadingFilter(qb, filters);
+  applySessionFilters(qb, filters, purpose);
+  applyLongLoadingFilter(qb, filters, purpose);
+}
+
+function applyFilterOptionText(qb: ResponseQuery, filters: FlatResponseFilters): void {
+  const {
+    code, group, login, booklet, unit, response
+  } = filters;
+  if (code) qb.andWhere('person.code ILIKE :code', { code: `%${code}%` });
+  if (group) qb.andWhere('person.group ILIKE :group', { group: `%${group}%` });
+  if (login) qb.andWhere('person.login ILIKE :login', { login: `%${login}%` });
+  if (booklet) qb.andWhere('bookletinfo.name ILIKE :booklet', { booklet: `%${booklet}%` });
+  if (unit) qb.andWhere('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: `%${unit}%` });
+  if (response) qb.andWhere('response.variableid ILIKE :response', { response: `%${response}%` });
 }
 
 function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
@@ -105,15 +121,15 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
     );
   }
   if (tags) {
-    if (purpose === 'rows') {
+    if (purpose === 'options') {
       qb.andWhere('unitTag.tag ILIKE :tags', { tags: `%${tags}%` });
     } else {
       qb.andWhere(
         `EXISTS (
           SELECT 1
-          FROM unit_tag count_unit_tag
-          WHERE count_unit_tag."unitId" = unit.id
-            AND count_unit_tag.tag ILIKE :tags
+          FROM unit_tag matching_tag
+          WHERE matching_tag."unitId" = unit.id
+            AND matching_tag.tag ILIKE :tags
         )`,
         { tags: `%${tags}%` }
       );
@@ -221,7 +237,7 @@ function applyUnitProgressFilter(qb: ResponseQuery, filters: FlatResponseFilters
   }
 }
 
-function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters): void {
+function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
   // Dimensions deliberately use separate EXISTS clauses and can match different sessions.
   const {
     sessionBrowsers, sessionOs, sessionScreens, sessionIds
@@ -256,7 +272,7 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters): v
       { sessionScreens }
     );
   }
-  if (sessionIds.length > 0) {
+  if (purpose !== 'options' && sessionIds.length > 0) {
     qb.andWhere(
       `EXISTS (
         SELECT 1 FROM session s
@@ -268,28 +284,26 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters): v
   }
 }
 
-function applyLongLoadingFilter(qb: ResponseQuery, filters: FlatResponseFilters): void {
+function applyLongLoadingFilter(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
   const { longLoadingOnly, longLoadingThresholdMs } = filters;
-  if (longLoadingOnly) {
-    qb.andWhere(
-      `(EXISTS (
-        SELECT 1
-        FROM session s
-        WHERE s.bookletid = "bookletEntity"."id"
-          AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
-      )
-      OR EXISTS (
-        SELECT 1
-        FROM unitlog ul_started
-        JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
-        WHERE ul_started.unitid = unit.id
-          AND ul_started.key = 'STARTED'
-          AND ul_ended.key = 'ENDED'
-          AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-      ))`,
-      { longLoadingThresholdMs }
-    );
-  }
+  if (!longLoadingOnly) return;
+  const unitLoading = `EXISTS (
+    SELECT 1
+    FROM unitlog ul_started
+    JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
+    WHERE ul_started.unitid = unit.id
+      AND ul_started.key = 'STARTED'
+      AND ul_ended.key = 'ENDED'
+      AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
+  )`;
+  // The option lists historically consider only unit logs.
+  const condition = purpose === 'options' ? unitLoading : `(EXISTS (
+    SELECT 1
+    FROM session s
+    WHERE s.bookletid = "bookletEntity"."id"
+      AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
+  ) OR ${unitLoading})`;
+  qb.andWhere(condition, { longLoadingThresholdMs });
 }
 
 function applyProcessingDurationCategory(qb: ResponseQuery, filters: FlatResponseFilters): void {

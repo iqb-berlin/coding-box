@@ -18,6 +18,7 @@ describe('ValidationTaskService', () => {
   };
   let jobQueueService: {
     addValidationTaskJob: jest.Mock;
+    getValidationTaskRecovery: jest.Mock;
   };
   let workspaceTestResultsService: {
     deleteTestResultsByRequest: jest.Mock;
@@ -29,6 +30,7 @@ describe('ValidationTaskService', () => {
       create: jest.fn(),
       find: jest.fn(),
       findOne: jest.fn(),
+      update: jest.fn(),
       save: jest.fn()
     };
     workspaceFilesService = {
@@ -38,7 +40,8 @@ describe('ValidationTaskService', () => {
       deleteAllInvalidResponses: jest.fn()
     };
     jobQueueService = {
-      addValidationTaskJob: jest.fn()
+      addValidationTaskJob: jest.fn(),
+      getValidationTaskRecovery: jest.fn().mockResolvedValue(new Map())
     };
     workspaceTestResultsService = {
       deleteTestResultsByRequest: jest.fn(),
@@ -68,6 +71,22 @@ describe('ValidationTaskService', () => {
     }).compile();
 
     service = module.get<ValidationTaskService>(ValidationTaskService);
+  });
+
+  it('returns a waiting state for an interrupted validation without persisting stale progress', async () => {
+    const task = {
+      id: 1, workspace_id: 7, validation_type: 'testTakers', status: 'processing', progress: 60
+    };
+    taskRepository.findOne?.mockImplementation(() => Promise.resolve({ ...task }));
+    jobQueueService.getValidationTaskRecovery.mockResolvedValue(new Map([[1, { status: 'pending' }]]));
+
+    expect(await service.getValidationTask(1, 7)).toMatchObject({
+      status: 'pending', progress: 0, progress_message: expect.stringContaining('Wiederanlauf')
+    });
+    expect(taskRepository.update).not.toHaveBeenCalled();
+
+    jobQueueService.getValidationTaskRecovery.mockResolvedValue(new Map());
+    expect(await service.getValidationTask(1, 7)).toMatchObject({ status: 'processing', progress: 60 });
   });
 
   it('should refresh GeoGebra package status when returning cached test file results', async () => {

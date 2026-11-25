@@ -1122,7 +1122,7 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         query: jest.fn().mockResolvedValue([]), getRepository: entity => transactionRepositories.get(entity)
       })) as never);
       jest.spyOn(personsRepository.manager, 'transaction').mockImplementation((async callback => callback({
-        getRepository: entity => transactionRepositories.get(entity)
+        query: jest.fn().mockResolvedValue([]), getRepository: entity => transactionRepositories.get(entity)
       })) as never);
 
       const realPersonService = new PersonService(
@@ -1231,7 +1231,7 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         name: 'unit2',
         bookletid: 201
       }));
-      expect(responseRepository.find).toHaveBeenCalledWith(expect.objectContaining({
+      expect(responseRepository.find).not.toHaveBeenCalledWith(expect.objectContaining({
         where: expect.objectContaining({
           unitid: 202,
           subform: '',

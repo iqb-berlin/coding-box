@@ -12,7 +12,7 @@ import { AppService } from '../../../core/services/app.service';
 import { TestResultService, TestResultsOverviewResponse } from '../../../shared/services/test-result/test-result.service';
 import { takeUntilWorkspaceChanged } from '../../../shared/utils/workspace-request.operator';
 import { TestCenterImportComponent } from '../test-center-import/test-center-import.component';
-import { TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
+import { PendingUploadBatch, TestResultsUploadStateService } from '../../services/test-results-upload-state.service';
 import { ImportResultDto } from '../../../../../../../api-dto/files/import-options.dto';
 import { TestResultsUploadIssueDto, TestResultsUploadResultDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import { TestResultsImportProgressDialogComponent, TestResultsImportProgressState } from './test-results-import-progress-dialog.component';
@@ -46,9 +46,17 @@ export class TestResultsImportFacade {
   private readonly manualAppliedResultsOverview = this.statistics.manualAppliedResultsOverview;
   private readonly manualAppliedResultsOverviewLoadFailed = this.statistics.manualAppliedResultsOverviewLoadFailed;
 
-  updateUploadProgress(uploading: boolean, message?: string): void {
-    this.isUploadingResultsState.set(uploading);
-    if (message !== undefined) this.uploadingMessageState.set(message);
+  updateUploadProgress(batch?: PendingUploadBatch): void {
+    this.isUploadingResultsState.set(!!batch);
+    if (!batch) return;
+
+    if (batch.completedCount === batch.totalJobs) {
+      this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.preparing-result'));
+    } else if (batch.phase === 'reading') {
+      this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.reading-file-progress', { progress: batch.progress }));
+    } else {
+      this.uploadingMessageState.set(this.uiTranslate('ui-text.test-results-upload-state.processing'));
+    }
   }
 
   constructor() {
@@ -382,7 +390,7 @@ export class TestResultsImportFacade {
         });
 
         optionsRef
-          .afterClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
+          .beforeClosed().pipe(takeUntilWorkspaceChanged(this.appService), takeUntilDestroyed(this.destroyRef))
           .subscribe(
             (options: TestResultsUploadOptionsDialogResult | undefined) => {
               if (!options) {

@@ -107,6 +107,7 @@
   },
   "export-toast": {
     "title": "Datenexport",
+    "download-failed": "Exportdatei konnte nicht heruntergeladen werden. Versuchen Sie es erneut.",
     "download": "Herunterladen",
     "remove": "Entfernen",
     "clear-all": "Alle löschen",
@@ -247,7 +248,7 @@
   "process-overview": {
     "title": "Zentrale Prozess-Übersicht",
     "refresh": "Aktualisieren",
-    "no-data": "Keine Prozesse in der Warteschlange.",
+    "no-data": "Keine Prozesse vorhanden.",
     "no-filter-data": "Keine Prozesse für die aktuellen Filter.",
     "confirm-content": "Möchten Sie den Prozess \"{{queue}}\" (ID: {{id}}) wirklich {{action}}?",
     "filters": {
@@ -595,6 +596,7 @@
     }
   },
   "ws-admin": {
+    "workspace-navigation": "Arbeitsbereichsnavigation",
     "diagnostics-history": {
       "title": "Gespeicherte Itemmatrix-Diagnosen",
       "description": "Vollständige Fehlerlisten bleiben auch nach Ablauf oder Entfernen der Exportaufträge erhalten. Die Zelldiagnose enthält Personenkennungen und die genaue Position jeder betroffenen Zelle.",
@@ -1708,7 +1710,7 @@
     "error-downloading-workspace-database-export": "Fehler beim Herunterladen der Exportdatei.",
     "error-exporting-workspace-database-retry": "Fehler beim Exportieren der Arbeitsbereich-Datenbank. Bitte versuchen Sie es erneut.",
     "authentication-required": "Nicht authentifiziert. Bitte melden Sie sich erneut an.",
-    "process-overview-description": "Zentrale Prozess-Übersicht für Queue-Hintergrundaufgaben.",
+    "process-overview-description": "Status und Fortschritt der Prozesse im Arbeitsbereich.",
     "show-processes": "Prozesse anzeigen"
   },
   "journal": {
@@ -3658,6 +3660,17 @@
     "no-anomalies": "Keine Log-Auffälligkeiten für dieses Testheft erkannt."
   },
   "ui-text": {
+    "coding-statistics": {
+      "status-load-failed": "Der Status der Kodierstatistik konnte nicht geladen werden."
+    },
+    "autocoder": {
+      "checking-start": "Voraussetzungen für Auto-Coding werden geprüft.",
+      "loading-job-status": "Auftrag angenommen. Der aktuelle Status wird geladen."
+    },
+    "my-coding-jobs": {
+      "replay-blocked": "Der Browser hat das Replay-Fenster blockiert.",
+      "open-replay-in-current-tab": "Replay hier öffnen"
+    },
     "reset-version-dialog": {
       "preview-help": "Prüfen Sie den gewählten Bereich vor dem Zurücksetzen. Die Prüfung startet nur auf Knopfdruck und verändert keine Daten.",
       "process-label": "Reset-Vorschau",
@@ -4121,6 +4134,8 @@
       "assigned-to": "Zugeordnet zu:"
     },
     "manual-coding-preparation-view": {
+      "calculate-analysis": "Antwortanalyse starten",
+      "calculation-queued": "Wartet auf Bearbeitung",
       "analysis-running": "Analyse läuft",
       "calculation-running": "Berechnung läuft...",
       "coded-value": "Kodiert (Code: {{assignedCode}})",
@@ -4172,6 +4187,8 @@
       "boolean-option": "Boolesche Option"
     },
     "variable-analysis-dialog": {
+      "results-expired": "Das gespeicherte Ergebnis ist abgelaufen.",
+      "recalculate": "Erneut berechnen",
       "results-tab": "Analyseergebnisse",
       "total-responses-column": "Antworten gesamt",
       "loading-distribution": "Lade Code-/Score-Verteilung...",
@@ -4293,13 +4310,7 @@
       "units-title": "Aufgaben im Testheft"
     },
     "booklet-search-dialog": {
-      "title": "Booklet Suche",
-      "booklet-name": "Booklet Name",
-      "name-placeholder": "Booklet Name eingeben...",
-      "empty": "Keine Booklets gefunden.",
-      "delete-failed": "Fehler beim Löschen des Booklets: {{value1}}",
-      "delete-all-title": "Alle Booklets löschen",
-      "delete-all-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefundenen Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden."
+      "empty": "Keine Booklets gefunden."
     },
     "content-pool-import-dialog": {
       "title": "ACP aus Content Pool importieren",
@@ -4430,7 +4441,12 @@
       "install-failed": "Installation fehlgeschlagen."
     },
     "process-overview": {
-      "pagination": "Seite der Prozesse auswählen"
+      "pagination": "Seite der Prozesse auswählen",
+      "test-files-upload": "Testdatei-Upload",
+      "test-files-upload-description": "Verarbeitung hochgeladener Testdateien und ZIP-Archive",
+      "uploaded-file-count": "Importiert",
+      "failed-file-count": "Fehlgeschlagen",
+      "conflict-count": "Konflikte"
     },
     "resource-packages-dialog": {
       "title": "Ressourcenpakete",
@@ -4615,7 +4631,7 @@
       "overwrite-failed": "Fehler beim Überschreiben der Dateien.",
       "upload-failed": "Fehler beim Hochladen der Dateien.",
       "file-types-required": "Keine Dateitypen ausgewählt.",
-      "zip-download-success": "ZIP-Datei wurde erfolgreich heruntergeladen.",
+      "zip-download-started": "ZIP-Download gestartet. Den Fortschritt sehen Sie in den Downloads Ihres Browsers.",
       "zip-download-failed": "Fehler beim Herunterladen der ZIP-Datei.",
       "no-test-takers-title": "Keine Testtaker gefunden",
       "create-test-takers-question": "Es wurden keine Testtaker-Dateien gefunden. Möchten Sie eine automatisch generierte Testtaker-Datei erstellen?",
@@ -4632,8 +4648,7 @@
       "size-1mb-to-10mb": "1MB - 10MB",
       "size-over-10mb": "> 10MB",
       "content-pool-upload-result": "Content-Pool-Upload Ergebnis",
-      "loading-list": "Dateiliste wird geladen...",
-      "empty-zip-response": "Leere ZIP-Antwort erhalten."
+      "loading-list": "Dateiliste wird geladen..."
     },
     "test-results-delete-preview-dialog": {
       "scope": "Betroffener Bereich",
@@ -4746,6 +4761,8 @@
       "start-upload": "Upload starten"
     },
     "test-results-upload-result-dialog": {
+      "coding-freshness-unavailable": "Der Kodierstand konnte noch nicht geladen werden.",
+      "retry-coding-freshness": "Kodierstand erneut laden",
       "refreshing-overview": "Übersicht wird aktualisiert",
       "log-import-title": "Hinweis zum Log-Import",
       "log-import-hint": "Logs werden nur bestehenden Testpersonen, Testheften und Aufgaben zugeordnet. Wenn die passenden Testergebnisse fehlen, legt der Import sie nicht automatisch an.",
@@ -4847,6 +4864,8 @@
       "no-category": "Ohne Kategorie"
     },
     "test-results": {
+      "flat-load-failed": "Testergebnisse konnten nicht geladen werden.",
+      "flat-load-retry": "Erneut laden",
       "import": "Import",
       "running": "Läuft...",
       "quick-search": "Schnellsuche",
@@ -4886,7 +4905,6 @@
       "value": "Value:",
       "empty-title": "Keine Testergebnisse vorhanden",
       "empty-description": "Laden Sie Antworten oder Logs hoch, um Testergebnisse anzuzeigen.",
-      "processing-files": "Verarbeite... {{progress}}% ({{completedCount}}/{{totalJobs}} Dateien)",
       "invalid-booklet": "Ungültiges Testheft",
       "invalid-person": "Keine gültige Testperson ausgewählt",
       "no-booklet-units": "Keine Units im Testheft vorhanden",
@@ -4910,11 +4928,13 @@
       "loading-unit-info": "Lade Unit-Informationen..."
     },
     "test-results-search": {
+      "load-failed": "Mindestens ein Suchbereich konnte nicht geladen werden.",
       "search-placeholder": "Code, Login, Testheft, Aufgabe, Variable oder Antwortwert",
       "search-scopes": "Suchbereiche",
       "minimum-search-length": "Geben Sie mindestens {{MIN_SEARCH_LENGTH}} Zeichen ein.",
       "no-matches": "Keine Treffer gefunden.",
       "result-count": "{{value1}} von {{value2}}",
+      "preview-count": "{{count}} Treffer in der Vorschau, weitere vorhanden",
       "open-browser": "Im Ergebnisbrowser öffnen",
       "start-replay": "Replay starten",
       "replay-unavailable": "Für diesen Treffer ist kein Replay verfügbar."
@@ -4957,25 +4977,6 @@
       "schemer": "Schemer:",
       "scheme-type": "Scheme Type:",
       "coding-scheme": "Kodierungsschema"
-    },
-    "unit-search-dialog": {
-      "booklets-title": "Booklets suchen",
-      "search-booklet": "Booklet suchen",
-      "booklet-placeholder": "Geben Sie den Namen des Booklets ein...",
-      "delete-filtered-units": "Alle {{value1}} gefilterten Aufgaben löschen",
-      "delete-filtered-responses": "Alle {{value1}} gefilterten Antworten löschen",
-      "delete-filtered-booklets": "Alle {{value1}} gefilterten Booklets löschen",
-      "delete-unit-confirmation": "Sind Sie sicher, dass Sie die Unit \"{{unitName}}\" ({{value2}}) löschen möchten? Alle zugehörigen Antworten werden ebenfalls gelöscht.",
-      "unit-deleted": "Unit erfolgreich gelöscht. Unit ID: {{deletedUnit}}",
-      "unit-delete-failed": "Fehler beim Löschen der Unit: {{value1}}",
-      "response-deleted": "Antwort erfolgreich gelöscht. Antwort ID: {{deletedResponse}}",
-      "response-delete-failed": "Fehler beim Löschen der Antwort: {{value1}}",
-      "delete-units-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Aufgaben löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "units-deleted": "{{deletedCount}} Aufgaben erfolgreich gelöscht.",
-      "units-delete-failed": "Fehler beim Löschen der Aufgaben: {{value1}}",
-      "delete-responses-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Antworten löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "delete-booklets-confirmation": "Sind Sie sicher, dass Sie alle {{value1}} gefilterten Booklets löschen möchten? Diese Aktion kann nicht rückgängig gemacht werden.",
-      "no-alias": "ohne Alias"
     },
     "duplicate-responses-validation-panel": {
       "title": "Duplikate-Prüfung",
@@ -5336,6 +5337,7 @@
       "error-count": "fehler"
     },
     "test-results-export": {
+      "status-load-failed": "Der Exportstatus konnte nicht geladen werden. Öffnen Sie den Exportdialog erneut.",
       "start-failed": "Fehler beim Starten des Exports",
       "completed": "Export abgeschlossen",
       "cancel-failed": "Export konnte nicht abgebrochen werden",
@@ -5346,10 +5348,10 @@
     "test-results-import": {
       "completed-refreshing": "Der Import ist abgeschlossen. Lade die aktualisierten Ergebniszahlen.",
       "overview-loaded": "Die Ergebnisübersicht wurde geladen.",
-      "importing-responses": "Importiere Antworten... (0%)",
+      "importing-responses": "Antwortdatei wird hochgeladen",
       "uploading": "Ergebnisse werden hochgeladen...",
       "ready": "Ergebnis bereit",
-      "importing-logs": "Importiere Logs... (0%)"
+      "importing-logs": "Log-Datei wird hochgeladen"
     },
     "test-results-summary": {
       "controller-error": "Controller-Fehler",
@@ -5380,7 +5382,11 @@
       "chunked-logs-hint": "Die Log-Datei wird in Teilen übertragen.",
       "chunked-responses-hint": "Die Antwortdatei wird in Teilen übertragen.",
       "start-failed": "Fehler beim Upload-Start: {{message}}",
-      "processing": "Verarbeitung läuft",
+      "preparing-upload": "Import wird vorbereitet",
+      "transfer-complete": "Die Datei wurde übertragen und wird für den Import vorbereitet.",
+      "reading-file": "Datei wird eingelesen",
+      "reading-file-progress": "Datei wird eingelesen ({{progress}} %)",
+      "processing": "Daten werden verarbeitet",
       "accepted": "Die Datei wurde angenommen. Der Server verarbeitet die Upload-Jobs.",
       "status-unavailable": "Upload läuft möglicherweise weiter, aber der Status konnte gerade nicht gelesen werden.",
       "completed-refreshing": "Die Jobs sind abgeschlossen. Lade die aktualisierten Ergebniszahlen.",
@@ -5394,9 +5400,11 @@
       "log-quality-unavailable": "Logs importiert. Die Log-Qualität konnte nicht geprüft werden.",
       "waiting-for-results": "Die Jobs sind abgeschlossen. Warte auf die vollständigen Ergebnisdaten.",
       "job-failed": "Upload-Job {{value1}} ist fehlgeschlagen.",
-      "processing-jobs": "Der Server verarbeitet die Upload-Jobs.",
+      "processing-jobs": "Der Import läuft. Das Ergebnis wird anschließend angezeigt.",
       "logs-title": "Upload-Ergebnis (Logs)",
-      "reading-result": "Ergebnis wird gelesen"
+      "reading-result": "Ergebnis wird gelesen",
+      "preparing-result": "Ergebnis wird vorbereitet",
+      "loading-result-details": "Die Details für den Ergebnisdialog werden geladen."
     },
     "message-dialog": {
       "error-title": "Achtung: Fehler",

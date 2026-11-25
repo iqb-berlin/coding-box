@@ -1,4 +1,7 @@
 import 'reflect-metadata';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { WorkspaceTestResultsExportController } from './workspace-test-results-export.controller';
@@ -8,7 +11,8 @@ import {
   DatabaseExportJobResult
 } from '../database/database-export.processor';
 import { JobQueueService } from '../../job-queue/job-queue.service';
-import { CacheService } from '../../cache/cache.service';
+import type { CacheService } from '../../cache/cache.service';
+import { ExportArtifactService } from '../../database/services/coding/export-artifact.service';
 import { JournalService } from '../../database/services/shared';
 
 jest.mock('../../database/services/test-results', () => ({
@@ -32,7 +36,7 @@ describe('WorkspaceTestResultsExportController', () => {
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       jobQueueService,
-      {} as CacheService,
+      {} as ExportArtifactService,
       journalService,
       databaseExportQueue
     );
@@ -60,7 +64,7 @@ describe('WorkspaceTestResultsExportController', () => {
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       { deleteExportJob } as unknown as JobQueueService,
-      {} as CacheService,
+      {} as ExportArtifactService,
       {} as JournalService,
       {} as Queue<DatabaseExportJobData>
     );
@@ -99,7 +103,7 @@ describe('WorkspaceTestResultsExportController', () => {
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       {} as JobQueueService,
-      {} as CacheService,
+      {} as ExportArtifactService,
       { recordEvent: jest.fn() } as unknown as JournalService,
       databaseExportQueue
     );
@@ -249,14 +253,14 @@ describe('WorkspaceTestResultsExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     } as unknown as JobQueueService;
-    const cacheService = {
-      get: jest.fn(),
-      delete: jest.fn().mockResolvedValue(undefined)
-    } as unknown as CacheService;
+    const exportArtifacts = {
+      getArtifact: jest.fn(),
+      deleteArtifacts: jest.fn().mockResolvedValue(undefined)
+    } as unknown as ExportArtifactService;
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       jobQueueService,
-      cacheService,
+      exportArtifacts,
       { recordEvent: jest.fn() } as unknown as JournalService,
       { getJob: jest.fn() } as unknown as Queue<DatabaseExportJobData>
     );
@@ -267,8 +271,8 @@ describe('WorkspaceTestResultsExportController', () => {
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
-    expect(cacheService.get).not.toHaveBeenCalled();
-    expect(cacheService.delete).not.toHaveBeenCalled();
+    expect(exportArtifacts.getArtifact).not.toHaveBeenCalled();
+    expect(exportArtifacts.deleteArtifacts).not.toHaveBeenCalled();
   });
 
   it('does not report successful cancellation when queue cancellation was not accepted', async () => {
@@ -285,14 +289,14 @@ describe('WorkspaceTestResultsExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(false),
       cancelExportJob: jest.fn().mockResolvedValue(false)
     } as unknown as JobQueueService;
-    const cacheService = {
-      get: jest.fn(),
-      delete: jest.fn()
-    } as unknown as CacheService;
+    const exportArtifacts = {
+      getArtifact: jest.fn(),
+      deleteArtifacts: jest.fn()
+    } as unknown as ExportArtifactService;
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       jobQueueService,
-      cacheService,
+      exportArtifacts,
       { recordEvent: jest.fn() } as unknown as JournalService,
       { getJob: jest.fn() } as unknown as Queue<DatabaseExportJobData>
     );
@@ -303,7 +307,7 @@ describe('WorkspaceTestResultsExportController', () => {
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
-    expect(cacheService.delete).not.toHaveBeenCalled();
+    expect(exportArtifacts.deleteArtifacts).not.toHaveBeenCalled();
   });
 
   it('does not clean up finished exports when a job completes during cancellation', async () => {
@@ -322,14 +326,14 @@ describe('WorkspaceTestResultsExportController', () => {
       markExportJobCancelled: jest.fn().mockResolvedValue(true),
       cancelExportJob: jest.fn().mockResolvedValue(true)
     } as unknown as JobQueueService;
-    const cacheService = {
-      get: jest.fn(),
-      delete: jest.fn()
-    } as unknown as CacheService;
+    const exportArtifacts = {
+      getArtifact: jest.fn(),
+      deleteArtifacts: jest.fn()
+    } as unknown as ExportArtifactService;
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       jobQueueService,
-      cacheService,
+      exportArtifacts,
       { recordEvent: jest.fn() } as unknown as JournalService,
       { getJob: jest.fn() } as unknown as Queue<DatabaseExportJobData>
     );
@@ -340,7 +344,114 @@ describe('WorkspaceTestResultsExportController', () => {
     });
     expect(jobQueueService.markExportJobCancelled).toHaveBeenCalledWith('job-1', 7);
     expect(jobQueueService.cancelExportJob).toHaveBeenCalledWith('job-1', 7);
-    expect(cacheService.delete).not.toHaveBeenCalled();
+    expect(exportArtifacts.deleteArtifacts).not.toHaveBeenCalled();
+  });
+
+  it('offers a completed CSV only while its file exists, even if its metadata remains cached', async () => {
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'test-results-export-'));
+    const fileName = 'results.csv';
+    const filePath = path.join(directory, fileName);
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 7, exportType: 'test-results' },
+      getState: jest.fn().mockResolvedValue('completed'),
+      timestamp: 12345,
+      progress: 100
+    };
+    const artifactService = new ExportArtifactService({
+      get: jest.fn().mockResolvedValue({ workspaceId: 7, filePath, fileName }),
+      getStrict: jest.fn().mockResolvedValue({ workspaceId: 7, filePath, fileName })
+    } as unknown as CacheService, {} as never);
+    const controller = new WorkspaceTestResultsExportController(
+      {} as WorkspaceTestResultsService,
+      {
+        getExportJobs: jest.fn().mockResolvedValue([job]),
+        getExportJob: jest.fn().mockResolvedValue(job)
+      } as unknown as JobQueueService,
+      artifactService,
+      {} as JournalService,
+      {} as Queue<DatabaseExportJobData>
+    );
+    const response = { download: jest.fn() };
+
+    try {
+      fs.writeFileSync(filePath, 'response\n1\n');
+      await expect(controller.getExportJobs(7)).resolves.toEqual([
+        expect.objectContaining({ jobId: 'job-1', status: 'completed' })
+      ]);
+      await expect(controller.getExportJobStatus(7, 'job-1')).resolves.toMatchObject({ status: 'completed' });
+      await controller.downloadExportJobResult(7, 'job-1', response as never);
+      expect(response.download).toHaveBeenCalledWith(filePath, fileName);
+
+      fs.unlinkSync(filePath);
+      await expect(controller.getExportJobs(7)).resolves.toEqual([]);
+      await expect(controller.getExportJobStatus(7, 'job-1')).rejects.toMatchObject({ status: 404 });
+      await expect(controller.downloadExportJobResult(7, 'job-1', response as never))
+        .rejects.toThrow('Export result not found or expired');
+    } finally {
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  it('propagates an artifact-cache read error from completed CSV status requests', async () => {
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 7, exportType: 'test-results' },
+      getState: jest.fn().mockResolvedValue('completed'),
+      timestamp: 12345,
+      progress: 100
+    };
+    const error = new Error('Redis temporarily unavailable');
+    const artifactService = new ExportArtifactService({
+      get: jest.fn().mockResolvedValue(null),
+      getStrict: jest.fn().mockRejectedValue(error)
+    } as unknown as CacheService, {} as never);
+    const controller = new WorkspaceTestResultsExportController(
+      {} as WorkspaceTestResultsService,
+      {
+        getExportJobs: jest.fn().mockResolvedValue([job]),
+        getExportJob: jest.fn().mockResolvedValue(job)
+      } as unknown as JobQueueService,
+      artifactService,
+      {} as JournalService,
+      {} as Queue<DatabaseExportJobData>
+    );
+
+    await expect(controller.getExportJobStatus(7, 'job-1')).rejects.toBe(error);
+    await expect(controller.getExportJobs(7)).rejects.toBe(error);
+  });
+
+  it('reads one CSV job by ID and rejects jobs from other workspaces or export types', async () => {
+    const job = {
+      id: 'job-1',
+      data: { workspaceId: 7, exportType: 'test-logs' },
+      getState: jest.fn().mockResolvedValue('active'),
+      progress: { percentage: 52 },
+      timestamp: 12345
+    };
+    const getExportJob = jest.fn().mockResolvedValue(job);
+    const getArtifact = jest.fn();
+    const controller = new WorkspaceTestResultsExportController(
+      {} as WorkspaceTestResultsService,
+      { getExportJob } as unknown as JobQueueService,
+      { getArtifact } as unknown as ExportArtifactService,
+      {} as JournalService,
+      {} as Queue<DatabaseExportJobData>
+    );
+
+    await expect(controller.getExportJobStatus(7, 'job-1')).resolves.toMatchObject({
+      jobId: 'job-1',
+      status: 'active',
+      progress: 52,
+      exportType: 'test-logs'
+    });
+    expect(getExportJob).toHaveBeenCalledWith('job-1');
+    expect(getArtifact).not.toHaveBeenCalled();
+    await expect(controller.getExportJobStatus(8, 'job-1')).rejects.toMatchObject({ status: 404 });
+    job.data.exportType = 'item-matrix';
+    await expect(controller.getExportJobStatus(7, 'job-1')).rejects.toMatchObject({ status: 404 });
+    getExportJob.mockResolvedValue(null);
+    await expect(controller.getExportJobStatus(7, 'job-1')).rejects.toMatchObject({ status: 404 });
   });
 
   it('maps cancelled test-results export jobs in the job list', async () => {
@@ -403,7 +514,7 @@ describe('WorkspaceTestResultsExportController', () => {
     const controller = new WorkspaceTestResultsExportController(
       {} as WorkspaceTestResultsService,
       jobQueueService,
-      {} as CacheService,
+      {} as ExportArtifactService,
       { recordEvent: jest.fn() } as unknown as JournalService,
       { getJob: jest.fn() } as unknown as Queue<DatabaseExportJobData>
     );

@@ -1,3 +1,5 @@
+import type { UnitsReplayUnit } from '../services/units-replay.service';
+
 export interface ReplayNavigationContext {
   workspaceId: number;
   testPerson: string;
@@ -23,4 +25,12 @@ export function decideReplayNavigationStrategy(
   return current.testPerson === target.testPerson ?
     'direct-page-navigation' :
     'load-responses';
+}
+
+export function findReplayUnitIndex(units: readonly UnitsReplayUnit[], target: UnitsReplayUnit): number {
+  return units.findIndex(unit => (
+    unit.name === target.name &&
+    (unit.testPerson ?? '') === (target.testPerson ?? '') &&
+    unit.variableId === target.variableId
+  ));
 }

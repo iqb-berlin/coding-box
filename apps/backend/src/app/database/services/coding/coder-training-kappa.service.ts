@@ -315,7 +315,7 @@ export class CoderTrainingKappaService {
         workspace_id: workspaceId,
         training_id: trainingId
       },
-      relations: ['codingJobCoders.user'],
+      relations: { codingJobCoders: { user: true } },
       order: { id: 'ASC' }
     });
     const selectedJobIds = getWithinTrainingComparisonSelectedJobIds(options.selectedJobIds, jobs);

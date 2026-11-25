@@ -466,12 +466,7 @@ export class CoderTrainingComparisonService {
         workspace_id: workspaceId,
         id: In(trainingIds)
       },
-      relations: [
-        'codingJobs',
-        'codingJobs.codingJobUnits',
-        'codingJobs.codingJobCoders',
-        'codingJobs.codingJobCoders.user'
-      ],
+      relations: { codingJobs: { codingJobUnits: true, codingJobCoders: { user: true } } },
       order: { label: 'ASC' }
     });
 
@@ -644,11 +639,7 @@ export class CoderTrainingComparisonService {
         workspace_id: workspaceId,
         id: In(trainingIds)
       },
-      relations: [
-        'codingJobs',
-        'codingJobs.codingJobCoders',
-        'codingJobs.codingJobCoders.user'
-      ],
+      relations: { codingJobs: { codingJobCoders: { user: true } } },
       order: { label: 'ASC' }
     });
 
@@ -755,7 +746,7 @@ export class CoderTrainingComparisonService {
         workspace_id: workspaceId,
         training_id: trainingId
       },
-      relations: ['codingJobCoders.user'],
+      relations: { codingJobCoders: { user: true } },
       order: { id: 'ASC' }
     });
 
@@ -1006,7 +997,7 @@ export class CoderTrainingComparisonService {
         workspace_id: workspaceId,
         training_id: trainingId
       },
-      relations: ['codingJobCoders.user'],
+      relations: { codingJobCoders: { user: true } },
       order: { id: 'ASC' }
     });
 

@@ -5,8 +5,11 @@ describe('zoneless test-results view', () => {
     it(leaveView ? 'tracks an accepted response upload after leaving its starting view' :
       'uploads responses and refreshes the overview after processing', () => {
       let completionId: string;
+      let resultDetailsId: string;
+      let jobStage: 'reading' | 'processing' | 'completed' = 'reading';
       let uploaded = false;
       let completionRequested = false;
+      let resultDetailsRequested = false;
       const before = {
         testPersons: 3,
         testGroups: 2,
@@ -61,21 +64,37 @@ describe('zoneless test-results view', () => {
           request.continue();
         }).as('uploadComplete');
       });
-      cy.intercept('GET', '**/api/admin/workspace/5/upload/status/job-1', {
-        body: {
-          id: 'job-1',
-          status: 'completed',
-          progress: 100,
-          result: {
-            expected: delta,
-            before,
-            after,
-            delta,
-            responseStatusCounts: {},
-            issues: [],
-            importedResponses: true
+      const codingFreshness = { workspaceId: 5, currentRevision: 0, items: [] };
+      cy.task<{ id: string; url: string }>('deferred:create', { body: codingFreshness }).then(gate => {
+        resultDetailsId = gate.id;
+        cy.intercept('GET', '**/api/admin/workspace/5/coding/freshness', request => {
+          if (uploaded) {
+            resultDetailsRequested = true;
+            request.url = gate.url;
+            request.continue();
+          } else {
+            request.reply({ body: codingFreshness });
           }
-        }
+        });
+      });
+      cy.intercept('GET', '**/api/admin/workspace/5/upload/status/job-1', request => {
+        request.reply({
+          body: {
+            id: 'job-1',
+            status: jobStage === 'completed' ? 'completed' : 'active',
+            progress: jobStage === 'completed' ? 100 : 42,
+            phase: jobStage === 'reading' ? 'reading' : 'processing',
+            result: jobStage === 'completed' ? {
+              expected: delta,
+              before,
+              after,
+              delta,
+              responseStatusCounts: {},
+              issues: [],
+              importedResponses: true
+            } : undefined
+          }
+        });
       }).as('uploadStatus');
 
       cy.visit('/', {
@@ -116,17 +135,38 @@ describe('zoneless test-results view', () => {
         .contains('button', 'Upload starten').click();
       cy.wait(['@uploadInit', '@uploadChunk']);
       cy.get('coding-box-test-results-import-progress-dialog').should('be.visible')
+        .and('contain.text', 'Import wird vorbereitet')
+        .and('not.contain.text', '100%')
         .should(() => { expect(completionRequested).to.equal(true); });
       if (leaveView) {
         cy.window().then(win => { win.location.hash = '/'; });
         cy.get('coding-box-test-results').should('not.exist');
         cy.get('coding-box-test-results-import-progress-dialog').should('be.visible');
       }
-      cy.then(() => {
-        uploaded = true;
-        return cy.task('deferred:release', completionId);
-      });
+      cy.then(() => cy.task('deferred:release', completionId));
       cy.wait(['@uploadComplete', '@uploadStatus']);
+      cy.get('coding-box-test-results-import-progress-dialog')
+        .should('contain.text', 'Datei wird eingelesen')
+        .find('mat-progress-bar').should('have.attr', 'aria-valuenow', '42');
+
+      cy.then(() => { jobStage = 'processing'; });
+      cy.get('coding-box-test-results-import-progress-dialog')
+        .should('contain.text', 'Daten werden verarbeitet')
+        .and('not.contain.text', '100%')
+        .find('mat-progress-bar').should('not.have.attr', 'aria-valuenow');
+      cy.get('coding-box-test-results-upload-result-dialog').should('not.exist');
+
+      cy.then(() => {
+        jobStage = 'completed';
+        uploaded = true;
+      });
+      cy.get('coding-box-test-results-import-progress-dialog')
+        .should('be.visible')
+        .and('contain.text', 'Ergebnis wird vorbereitet')
+        .and('not.contain.text', '100%')
+        .should(() => { expect(resultDetailsRequested).to.equal(true); });
+      cy.get('coding-box-test-results-upload-result-dialog').should('not.exist');
+      cy.then(() => cy.task('deferred:release', resultDetailsId));
       cy.get('coding-box-test-results-upload-result-dialog', { timeout: 10000 })
         .should('contain.text', 'Upload-Ergebnis');
       cy.get('coding-box-test-results-import-progress-dialog').should('not.exist');

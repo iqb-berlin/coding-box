@@ -119,7 +119,7 @@ export class CodingResultsService {
     codingJobId: number,
     options: ApplyCodingResultsOptions = {}
   ): Promise<ApplyCodingResultsResult> {
-    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection,
+    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.dataSource,
       () => this.applyCodingResultsInPool(workspaceId, codingJobId, options));
   }
 
@@ -484,7 +484,7 @@ export class CodingResultsService {
 
       if (responsesToUpdate.length === 0) {
         if (skippedReviewCount === 0) {
-          const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+          const queryRunner = this.responseRepository.manager.dataSource.createQueryRunner();
           await queryRunner.connect();
           await queryRunner.startTransaction('READ COMMITTED');
 
@@ -537,7 +537,7 @@ export class CodingResultsService {
         };
       }
 
-      const queryRunner = this.responseRepository.manager.connection.createQueryRunner();
+      const queryRunner = this.responseRepository.manager.dataSource.createQueryRunner();
       await queryRunner.connect();
       await queryRunner.startTransaction('READ COMMITTED');
 
@@ -844,7 +844,7 @@ export class CodingResultsService {
 
     try {
       const result = await withWorkspaceTestResultsMutationLock(
-        this.responseRepository.manager.connection,
+        this.responseRepository.manager.dataSource,
         workspaceId,
         queryRunner => this.applyEmptyResponseCodingLocked(
           workspaceId,

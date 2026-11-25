@@ -62,7 +62,8 @@ describe('TestResultsSearchComponent zoneless responses', () => {
 
   it('renders loading and delayed results without another interaction', async () => {
     await enterQuery('P01');
-    expect(quickSearch).toHaveBeenCalledWith(1, 'P01', 8);
+    expect(quickSearch).toHaveBeenCalledWith(1, 'P01', 8, 'person');
+    expect(quickSearch).not.toHaveBeenCalledWith(1, 'P01', 8, 'response');
     expect(fixture.nativeElement.querySelector('mat-spinner')).not.toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Suche läuft...');
 
@@ -85,8 +86,7 @@ describe('TestResultsSearchComponent zoneless responses', () => {
 
     expect(fixture.nativeElement.querySelector('mat-spinner')).toBeNull();
     expect(fixture.nativeElement.querySelector('.result-item')).toBeNull();
-    expect(fixture.nativeElement.textContent).toContain('Keine Treffer gefunden.');
-    expect(fixture.nativeElement.querySelector('.type-count')?.textContent.trim()).toBe('0');
+    expect(fixture.nativeElement.querySelector('[role=alert]')?.textContent).toContain('Mindestens ein Suchbereich konnte nicht geladen werden.');
   });
 
   it('clears the result counts after the query falls below the minimum length', async () => {
@@ -95,7 +95,7 @@ describe('TestResultsSearchComponent zoneless responses', () => {
 
     await enterQuery('P');
 
-    expect(quickSearch).toHaveBeenCalledTimes(1);
+    expect(quickSearch).toHaveBeenCalledTimes(3);
     expect(fixture.nativeElement.querySelector('.result-item')).toBeNull();
     expect(fixture.nativeElement.querySelector('.type-count')).toBeNull();
     expect(fixture.nativeElement.textContent).toContain('Geben Sie mindestens 2 Zeichen ein.');

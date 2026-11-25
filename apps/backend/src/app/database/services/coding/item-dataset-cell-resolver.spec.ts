@@ -1,7 +1,9 @@
 import type { VariableCodingData } from '@iqbspecs/coding-scheme';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import { CodingSchemeFactory } from './generated/autocoder-compatibility-engine';
-import { ItemDatasetCellResolver, ItemDatasetColumn, ItemDatasetProfile } from './item-dataset-cell-resolver';
+import {
+  ItemDatasetCellResolver, ItemDatasetColumn, ItemDatasetProfile, type ItemDatasetResponseValue
+} from './item-dataset-cell-resolver';
 import { buildItemDatasetVariablePositions } from './item-dataset-variable-positions.util';
 
 const column = (itemId: string, variableId: string, itemOrder: number, unitId = 'DLB004'): ItemDatasetColumn => ({
@@ -78,6 +80,40 @@ describe('item dataset MNR ordering', () => {
       ...values, [later.key, { code: 1, score: 1, status: 5 }]
     ]), profile(), new Map(), { notReachedScope: scope, variablePositions });
     expect(cells.map(cell => cell.code)).toEqual(scope === 'booklet' ? [-99, 1, -99, 1] : [-96, 1, -96, 1]);
+  });
+
+  it.each(['testlet', 'booklet'] as const)('does not use an ambiguous response as evidence of later activity in %s scope', notReachedScope => {
+    const early = column('1', 'EARLY', 0);
+    const later = column('2', 'LATER', 1, 'LATER');
+    const sameTestlet = {
+      units: new Map([
+        ['DLB004', { unitId: 'DLB004', order: 0, testletKey: 'T1' }],
+        ['LATER', { unitId: 'LATER', order: 1, testletKey: 'T1' }]
+      ])
+    };
+    const cells = resolver.resolve([early, later], sameTestlet, new Map<string, ItemDatasetResponseValue>([
+      [early.key, { status: 1, code: null, score: null }],
+      [later.key, {
+        status: null, code: null, score: null, failureReason: 'unresolved-cell'
+      }]
+    ]), profile(), new Map(), { notReachedScope });
+    expect(cells[0]).toMatchObject({ state: 'mnr', code: -96 });
+    expect(cells[1]).toMatchObject({ state: 'error', failureReason: 'unresolved-cell', activity: false });
+  });
+
+  it('propagates an ambiguous source through a nested derived item', () => {
+    const target = { ...column('2', 'D2', 0), isDerived: true };
+    const intermediateKey = 'DLB004\u001FD1';
+    const baseKey = 'DLB004\u001FBASE';
+    const sources = new Map([[target.key, [intermediateKey]], [intermediateKey, [baseKey]]]);
+    const [cell] = resolver.resolve([target], design, new Map<string, ItemDatasetResponseValue>([
+      [intermediateKey, {
+        status: null, code: null, score: null, failureReason: 'unresolved-cell'
+      }],
+      [baseKey, { status: 9, code: null, score: null }]
+    ]), profile(), sources, {});
+    expect(cell).toMatchObject({ state: 'error', failureReason: 'derived-source-unresolved' });
+    expect(() => resolver.getExportValue(cell, 'code')).toThrow('derived-source-unresolved');
   });
 
   it('recodes NR before later variable work even when its item is last', () => {

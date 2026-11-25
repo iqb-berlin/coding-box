@@ -25,6 +25,7 @@ import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
 import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/test-results';
+import { readTestResultsUploadProgress } from '../../../../../../api-dto/files/test-results-upload-progress.dto';
 import { TestResultsUploadJobDto } from '../../../../../../api-dto/files/test-results-upload-job.dto';
 import { ChunkedUploadInitResponseDto, ChunkedUploadChunkResponseDto } from '../../../../../../api-dto/files/chunked-upload.dto';
 import { CacheService } from '../../cache/cache.service';
@@ -308,7 +309,11 @@ export class WorkspaceTestResultsImportController {
             'paused'
           ]
         },
-        progress: { type: 'number' },
+        progress: {
+          type: 'number',
+          description: 'Percentage of file bytes read. The job status determines when processing has ended.'
+        },
+        phase: { type: 'string', enum: ['reading', 'processing'] },
         result: { type: 'object' },
         error: { type: 'object' }
       }
@@ -328,14 +333,14 @@ export class WorkspaceTestResultsImportController {
     }
 
     const state = await job.getState();
-    const progress = job.progress;
+    const progress = readTestResultsUploadProgress(job.progress);
     const result = job.returnvalue;
     const error = job.failedReason;
 
     return {
       id: job.id,
       status: state,
-      progress,
+      ...progress,
       result,
       error
     };

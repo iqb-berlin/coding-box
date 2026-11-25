@@ -17,6 +17,7 @@ import { withWorkspaceFilesMutationLock } from '../shared/workspace-files-lock.u
 import { WorkspaceFileCacheService } from './workspace-file-cache.service';
 import { WorkspaceXmlFileUploadService } from './workspace-xml-file-upload.service';
 import { WorkspaceResourceFileUploadService } from './workspace-resource-file-upload.service';
+import { ReportFileUploadProgress, WorkspaceFileUploadProcessService } from './workspace-file-upload-process.service';
 import {
   isCodingSchemeFileId, toFailedUploadResult, getWorkspaceFilesMutationContext, WorkspaceFilesMutationContext
 } from './workspace-file-write.util';
@@ -26,6 +27,8 @@ type UploadedFileForCacheInvalidation = {
   filename?: string;
   fileType?: string;
 };
+
+export type WorkspaceFileUploadOptions = { trackProgress: boolean };
 
 @Injectable()
 export class WorkspaceFileUploadService {
@@ -37,7 +40,8 @@ export class WorkspaceFileUploadService {
     private readonly resources: WorkspaceResourceFileUploadService,
     private readonly workspaceFileStorageService: WorkspaceFileStorageService,
     private readonly caches: WorkspaceFileCacheService,
-    private readonly codingStatisticsService: CodingStatisticsService
+    private readonly codingStatisticsService: CodingStatisticsService,
+    private readonly uploadProcess: WorkspaceFileUploadProcessService
   ) {}
 
   private isUploadedCodingSchemeFile(
@@ -65,18 +69,23 @@ export class WorkspaceFileUploadService {
     workspace_id: number,
     originalFiles: FileIo[],
     overwriteExisting: boolean,
-    overwriteFileIds?: string[]
+    overwriteFileIds?: string[],
+    options?: WorkspaceFileUploadOptions
   ): Promise<TestFilesUploadResultDto> {
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspace_id,
-      queryRunner => this.uploadTestFilesUnlocked(
-        workspace_id,
-        originalFiles,
-        overwriteExisting,
-        overwriteFileIds,
-        getWorkspaceFilesMutationContext(queryRunner)
-      )
+      async queryRunner => {
+        const mutationContext = getWorkspaceFilesMutationContext(queryRunner);
+        const upload = (report?: ReportFileUploadProgress) => this.uploadTestFilesUnlocked(
+          workspace_id, originalFiles, overwriteExisting, overwriteFileIds, mutationContext, report
+        );
+        if (!options?.trackProgress) return upload();
+
+        // Allocate a database-wide order under the lock, including across API replicas.
+        const [row] = await queryRunner.query('SELECT pg_current_xact_id()::text AS upload_order') as [{ upload_order: string }];
+        return this.uploadProcess.track(workspace_id, row.upload_order, originalFiles.length, upload);
+      }
     );
   }
 
@@ -85,7 +94,8 @@ export class WorkspaceFileUploadService {
     originalFiles: FileIo[],
     overwriteExisting: boolean,
     overwriteFileIds: string[] | undefined,
-    mutationContext: WorkspaceFilesMutationContext
+    mutationContext: WorkspaceFilesMutationContext,
+    report?: ReportFileUploadProgress
   ): Promise<TestFilesUploadResultDto> {
     this.logger.log(`Uploading test files for workspace ${workspace_id}`);
 
@@ -119,7 +129,8 @@ export class WorkspaceFileUploadService {
         5,
         overwriteExisting,
         overwriteAllowList,
-        mutationContext
+        mutationContext,
+        report
       );
       // Refresh shared file caches even when every file fails or conflicts.
       await this.caches.invalidateWorkspaceFileCaches(workspace_id);
@@ -157,7 +168,8 @@ export class WorkspaceFileUploadService {
     file: FileIo,
     overwriteExisting: boolean,
     overwriteAllowList?: Set<string>,
-    mutationContext?: WorkspaceFilesMutationContext
+    mutationContext?: WorkspaceFilesMutationContext,
+    reportZipFraction?: ReportFileUploadProgress
   ): Array<Promise<unknown>> {
     const filePromises: Array<Promise<unknown>> = [];
     const fileExtension = path.extname(file.originalname || '').toLowerCase();
@@ -235,7 +247,8 @@ export class WorkspaceFileUploadService {
             file,
             overwriteExisting,
             overwriteAllowList,
-            mutationContext
+            mutationContext,
+            reportZipFraction
           )
         );
         break;
@@ -285,7 +298,8 @@ export class WorkspaceFileUploadService {
     file: FileIo,
     overwriteExisting: boolean,
     overwriteAllowList?: Set<string>,
-    mutationContext?: WorkspaceFilesMutationContext
+    mutationContext?: WorkspaceFilesMutationContext,
+    reportFraction?: ReportFileUploadProgress
   ): Promise<unknown[]> {
     this.logger.log(
       `Processing ZIP file: ${file.originalname} for workspace ${workspaceId}`
@@ -329,6 +343,7 @@ export class WorkspaceFileUploadService {
           })
         );
         batchResults.forEach(res => results.push(...res));
+        reportFraction?.((i + batch.length) / zipEntries.length);
       }
       return results;
     } catch (error) {
@@ -411,7 +426,7 @@ export class WorkspaceFileUploadService {
     return uploaded;
   }
 
-  private async processInBatches(workspace_id: number, files: FileIo[], batchSize: number, overwriteExistingParam: boolean, overwriteAllowListParam: Set<string> | undefined, mutationContext: WorkspaceFilesMutationContext): Promise<TestFilesUploadResultDto> {
+  private async processInBatches(workspace_id: number, files: FileIo[], batchSize: number, overwriteExistingParam: boolean, overwriteAllowListParam: Set<string> | undefined, mutationContext: WorkspaceFilesMutationContext, report?: ReportFileUploadProgress): Promise<TestFilesUploadResultDto> {
     const conflicts: TestFilesUploadConflictDto[] = [];
     const failedFiles: TestFilesUploadFailedDto[] = [];
     const uploadedFiles: TestFilesUploadUploadedDto[] = [];
@@ -419,36 +434,33 @@ export class WorkspaceFileUploadService {
     let uploaded = 0;
     for (let i = 0; i < files.length; i += batchSize) {
       const batch = files.slice(i, i + batchSize);
-      const tasks: Array<{ filename: string; promise: Promise<unknown> }> =
-        [];
+      const fractions = batch.map(() => 0);
+      const settledFiles = await Promise.all(batch.map(async (file, index) => {
+        const reportFileProgress = report && ((fraction: number) => {
+          fractions[index] = fraction;
+          report(fractions.reduce((sum, part) => sum + part, i) / files.length);
+        });
+        const results = await Promise.allSettled(this.handleFile(
+          workspace_id, file, overwriteExistingParam, overwriteAllowListParam, mutationContext, reportFileProgress
+        ));
+        reportFileProgress?.(1);
+        return results;
+      }));
 
-      batch.forEach(file => {
-        const promises = this.handleFile(
-          workspace_id,
-          file,
-          overwriteExistingParam,
-          overwriteAllowListParam,
-          mutationContext
-        );
-        promises.forEach(p => tasks.push({ filename: file.originalname, promise: p })
-        );
-      });
-
-      const settled = await Promise.allSettled(tasks.map(t => t.promise));
-      // Preserve task order across returned failures, rejections and nested ZIP results.
-      uploaded += settled.reduce((count, result, idx) => {
-        const task = tasks[idx];
-        if (result.status === 'rejected') {
-          const reason = (result as PromiseRejectedResult).reason;
-          failedFiles.push({
-            filename: task?.filename || 'unknown',
-            reason: reason instanceof Error ? reason.message : String(reason)
-          });
-          return count;
+      // Collect in input order even when files finish out of order.
+      for (const [index, results] of settledFiles.entries()) {
+        for (const result of results) {
+          if (result.status === 'rejected') {
+            const { reason } = result;
+            failedFiles.push({
+              filename: batch[index].originalname || 'unknown',
+              reason: reason instanceof Error ? reason.message : String(reason)
+            });
+          } else {
+            uploaded += this.collectUploadResults([result.value], failedFiles, conflicts, uploadedFiles, issues);
+          }
         }
-
-        return count + this.collectUploadResults([result.value], failedFiles, conflicts, uploadedFiles, issues);
-      }, 0);
+      }
     }
 
     return {

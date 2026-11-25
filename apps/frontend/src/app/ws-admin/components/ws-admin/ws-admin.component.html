@@ -13,6 +13,7 @@
         </a>
       }
     </nav>
+      <ng-container [ngTemplateOutlet]="compactNavigation" [ngTemplateOutletContext]="{ $implicit: navLinks() }" />
       <mat-tab-nav-panel #tabPanel class="router-panel">
         <router-outlet></router-outlet>
       </mat-tab-nav-panel>
@@ -30,6 +31,7 @@
             </a>
           }
         </nav>
+        <ng-container [ngTemplateOutlet]="compactNavigation" [ngTemplateOutletContext]="{ $implicit: codingManagerLinks() }" />
         <mat-tab-nav-panel #tabPanel class="router-panel">
           <router-outlet></router-outlet>
         </mat-tab-nav-panel>
@@ -41,3 +43,13 @@
     }
   </div>
 </div>
+
+<ng-template #compactNavigation let-links>
+  <nav class="compact-navigation" [attr.aria-label]="'ws-admin.workspace-navigation' | translate">
+    @for (link of links; track link.path) {
+      <a [routerLink]="link.path" routerLinkActive="active-link" ariaCurrentWhenActive="page">
+        {{ link.label | translate }}
+      </a>
+    }
+  </nav>
+</ng-template>

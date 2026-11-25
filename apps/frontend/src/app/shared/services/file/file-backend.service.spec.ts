@@ -1,6 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController, provideHttpClientTesting } from '@angular/common/http/testing';
-import { HttpEventType, provideHttpClient, withInterceptorsFromDi } from '@angular/common/http';
+import {
+  provideHttpClient, withInterceptorsFromDi
+} from '@angular/common/http';
 import { FileBackendService } from './file-backend.service';
 import { SERVER_URL } from '../../../injection-tokens';
 
@@ -59,29 +61,17 @@ describe('FileBackendService', () => {
       req.flush(new Blob());
     });
 
-    it('should post request for zip download with progress events', () => {
-      const receivedEventTypes: number[] = [];
-      service
-        .downloadWorkspaceFilesAsZipWithProgress(1, ['xml'])
-        .subscribe(event => {
-          receivedEventTypes.push(event.type);
-        });
+    it('prepares an archive for a native browser download', () => {
+      const url = `${mockServerUrl}admin/workspace/1/files/download-zip`;
+      let downloadUrl: string | undefined;
+      service.prepareWorkspaceZip(1, ['xml']).subscribe(result => { downloadUrl = result; });
 
-      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/1/files/download-zip`);
+      const req = httpMock.expectOne(`${url}?prepare=true`);
       expect(req.request.method).toBe('POST');
       expect(req.request.body).toEqual({ fileTypes: ['xml'] });
-      expect(req.request.reportProgress).toBe(true);
-      expect(req.request.responseType).toBe('blob');
+      req.flush({ id: 'prepared-archive' });
 
-      req.event({
-        type: HttpEventType.DownloadProgress,
-        loaded: 50,
-        total: 100
-      });
-      req.flush(new Blob(['zip']));
-
-      expect(receivedEventTypes).toContain(HttpEventType.DownloadProgress);
-      expect(receivedEventTypes).toContain(HttpEventType.Response);
+      expect(downloadUrl).toBe(`${url}/prepared-archive/download`);
     });
   });
 });

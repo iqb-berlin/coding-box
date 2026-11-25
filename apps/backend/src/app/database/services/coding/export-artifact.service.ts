@@ -259,10 +259,11 @@ export class ExportArtifactService {
     }
   }
 
-  async getArtifact(jobId: string): Promise<ExportJobResult | null> {
-    const metadata = await this.cacheService.get<ExportJobResult>(
-      ExportArtifactService.getExportResultCacheKey(jobId)
-    );
+  async getArtifact(jobId: string, { strict = false } = {}): Promise<ExportJobResult | null> {
+    const key = ExportArtifactService.getExportResultCacheKey(jobId);
+    const metadata = strict ?
+      await this.cacheService.getStrict<ExportJobResult>(key) :
+      await this.cacheService.get<ExportJobResult>(key);
     return metadata?.filePath && fs.existsSync(metadata.filePath) ? metadata : null;
   }
 
