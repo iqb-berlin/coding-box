@@ -480,16 +480,10 @@ export class CodingResultsExportService {
           job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.bookletinfo',
-        'response.unit.booklet.person'
-      ]
+      relations: {
+        coding_job: { codingJobCoders: { user: true } },
+        response: { unit: { booklet: { bookletinfo: true, person: true } } }
+      }
     });
 
     if (codingJobUnits.length === 0 && excludeAutoCoded) {
@@ -786,16 +780,10 @@ export class CodingResultsExportService {
           job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.bookletinfo',
-        'response.unit.booklet.person'
-      ]
+      relations: {
+        coding_job: { codingJobCoders: { user: true } },
+        response: { unit: { booklet: { bookletinfo: true, person: true } } }
+      }
     });
 
     if (codingJobUnits.length === 0 && excludeAutoCoded) {
@@ -1113,16 +1101,10 @@ export class CodingResultsExportService {
           job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
         }
       },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.bookletinfo',
-        'response.unit.booklet.person'
-      ]
+      relations: {
+        coding_job: { codingJobCoders: { user: true } },
+        response: { unit: { booklet: { bookletinfo: true, person: true } } }
+      }
     });
 
     if (codingJobUnits.length === 0 && excludeAutoCoded) {
@@ -1421,7 +1403,7 @@ export class CodingResultsExportService {
         training_id: IsNull(),
         job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
       },
-      relations: ['codingJobCoders', 'codingJobCoders.user', 'codingJobUnits', 'codingJobUnits.response', 'codingJobUnits.response.unit']
+      relations: { codingJobCoders: { user: true }, codingJobUnits: { response: { unit: true } } }
     });
 
     if (codingJobs.length === 0) {
@@ -1750,16 +1732,10 @@ export class CodingResultsExportService {
                   job_type: Not(CODING_JOB_TYPE_CODING_ISSUE_REVIEW)
                 }
               },
-              relations: [
-                'coding_job',
-                'coding_job.codingJobCoders',
-                'coding_job.codingJobCoders.user',
-                'response',
-                'response.unit',
-                'response.unit.booklet',
-                'response.unit.booklet.bookletinfo',
-                'response.unit.booklet.person'
-              ],
+              relations: {
+                coding_job: { codingJobCoders: { user: true } },
+                response: { unit: { booklet: { bookletinfo: true, person: true } } }
+              },
               take: MAX_RESPONSES_PER_WORKSHEET * 10
             });
 

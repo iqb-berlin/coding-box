@@ -1,4 +1,6 @@
-import { ForbiddenException, BadRequestException, ConflictException } from '@nestjs/common';
+import {
+  ForbiddenException, BadRequestException, ConflictException, NotFoundException
+} from '@nestjs/common';
 import { randomUUID } from 'node:crypto';
 import { DataSource } from 'typeorm';
 import User from '../../entities/user.entity';
@@ -80,7 +82,7 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
     await db.manager.save(CodingJobCoder, { coding_job_id: resources.get('job')![0], user_id: owner.id });
     const dependencies = {
       connection: db,
-      usersService: Object.assign(Object.create(UsersService.prototype), { workspaceUserRepository: db.getRepository(WorkspaceUser) }),
+      usersService: new UsersService(users, db.getRepository(WorkspaceUser)),
       codingJobRepository: db.getRepository(CodingJob),
       codingJobCoderRepository: db.getRepository(CodingJobCoder),
       cacheService: { incr: async () => 1, delete: async () => undefined },
@@ -144,6 +146,48 @@ describePostgres('Coding ownership with PostgreSQL and competing mutations', () 
       name: 'Changed', creatorUserId: foreign.id
     } as never, owner.id);
     expect(await service.getVariableBundle(created.id, workspaceId)).toMatchObject({ name: 'Changed', creatorUserId: owner.id });
+  });
+
+  it('scopes reads and writes to the requested workspace and the persisted role', async () => {
+    const other = await db.manager.save(Workspace, { name: 'Other ownership workspace' });
+    const bundles = new VariableBundleService(db.getRepository(VariableBundle));
+    try {
+      await db.manager.save(WorkspaceUser, { workspaceId: other.id, userId: foreign.id, accessLevel: 2 });
+      const bundle = await bundles.createVariableBundle(other.id, { name: 'Other bundle', variables: [] }, foreign.id);
+      const job = await db.manager.save(CodingJob, { workspace_id: other.id, name: 'Other job', creatorUserId: foreign.id });
+
+      await expect(jobs.assertUserCanAccessCodingJob(job.id, other.id, foreign.id)).resolves.toBeUndefined();
+      await expect(jobs.assertUserCanAccessCodingJob(job.id, other.id, owner.id)).rejects.toBeInstanceOf(ForbiddenException);
+      await expect(jobs.assertUserCanAccessCodingJob(job.id, workspaceId, foreign.id)).rejects.toBeInstanceOf(NotFoundException);
+      await expect(bundles.getVariableBundles(other.id)).resolves.toMatchObject({ total: 1, data: [{ id: bundle.id }] });
+      await expect(bundles.getVariableBundle(bundle.id, workspaceId)).rejects.toBeInstanceOf(NotFoundException);
+
+      await expect(bundles.updateVariableBundle(bundle.id, other.id, { name: 'Allowed edit' }, foreign.id))
+        .resolves.toMatchObject({ id: bundle.id, name: 'Allowed edit' });
+      await expect(bundles.updateVariableBundle(bundle.id, workspaceId, { name: 'Wrong workspace' }, foreign.id))
+        .rejects.toBeInstanceOf(NotFoundException);
+      await expect(bundles.updateVariableBundle(bundle.id, other.id, { name: 'Wrong role' }, owner.id))
+        .rejects.toBeInstanceOf(ForbiddenException);
+      await expect(db.manager.findOneByOrFail(VariableBundle, { id: bundle.id }))
+        .resolves.toMatchObject({ workspace_id: other.id, name: 'Allowed edit', creatorUserId: foreign.id });
+    } finally {
+      await db.manager.delete(CodingJob, { workspace_id: other.id });
+      await db.manager.delete(VariableBundle, { workspace_id: other.id });
+      await db.manager.delete(WorkspaceUser, { workspaceId: other.id });
+      await db.manager.delete(Workspace, other.id);
+    }
+  });
+
+  it.each([null, undefined])('rejects a missing workspace filter (%s) on reads and edits', async missing => {
+    const bundles = new VariableBundleService(db.getRepository(VariableBundle));
+    const [id] = resources.get('bundle')!;
+    const invalidWorkspace = missing as unknown as number;
+    const filterError = /value encountered in property '([^']*\.)?workspace_id' of a where condition/i;
+
+    await expect(bundles.getVariableBundles(invalidWorkspace)).rejects.toThrow(filterError);
+    await expect(bundles.updateVariableBundle(id, invalidWorkspace, { name: 'Missing workspace' }, owner.id))
+      .rejects.toThrow(filterError);
+    await expect(bundles.getVariableBundle(id, workspaceId)).resolves.toMatchObject({ name: 'Ownership proof' });
   });
 
   it('rejects mixed bulk deletion atomically and audits privileged legacy deletion', async () => {

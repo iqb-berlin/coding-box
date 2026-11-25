@@ -84,15 +84,7 @@ export class CodingTimesExportService {
         },
         code: Not(IsNull()) // Only include units that have been coded
       },
-      relations: [
-        'coding_job',
-        'coding_job.codingJobCoders',
-        'coding_job.codingJobCoders.user',
-        'response',
-        'response.unit',
-        'response.unit.booklet',
-        'response.unit.booklet.bookletinfo'
-      ],
+      relations: { coding_job: { codingJobCoders: { user: true } }, response: { unit: { booklet: { bookletinfo: true } } } },
       select: {
         id: true,
         variable_id: true,

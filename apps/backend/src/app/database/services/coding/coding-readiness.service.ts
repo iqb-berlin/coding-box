@@ -543,7 +543,7 @@ export class CodingReadinessService {
         workspace_id: workspaceId,
         file_id: In(unitFileIds)
       },
-      select: ['file_id', 'data', 'filename']
+      select: { file_id: true, data: true, filename: true }
     });
     const unitFileMap = new Map(unitFiles.map(file => [file.file_id, file]));
     const availableUnitFileIds = new Set(unitFiles.map(file => file.file_id));
@@ -588,7 +588,7 @@ export class CodingReadinessService {
           workspace_id: workspaceId,
           file_id: In(Array.from(schemeRefs))
         },
-        select: ['file_id', 'filename', 'data']
+        select: { file_id: true, filename: true, data: true }
       });
     const availableCodingSchemeRefs = new Set(codingSchemeFiles.map(file => file.file_id));
     const usableCodingSchemeRefs = new Set<string>();

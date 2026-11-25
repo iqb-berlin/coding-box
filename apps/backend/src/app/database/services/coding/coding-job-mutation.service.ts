@@ -3,7 +3,7 @@ import {
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  Repository, In, Connection, EntityManager
+  Repository, In, DataSource, EntityManager
 } from 'typeorm';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { JournalService } from '../shared/journal.service';
@@ -49,7 +49,7 @@ export class CodingJobMutationService {
     private readonly codingJobVariableBundleRepository: Repository<CodingJobVariableBundle>,
     @InjectRepository(CodingJobUnit)
     private readonly codingJobUnitRepository: Repository<CodingJobUnit>,
-    private readonly connection: Connection,
+    private readonly connection: DataSource,
     private readonly cacheService: CacheService,
     private readonly workspaceExclusionService: WorkspaceExclusionService,
     private readonly access: CodingJobAccessService,
@@ -573,7 +573,7 @@ export class CodingJobMutationService {
     }
     const job = await manager.getRepository(CodingJob).findOne({
       where: { id: codingJobId },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
     if (!job) throw new NotFoundException('Coding job not found');
     await lockWorkspaceTestResultsMutationInTransaction(manager, workspaceId ?? job.workspace_id);
@@ -656,7 +656,7 @@ export class CodingJobMutationService {
           coding_job_id: In(affectedJobIds),
           user_id: targetCoderId
         },
-        select: ['coding_job_id']
+        select: { coding_job_id: true }
       });
 
       const existingTargetJobIds = new Set(
@@ -1119,7 +1119,7 @@ export class CodingJobMutationService {
     callback: (codingJob: CodingJob, manager: EntityManager) => Promise<T>
   ): Promise<T> {
     const scope = await this.codingJobRepository.findOne({
-      where: { id }, select: ['id', 'workspace_id']
+      where: { id }, select: { id: true, workspace_id: true }
     });
     if (!scope) throw new NotFoundException(`Coding job with ID ${id} not found`);
     return this.withLockedCodingJob(id, scope.workspace_id, callback);

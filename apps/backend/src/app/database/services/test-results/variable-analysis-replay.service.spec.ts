@@ -300,7 +300,7 @@ const getSampleInfoRows = (rows: ResponseFixtureRow[]) => {
 describe('VariableAnalysisReplayService', () => {
   let service: VariableAnalysisReplayService;
   let fileUploadRepository: { find: jest.Mock };
-  let responseRepository: { createQueryBuilder: jest.Mock; manager: { connection: { createQueryRunner: jest.Mock } } };
+  let responseRepository: { createQueryBuilder: jest.Mock; manager: { dataSource: { createQueryRunner: jest.Mock } } };
   let workspaceFilesService: { getUnitVariableMap: jest.Mock };
   let codingListService: { getVariablePageMap: jest.Mock };
   let workspaceExclusionService: { resolveExclusionsForQueries: jest.Mock };
@@ -401,7 +401,7 @@ describe('VariableAnalysisReplayService', () => {
         )
       )),
       manager: {
-        connection: {
+        dataSource: {
           createQueryRunner: jest.fn().mockReturnValue({
             connect: jest.fn().mockResolvedValue(undefined),
             startTransaction: jest.fn().mockResolvedValue(undefined),

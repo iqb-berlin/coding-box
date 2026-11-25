@@ -68,7 +68,7 @@ export class WorkspaceFileUploadService {
     overwriteFileIds?: string[]
   ): Promise<TestFilesUploadResultDto> {
     return withWorkspaceFilesMutationLock(
-      this.fileUploadRepository.manager.connection,
+      this.fileUploadRepository.manager.dataSource,
       workspace_id,
       queryRunner => this.uploadTestFilesUnlocked(
         workspace_id,

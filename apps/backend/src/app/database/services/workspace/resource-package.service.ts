@@ -100,7 +100,7 @@ export class ResourcePackageService {
         ]
       });
     if (resourcePackage) {
-      await withResourcePackageLock(this.resourcePackageRepository.manager.connection, resourcePackage.name, async () => {
+      await withResourcePackageLock(this.resourcePackageRepository.manager.dataSource, resourcePackage.name, async () => {
         if (resourcePackage.scope === 'global') {
           await this.deleteGlobalPackageReferences(resourcePackage.name);
           await this.removePackageDirectory(resourcePackage.name);
@@ -123,7 +123,7 @@ export class ResourcePackageService {
     const preparedUpload = await this.prepareResourcePackageUpload(zippedResourcePackage);
     await this.ensurePackagesDirectoryExists();
 
-    return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
+    return withResourcePackageLock(this.resourcePackageRepository.manager.dataSource, preparedUpload.packageName, async () => {
       const existingPackages = await this.findPackagesByName(preparedUpload.packageName);
       const existingPackage = await this.findMatchingPackageByContentHash(existingPackages, preparedUpload.contentHash);
       if (existingPackage) {
@@ -418,7 +418,7 @@ export class ResourcePackageService {
     }
     await this.ensurePackagesDirectoryExists();
 
-    return withResourcePackageLock(this.resourcePackageRepository.manager.connection, preparedUpload.packageName, async () => {
+    return withResourcePackageLock(this.resourcePackageRepository.manager.dataSource, preparedUpload.packageName, async () => {
       await this.extractAndStorePackage(
         preparedUpload.packageName,
         zippedResourcePackage,

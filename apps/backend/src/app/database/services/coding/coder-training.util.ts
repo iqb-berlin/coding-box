@@ -2,6 +2,13 @@ import { CoderTrainingBundle } from '../../entities/coder-training-bundle.entity
 import { CoderTrainingVariable } from '../../entities/coder-training-variable.entity';
 import { CodingJob } from '../../entities/coding-job.entity';
 
+export const coderTrainingRelations = {
+  codingJobs: true,
+  variables: true,
+  bundles: { bundle: true },
+  coders: true
+} as const;
+
 export function getWithinTrainingComparisonSelectedJobIds(
   selectedJobIds: number[] | undefined,
   jobs: Array<Pick<CodingJob, 'id'>>

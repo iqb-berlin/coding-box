@@ -43,7 +43,7 @@ describe('CodingVersionService', () => {
     createQueryBuilder: jest.fn(() => mockQueryBuilder),
     update: jest.fn(),
     delete: jest.fn(),
-    manager: { connection: mockConnection }
+    manager: { dataSource: mockConnection }
   };
 
   const mockCodingStatisticsService = {
