@@ -12,6 +12,7 @@ import {
   DataSource,
   Repository
 } from 'typeorm';
+import { chunkResolver } from './response-chunks';
 import { Booklet } from '../../entities/booklet.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
@@ -213,7 +214,8 @@ export class TestResultsExportService {
           'response.variableid',
           'response.status',
           'response.value',
-          'response.subform'
+          'response.subform',
+          'response.source_chunk_key'
         ])
         .where('response.unitid IN (:...unitIds)', { unitIds })
         .andWhere(
@@ -266,10 +268,10 @@ export class TestResultsExportService {
       });
 
       chunks.forEach(chunk => {
-        if (!chunksByUnitId.has(chunk.unitid)) {
-          chunksByUnitId.set(chunk.unitid, []);
+        if (!chunksByUnitId.has(Number(chunk.unitid))) {
+          chunksByUnitId.set(Number(chunk.unitid), []);
         }
-        chunksByUnitId.get(chunk.unitid)!.push(chunk);
+        chunksByUnitId.get(Number(chunk.unitid))!.push(chunk);
       });
 
       lastStates.forEach(ls => {
@@ -286,19 +288,12 @@ export class TestResultsExportService {
         const unitChunks = chunksByUnitId.get(unit.id) || [];
         const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
 
-        const chunkKeyMap = new Map<string, string>();
+        const resolveChunk = chunkResolver(unitChunks);
         const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
 
         unitChunks.forEach(chunk => {
-          if (chunk.variables) {
-            const variables = chunk.variables.split(',').map(v => v.trim());
-            variables.forEach(variable => {
-              chunkKeyMap.set(variable, chunk.key);
-            });
-          }
-
           // Store timestamp and type for each chunk key so we can use it in the export
-          if (!chunkMetaByKey.has(chunk.key)) {
+          if (!chunkMetaByKey.has(chunk.key) || Number(chunk.ts) >= chunkMetaByKey.get(chunk.key)!.ts) {
             chunkMetaByKey.set(chunk.key, {
               ts: Number(chunk.ts) || 0,
               type: chunk.type || 'state'
@@ -309,7 +304,7 @@ export class TestResultsExportService {
         const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
 
         unitResponses.forEach(r => {
-          const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
+          const chunkKey = resolveChunk(r);
           if (!responsesByChunkKey.has(chunkKey)) {
             responsesByChunkKey.set(chunkKey, []);
           }
@@ -323,20 +318,15 @@ export class TestResultsExportService {
             id: r.variableid,
             value: value,
             status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform ?? undefined
+            subform: r.subform || undefined
           });
         });
 
         const exportChunks: Chunk[] = [];
         responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
           const meta = chunkMetaByKey.get(chunkKey);
-          const resolvedSubForm =
-            chunkResponses.find(r => r.subform && r.subform.length > 0)
-              ?.subform || '';
-
           exportChunks.push({
             id: chunkKey,
-            subForm: resolvedSubForm,
             responseType: meta?.type || 'state',
             ts: meta?.ts || 0,
             content: JSON.stringify(chunkResponses)

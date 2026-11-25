@@ -2641,6 +2641,21 @@ describe('WorkspaceTestResultsService', () => {
       expect(responseQb.getRawMany).toHaveBeenCalledTimes(1);
     });
 
+    it('replays equal variable IDs in their original parts and subforms', async () => {
+      const unitQb = mockQueryBuilder();
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      const responseQb = mockQueryBuilder();
+      const pairs = [['part-a', 'A'], ['part-a', 'B'], ['part-b', 'C']];
+      responseQb.getRawMany.mockResolvedValue(pairs.map(([part, form]) => ({
+        variableid: 'x', value: form, status: 3, source_chunk_key: part, subform: form
+      })));
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      const result = await service.findUnitResponse(1, 'login@code@group@booklet', 'unit');
+      expect(result.responses.flatMap(part => JSON.parse(part.content).map(r => [part.id, r.subform, r.value])))
+        .toEqual(pairs.map(([part, form]) => [part, form, form]));
+    });
+
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
         globalIgnoredUnits: [],

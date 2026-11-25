@@ -7,6 +7,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
 } from 'typeorm';
+import { chunkResolver } from './response-chunks';
 import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../workspace/workspace-constants';
 import { CacheService } from '../../../cache/cache.service';
 import { Booklet } from '../../entities/booklet.entity';
@@ -181,7 +182,8 @@ export class TestResultsReplayService {
         'response.variableid AS variableid',
         'response.value AS value',
         'response.status AS status',
-        'response.subform AS subform'
+        'response.subform AS subform',
+        'response.source_chunk_key AS source_chunk_key'
       ])
       .where('response.unitid = :unitDbId', { unitDbId })
       .andWhere(
@@ -194,56 +196,37 @@ export class TestResultsReplayService {
       value: string | null;
       status: number;
       subform: string | null;
+      source_chunk_key: string | null;
     }>();
 
-    const chunkKeyMap = new Map<string, { key: string; ts: number }>();
-    chunks.forEach(chunk => {
-      if (chunk.variables) {
-        const chunkTs = Number(chunk.ts) || 0;
-        const variables = chunk.variables.split(',').map(v => v.trim());
-        variables.forEach(variable => {
-          const current = chunkKeyMap.get(variable);
-          if (!current || chunkTs >= current.ts) {
-            chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
-          }
-        });
-      }
-    });
-
+    const resolveChunk = chunkResolver(chunks);
     const responsesByChunk = new Map<string, Map<string, {
       id: string;
       value: unknown;
       status: ResponseStatusType;
-      chunkTs: number;
+      subform?: string;
     }>>();
 
     responseRows.forEach(response => {
-      const mappedChunk = chunkKeyMap.get(response.variableid);
-      const chunkKey = mappedChunk?.key || response.subform || '';
-      const chunkTs = mappedChunk?.ts || 0;
+      const chunkKey = resolveChunk(response);
+      const subform = response.source_chunk_key != null ? response.subform : null;
       const mappedResponse = {
         id: response.variableid,
         value: parseStoredResponseValue(response.value, response.variableid),
         status: statusNumberToString(response.status) ?? 'UNSET',
-        chunkTs
+        ...(subform ? { subform } : {})
       };
 
       if (!responsesByChunk.has(chunkKey)) {
         responsesByChunk.set(chunkKey, new Map());
       }
       const chunkResponses = responsesByChunk.get(chunkKey)!;
-      const existing = chunkResponses.get(mappedResponse.id);
-      if (!existing || mappedResponse.chunkTs >= existing.chunkTs) {
-        chunkResponses.set(mappedResponse.id, mappedResponse);
-      }
+      chunkResponses.set(JSON.stringify([mappedResponse.id, subform || '']), mappedResponse);
     });
 
     const responsesArray = Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
       id: chunkKey,
-      content: JSON.stringify(Array.from(responseMap.values()).map(({
-        chunkTs: _chunkTs,
-        ...response
-      }) => response))
+      content: JSON.stringify(Array.from(responseMap.values()))
     }));
 
     const result = {

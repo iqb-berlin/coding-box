@@ -353,7 +353,10 @@ describe('PersonPersistenceService', () => {
     );
   });
 
-  it('should replace chunk rows per unit and deduplicate chunk entries', async () => {
+  it('retains omitted variables on partial reimport and deduplicates incoming chunk entries', async () => {
+    jest.spyOn(chunkRepository, 'findBy').mockResolvedValue([{
+      key: 'elementCodes', variables: 'a,b,old', type: 'state', ts: 42
+    } as ChunkEntity]);
     jest.spyOn(chunkRepository, 'delete').mockResolvedValue({} as never);
     const insertSpy = jest.spyOn(chunkRepository, 'insert').mockResolvedValue({} as never);
 
@@ -385,7 +388,7 @@ describe('PersonPersistenceService', () => {
       { id: 'BOOKLET_1' } as never
     );
 
-    expect(chunkRepository.delete).toHaveBeenCalledWith({ unitid: 123 });
+    expect(chunkRepository.delete).toHaveBeenCalledWith({ unitid: 123, key: expect.anything() });
     expect(insertSpy).toHaveBeenCalledTimes(1);
     expect(insertSpy).toHaveBeenCalledWith([
       {
@@ -401,18 +404,20 @@ describe('PersonPersistenceService', () => {
         type: 'iqb-standard@1.0',
         ts: 2,
         variables: 's1'
+      }, {
+        unitid: 123, key: 'elementCodes', type: 'state', ts: 42, variables: 'old'
       }
     ]);
   });
 
-  it('skips response lookup on a new unit only until that subform has been written', async () => {
+  it('deduplicates repeated responses on a new unit without a database lookup', async () => {
     const find = jest.spyOn(responseRepository, 'find').mockResolvedValue([{ variableid: 'v', subform: 's' } as ResponseEntity]);
     const save = jest.spyOn(responseRepository, 'save').mockResolvedValue([{ id: 7 }] as never);
     const subform = { id: 's', responses: [{ id: 'v', status: 'VALUE_CHANGED' as const, value: 'answer' }] };
     const result = await service.saveSubformResponsesForUnit({ id: 3 } as Unit, [subform, subform], 'skip', undefined, true);
     expect(result).toMatchObject({ success: true, saved: 1, skipped: 1 });
     expect(save).toHaveBeenCalledTimes(1);
-    expect(find).toHaveBeenCalledTimes(1);
+    expect(find).not.toHaveBeenCalled();
   });
 
   it('imports a new person in an existing test group by matching the full person key', async () => {
@@ -659,9 +664,9 @@ describe('PersonPersistenceService', () => {
       'merge'
     );
 
-    expect(unitFindSpy).toHaveBeenCalledWith({
+    expect(unitFindSpy).toHaveBeenCalledWith(expect.objectContaining({
       where: { alias: 'UNIT_NEW', name: 'UNIT_NEW', bookletid: 30 }
-    });
+    }));
     expect(unitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
       alias: 'UNIT_NEW',
       name: 'UNIT_NEW',

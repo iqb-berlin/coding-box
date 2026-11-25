@@ -84,10 +84,12 @@ export type Chunk = {
   content: string;
   ts: number;
   responseType: string;
-  subForm: string;
+  subForm?: string;
 };
 
 export type TcMergeSubForms = {
+  sourceChunkKey?: string;
+  legacySubform?: string;
   id: string;
   responses: TcMergeResponse[];
 };

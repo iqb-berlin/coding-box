@@ -1223,9 +1223,9 @@ existing-group;existing-login;existing-code;booklet1;unit2;"[{""subForm"":"""","
         }
       }));
 
-      expect(unitRepository.findOne).toHaveBeenCalledWith({
+      expect(unitRepository.findOne).toHaveBeenCalledWith(expect.objectContaining({
         where: { alias: 'original-unit2', name: 'unit2', bookletid: 201 }
-      });
+      }));
       expect(unitRepository.save).toHaveBeenCalledWith(expect.objectContaining({
         alias: 'original-unit2',
         name: 'unit2',

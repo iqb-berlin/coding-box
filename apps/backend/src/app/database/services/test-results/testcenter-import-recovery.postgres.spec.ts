@@ -1,8 +1,13 @@
+import { CodingScheme } from '@iqbspecs/coding-scheme';
 import { createServer, Server } from 'node:http';
 import { createMock } from '@golevelup/ts-jest';
 import { HttpService } from '@nestjs/axios';
 import { ConfigService } from '@nestjs/config';
 import { DataSource, In } from 'typeorm';
+import { AutocoderDerivedService } from '../coding/autocoder-derived.service';
+import { AutocoderResponseService } from '../coding/autocoder-response.service';
+import { ResponseManagementService } from './response-management.service';
+import { AutocoderEngineService } from '../coding/autocoder-engine.service';
 import Workspace from '../../entities/workspace.entity';
 import Persons from '../../entities/persons.entity';
 import { TestcenterImportRun } from '../../entities/testcenter-import-run.entity';
@@ -68,8 +73,8 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     );
   };
 
-  const importRun = (service: TestcenterService, runId: string) => service.importWorkspaceFiles(
-    String(workspaceId), 'tc', '', upstreamUrl, 'fixture-token', options, 'g1', true, undefined, runId, 'skip', 7
+  const importRun = (service: TestcenterService, runId: string, mode: 'skip' | 'merge' | 'replace' = 'skip') => service.importWorkspaceFiles(
+    String(workspaceId), 'tc', '', upstreamUrl, 'fixture-token', options, 'g1', true, undefined, runId, mode, 7
   );
 
   const counts = async () => {
@@ -188,6 +193,149 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     expect(await connection.getRepository(JournalEntry).countBy({ workspaceId })).toBe(events.length);
   }, 30000);
 
+  it('codes SUM_CODE across persisted aspect data parts and keeps equal variable IDs in separate subforms', async () => {
+    const answer = (id: string, subform?: string) => ({
+      id, value: 1, status: 'VALUE_CHANGED', subform
+    });
+    rows = [rows[0]];
+    rows[0].responses = [
+      {
+        id: 'elementCodes', responseType: 'state', ts: 1, content: JSON.stringify([answer('a'), answer('x', 'left')])
+      },
+      {
+        id: 'stateVariableCodes', responseType: 'state', ts: 2, content: JSON.stringify([answer('s'), answer('x', 'right')])
+      }
+    ];
+    expect((await importRun(createService(), 'split')).success).toBe(true);
+    const stored = await connection.getRepository(ResponseEntity).createQueryBuilder('r').innerJoin('r.unit', 'u')
+      .innerJoin('u.booklet', 'b')
+      .innerJoin('b.person', 'p')
+      .where('p.workspace_id = :workspaceId', { workspaceId })
+      .getMany();
+    expect(stored.map(r => [r.variableid, r.subform, r.source_chunk_key]).sort()).toEqual([
+      ['a', '', 'elementCodes'], ['s', '', 'stateVariableCodes'], ['x', 'left', 'elementCodes'], ['x', 'right', 'stateVariableCodes']
+    ]);
+    const scheme = new CodingScheme({
+      variableCodings: [
+        ...['a', 's'].map(id => ({
+          id,
+          sourceType: 'BASE',
+          codes: [{
+            id: 1, type: 'FULL_CREDIT', score: 1, ruleSets: [{ rules: [{ method: 'NUMERIC_MATCH', parameters: ['1'] }] }]
+          }]
+        })),
+        {
+          id: 'd',
+          sourceType: 'SUM_CODE',
+          deriveSources: ['a', 's'],
+          sourceParameters: { processing: [] },
+          codes: [{
+            id: 2, type: 'FULL_CREDIT', score: 2, ruleSets: [{ rules: [{ method: 'NUMERIC_MATCH', parameters: ['2'] }] }]
+          }]
+        }
+      ]
+    });
+    const inputs = stored.filter(r => r.variableid !== 'x').map(r => ({
+      id: r.variableid, value: r.value, status: 'VALUE_CHANGED' as const, subform: r.subform || undefined
+    }));
+    const engine = new AutocoderEngineService();
+    expect(engine.codeAutocoderResponses(inputs.map((r, i) => ({ ...r, subform: String(i) })), scheme.variableCodings))
+      .not.toContainEqual(expect.objectContaining({ id: 'd', code: 2 }));
+    const unit = await connection.getRepository(Unit).findOneByOrFail({ id: stored[0].unitid });
+    const coding = new AutocoderResponseService(engine, new AutocoderDerivedService(engine), createMock());
+    const { allCodedResponses } = await coding.processAndCodeResponses({
+      workspaceId,
+      units: [unit],
+      unitToResponsesMap: new Map([[unit.id, stored]]),
+      unitToCodingSchemeRefMap: new Map([[unit.id, 'scheme']]),
+      fileIdToCodingSchemeMap: new Map([['scheme', scheme]]),
+      statistics: { totalResponses: 0, statusCounts: {} },
+      autoCoderRun: 1
+    });
+    const writer = new ResponseManagementService(connection, createMock(), createMock(), createMock());
+    await connection.transaction(manager => writer.updateResponsesInDatabase(
+      workspaceId, allCodedResponses, manager.queryRunner!, undefined, undefined, undefined, undefined, { unitIds: [unit.id], autoCoderRun: 1 }, { managedExternally: true }
+    ));
+    const derived = await connection.getRepository(ResponseEntity).findOneByOrFail({ unitid: unit.id, variableid: 'd' });
+    expect(derived.value).toBe('2');
+    expect(Number(derived.code_v1)).toBe(2);
+    expect(Number(derived.score_v1)).toBe(2);
+    expect(derived.is_autocoder_generated).toBe(true);
+  });
+
+  it.each(['skip', 'merge', 'replace'] as const)('retains a legacy manual assignment on %s reimport', async mode => {
+    rows = rows.slice(0, 1);
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const repo = connection.getRepository(ResponseEntity);
+    const original = await repo.createQueryBuilder('r').innerJoin('r.unit', 'u')
+      .innerJoin('u.booklet', 'b').innerJoin('b.person', 'p')
+      .where('p.workspace_id = :workspaceId', { workspaceId })
+      .getOneOrFail();
+    await repo.update(original.id, { source_chunk_key: null, subform: 'main', code_v2: 7 });
+    const [job] = await connection.query('INSERT INTO coding_job (workspace_id, name) VALUES ($1, $2) RETURNING id', [workspaceId, 'manual']);
+    await connection.query(`INSERT INTO coding_job_unit (coding_job_id, response_id, unit_name, variable_id,
+      variable_anchor, booklet_name, person_login, person_code, code) VALUES ($1,$2,'U1','VAR','','B','L','C',7)`, [job.id, original.id]);
+    try {
+      rows[0].responses = [{
+        id: 'main',
+        responseType: 'state',
+        ts: 42,
+        content: JSON.stringify([{
+          id: 'VAR', status: 'VALUE_CHANGED', value: 'edited', subform: 'A'
+        }])
+      }];
+      expect((await importRun(service, 'reimport', mode)).success).toBe(true);
+      expect(await repo.findBy({ unitid: original.unitid })).toEqual([expect.objectContaining({
+        id: original.id,
+        code_v2: 7,
+        value: mode === 'replace' ? 'edited' : original.value,
+        source_chunk_key: mode === 'skip' ? null : 'main',
+        subform: mode === 'skip' ? 'main' : 'A'
+      })]);
+      expect(await connection.query('SELECT code, response_id FROM coding_job_unit WHERE coding_job_id=$1', [job.id]))
+        .toEqual([{ code: 7, response_id: original.id }]);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job.id]);
+    }
+  });
+
+  it('rolls back ambiguous reimports when two real subforms share one historical response', async () => {
+    rows = rows.slice(0, 1);
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const repo = connection.getRepository(ResponseEntity);
+    const original = await repo.createQueryBuilder('r').innerJoin('r.unit', 'u')
+      .innerJoin('u.booklet', 'b').innerJoin('b.person', 'p')
+      .where('p.workspace_id = :workspaceId', { workspaceId })
+      .getOneOrFail();
+    await repo.update(original.id, { source_chunk_key: null, subform: 'main', code_v2: 7 });
+    rows[0].responses = [{
+      id: 'main',
+      responseType: 'state',
+      ts: 2,
+      content: JSON.stringify(['A', 'B'].map(subform => ({
+        id: 'VAR', value: 'new', status: 'VALUE_CHANGED', subform
+      })))
+    }];
+    expect((await importRun(service, 'ambiguous', 'replace')).success).toBe(false);
+    expect(await repo.findBy({ unitid: original.unitid })).toEqual([expect.objectContaining({
+      id: original.id, subform: 'main', source_chunk_key: null, code_v2: 7, value: original.value
+    })]);
+    // A real subform named like the old chunk is not evidence of a manual case's origin.
+    rows[0].responses = [{
+      id: 'another-part',
+      responseType: 'state',
+      ts: 3,
+      content: JSON.stringify([{
+        id: 'VAR', value: 'unrelated', status: 'VALUE_CHANGED', subform: 'main'
+      }])
+    }];
+    expect((await importRun(service, 'colliding-name', 'merge')).success).toBe(false);
+    expect(await repo.findBy({ unitid: original.unitid })).toEqual([expect.objectContaining({
+      id: original.id, value: original.value, source_chunk_key: null, subform: 'main'
+    })]);
+  });
   it('rolls back concurrent unit writes on a real PostgreSQL audit error, then safely imports a new run', async () => {
     const auditFailure = jest.spyOn(JournalService, 'recordEventInTransaction').mockImplementationOnce(async manager => {
       await manager.query('SELECT 1 / 0');

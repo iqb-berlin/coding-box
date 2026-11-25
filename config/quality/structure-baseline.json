@@ -865,12 +865,9 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 1058
+        "max-lines": 979
       },
       "functions": {
-        "class PersonPersistenceService#1/method processBookletWithTransaction#1": {
-          "max-lines-per-function": 106
-        },
         "class PersonPersistenceService#1/method processPersonBooklets#1": {
           "complexity": 27,
           "max-depth": 5,
@@ -880,9 +877,6 @@
           "complexity": 21,
           "max-depth": 5,
           "max-lines-per-function": 165
-        },
-        "class PersonPersistenceService#1/method saveSubformResponsesForUnit#1": {
-          "max-depth": 5
         }
       }
     },
@@ -945,7 +939,7 @@
           "max-lines-per-function": 294
         },
         "class TestResultsExportService#1/method exportTestResultsToStream#1": {
-          "max-lines-per-function": 249
+          "max-lines-per-function": 240
         }
       }
     },
@@ -1004,7 +998,7 @@
       "file": {},
       "functions": {
         "class TestResultsReplayService#1/method findUnitResponse#1": {
-          "max-lines-per-function": 184
+          "max-lines-per-function": 167
         }
       }
     },
@@ -1040,7 +1034,7 @@
     },
     "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
       "file": {
-        "max-lines": 966
+        "max-lines": 923
       },
       "functions": {
         "class UploadResultsService#1/method buildImportSummary#1": {
@@ -1051,10 +1045,7 @@
         },
         "class UploadResultsService#1/method processUpload#1": {
           "max-depth": 5,
-          "max-lines-per-function": 403
-        },
-        "class UploadResultsService#1/method processUpload#1/anonymous:17c848eb0f2cddb2#1": {
-          "max-lines-per-function": 130
+          "max-lines-per-function": 362
         }
       }
     },

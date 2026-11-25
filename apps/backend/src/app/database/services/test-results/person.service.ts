@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { extractResponseGroups } from './response-chunks';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
@@ -461,16 +462,9 @@ export class PersonService {
   }
 
   private extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
-    return parsedResponses
-      .map(chunk => {
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
-        } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-          return { id: chunk.subForm || chunk.id || '', responses: [] };
-        }
-      });
+    return extractResponseGroups(parsedResponses, (chunk, error) => {
+      this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
+    });
   }
 
   private extractVariablesFromSubforms(subforms: TcMergeSubForms[]): Set<string> {
@@ -535,7 +529,7 @@ export class PersonService {
   ): TcMergeUnit {
     const chunks = parsedResponses
       .map(chunk => {
-        const chunkId = String(chunk.id || chunk.subForm || '').trim();
+        const chunkId = String(chunk.id || chunk.subForm || '');
         const chunkType = String(chunk.responseType || '').trim();
         const chunkTs = Number(chunk.ts) || 0;
         let chunkVariables: string[] = [];

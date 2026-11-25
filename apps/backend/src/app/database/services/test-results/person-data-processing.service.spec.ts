@@ -460,9 +460,22 @@ describe('PersonDataProcessingService', () => {
       const result = service.extractSubforms(chunks as unknown as Chunk[]);
       expect(result).toHaveLength(2);
       expect(result[0]).toMatchObject({
-        id: 'SF1',
+        id: '',
+        sourceChunkKey: '1',
         responses: [{ id: 'var1', value: 'test' }]
       });
+    });
+
+    it('preserves explicit subforms even when an old export repeats the chunk name', () => {
+      const chunk: Chunk = {
+        id: 'part',
+        subForm: 'part',
+        ts: 1,
+        responseType: 'state',
+        content: JSON.stringify([{ id: 'a', subform: 'part' }, { id: 'a', subform: 'other' }, { id: 'b' }])
+      };
+      expect(service.extractSubforms([chunk]).map(group => [group.id, group.sourceChunkKey]))
+        .toEqual([['part', 'part'], ['other', 'part'], ['', 'part']]);
     });
 
     it('should handle invalid chunk content', () => {
