@@ -1,6 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
 import * as cheerio from 'cheerio';
-import { FileIo } from '../../../admin/workspace/file-io.interface';
 
 @Injectable()
 export class WorkspaceFileParsingService {
@@ -242,42 +241,58 @@ export class WorkspaceFileParsingService {
     }
   }
 
-  getPlayerId(file: FileIo): string {
-    try {
-      const playerCode = file.buffer.toString();
-      const playerContent = cheerio.load(playerCode);
-      const metaDataElement = playerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      const id = metadata.id || metadata['@id'];
-      const version = metadata.version;
-
-      if (!id || !version) {
-        return this.getResourceId(file);
+  identifyHtmlFile(filename: string, html: string) {
+    const document = cheerio.load(html);
+    const scripts = document('script[type="application/ld+json"]').toArray();
+    const blocks = scripts.flatMap(element => {
+      try {
+        const parsed: unknown = JSON.parse(document(element).text());
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+          return [parsed as Record<string, unknown>];
+        }
+      } catch {
+        // A malformed block does not invalidate the other metadata in the file.
       }
+      return [];
+    });
 
-      return this.normalizePlayerId(`${id}-${version}`);
-    } catch (error) {
-      return this.getResourceId(file);
+    const modules = blocks.map(metadata => this.identifyHtmlModule(metadata))
+      .filter(module => module !== undefined);
+    // Preserve single-block identification. In mixed documents prefer declared modules, then legacy untyped metadata.
+    const selected = scripts.length === 1 ? modules[0] :
+      modules.find(({ kind }) => kind === 'player' || kind === 'schemer') ??
+      modules.find(({ kind }) => !kind);
+    if (selected) {
+      return {
+        fileId: selected.fileId, fileType: selected.fileType, metadata: selected.metadata, usesFilename: false
+      };
     }
+    return {
+      fileId: this.getResourceId(filename), fileType: 'Resource', metadata: blocks[0] ?? {}, usesFilename: true
+    };
   }
 
-  getSchemerId(file: FileIo): string {
-    try {
-      const schemerCode = file.buffer.toString();
-      const schemerContent = cheerio.load(schemerCode);
-      const metaDataElement = schemerContent('script[type="application/ld+json"]');
-      const metadata = JSON.parse(metaDataElement.text());
-      return this.normalizePlayerId(`${metadata['@id']}-${metadata.version}`);
-    } catch (error) {
-      return this.getResourceId(file);
-    }
+  private identifyHtmlModule(metadata: Record<string, unknown>) {
+    const type = metadata['@type'] ?? metadata.type;
+    const kind = typeof type === 'string' ? type.toLowerCase() : type;
+
+    const isSchemer = kind === 'schemer';
+    const id = isSchemer ? metadata['@id'] ?? metadata.id : metadata.id || metadata['@id'];
+    const { version } = metadata;
+    const release = typeof version === 'string' || typeof version === 'number' ?
+      /^(\d+(?:\.\d+){0,2})(?:[-+]\S+)?$/.exec(String(version)) : null;
+    if (typeof id !== 'string' || !id.trim() || !release) return undefined;
+    const fileId = this.normalizePlayerId(`${id}-${release[1]}`);
+    return fileId ? {
+      fileId, fileType: isSchemer ? 'Schemer' : 'Resource', metadata, kind
+    } : undefined;
   }
 
-  getResourceId(file: FileIo): string {
-    if (!file?.originalname) {
+  getResourceId(filename: string): string {
+    if (!filename) {
       throw new Error('Invalid file: originalname is required.');
     }
-    const filePathParts = decodeURIComponent(file.originalname).split('/')
+    const filePathParts = decodeURIComponent(filename).split('/')
       .map(part => part.trim());
     const fileName = filePathParts.pop();
     if (!fileName) {
@@ -286,13 +301,13 @@ export class WorkspaceFileParsingService {
     return fileName.toUpperCase();
   }
 
-  normalizePlayerId(name: string): string {
+  private normalizePlayerId(name: string): string | undefined {
     const reg = /^(\D+?)[@V-]?((\d+)(\.\d+)?(\.\d+)?(-\S+?)?)?(.\D{3,4})?$/;
 
     const matches = name.match(reg);
 
     if (!matches) {
-      throw new Error(`Invalid player name: ${name}`);
+      return undefined;
     }
 
     const [, module = '', , major = '', minorDot = '', patchDot = ''] = matches;

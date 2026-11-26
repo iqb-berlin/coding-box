@@ -6,7 +6,7 @@ import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { WorkspaceFileParsingService } from './workspace-file-parsing.service';
 import { WorkspaceFileStorageService } from './workspace-file-storage.service';
 import { WorkspaceTestTakersValidationService } from './workspace-test-takers-validation.service';
-import { createWorkspaceFilesService, xmlUploads, resourceUploads } from './workspace-files-test.factory';
+import { createWorkspaceFilesService, xmlUploads } from './workspace-files-test.factory';
 
 const file = (name: string, data: string | Buffer, mimetype = 'application/octet-stream'): FileIo => ({
   originalname: name, mimetype, buffer: Buffer.from(data), size: Buffer.byteLength(data), fieldname: '', encoding: ''
@@ -24,10 +24,13 @@ function fixture() {
     into: jest.fn().mockReturnThis(),
     values: jest.fn().mockReturnThis(),
     orIgnore: jest.fn().mockReturnThis(),
+    onConflict: jest.fn().mockReturnThis(),
+    returning: jest.fn().mockReturnThis(),
     getMany: jest.fn().mockResolvedValue([]),
-    execute: jest.fn(async () => { events.push('execute'); return { affected: 1 }; })
+    execute: jest.fn(async () => { events.push('execute'); return { affected: 1, raw: [{ file_id: 'NEW' }] }; })
   };
   const lockedFiles = {
+    existsBy: jest.fn().mockResolvedValue(false),
     findOne: jest.fn().mockResolvedValue(null),
     find: jest.fn().mockResolvedValue([]),
     create: jest.fn(value => value),
@@ -196,7 +199,7 @@ describe('workspace file workflow boundaries', () => {
       '@type': kind, '@id': 'MODULE', id: 'MODULE', version: '1.0.0'
     };
     const html = file('module.html', `<html><script type="application/ld+json">${JSON.stringify(metadata)}</script></html>`, 'text/html');
-    f.lockedFiles.findOne.mockResolvedValue({ data: 'old' });
+    f.lockedFiles.existsBy.mockResolvedValue(true);
     const conflict = await f.service.uploadTestFiles(7, [html], false);
     expect(conflict.conflicts).toEqual([{ fileId: 'MODULE-1.0.0', filename: 'module.html', fileType: kind === 'schemer' ? 'Schemer' : 'Resource' }]);
     const skipped = await f.service.uploadTestFiles(7, [html], true, ['OTHER']);
@@ -209,16 +212,48 @@ describe('workspace file workflow boundaries', () => {
     }), ['file_id', 'workspace_id']);
   });
 
-  it('retains the generic HTML fallback when normal persistence fails', async () => {
+  it.each(['read', 'insert', 'upsert'])('reports an HTML %s error without a fallback write', async operation => {
     const f = fixture();
-    f.ordinaryFiles.findOne.mockResolvedValue(null);
-    f.ordinaryFiles.upsert.mockRejectedValueOnce(new Error('first write failed')).mockResolvedValueOnce(undefined);
-    const html = file('fallback.html', '<html/>', 'text/html');
-    await expect(resourceUploads(f.service).handleHtmlFile(7, html, false)).resolves.toEqual({
-      fileId: 'FALLBACK.HTML', filename: 'fallback.html', fileType: 'Resource'
+    const error = new Error(`database ${operation} failed`);
+    const failedOperation = {
+      read: f.lockedFiles.existsBy, insert: f.query.execute, upsert: f.lockedFiles.upsert
+    }[operation];
+    failedOperation.mockRejectedValueOnce(error);
+    const html = file('module.html', '<script type="application/ld+json">{"id":"PLAYER","version":"1.0"}</script>', 'text/html');
+    const result = await f.service.uploadTestFiles(7, [html], operation === 'upsert');
+    expect(result).toMatchObject({
+      uploaded: 0, failed: 1, failedFiles: [{ filename: 'module.html', reason: error.message }]
     });
-    expect(f.ordinaryFiles.upsert).toHaveBeenCalledTimes(2);
-    expect(f.ordinaryFiles.upsert).toHaveBeenLastCalledWith(expect.objectContaining({ structured_data: { metadata: {} } }), ['file_id', 'workspace_id']);
+    expect(result.issues).toBeUndefined();
+    expect(f.query.execute).toHaveBeenCalledTimes(operation === 'insert' ? 1 : 0);
+    expect(f.lockedFiles.upsert).toHaveBeenCalledTimes(operation === 'upsert' ? 1 : 0);
+  });
+
+  it('checks overwrite permission for the decoded fallback key and explains a successful fallback', async () => {
+    const f = fixture();
+    const html = file('module%20a.html', '<html/>', 'text/html');
+    const target = { fileId: 'MODULE A.HTML', filename: html.originalname, fileType: 'Resource' };
+    f.lockedFiles.existsBy.mockResolvedValue(true);
+    const conflict = await f.service.uploadTestFiles(7, [html], false);
+    expect(conflict).toMatchObject({ uploaded: 0, conflicts: [target] });
+    const skipped = await f.service.uploadTestFiles(7, [html], true, ['OTHER']);
+    expect(skipped.uploaded).toBe(0);
+    expect(f.lockedFiles.existsBy).toHaveBeenCalledWith({ file_id: target.fileId, workspace_id: 7 });
+    expect(f.query.execute).not.toHaveBeenCalled();
+    expect(f.lockedFiles.upsert).not.toHaveBeenCalled();
+    expect(conflict.issues).toBeUndefined();
+    expect(skipped.issues).toBeUndefined();
+
+    const uploaded = await f.service.uploadTestFiles(7, [html], true, ['module a.html']);
+    expect(uploaded).toMatchObject({
+      uploaded: 1,
+      failed: 0,
+      uploadedFiles: [target],
+      issues: [{ level: 'warning', fileName: html.originalname, message: expect.stringContaining(target.fileId) }]
+    });
+    expect(f.lockedFiles.upsert).toHaveBeenCalledWith(expect.objectContaining({
+      file_id: target.fileId, structured_data: { metadata: {} }
+    }), ['file_id', 'workspace_id']);
   });
 
   it('keeps failures returned by handlers in order with rejected ZIP tasks', async () => {
