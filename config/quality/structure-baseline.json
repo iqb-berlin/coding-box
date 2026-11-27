@@ -15,15 +15,6 @@
     "apps/backend/src/app/admin/database/database-export.service.ts": {
       "file": {},
       "functions": {
-        "class DatabaseExportService#1/method exportToSqliteFile#1": {
-          "max-depth": 5,
-          "max-lines-per-function": 147
-        },
-        "class DatabaseExportService#1/method exportWorkspaceToSqliteFile#1": {
-          "complexity": 25,
-          "max-depth": 5,
-          "max-lines-per-function": 169
-        },
         "class DatabaseExportService#1/method getWorkspaceExportTables#1": {
           "max-lines-per-function": 219
         }

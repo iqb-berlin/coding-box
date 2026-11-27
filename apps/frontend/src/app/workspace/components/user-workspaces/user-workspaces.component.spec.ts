@@ -1,5 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { TranslateModule } from '@ngx-translate/core';
+import { provideRouter } from '@angular/router';
+import { TranslateModule, TranslateService } from '@ngx-translate/core';
 import { of } from 'rxjs';
 import { UserWorkspacesComponent } from './user-workspaces.component';
 import { AuthService } from '../../../core/services/auth.service';
@@ -32,6 +33,7 @@ describe('UserWorkspacesComponent', () => {
 
     await TestBed.configureTestingModule({
       providers: [
+        provideRouter([]),
         { provide: AuthService, useValue: mockAuthService },
         { provide: AppService, useValue: mockAppService }
       ],
@@ -60,7 +62,7 @@ describe('UserWorkspacesComponent', () => {
     fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain('error.backend_auth_rejected_message');
-    expect(fixture.nativeElement.textContent).not.toContain('error.reauthentication_message');
+    expect(fixture.nativeElement.textContent).not.toContain('ui-text.user-workspaces.session-ended');
   });
 
   it('should login with a pending reauthentication return URL', () => {
@@ -77,7 +79,7 @@ describe('UserWorkspacesComponent', () => {
     fixture.componentRef.setInput('authBootstrapStatus', 'auth-data-failed');
     fixture.detectChanges();
     expect(fixture.nativeElement.textContent).toContain(message);
-    expect(fixture.nativeElement.textContent).not.toContain('error.reauthentication_message');
+    expect(fixture.nativeElement.textContent).not.toContain('ui-text.user-workspaces.session-ended');
     expect(getButtonByText('home.retry-auth-data')).toBeDefined();
   });
 
@@ -123,7 +125,7 @@ describe('UserWorkspacesComponent', () => {
 
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('error.reauthentication_message');
+    expect(fixture.nativeElement.textContent).toContain('ui-text.user-workspaces.session-ended');
     expect(fixture.nativeElement.textContent).not.toContain('home.loading-user-workspaces');
 
     const button = fixture.nativeElement.querySelector('button');
@@ -158,7 +160,105 @@ describe('UserWorkspacesComponent', () => {
 
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('error.reauthentication_title');
-    expect(fixture.nativeElement.textContent).toContain('error.reauthentication_message');
+    expect(fixture.nativeElement.querySelector('h2').textContent).toContain('ui-text.user-workspaces.sign-in-again');
+    expect(fixture.nativeElement.textContent).toContain('ui-text.user-workspaces.session-ended');
+    expect(fixture.nativeElement.textContent).not.toContain('ui-text.user-workspaces.login-required');
+  });
+
+  it('updates search when the visible viewport changes without resizing the app', () => {
+    const appViewport = document.createElement('div');
+    appViewport.className = 'app-main';
+    const host = fixture.nativeElement as HTMLElement;
+    host.before(appViewport);
+    appViewport.append(host);
+
+    const visualViewport = Object.assign(new EventTarget(), { height: 850, offsetTop: 0 });
+    const originalVisualViewport = Object.getOwnPropertyDescriptor(window, 'visualViewport');
+    const originalResizeObserver = globalThis.ResizeObserver;
+    Object.defineProperty(window, 'visualViewport', { configurable: true, value: visualViewport });
+    globalThis.ResizeObserver = class {
+      observe(): void {}
+      unobserve(): void {}
+      disconnect(): void {}
+    };
+    const rect = jest.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function getTestBounds(this: HTMLElement) {
+      if (this === appViewport) return new DOMRect(0, 60, 800, 790);
+      if (this.classList.contains('workspace-results')) return new DOMRect(0, 300, 800, 260);
+      return new DOMRect();
+    });
+    const search = () => host.querySelector('input[type="search"]');
+    const changeViewport = (event: string) => {
+      visualViewport.dispatchEvent(new Event(event));
+      fixture.detectChanges();
+    };
+
+    try {
+      fixture.componentRef.setInput('authDataLoaded', true);
+      fixture.componentRef.setInput('workspaces', [{ id: 7, name: 'VERA Deutsch' }]);
+      fixture.detectChanges();
+      expect(search()).toBeNull();
+
+      visualViewport.height = 525;
+      changeViewport('resize');
+      expect(search()).not.toBeNull();
+
+      visualViewport.offsetTop = 65;
+      changeViewport('scroll');
+      expect(search()).toBeNull();
+
+      visualViewport.offsetTop = 0;
+      changeViewport('scroll');
+      expect(search()).not.toBeNull();
+
+      visualViewport.height = 850;
+      changeViewport('resize');
+      expect(search()).toBeNull();
+    } finally {
+      fixture.destroy();
+      appViewport.remove();
+      rect.mockRestore();
+      globalThis.ResizeObserver = originalResizeObserver;
+      if (originalVisualViewport) Object.defineProperty(window, 'visualViewport', originalVisualViewport);
+      else Reflect.deleteProperty(window, 'visualViewport');
+    }
+  });
+
+  it('filters workspace names case-insensitively and restores the original order when cleared', () => {
+    // This test exercises filtering with the search open. Browser tests cover viewport geometry.
+    Reflect.get(component, 'needsSearch').set(true);
+    fixture.componentRef.setInput('authDataLoaded', true);
+    fixture.componentRef.setInput('workspaces', [
+      { id: 7, name: 'VERA Deutsch' },
+      { id: 2, name: 'Mathematik Pilotierung' },
+      { id: 3 }
+    ]);
+    fixture.detectChanges();
+
+    const input = fixture.nativeElement.querySelector('input[type="search"]') as HTMLInputElement;
+    const workspaceLinks = () => Array.from(
+      (fixture.nativeElement as HTMLElement).querySelectorAll('.workspace'),
+      link => link.getAttribute('href')
+    );
+    const search = (query: string) => {
+      input.value = query;
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+    };
+
+    search('  deutsch  ');
+    expect(workspaceLinks()).toEqual(['/workspace-admin/7']);
+
+    const translations = TestBed.inject(TranslateService);
+    translations.setTranslation('de', { 'ui-text': { 'user-workspaces': { unnamed: 'Arbeitsbereich {{id}}' } } });
+    translations.use('de');
+    search('Arbeitsbereich 3');
+    expect(workspaceLinks()).toEqual(['/workspace-admin/3']);
+
+    search('Englisch');
+    expect(workspaceLinks()).toEqual([]);
+    expect(fixture.nativeElement.textContent).toContain('ui-text.user-workspaces.no-matches');
+
+    search('');
+    expect(workspaceLinks()).toEqual(['/workspace-admin/7', '/workspace-admin/2', '/workspace-admin/3']);
   });
 });

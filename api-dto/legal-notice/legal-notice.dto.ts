@@ -1,5 +1,5 @@
 import type { RequestBody } from '../request-contracts';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class LegalNoticeDto {
   @ApiProperty({ description: 'HTML content for the imprint/privacy dialog' })
@@ -7,6 +7,9 @@ export class LegalNoticeDto {
 
   @ApiProperty({ description: 'Whether the content comes from the built-in default' })
     isDefault!: boolean;
+
+  @ApiPropertyOptional({ description: 'Operator-configured HTTPS imprint link' })
+    imprintUrl?: string;
 }
 
 export type UpdateLegalNoticeDto = RequestBody<'UpdateLegalNoticeDto'>;

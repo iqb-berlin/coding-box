@@ -1,28 +1,16 @@
-.home-body {
-  width: 100%;
+:host {
+  display: flex;
+  flex-direction: column;
+  min-block-size: 100%;
+}
+
+main {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   box-sizing: border-box;
-}
-
-.app-container {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(300px, 500px));
-  align-items: stretch;
-  justify-content: center;
-  gap: clamp(16px, 3vw, 28px);
-  min-height: 100%;
-  padding: clamp(12px, 3vw, 28px);
-  margin: 0;
-}
-
-.home-panel {
-  min-width: 0;
-  width: 100%;
-  min-height: 0;
-}
-
-@media (max-width: 760px) {
-  .app-container {
-    grid-template-columns: minmax(0, 1fr);
-    align-items: start;
-  }
+  inline-size: 100%;
+  max-inline-size: 62rem;
+  margin-inline: auto;
+  padding: clamp(1.5rem, 5vw, 3.5rem) clamp(1rem, 4vw, 2rem);
 }

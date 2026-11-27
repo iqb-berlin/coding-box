@@ -162,6 +162,30 @@ describe('authInterceptor', () => {
     req.flush({ access_token: 'fresh-token' });
   });
 
+  it('reads the public legal notice without refreshing an expired session', () => {
+    authService.getValidToken.mockRejectedValue(new AuthRefreshUnavailableError());
+    const result = jest.fn();
+    http.get('/api/legal-notice').subscribe(result);
+
+    const req = httpMock.expectOne('/api/legal-notice');
+    expect(authService.getValidToken).not.toHaveBeenCalled();
+    expect(req.request.headers.has('Authorization')).toBe(false);
+    expect(req.request.headers.has('X-Request-Id')).toBe(true);
+    const notice = { html: '<p>Privacy</p>', isDefault: false };
+    req.flush(notice);
+    expect(result).toHaveBeenCalledWith(notice);
+  });
+
+  it.each(['PUT', 'DELETE'])('uses the access token for %s /api/legal-notice', async method => {
+    http.request(method, '/api/legal-notice').subscribe();
+    await Promise.resolve();
+
+    const req = httpMock.expectOne({ method, url: '/api/legal-notice' });
+    expect(authService.getValidToken).toHaveBeenCalledTimes(1);
+    expect(req.request.headers.get('Authorization')).toBe('Bearer keycloak-token');
+    req.flush({});
+  });
+
   it('should preserve explicit authorization headers for scoped API tokens', () => {
     http.get('/api/scoped', {
       headers: new HttpHeaders({ Authorization: 'Bearer scoped-token' })

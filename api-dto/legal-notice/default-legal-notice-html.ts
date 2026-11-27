@@ -1,6 +1,7 @@
 export const defaultLegalNoticeHtml = `
 <p>
-  Das Institut zur Qualitätsentwicklung im Bildungswesen betreibt auf diesen Seiten eine Anwendung für das Erstellen von Seiten und Aufgaben für das computerbasierte Leistungstesten von Schülerinnen und Schülern. Die Arbeit mit diesem System erfordert einen persönlichen Account. Der hierzu erforderlichen Speicherung und Verwendung von Daten stimmen die Beteiligten in einem gesonderten Vorgang zu. Zugriffe ohne Account werden weder protokolliert noch in irgendeiner Art gepeichert.
+  Mit der IQB-Kodierbox werden Antworten aus Testungen kodiert.
+  <a href="https://www.iqb.hu-berlin.de/de/impressum/" target="_blank" rel="noopener">Impressum des IQB</a>
 </p>
 <h2>Postanschrift:</h2>
 <p>
@@ -24,6 +25,9 @@ export const defaultLegalNoticeHtml = `
   10099 Berlin<br>
   Tel: +49 (30) 2093-20020<br>
   E-Mail: datenschutz&#64;uv.hu-berlin.de<br>
-  <a href="https://www.iqb.hu-berlin.de/de/datenschutz/" target="_blank" rel="noopener">https://www.iqb.hu-berlin.de/de/datenschutz/</a>
+</p>
+<p>
+  Informationen zur Verarbeitung von Daten in dieser Kodierbox erhalten Sie beim Betreiber dieser Instanz.
+  Die <a href="https://www.iqb.hu-berlin.de/de/datenschutz/" target="_blank" rel="noopener">Datenschutzerklärung der IQB-Website</a> bezieht sich auf den Internetauftritt des Instituts.
 </p>
 `.trim();

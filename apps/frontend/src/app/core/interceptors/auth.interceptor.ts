@@ -156,14 +156,14 @@ function isStaleSessionAuthError(
 ): boolean {
   return isBackendRequest(req.url, serverUrl) && (status === 401 || status === 403) &&
     (session.requestGeneration !== session.currentGeneration ||
-      (status === 401 && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+      (status === 401 && !isRequestWithoutAccessToken(req, serverUrl) &&
         modifiedReq.headers.get('Authorization') !== (session.token ? `Bearer ${session.token}` : null)));
 }
 
 function isCurrentProtectedBackendRequest(
   req: HttpRequest<unknown>, modifiedReq: HttpRequest<unknown>, serverUrl: string, session: AuthResponseSession
 ): boolean {
-  return isBackendRequest(req.url, serverUrl) && !isAuthEndpointWithoutAccessToken(req.url, serverUrl) &&
+  return isBackendRequest(req.url, serverUrl) && !isRequestWithoutAccessToken(req, serverUrl) &&
     session.requestGeneration === session.currentGeneration && !!session.token &&
     modifiedReq.headers.get('Authorization') === `Bearer ${session.token}`;
 }
@@ -213,7 +213,7 @@ function getRequestWithAuthHeader(
     return of(req);
   }
 
-  if (isAuthEndpointWithoutAccessToken(req.url, serverUrl)) {
+  if (isRequestWithoutAccessToken(req, serverUrl)) {
     return of(req);
   }
 
@@ -295,10 +295,11 @@ function isBackendRequest(url: string, serverUrl: string): boolean {
   return false;
 }
 
-function isAuthEndpointWithoutAccessToken(url: string, serverUrl: string): boolean {
-  const backendPath = getBackendRelativePath(url, serverUrl);
-  return AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN.some(endpoint => backendPath === endpoint ||
-    backendPath.startsWith(`${endpoint}/`));
+function isRequestWithoutAccessToken(req: HttpRequest<unknown>, serverUrl: string): boolean {
+  const backendPath = getBackendRelativePath(req.url, serverUrl);
+  return (req.method === 'GET' && /^\/legal-notice\/?$/.test(backendPath)) ||
+    AUTH_ENDPOINTS_WITHOUT_ACCESS_TOKEN.some(endpoint => backendPath === endpoint ||
+      backendPath.startsWith(`${endpoint}/`));
 }
 
 function getBackendRelativePath(url: string, serverUrl: string): string {

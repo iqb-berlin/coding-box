@@ -29,6 +29,22 @@ describe('LegalNoticeService', () => {
     expect(result.html).toContain('https://www.iqb.hu-berlin.de/de/datenschutz/');
   });
 
+  it.each([
+    ['https://example.org/impressum', 'https://example.org/impressum'],
+    ['invalid', undefined],
+    ['http://example.org/', undefined]
+  ])('returns only configured HTTPS imprint links (%s)', async (value, expected) => {
+    const previous = process.env.PUBLIC_IMPRINT_URL;
+    try {
+      process.env.PUBLIC_IMPRINT_URL = value;
+      const service = new LegalNoticeService(createSettingRepositoryMock() as never);
+      expect((await service.getLegalNotice()).imprintUrl).toBe(expected);
+    } finally {
+      if (previous === undefined) delete process.env.PUBLIC_IMPRINT_URL;
+      else process.env.PUBLIC_IMPRINT_URL = previous;
+    }
+  });
+
   it('returns stored text when a setting exists', async () => {
     const repository = createSettingRepositoryMock({
       key: 'system-legal-notice-html',

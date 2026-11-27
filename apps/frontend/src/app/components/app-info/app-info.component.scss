@@ -1,156 +1,41 @@
-@use 'sass:color';
-
-$iqb-accent: rgb(0, 96, 100);
-
-
-.scroll-area {
-  overflow-y: auto;
-}
-
 .app-info {
-  box-sizing: border-box;
-  background: lightgray;
-  border-radius: 8px;
-  padding: clamp(20px, 4vw, 40px);
-  font-size: clamp(16px, 2vw, 18px);
-  line-height: 1.6;
-  min-height: 100%;
   display: flex;
-  flex-direction: column;
   justify-content: space-between;
-  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.05);
+  flex-wrap: wrap;
+  gap: 0.25rem 2rem;
+  padding: 0.5rem clamp(1rem, 3vw, 2rem);
+  border-block-start: 1px solid #dce5e5;
+  background: #fff;
+  color: #465b60;
+  font-size: 0.875rem;
 
-  .content {
-    flex: 1;
+  .operator, nav {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0 1rem;
   }
 
-  .app-title {
-    font-size: 28px;
-    font-weight: 600;
-    color: $iqb-accent;
-    margin-bottom: 20px;
-    letter-spacing: -0.5px;
-    border-bottom: 2px solid rgba($iqb-accent, 0.2);
-    padding-bottom: 10px;
+  a,
+  button {
+    display: inline-flex;
+    align-items: center;
+    min-block-size: 2rem;
+    color: var(--primary);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
   }
-
-  p {
-    margin-bottom: 25px;
-    color: #333;
-    font-weight: 400;
-
-    a {
-      color: $iqb-accent;
-      text-decoration: none;
-      font-weight: 500;
-      transition: color 0.2s ease;
-
-      &:hover {
-        color: color.adjust($iqb-accent, $lightness: -10%);
-        text-decoration: underline;
-      }
-    }
-  }
-
-  .info-card {
-    background-color: rgba(255, 255, 255, 0.6);
-    border-radius: 8px;
-    padding: clamp(14px, 3vw, 20px);
-    margin-bottom: 30px;
-    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
-
-    ul {
-      list-style-type: none;
-      padding-left: 0;
-      margin-bottom: 0;
-
-      li {
-        padding: 10px 0;
-        border-bottom: 1px solid rgba(0, 0, 0, 0.08);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-
-        &:last-child {
-          border-bottom: none;
-          padding-bottom: 0;
-        }
-
-        &:first-child {
-          padding-top: 0;
-        }
-      }
-    }
-
-    .info-label {
-      font-weight: 600;
-      color: #555;
-      width: 100px;
-      flex-shrink: 0;
-    }
-
-    .info-value {
-      color: #333;
-    }
-
-    .admin-badge {
-      background-color: $iqb-accent;
-      color: white;
-      padding: 3px 10px;
-      border-radius: 12px;
-      font-size: 14px;
-      font-weight: 500;
-    }
-  }
-}
-
-.impressum {
-  width: 100%;
-  padding: 12px 0 0;
-  margin-top: auto;
 
   button {
-    width: auto;
-    min-width: 200px;
-    border-radius: 25px;
-    padding: 10px 24px;
-    font-weight: 500;
-    letter-spacing: 0.5px;
-    transition: all 0.3s ease;
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
-
-    &:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
-    }
-
-    .button-text {
-      font-weight: 500;
-    }
-  }
-}
-
-@media (max-width: 480px) {
-  .app-info {
-    line-height: 1.5;
-
-    .info-card {
-      margin-bottom: 20px;
-
-      ul li {
-        align-items: flex-start;
-        flex-direction: column;
-        gap: 4px;
-      }
-
-      .info-label {
-        width: auto;
-      }
-    }
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    cursor: pointer;
   }
 
-  .impressum button {
-    width: 100%;
-    min-width: 0;
+  :is(a, button):focus-visible {
+    outline: 2px solid var(--primary);
+    outline-offset: 3px;
   }
 }

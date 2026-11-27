@@ -1,11 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectDataSource } from '@nestjs/typeorm';
-import { DataSource, QueryRunner } from 'typeorm';
+import { DataSource, EntityManager } from 'typeorm';
 import * as fs from 'fs';
 import * as path from 'path';
 import sqlite3 from 'sqlite3';
 import { promisify } from 'util';
-import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import { DatabaseExportCancelledError } from './database-export-cancelled.error';
 
 type ExportProgressCallback = (
@@ -15,7 +14,7 @@ type ExportProgressCallback = (
 
 type ExportCancellationCheck = () => Promise<boolean> | boolean;
 
-type WorkspaceExportTable = {
+type ExportTable = {
   name: string;
   query: string;
 };
@@ -26,7 +25,7 @@ type ExportTableColumn = {
   is_nullable: string;
 };
 
-type ResolvedWorkspaceExportTable = WorkspaceExportTable & {
+type ResolvedExportTable = ExportTable & {
   columns: ExportTableColumn[];
   rowCount: number;
 };
@@ -39,382 +38,169 @@ export class DatabaseExportService {
     @InjectDataSource() private readonly dataSource: DataSource
   ) {}
 
-  async exportToSqliteFile(
+  exportToSqliteFile(
     outputFilePath: string,
     onProgress?: ExportProgressCallback,
     isCancelled?: ExportCancellationCheck
   ): Promise<void> {
-    const outputDir = path.dirname(outputFilePath);
-
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    const db = new sqlite3.Database(outputFilePath);
-    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
-      db.run(sql, values, error => (error ? reject(error) : resolve()));
-    });
-    const dbClose = promisify(db.close.bind(db));
-
-    try {
-      await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
-      await this.throwIfCancelled(isCancelled);
-
-      const tables: { table_name: string }[] = await this.dataSource.query(`
-        SELECT table_name
-        FROM information_schema.tables
-        WHERE table_schema = 'public'
-        ORDER BY table_name
-      `);
-
-      const exportableTables = tables
-        .map(table => table.table_name)
-        .filter(tableName => !tableName.startsWith('typeorm_') && tableName !== 'migrations');
-
-      await this.throwIfCancelled(isCancelled);
-
-      // Keep the export in a single SQLite file (without .wal sidecar files).
-      await dbRun('PRAGMA journal_mode=DELETE');
-      await dbRun('PRAGMA synchronous=NORMAL');
-      await dbRun('PRAGMA cache_size=10000');
-      await dbRun('PRAGMA temp_store=memory');
-
-      const rowCounts = new Map<string, number>();
-      let totalRows = 0;
-
-      for (const tableName of exportableTables) {
-        await this.throwIfCancelled(isCancelled);
-        const countResult = await this.dataSource.query(
-          `SELECT COUNT(*) as count FROM "${tableName}"`
-        );
-        const rowCount = Number(countResult[0]?.count ?? 0);
-        rowCounts.set(tableName, rowCount);
-        totalRows += rowCount;
-      }
-
-      await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
-
-      let processedRows = 0;
-      let processedTables = 0;
-      const totalTables = exportableTables.length || 1;
-
-      for (const tableName of exportableTables) {
-        await this.throwIfCancelled(isCancelled);
-        this.logger.log(`Processing table: ${tableName}`);
-
-        const columns: ExportTableColumn[] = await this.dataSource.query(`
-          SELECT column_name, data_type, is_nullable
-          FROM information_schema.columns
-          WHERE table_name = $1 AND table_schema = 'public'
-          ORDER BY ordinal_position
-        `, [tableName]);
-
-        const columnDefs = columns
-          .map(col => {
-            const colType = this.mapPostgresTypeToSqlite(col.data_type);
-            const nullable = col.is_nullable === 'YES' ? '' : ' NOT NULL';
-            return `"${col.column_name}" ${colType}${nullable}`;
-          })
-          .join(', ');
-
-        await dbRun(
-          `CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`
-        );
-
-        const totalRowsInTable = rowCounts.get(tableName) ?? 0;
-        if (totalRowsInTable === 0) {
-          processedTables += 1;
-          await this.reportProgress(
-            onProgress,
-            this.calculateProgress(
-              processedRows,
-              totalRows,
-              processedTables,
-              totalTables
-            ),
-            `Tabelle ${tableName} abgeschlossen`
-          );
-          continue;
-        }
-
-        const orderByClause = await this.getStableOrderByClause(tableName, columns);
-        const batchSize = 1000;
-        let offset = 0;
-
-        while (offset < totalRowsInTable) {
-          await this.throwIfCancelled(isCancelled);
-
-          const rows = await this.dataSource.query(`
-            SELECT * FROM "${tableName}"
-            ORDER BY ${orderByClause}
-            LIMIT $1 OFFSET $2
-          `, [batchSize, offset]);
-
-          if (rows.length === 0) {
-            break;
-          }
-
-          const columnNames = columns.map(col => `"${col.column_name}"`).join(', ');
-          const placeholders = columns.map(() => '?').join(', ');
-          const insertSql = `INSERT INTO "${tableName}" (${columnNames}) VALUES (${placeholders})`;
-
-          await dbRun('BEGIN TRANSACTION');
-          try {
-            for (const row of rows) {
-              const values = columns.map(col => this.normalizeSqliteValue(row[col.column_name]));
-              await dbRun(insertSql, values);
-            }
-            await dbRun('COMMIT');
-          } catch (error) {
-            await dbRun('ROLLBACK');
-            throw error;
-          }
-
-          offset += rows.length;
-          processedRows += rows.length;
-
-          await this.reportProgress(
-            onProgress,
-            this.calculateProgress(
-              processedRows,
-              totalRows,
-              processedTables,
-              totalTables
-            ),
-            `Tabelle ${tableName}: ${Math.min(offset, totalRowsInTable)}/${totalRowsInTable}`
-          );
-        }
-
-        processedTables += 1;
-        this.logger.log(`Completed table ${tableName}`);
-      }
-
-      await dbClose();
-      await this.reportProgress(onProgress, 100, 'Export abgeschlossen');
-    } catch (error) {
-      try {
-        await dbClose();
-      } catch (closeError) {
-        this.logger.error(
-          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
-          getErrorStack(closeError)
-        );
-      }
-
-      if (fs.existsSync(outputFilePath)) {
-        try {
-          fs.unlinkSync(outputFilePath);
-        } catch (cleanupError) {
-          this.logger.error(
-            `Error deleting failed export file: ${getErrorMessage(cleanupError) || cleanupError}`,
-            getErrorStack(cleanupError)
-          );
-        }
-      }
-
-      throw error;
-    }
+    return this.exportSnapshot(outputFilePath, undefined, onProgress, isCancelled);
   }
 
-  async exportWorkspaceToSqliteFile(
+  exportWorkspaceToSqliteFile(
     outputFilePath: string,
     workspaceId: number,
     onProgress?: ExportProgressCallback,
     isCancelled?: ExportCancellationCheck
   ): Promise<void> {
-    const outputDir = path.dirname(outputFilePath);
+    return this.exportSnapshot(outputFilePath, workspaceId, onProgress, isCancelled);
+  }
 
-    if (!fs.existsSync(outputDir)) {
-      fs.mkdirSync(outputDir, { recursive: true });
-    }
-
-    const db = new sqlite3.Database(outputFilePath);
-    const dbRun = (sql: string, values: unknown[] = []): Promise<void> => new Promise((resolve, reject) => {
-      db.run(sql, values, error => (error ? reject(error) : resolve()));
+  private async exportSnapshot(
+    outputFilePath: string,
+    workspaceId: number | undefined,
+    onProgress?: ExportProgressCallback,
+    isCancelled?: ExportCancellationCheck
+  ): Promise<void> {
+    await fs.promises.mkdir(path.dirname(outputFilePath), { recursive: true });
+    const db = await new Promise<sqlite3.Database>((resolve, reject) => {
+      const connection = new sqlite3.Database(outputFilePath, error => (error ? reject(error) : resolve(connection)));
     });
-    const dbClose = promisify(db.close.bind(db));
-    const queryRunner = this.dataSource.createQueryRunner();
 
     try {
-      await queryRunner.connect();
-      await queryRunner.startTransaction('REPEATABLE READ');
-      await queryRunner.query('SET TRANSACTION READ ONLY');
+      try {
+        // DELETE journal mode leaves a self-contained file for the downloader.
+        await this.runSqlite(db, 'PRAGMA journal_mode=DELETE');
+        await this.runSqlite(db, 'PRAGMA synchronous=NORMAL');
+        await this.runSqlite(db, 'PRAGMA cache_size=10000');
+        await this.runSqlite(db, 'PRAGMA temp_store=memory');
 
-      await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
-      await this.throwIfCancelled(isCancelled);
-
-      // Keep the export in a single SQLite file (without .wal sidecar files).
-      await dbRun('PRAGMA journal_mode=DELETE');
-      await dbRun('PRAGMA synchronous=NORMAL');
-      await dbRun('PRAGMA cache_size=10000');
-      await dbRun('PRAGMA temp_store=memory');
-
-      const workspaceTableConfigs = this.getWorkspaceExportTables();
-      const workspaceTables: ResolvedWorkspaceExportTable[] = [];
-      let totalRows = 0;
-
-      for (const tableConfig of workspaceTableConfigs) {
-        await this.throwIfCancelled(isCancelled);
-        const columns = await this.getTableColumns(tableConfig.name, queryRunner);
-
-        if (columns.length === 0) {
-          this.logger.warn(`Table ${tableConfig.name} not found, skipping...`);
-          continue;
-        }
-
-        await this.throwIfCancelled(isCancelled);
-        const countResult = await queryRunner.query(
-          `SELECT COUNT(*) as count FROM (${tableConfig.query}) export_rows`,
-          [workspaceId]
-        );
-        const rowCount = Number(countResult[0]?.count ?? 0);
-        workspaceTables.push({
-          ...tableConfig,
-          columns,
-          rowCount
+        await this.dataSource.transaction('REPEATABLE READ', async manager => {
+          await manager.query('SET TRANSACTION READ ONLY');
+          await this.reportProgress(onProgress, 1, 'Initialisierung gestartet');
+          await this.writeTables(manager, db, workspaceId, onProgress, isCancelled);
         });
-        totalRows += rowCount;
+      } finally {
+        await promisify(db.close.bind(db))();
       }
-
-      await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
-
-      let processedRows = 0;
-      let processedTables = 0;
-      const totalTables = workspaceTables.length || 1;
-
-      for (const tableConfig of workspaceTables) {
-        await this.throwIfCancelled(isCancelled);
-        const tableName = tableConfig.name;
-
-        this.logger.log(`Processing workspace table: ${tableName}`);
-
-        const { columns } = tableConfig;
-
-        const columnDefs = columns.map(col => {
-          const colType = this.mapPostgresTypeToSqlite(col.data_type);
-          const nullable = col.is_nullable === 'YES' ? '' : ' NOT NULL';
-          return `"${col.column_name}" ${colType}${nullable}`;
-        }).join(', ');
-
-        await dbRun(`CREATE TABLE IF NOT EXISTS "${tableName}" (${columnDefs})`);
-
-        const totalRowsInTable = tableConfig.rowCount;
-        if (totalRowsInTable === 0) {
-          processedTables += 1;
-          await this.reportProgress(
-            onProgress,
-            this.calculateProgress(
-              processedRows,
-              totalRows,
-              processedTables,
-              totalTables
-            ),
-            `Tabelle ${tableName} abgeschlossen`
-          );
-          continue;
-        }
-
-        const orderByClause = await this.getStableOrderByClause(tableName, columns, queryRunner);
-        const batchSize = 1000;
-        let offset = 0;
-
-        while (offset < totalRowsInTable) {
-          await this.throwIfCancelled(isCancelled);
-
-          const rows = await queryRunner.query(
-            `SELECT * FROM (${tableConfig.query}) export_rows
-             ORDER BY ${orderByClause}
-             LIMIT $2 OFFSET $3`,
-            [workspaceId, batchSize, offset]
-          );
-
-          if (rows.length === 0) {
-            break;
-          }
-
-          const columnNames = columns.map(col => `"${col.column_name}"`).join(', ');
-          const placeholders = columns.map(() => '?').join(', ');
-          const insertSql = `INSERT INTO "${tableName}" (${columnNames}) VALUES (${placeholders})`;
-
-          await dbRun('BEGIN TRANSACTION');
-          try {
-            for (const row of rows) {
-              const values = columns.map(col => this.normalizeSqliteValue(row[col.column_name]));
-              await dbRun(insertSql, values);
-            }
-            await dbRun('COMMIT');
-          } catch (error) {
-            await dbRun('ROLLBACK');
-            throw error;
-          }
-
-          offset += rows.length;
-          processedRows += rows.length;
-
-          await this.reportProgress(
-            onProgress,
-            this.calculateProgress(
-              processedRows,
-              totalRows,
-              processedTables,
-              totalTables
-            ),
-            `Tabelle ${tableName}: ${Math.min(offset, totalRowsInTable)}/${totalRowsInTable}`
-          );
-        }
-
-        processedTables += 1;
-        this.logger.log(`Completed workspace table ${tableName}`);
-      }
-
-      await dbClose();
-      await queryRunner.commitTransaction();
       await this.reportProgress(onProgress, 100, 'Export abgeschlossen');
     } catch (error) {
-      if (queryRunner.isTransactionActive) {
-        try {
-          await queryRunner.rollbackTransaction();
-        } catch (rollbackError) {
-          this.logger.error(
-            `Error rolling back workspace export transaction: ${getErrorMessage(rollbackError) || rollbackError}`,
-            getErrorStack(rollbackError)
-          );
-        }
-      }
+      await fs.promises.rm(outputFilePath, { force: true });
+      throw error;
+    }
+  }
 
-      try {
-        await dbClose();
-      } catch (closeError) {
-        this.logger.error(
-          `Error closing SQLite file: ${getErrorMessage(closeError) || closeError}`,
-          getErrorStack(closeError)
+  private async writeTables(
+    manager: EntityManager,
+    db: sqlite3.Database,
+    workspaceId: number | undefined,
+    onProgress?: ExportProgressCallback,
+    isCancelled?: ExportCancellationCheck
+  ): Promise<void> {
+    const parameters = workspaceId === undefined ? [] : [workspaceId];
+    const configs = workspaceId === undefined ? await this.getSystemExportTables(manager) : this.getWorkspaceExportTables();
+    const tables: ResolvedExportTable[] = [];
+    for (const config of configs) {
+      await this.throwIfCancelled(isCancelled);
+      const columns = await this.getTableColumns(config.name, manager);
+      if (!columns.length) {
+        this.logger.warn(`Table ${config.name} not found, skipping...`);
+        continue;
+      }
+      const [result] = await manager.query(`SELECT COUNT(*) AS count FROM (${config.query}) export_rows`, parameters);
+      tables.push({ ...config, columns, rowCount: Number(result.count) });
+    }
+
+    await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
+    const totalRows = tables.reduce((sum, table) => sum + table.rowCount, 0);
+    let processedRows = 0;
+    for (const [index, table] of tables.entries()) {
+      await this.throwIfCancelled(isCancelled);
+      const definitions = table.columns.map(column => {
+        const nullable = column.is_nullable === 'YES' ? '' : ' NOT NULL';
+        return `${this.quoteIdentifier(column.column_name)} ${this.mapPostgresTypeToSqlite(column.data_type)}${nullable}`;
+      });
+      await this.runSqlite(db, `CREATE TABLE IF NOT EXISTS ${this.quoteIdentifier(table.name)} (${definitions.join(', ')})`);
+      if (table.rowCount) {
+        const rowsBeforeTable = processedRows;
+        await this.copyTable(manager, db, table, parameters, isCancelled, written => this.reportProgress(
+          onProgress,
+          this.calculateProgress(rowsBeforeTable + written, totalRows, index, tables.length),
+          `Tabelle ${table.name}: ${written}/${table.rowCount}`
+        ));
+        processedRows += table.rowCount;
+      } else {
+        await this.reportProgress(
+          onProgress,
+          this.calculateProgress(processedRows, totalRows, index + 1, tables.length),
+          `Tabelle ${table.name} abgeschlossen`
         );
       }
-
-      if (fs.existsSync(outputFilePath)) {
-        try {
-          fs.unlinkSync(outputFilePath);
-        } catch (cleanupError) {
-          this.logger.error(
-            `Error deleting failed workspace export file: ${getErrorMessage(cleanupError) || cleanupError}`,
-            getErrorStack(cleanupError)
-          );
-        }
-      }
-
-      throw error;
-    } finally {
-      if (!queryRunner.isReleased) {
-        try {
-          await queryRunner.release();
-        } catch (releaseError) {
-          this.logger.error(
-            `Error releasing workspace export query runner: ${getErrorMessage(releaseError) || releaseError}`,
-            getErrorStack(releaseError)
-          );
-        }
-      }
     }
+  }
+
+  private async getSystemExportTables(manager: EntityManager): Promise<ExportTable[]> {
+    const tables: { table_name: string }[] = await manager.query(`
+      SELECT table_name FROM information_schema.tables WHERE table_schema = 'public' ORDER BY table_name
+    `);
+    return tables
+      .map(table => table.table_name)
+      .filter(name => !name.startsWith('typeorm_') && name !== 'migrations')
+      .map(name => ({ name, query: `SELECT * FROM public.${this.quoteIdentifier(name)}` }));
+  }
+
+  private async copyTable(
+    manager: EntityManager,
+    db: sqlite3.Database,
+    table: ResolvedExportTable,
+    parameters: number[],
+    isCancelled: ExportCancellationCheck | undefined,
+    reportWritten: (written: number) => Promise<void>
+  ): Promise<void> {
+    const orderBy = await this.getStableOrderByClause(table.name, table.columns, manager);
+    // The cursor lives on this transaction's connection and is discarded on rollback.
+    await manager.query(`DECLARE export_rows_cursor NO SCROLL CURSOR FOR
+      SELECT * FROM (${table.query}) export_rows ORDER BY ${orderBy}`, parameters);
+    const names = table.columns.map(column => this.quoteIdentifier(column.column_name));
+    const sql = `INSERT INTO ${this.quoteIdentifier(table.name)} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`;
+    const statement = await new Promise<sqlite3.Statement>((resolve, reject) => {
+      const prepared = db.prepare(sql, error => (error ? reject(error) : resolve(prepared)));
+    });
+    let written = 0;
+    try {
+      while (written < table.rowCount) {
+        await this.throwIfCancelled(isCancelled);
+        const rows: Record<string, unknown>[] = await manager.query('FETCH FORWARD 1000 FROM export_rows_cursor');
+        if (!rows.length) throw new Error(`Incomplete export of ${table.name}: ${written}/${table.rowCount} rows`);
+        await this.runSqlite(db, 'BEGIN TRANSACTION');
+        try {
+          for (const row of rows) {
+            const values = table.columns.map(column => this.normalizeSqliteValue(row[column.column_name]));
+            await new Promise<void>((resolve, reject) => {
+              statement.run(values, error => (error ? reject(error) : resolve()));
+            });
+          }
+          await this.runSqlite(db, 'COMMIT');
+        } catch (error) {
+          await this.runSqlite(db, 'ROLLBACK');
+          throw error;
+        }
+        written += rows.length;
+        await reportWritten(written);
+      }
+    } finally {
+      await promisify(statement.finalize.bind(statement))();
+    }
+    await manager.query('CLOSE export_rows_cursor');
+  }
+
+  private runSqlite(db: sqlite3.Database, sql: string): Promise<void> {
+    return new Promise((resolve, reject) => {
+      db.run(sql, error => (error ? reject(error) : resolve()));
+    });
+  }
+
+  private quoteIdentifier(name: string): string {
+    return `"${name.replace(/"/g, '""')}"`;
   }
 
   private normalizeSqliteValue(value: unknown): unknown {
@@ -465,10 +251,10 @@ export class DatabaseExportService {
   private async getStableOrderByClause(
     tableName: string,
     columns: Array<{ column_name: string }>,
-    queryRunner?: QueryRunner
+    manager: EntityManager
   ): Promise<string> {
     const columnNames = columns.map(column => column.column_name);
-    const primaryKeyColumns = await this.getPrimaryKeyColumns(tableName, queryRunner);
+    const primaryKeyColumns = await this.getPrimaryKeyColumns(tableName, manager);
     let orderColumns = primaryKeyColumns;
     if (orderColumns.length === 0) {
       orderColumns = columnNames.includes('id') ? ['id'] : columnNames;
@@ -476,15 +262,15 @@ export class DatabaseExportService {
 
     return orderColumns
       .filter(columnName => columnNames.includes(columnName))
-      .map(columnName => `"${columnName}" ASC`)
-      .join(', ') || columnNames.map(columnName => `"${columnName}" ASC`).join(', ');
+      .map(columnName => `${this.quoteIdentifier(columnName)} ASC`)
+      .join(', ') || columnNames.map(columnName => `${this.quoteIdentifier(columnName)} ASC`).join(', ');
   }
 
   private async getTableColumns(
     tableName: string,
-    queryRunner?: QueryRunner
+    manager: EntityManager
   ): Promise<ExportTableColumn[]> {
-    return (queryRunner || this.dataSource).query(`
+    return manager.query(`
       SELECT column_name, data_type, is_nullable
       FROM information_schema.columns
       WHERE table_name = $1 AND table_schema = 'public'
@@ -494,9 +280,9 @@ export class DatabaseExportService {
 
   private async getPrimaryKeyColumns(
     tableName: string,
-    queryRunner?: QueryRunner
+    manager: EntityManager
   ): Promise<string[]> {
-    const rows: { column_name: string }[] = await (queryRunner || this.dataSource).query(`
+    const rows: { column_name: string }[] = await manager.query(`
       SELECT kcu.column_name
       FROM information_schema.table_constraints tc
       INNER JOIN information_schema.key_column_usage kcu
@@ -525,7 +311,7 @@ export class DatabaseExportService {
     return Math.min(99, Math.max(1, (processedTables / totalTables) * 99));
   }
 
-  private getWorkspaceExportTables(): WorkspaceExportTable[] {
+  private getWorkspaceExportTables(): ExportTable[] {
     return [
       {
         name: 'workspace',

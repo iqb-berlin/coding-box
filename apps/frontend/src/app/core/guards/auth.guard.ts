@@ -8,7 +8,7 @@ import {
 import { inject } from '@angular/core';
 import { AppService } from '../services/app.service';
 import { AuthService } from '../services/auth.service';
-import { createAuthDataFailedUrlTree, createReAuthenticationUrlTree } from './auth-redirect';
+import { createAuthDataFailedUrlTree, createLoginUrlTree } from './auth-redirect';
 import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
 
 const isAccessAllowed = async (
@@ -20,7 +20,7 @@ const isAccessAllowed = async (
   const router = inject(Router);
 
   if (!authService.isLoggedIn()) {
-    return createReAuthenticationUrlTree(router, state.url);
+    return createLoginUrlTree(router, state.url);
   }
 
   try {
