@@ -22,7 +22,7 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
     });
     cy.intercept('GET', '**/api/admin/workspace/5/coding/groups/stats', {
       delay: 150,
-      body: [{ groupName: 'delayed-group', testPersonCount: 1, responsesToCode: 1 }]
+      body: [{ groupName: '12', testPersonCount: 1, responsesToCode: 1 }]
     }).as('groups');
   });
 
@@ -44,7 +44,7 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
         jobId,
         status: outcome,
         progress: 100,
-        groupNames: 'delayed-group',
+        groupNames: '12',
         autoCoderRun: 1,
         result: outcome === 'completed' ? {
           totalResponses: 1, statusCounts: { CODED: 1 }, warnings: [feedback]
@@ -66,13 +66,12 @@ describe('zoneless auto-coding job feedback when the list answers first', () => 
         request.reply({
           delay: 150,
           body: terminalListEnabled ? [terminalJob] : started ? [{
-            jobId, status: 'processing', progress: 20, groupNames: 'delayed-group', autoCoderRun: 1
+            jobId, status: 'processing', progress: 20, groupNames: '12', autoCoderRun: 1
           }] : []
         });
       }).as('jobs');
-      cy.intercept('GET', '**/api/admin/workspace/5/coding?*', request => {
-        expect(request.query.testPersons).to.equal('delayed-group');
-        expect(request.query.autoCoderRun).to.equal('1');
+      cy.intercept('POST', '**/api/admin/workspace/5/coding', request => {
+        expect(request.body).to.deep.equal({ selection: { groupNames: ['12'] }, autoCoderRun: 1 });
         started = true;
         request.reply({
           delay: 150,

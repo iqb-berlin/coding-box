@@ -1,5 +1,5 @@
 import {
-  BadRequestException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException,
+  BadRequestException, ConflictException, Controller, Param, Post, Put, Query, Req, UseGuards, UseInterceptors, UploadedFiles, ParseIntPipe, Logger, Get, NotFoundException,
   ParseBoolPipe
 } from '@nestjs/common';
 import { randomUUID } from 'crypto';
@@ -18,6 +18,7 @@ import {
 } from '@nestjs/swagger';
 import { FilesInterceptor } from '@nestjs/platform-express';
 import { Request } from 'express';
+import { assembleChunkedUpload, hasAssembledUpload, removeUploadChunks } from './chunked-upload-files';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -444,6 +445,9 @@ export class WorkspaceTestResultsImportController {
       );
     }
 
+    if (await hasAssembledUpload(session.tempDir, session.fileSize)) {
+      throw new ConflictException('Upload already assembled. Retry completion.');
+    }
     const chunkPath = path.join(
       session.tempDir,
       `chunk_${String(chunkIndex).padStart(6, '0')}`
@@ -495,19 +499,43 @@ export class WorkspaceTestResultsImportController {
     @ValidatedBody('ChunkedUploadCompleteRequestDto', true) body: RequestBody<'ChunkedUploadCompleteRequestDto'> = {},
     @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
-    const session = await this.cacheService.get<ChunkedUploadSession>(
-      this.uploadSessionKey(uploadId)
-    );
+    const jobId = `chunked-upload-${uploadId}`;
+    const sessionKey = this.uploadSessionKey(uploadId);
+    const session = await this.cacheService.getStrict<ChunkedUploadSession>(sessionKey);
     if (!session) {
-      throw new NotFoundException(
-        `Upload session ${uploadId} not found or expired.`
-      );
+      const job = await this.jobQueueService.getUploadJob(jobId);
+      if (job?.data.workspaceId === workspaceId) return [{ jobId }];
+      throw new NotFoundException(`Upload session ${uploadId} not found or expired.`);
     }
+    if (session.workspaceId !== workspaceId) throw new BadRequestException('Workspace ID mismatch.');
 
-    if (session.workspaceId !== workspaceId) {
-      throw new BadRequestException('Workspace ID mismatch.');
+    const owner = randomUUID();
+    const lockKey = `${sessionKey}:complete`;
+    if (!await this.cacheService.acquireShortLock(lockKey, owner, UPLOAD_SESSION_TTL)) {
+      throw new ConflictException('Upload completion already in progress.');
     }
+    try {
+      // A previous completion may have handed the file to a worker while we acquired the lock.
+      const job = await this.jobQueueService.getUploadJob(jobId);
+      if (job && job.data.workspaceId !== workspaceId) throw new ConflictException('Upload job workspace mismatch.');
+      const result = job ? [{ jobId }] : await this.queueChunkedUpload(session, jobId, body, request?.user.id);
+      await removeUploadChunks(session.tempDir, session.totalChunks).catch(error => {
+        this.logger.warn(`Could not clean up accepted upload ${uploadId}: ${error.message}`);
+      });
+      await this.cacheService.delete(sessionKey);
+      return result;
+    } finally {
+      await this.cacheService.getAndDeleteIfFieldMatches(lockKey, 'owner', owner);
+    }
+  }
 
+  private async queueChunkedUpload(
+    session: ChunkedUploadSession,
+    jobId: string,
+    body: RequestBody<'ChunkedUploadCompleteRequestDto'>,
+    requestedByUserId?: number
+  ): Promise<TestResultsUploadJobDto[]> {
+    const { workspaceId } = session;
     // Check all chunks received
     const missing = [];
     for (let i = 0; i < session.totalChunks; i++) {
@@ -519,29 +547,7 @@ export class WorkspaceTestResultsImportController {
       throw new BadRequestException(`Missing chunks: ${missing.join(', ')}`);
     }
 
-    // Merge chunks into a single file
-    const mergedPath = path.join(session.tempDir, 'merged.csv');
-    const writeStream = fs.createWriteStream(mergedPath);
-
-    for (let i = 0; i < session.totalChunks; i++) {
-      const chunkPath = path.join(
-        session.tempDir,
-        `chunk_${String(i).padStart(6, '0')}`
-      );
-      const chunkData = fs.readFileSync(chunkPath);
-      writeStream.write(chunkData);
-      fs.unlinkSync(chunkPath);
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      writeStream.end(() => resolve());
-      writeStream.on('error', reject);
-    });
-
-    const mergedSize = fs.statSync(mergedPath).size;
-    this.logger.log(
-      `Merged ${session.totalChunks} chunks into ${mergedPath} (${mergedSize} bytes)`
-    );
+    const mergedPath = await assembleChunkedUpload(session.tempDir, session.totalChunks, session.fileSize);
 
     // Build a file object compatible with the existing upload pipeline
     const file = {
@@ -550,10 +556,10 @@ export class WorkspaceTestResultsImportController {
       encoding: '7bit',
       mimetype: session.mimeType,
       buffer: Buffer.alloc(0),
-      size: mergedSize,
+      size: session.fileSize,
       path: mergedPath,
       destination: session.tempDir,
-      filename: 'merged.csv'
+      filename: path.basename(mergedPath)
     };
 
     // Parse options
@@ -591,7 +597,7 @@ export class WorkspaceTestResultsImportController {
     });
 
     // Queue the upload job
-    const result = await this.uploadResults.uploadTestResults(
+    return this.uploadResults.uploadTestResults(
       workspaceId,
       [file],
       session.resultType,
@@ -606,16 +612,8 @@ export class WorkspaceTestResultsImportController {
         variableId: body.variableId,
         subform: body.subform
       },
-      request?.user.id
+      requestedByUserId,
+      jobId
     );
-
-    // Cleanup session from Redis
-    await this.cacheService.delete(this.uploadSessionKey(uploadId));
-
-    this.logger.log(
-      `Chunked upload ${uploadId} completed, ${result.length} job(s) queued`
-    );
-
-    return result;
   }
 }

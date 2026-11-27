@@ -172,9 +172,6 @@
       "functions": {
         "class WorkspaceTestResultsImportController#1/method addTestResults#1": {
           "max-lines-per-function": 180
-        },
-        "class WorkspaceTestResultsImportController#1/method completeChunkedUpload#1": {
-          "max-lines-per-function": 119
         }
       }
     },
@@ -1409,7 +1406,7 @@
     },
     "apps/frontend/src/app/coding/services/test-person-coding.service.ts": {
       "file": {
-        "max-lines": 1600
+        "max-lines": 1599
       },
       "functions": {
         "class TestPersonCodingService#1/method importExternalCodingWithProgress#1": {

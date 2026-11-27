@@ -59,7 +59,7 @@
         </div>
 
         <div class="button-container">
-          <button mat-raised-button color="primary" [disabled]="isLoading() || selectedGroups.length === 0" (click)="codeTestPersons(selectedGroups.join(','))">
+          <button mat-raised-button color="primary" [disabled]="isLoading() || selectedGroups.length === 0" (click)="codeTestPersons({ groupNames: selectedGroups })">
             <mat-icon>code</mat-icon>
             {{ 'test-person-coding.code-selected-groups' | translate }}
           </button>

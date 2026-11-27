@@ -11,12 +11,16 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import {
+  ApiCreatedResponse,
+  ApiOperation,
   ApiOkResponse,
   ApiParam,
   ApiQuery,
   ApiTags,
   ApiConflictResponse
 } from '@nestjs/swagger';
+import type { RequestBody } from '../../../../../../api-dto/request-contracts';
+import { ValidatedBody } from '../../http/validated-body.decorator';
 import { CodingStatistics } from '../../database/services/shared';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { JwtOrWorkspaceTokenAuthGuard } from '../../auth/jwt-or-workspace-token-auth.guard';
@@ -90,7 +94,25 @@ export class WorkspaceCodingController {
     throw new BadRequestException('autoCoderRun must be 1 or 2');
   }
 
+  @Post(':workspace_id/coding')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard)
+  @ApiParam({ name: 'workspace_id', type: Number })
+  @ApiCreatedResponse({ description: 'Start auto-coding for the specified groups or person IDs.' })
+  async startAutocoding(
+    @WorkspaceId() workspaceId: number,
+    @ValidatedBody('StartAutocoding') body: RequestBody<'StartAutocoding'>
+  ): Promise<CodingStatistics> {
+    await this.assertAutocodingCanStart(workspaceId, body.autoCoderRun);
+    return this.codingProcessService.startAutocoding(workspaceId, body.selection, body.autoCoderRun);
+  }
+
+  private async assertAutocodingCanStart(workspaceId: number, run: 1 | 2): Promise<void> {
+    await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspaceId);
+    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(workspaceId, run);
+  }
+
   @Get(':workspace_id/coding')
+  @ApiOperation({ deprecated: true, summary: 'Legacy auto-coding start with comma-separated selectors' })
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })
   @ApiQuery({
@@ -113,11 +135,7 @@ export class WorkspaceCodingController {
     @Query('autoCoderRun') autoCoderRun: string | string[] | undefined
   ): Promise<CodingStatistics> {
     const autoCoderRunNumber = this.parseAutoCoderRun(autoCoderRun);
-    await this.jobQueueService.assertNoDependencyConflicts('test-person-coding', workspace_id);
-    await this.autoCodingRunGuardService.assertAutoCodingRunCanStart(
-      workspace_id,
-      autoCoderRunNumber
-    );
+    await this.assertAutocodingCanStart(workspace_id, autoCoderRunNumber);
 
     return this.codingProcessService.codeTestPersons(
       workspace_id,

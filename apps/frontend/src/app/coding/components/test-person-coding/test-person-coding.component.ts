@@ -30,6 +30,7 @@ import {
   of,
   tap
 } from 'rxjs';
+import type { AutocodingSelection } from '../../../../../../../api-dto/request-contracts';
 import {
   CodingStatistics,
   JobInfo,
@@ -258,8 +259,8 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       .subscribe();
   }
 
-  codeTestPersons(testPersonIds: string): void {
-    if (!testPersonIds) {
+  codeTestPersons(selection: AutocodingSelection): void {
+    if (('groupNames' in selection ? selection.groupNames : selection.personIds).length === 0) {
       this.snackBar.open(
         this.translateService.instant(
           'test-person-coding.enter-test-person-ids'
@@ -274,7 +275,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
     this.isStartingCoding.set(true);
 
     this.testPersonCodingService
-      .codeTestPersons(this.workspaceId, testPersonIds, this.autoCoderRun)
+      .codeTestPersons(this.workspaceId, selection, this.autoCoderRun)
       .pipe(
         takeUntilWorkspaceChanged(this.appService),
         tap(result => {
@@ -650,7 +651,7 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
       this.selectedGroups = this.availableGroups().map(
         group => group.groupName
       );
-      this.codeTestPersons(this.selectedGroups.join(','));
+      this.codeTestPersons({ groupNames: this.selectedGroups });
       this.snackBar.open(
         this.translateService.instant('test-person-coding.coding-all-groups', {
           count: this.selectedGroups.length
@@ -696,9 +697,8 @@ export class TestPersonCodingComponent implements OnInit, OnDestroy {
           );
           return;
         }
-        const testPersonIdsString = testPersonIds.join(',');
         codingStarted = true;
-        this.codeTestPersons(testPersonIdsString);
+        this.codeTestPersons({ personIds: testPersonIds });
         this.snackBar.open(
           this.translateService.instant(
             'test-person-coding.coding-test-persons-count',

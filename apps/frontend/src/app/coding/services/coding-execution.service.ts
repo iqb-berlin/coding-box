@@ -27,11 +27,8 @@ export class CodingExecutionService {
     jobId?: string;
     message?: string;
   }> {
-    const params = new HttpParams()
-      .set('testPersons', testPersonIds.join(','))
-      .set('autoCoderRun', autoCoderRun.toString());
     return this.http
-      .get<{
+      .post<{
       totalResponses: number;
       statusCounts: {
         [key: string]: number;
@@ -40,7 +37,7 @@ export class CodingExecutionService {
       message?: string;
     }>(
         `${this.serverUrl}admin/workspace/${workspace_id}/coding`,
-        { params })
+        { selection: { personIds: testPersonIds }, autoCoderRun })
       .pipe(
         catchError(() => of({ totalResponses: 0, statusCounts: {} }))
       );

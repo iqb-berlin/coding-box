@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   catchError,
   concat,
@@ -8,9 +8,11 @@ import {
   map,
   Observable,
   of,
+  retry,
   switchMap,
   tap,
-  throwError
+  throwError,
+  timer
 } from 'rxjs';
 import { VariableInfo } from '@iqbspecs/variable-info/variable-info.interface';
 import { FilesInListDto } from '../../../../../../../api-dto/files/files-in-list.dto';
@@ -324,7 +326,7 @@ export class FileService {
             last(),
             switchMap(() => {
               const completeUrl = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${uploadId}/complete`;
-              return this.http.post<TestResultsUploadJobDto[]>(
+              return defer(() => this.http.post<TestResultsUploadJobDto[]>(
                 completeUrl,
                 {
                   overwriteExisting: options.overwriteExisting,
@@ -333,7 +335,12 @@ export class FileService {
                   ...(options.filters || {})
                 },
                 { headers: this.authHeader }
-              );
+              )).pipe(retry({
+                count: 3,
+                delay: (error: HttpErrorResponse, attempt) => (
+                  [0, 409, 503, 504].includes(error.status) ? timer(1000 * (2 ** (attempt - 1))) : throwError(() => error)
+                )
+              }));
             })
           );
         })

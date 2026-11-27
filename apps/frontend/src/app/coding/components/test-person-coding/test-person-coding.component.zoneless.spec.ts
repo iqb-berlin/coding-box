@@ -22,7 +22,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
   let groups: Subject<WorkspaceGroupCodingStats[]>;
   let status: Subject<JobStatus | { error: string }>;
   let coding: Subject<{ jobId: string; message: string }>;
-  let testPersons: Subject<string[]>;
+  let testPersons: Subject<number[]>;
   let service: jest.Mocked<Partial<TestPersonCodingService>>;
   const workspaceChanges = new Subject<number>();
   const appService = { selectedWorkspaceId: 1, selectedWorkspaceId$: workspaceChanges.asObservable() };
@@ -103,7 +103,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
   });
 
   it('renders delayed job submission, polling progress and terminal status automatically', async () => {
-    fixture.componentInstance.codeTestPersons('delayed-group');
+    fixture.componentInstance.codeTestPersons({ groupNames: ['delayed-group'] });
     await fixture.whenStable();
     const codeAll = element().querySelector('.button-container button:last-child') as HTMLButtonElement;
     expect(codeAll.disabled).toBe(true);
@@ -130,7 +130,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
   });
 
   it('re-enables submission after a delayed error', async () => {
-    fixture.componentInstance.codeTestPersons('delayed-group');
+    fixture.componentInstance.codeTestPersons({ groupNames: ['delayed-group'] });
     await fixture.whenStable();
     coding.error(new Error('coding timeout'));
     await fixture.whenStable();
@@ -223,11 +223,11 @@ describe('Test person coding delayed responses without Zone.js', () => {
     codeAll.click();
     await fixture.whenStable();
     expect(codeAll.disabled).toBe(true);
-    testPersons.next(['person-1']);
+    testPersons.next([12]);
     testPersons.complete();
     await fixture.whenStable();
     expect(codeAll.disabled).toBe(true);
-    expect(service.codeTestPersons).toHaveBeenCalledWith(1, 'person-1', 1);
+    expect(service.codeTestPersons).toHaveBeenCalledWith(1, { personIds: [12] }, 1);
     coding.next({ jobId: 'all-persons-job', message: 'started' });
     coding.complete();
     await fixture.whenStable();
@@ -250,7 +250,7 @@ describe('Test person coding delayed responses without Zone.js', () => {
 
   it('unsubscribes from pending requests when destroyed', async () => {
     fixture.componentInstance.startJobStatusPolling('pending-job');
-    fixture.componentInstance.codeTestPersons('delayed-group');
+    fixture.componentInstance.codeTestPersons({ groupNames: ['delayed-group'] });
     await fixture.whenStable();
     fixture.destroy();
     expect(jobs.observed).toBe(false);

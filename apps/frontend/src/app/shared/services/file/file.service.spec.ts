@@ -250,6 +250,22 @@ describe('FileService', () => {
       expect(received).toHaveBeenCalledWith([]);
     });
 
+    it('retries only completion after a queue conflict', () => {
+      jest.useFakeTimers();
+      try {
+        const received = jest.fn();
+        service.uploadTestResultsChunked(1, file, 'responses', {}).subscribe(received);
+        httpMock.expectOne(`${url}/responses/init`).flush({ uploadId: 'retry', chunkSize: 10, totalChunks: 1 });
+        httpMock.expectOne(`${url}/retry/chunk/0`).flush({});
+        httpMock.expectOne(`${url}/retry/complete`).flush({}, { status: 409, statusText: 'Conflict' });
+        jest.advanceTimersByTime(1000);
+        httpMock.expectOne(`${url}/retry/complete`).flush([{ jobId: 'job' }]);
+        expect(received).toHaveBeenCalledWith([{ jobId: 'job' }]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('stops after a rejected chunk without reporting completion or sending later chunks', () => {
       const progress = jest.fn();
       const failed = jest.fn();
