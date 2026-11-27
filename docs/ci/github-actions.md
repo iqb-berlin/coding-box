@@ -43,8 +43,8 @@ demselben Workflow-Lauf. Die Images werden direkt aus diesen Archiven veröffent
 
 Bei einem Vorab-Release ist `<Version>` der vollständige Git-Tag, zum Beispiel
 `1.17.5-beta.2`. Die stabilen Aliase werden erst nach allen fünf Versions-Tags
-aktualisiert. Der Server kann `TAG` und `POSTGRES_IMAGE_SUFFIX` wie bisher verwenden,
-sobald der Publish-Job erfolgreich abgeschlossen ist.
+aktualisiert. Für Server, die von Docker Hub ziehen (`REGISTRY_PATH` leer), gelten
+weiterhin `TAG` und `POSTGRES_IMAGE_SUFFIX`.
 
 ### Einmalige Freischaltung
 
@@ -54,7 +54,16 @@ sobald der Publish-Job erfolgreich abgeschlossen ist.
    Docker-Hub-Repositories hinterlegen.
 2. Die bisherige Veröffentlichung derselben Tags deaktivieren.
 3. Die Repository-Variable `DOCKERHUB_RELEASE_ENABLED` auf `true` setzen.
-   Ein neuer Versions-Tag startet den ersten Release-Lauf.
+
+### Ablauf pro Release
+
+1. Den Versions-Tag vom vorbereiteten Release-Commit zu GitHub pushen.
+2. Den Job `Publish checked images to Docker Hub` freigeben und auf seinen Erfolg
+   warten.
+3. Das GitHub-Release zum vorhandenen Tag veröffentlichen. Vorab-Releases dabei
+   als Pre-release markieren. `make coding-box-update` prüft, ob zum gewählten Tag
+   ein GitHub-Release vorliegt, und schlägt standardmäßig das jüngste stabile
+   Release vor.
 
 Bei einem fehlgeschlagenen Push können einzelne Tags bereits existieren.
 Den fehlgeschlagenen Publish-Job im selben Lauf erneut ausführen, solange die
