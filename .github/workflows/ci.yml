@@ -100,7 +100,7 @@ jobs:
       - uses: ./.github/actions/restore-dependencies
       - run: command -v psql >/dev/null || (sudo apt-get update && sudo apt-get install -y postgresql-client)
       - run: node --test scripts/qa/junit-reporter.test.cjs
-      - run: npx --no-install nx exec -- bash scripts/tests/install-migration-regression.sh
+      - run: npx --no-install nx exec -- bash "$GITHUB_WORKSPACE/scripts/tests/install-migration-regression.sh"
       - run: npx --no-install nx run backend:typecheck
       - run: npx --no-install nx run backend:verify-runtime-package
       - name: Run backend tests with PostgreSQL and Redis
