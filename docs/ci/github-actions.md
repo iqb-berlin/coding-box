@@ -48,8 +48,8 @@ weiterhin `TAG` und `POSTGRES_IMAGE_SUFFIX`.
 
 ### Einmalige Freischaltung
 
-1. Das GitHub-Environment `dockerhub-release` anlegen, auf Versions-Tags
-   beschränken und mit einer Freigabe schützen. Dort `DOCKERHUB_USER` und
+1. Das GitHub-Environment `dockerhub-release` anlegen und auf Versions-Tags
+   beschränken. Dort `DOCKERHUB_USER` und
    `DOCKERHUB_TOKEN` für ein Konto mit Schreibzugriff auf die vier
    Docker-Hub-Repositories hinterlegen.
 2. Die bisherige Veröffentlichung derselben Tags deaktivieren.
@@ -57,9 +57,9 @@ weiterhin `TAG` und `POSTGRES_IMAGE_SUFFIX`.
 
 ### Ablauf pro Release
 
-1. Den Versions-Tag vom vorbereiteten Release-Commit zu GitHub pushen.
-2. Den Job `Publish checked images to Docker Hub` freigeben und auf seinen Erfolg
-   warten.
+1. Den Versions-Tag vom vorbereiteten Release-Commit mit dem GitHub-Workflow zu
+   GitHub pushen.
+2. Warten, bis `Publish checked images to Docker Hub` erfolgreich war.
 3. Das GitHub-Release zum vorhandenen Tag veröffentlichen. Vorab-Releases dabei
    als Pre-release markieren. `make coding-box-update` prüft, ob zum gewählten Tag
    ein GitHub-Release vorliegt, und schlägt standardmäßig das jüngste stabile
