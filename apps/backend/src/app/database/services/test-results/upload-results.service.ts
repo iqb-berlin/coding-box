@@ -10,9 +10,7 @@ import { Job } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, toError } from '../../../utils/error.util';
-import {
-  statusStringToNumber
-} from '../../utils/response-status-converter';
+import { countChunkResponses, selectResponseFromUnit } from './response-chunks';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { Log, Person, Response } from '../shared';
 import { PersonService } from './person.service';
@@ -435,23 +433,7 @@ export class UploadResultsService {
                 }
                 return true;
               })
-              .map(u => {
-                if (scope !== 'response') {
-                  return u;
-                }
-                return {
-                  ...u,
-                  subforms: (u.subforms || []).map(sf => {
-                    if ((sf.id || '') !== subform) {
-                      return { ...sf, responses: [] };
-                    }
-                    return {
-                      ...sf,
-                      responses: (sf.responses || []).filter(r => (r.id || '') === variableId)
-                    };
-                  })
-                };
-              })
+              .map(u => (scope === 'response' ? selectResponseFromUnit(u, variableId, subform) : u))
           }))
       }));
 
@@ -669,50 +651,7 @@ export class UploadResultsService {
                   const chunks = typeof row.responses === 'string' ? JSON.parse(row.responses) : row.responses;
                   if (Array.isArray(chunks)) {
                     chunks.forEach(chunk => {
-                      if (!chunk || typeof chunk !== 'object') return;
-                      const subForm = (chunk as { subForm?: string }).subForm || '';
-                      const content = (chunk as { content?: string }).content;
-                      if (!content || typeof content !== 'string') return;
-                      try {
-                        const chunkResponses = JSON.parse(content) as Array<{ id?: string; status?: string }>;
-                        if (!Array.isArray(chunkResponses)) return;
-                        chunkResponses.forEach(r => {
-                          const responseId = r?.id || '';
-                          if (!responseId) return;
-                          const uniqueKey = `${personKey}@@${bookletname}@@${unitKey}@@${subForm}@@${responseId}`;
-                          expectedAgg.responses.add(uniqueKey);
-
-                          let status = r?.status;
-                          if (!status) {
-                            status = 'INVALID';
-                            issues.push({
-                              level: 'warning',
-                              message: `Missing status (defaulting to INVALID) in response for ${uniqueKey}`,
-                              fileName: file.originalname,
-                              rowIndex,
-                              category: 'missing_status'
-                            });
-                          } else if (statusStringToNumber(status) === null) {
-                            issues.push({
-                              level: 'warning',
-                              message: `Invalid status '${status}' (defaulting to INVALID) in response for ${uniqueKey}`,
-                              fileName: file.originalname,
-                              rowIndex,
-                              category: 'invalid_status'
-                            });
-                            status = 'INVALID';
-                          }
-
-                          statusCounts[status] = (statusCounts[status] || 0) + 1;
-                        });
-                      } catch {
-                        issues.push({
-                          level: 'warning',
-                          message: 'Malformed chunk content JSON',
-                          fileName: file.originalname,
-                          rowIndex
-                        });
-                      }
+                      countChunkResponses(chunk, `${personKey}@@${bookletname}@@${unitKey}`, expectedAgg.responses, statusCounts, issues, file.originalname, rowIndex);
                     });
                   }
                 } catch {
@@ -730,7 +669,7 @@ export class UploadResultsService {
               const personsWithUnits = await Promise.all(
                 basePersons.map(async person => {
                   const personWithBooklets = await this.personService.assignBookletsToPerson(person, rowData, issues);
-                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues);
+                  return this.personService.assignUnitsToBookletAndPerson(personWithBooklets, rowData, issues, true);
                 })
               );
 

@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { chunkMemberships, extractResponseGroups } from './response-chunks';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Chunk,
@@ -7,7 +8,6 @@ import {
   Response,
   TcMergeBooklet,
   TcMergeLastState,
-  TcMergeResponse,
   TcMergeSubForms,
   TcMergeUnit
 } from '../shared/types';
@@ -331,16 +331,9 @@ export class PersonDataProcessingService {
    * @returns Array of subforms with responses
    */
   extractSubforms(parsedResponses: Chunk[]): TcMergeSubForms[] {
-    return parsedResponses
-      .map(chunk => {
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          return { id: chunk.subForm || chunk.id || '', responses: chunkContent };
-        } catch (error) {
-          this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-          return { id: chunk.subForm || chunk.id || '', responses: [] };
-        }
-      });
+    return extractResponseGroups(parsedResponses, (chunk, error) => {
+      this.logger.error(`Error parsing chunk content for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
+    });
   }
 
   /**
@@ -445,42 +438,9 @@ export class PersonDataProcessingService {
     variables: Set<string>,
     parsedResponses: Chunk[]
   ): TcMergeUnit {
-    const chunks = parsedResponses
-      .map(chunk => {
-        const chunkId = String(chunk.id || chunk.subForm || '').trim();
-        const chunkType = String(chunk.responseType || '').trim();
-        const chunkTs = Number(chunk.ts) || 0;
-        let chunkVariables: string[] = [];
-
-        try {
-          const chunkContent: TcMergeResponse[] = JSON.parse(chunk.content);
-          if (Array.isArray(chunkContent)) {
-            chunkVariables = Array.from(new Set(
-              chunkContent
-                .map(response => String(response?.id || '').trim())
-                .filter(Boolean)
-            ));
-          }
-        } catch (error) {
-          this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-        }
-
-        if (chunkVariables.length === 0 && parsedResponses.length === 1 && variables.size > 0) {
-          chunkVariables = Array.from(new Set(
-            Array.from(variables)
-              .map(variable => String(variable || '').trim())
-              .filter(Boolean)
-          ));
-        }
-
-        return {
-          id: chunkId,
-          type: chunkType,
-          ts: chunkTs,
-          variables: chunkVariables
-        };
-      })
-      .filter(chunk => chunk.id || chunk.type || chunk.ts || chunk.variables.length > 0);
+    const chunks = chunkMemberships(parsedResponses, variables, (chunk, error) => {
+      this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
+    });
 
     return {
       id: row.unitname,

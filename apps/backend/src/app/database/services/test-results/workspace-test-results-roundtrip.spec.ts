@@ -136,6 +136,7 @@ describe('test results export/import roundtrip', () => {
       status: 3,
       value: JSON.stringify(['answer-a']),
       subform: 'subform-a',
+      source_chunk_key: 'chunk-a',
       is_autocoder_generated: false,
       code_v1: 99,
       score_v1: 1,
@@ -223,7 +224,9 @@ describe('test results export/import roundtrip', () => {
           const excludesGenerated = qb.andWhere.mock.calls.some(([condition]) => (
             String(condition).includes('is_autocoder_generated IS NOT TRUE')
           ));
-          const rows = [sourceResponse, generatedResponse];
+          const rows = [sourceResponse, {
+            ...sourceResponse, id: 42, subform: 'subform-b', source_chunk_key: 'chunk-b'
+          }, generatedResponse];
           return (excludesGenerated ? rows.filter(r => !r.is_autocoder_generated) : rows) as unknown as ResponseEntity[];
         });
         return qb;
@@ -233,7 +236,7 @@ describe('test results export/import roundtrip', () => {
     const chunkRepository = {
       createQueryBuilder: jest.fn(() => queryBuilder<ChunkEntity>({
         getMany: jest.fn().mockResolvedValue([
-          sourceChunk as unknown as ChunkEntity
+          sourceChunk as unknown as ChunkEntity, { ...sourceChunk, key: 'chunk-b' } as unknown as ChunkEntity
         ])
       }))
     } as unknown as Repository<ChunkEntity>;
@@ -409,12 +412,18 @@ describe('test results export/import roundtrip', () => {
     expect(responseUnit.laststate).toEqual([
       { key: 'unitState', value: 'done' }
     ]);
+    expect(responseUnit.subforms.map(group => [group.id, group.sourceChunkKey, group.responses[0].id])).toEqual([
+      ['subform-a', 'chunk-a', 'var-a'], ['subform-b', 'chunk-b', 'var-a']
+    ]);
     expect(responseUnit.chunks).toEqual([
       {
         id: 'chunk-a',
+        subform: 'subform-a',
         type: 'state',
         ts: 123456,
         variables: ['var-a']
+      }, {
+        id: 'chunk-b', subform: 'subform-b', type: 'state', ts: 123456, variables: ['var-a']
       }
     ]);
 

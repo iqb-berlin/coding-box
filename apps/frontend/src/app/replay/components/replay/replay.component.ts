@@ -28,7 +28,7 @@ import {
 } from '../../services/replay-backend.service';
 import { AppService } from '../../../core/services/app.service';
 import { SpinnerComponent } from '../spinner/spinner.component';
-import { ErrorMessages } from '../../models/error-messages.model';
+import { ErrorMessages, replayErrorKey } from '../../models/error-messages.model';
 import { validateToken, isTestperson } from '../../utils/token-utils';
 import { ReviewCodeSelection, UnitsReplay, UnitsReplayUnit } from '../../services/units-replay.service';
 import { UnitsReplayComponent } from '../units-replay/units-replay.component';
@@ -695,6 +695,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
       TestPersonError: this.uiTranslate('ui-text.replay.invalid-person'),
       PlayerError: this.uiTranslate('ui-text.replay.invalid-player'),
       ResponsesError: this.uiTranslate('ui-text.replay.responses-load-failed', { value1: this.unitId(), value2: this.testPerson() }),
+      ambiguousResponses: this.uiTranslate('ui-text.replay.ambiguous-responses'),
       notInList: this.uiTranslate('ui-text.replay.page-not-found', { value1: this.page() || '' }),
       notCurrent: this.uiTranslate('ui-text.replay.page-unavailable', { value1: this.page() || '' }),
       tokenExpired: this.uiTranslate('ui-text.replay.token-expired'),
@@ -704,16 +705,7 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
   }
 
   private catchError(error: HttpErrorResponse): void {
-    let messageKey: keyof ErrorMessages;
-
-    if (error.status === 401) {
-      messageKey = '401' as keyof ErrorMessages;
-    } else if (error.status === 404 && this.unitId() && this.testPerson()) {
-      messageKey = 'ResponsesError' as keyof ErrorMessages;
-    } else {
-      messageKey = error.message as keyof ErrorMessages;
-    }
-
+    const messageKey = replayErrorKey(error, !!this.unitId() && !!this.testPerson());
     const message = error.status === 403 ? this.translateService.instant('error-forbidden') :
       this.getErrorMessages()[messageKey] || this.getErrorMessages().unknown;
     // The interceptor owns session and permission feedback for these responses.
@@ -886,7 +878,13 @@ export class ReplayComponent implements OnInit, OnDestroy, OnChanges {
     const load = this.canLoadReplayWithCurrentAuth(workspaceId) ?
       this.loadNavigationTarget(workspaceId, replayAttempt) :
       true;
-    const applied = typeof load === 'boolean' ? load : await load;
+    const applied = typeof load === 'boolean' ? load : await load.catch(error => {
+      if (!this.isCurrentReplayAttempt(replayAttempt)) return false;
+      if (!(error instanceof HttpErrorResponse)) throw error;
+      this.setIsLoaded();
+      this.catchError(error);
+      return false;
+    });
     if (applied && this.isCurrentReplayAttempt(replayAttempt)) this.updateNavigationIndex(unit);
   }
 

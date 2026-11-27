@@ -699,7 +699,7 @@ describe('PersonService', () => {
         service as unknown as { extractSubforms: (c: unknown[]) => unknown[] }
       ).extractSubforms(chunks);
       expect(result).toHaveLength(1);
-      expect((result as { id: string }[])[0].id).toBe('sf1');
+      expect((result as { id: string }[])[0].id).toBe('');
     });
 
     it('should handle invalid chunk content', () => {

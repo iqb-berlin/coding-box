@@ -1,4 +1,3 @@
-import { ResponseValueType } from '@iqbspecs/response/response.interface';
 import {
   Inject,
   Injectable, Logger
@@ -12,6 +11,7 @@ import {
   DataSource,
   Repository
 } from 'typeorm';
+import { exportResponseChunks } from './export-response-chunks';
 import { Booklet } from '../../entities/booklet.entity';
 import { BookletLog } from '../../entities/bookletLog.entity';
 import { ChunkEntity } from '../../entities/chunk.entity';
@@ -22,15 +22,11 @@ import { Unit } from '../../entities/unit.entity';
 import { UnitLastState } from '../../entities/unitLastState.entity';
 import { UnitLog } from '../../entities/unitLog.entity';
 import {
-  statusNumberToString
-} from '../../utils/response-status-converter';
-import { Chunk, TcMergeResponse } from '../shared';
-import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import {
-  applyExclusionsToQuery, applyIgnoredBookletsToQuery, createGeoGebraValueCondition, nonAutocoderGeneratedResponseCondition, parseStoredResponseValue
+  applyExclusionsToQuery, applyIgnoredBookletsToQuery, createGeoGebraValueCondition, nonAutocoderGeneratedResponseCondition
 } from './test-results.util';
 import { LogAnomalySummary, TestResultsExportFilters } from './workspace-test-results.types';
 
@@ -94,12 +90,11 @@ export class TestResultsExportService {
       `Exporting test results for workspace ${workspaceId} to file ${filePath}`
     );
     const fileStream = fs.createWriteStream(filePath);
-    await this.exportTestResultsToStream(
-      workspaceId,
-      fileStream,
-      filters,
-      progressCallback
-    );
+    try {
+      await this.exportTestResultsToStream(workspaceId, fileStream, filters, progressCallback);
+    } finally {
+      fileStream.destroy();
+    }
   }
 
   async exportTestResultsToStream(
@@ -213,7 +208,8 @@ export class TestResultsExportService {
           'response.variableid',
           'response.status',
           'response.value',
-          'response.subform'
+          'response.subform',
+          'response.source_chunk_key'
         ])
         .where('response.unitid IN (:...unitIds)', { unitIds })
         .andWhere(
@@ -230,7 +226,8 @@ export class TestResultsExportService {
           'chunk.key',
           'chunk.variables',
           'chunk.ts',
-          'chunk.type'
+          'chunk.type',
+          'chunk.subform'
         ])
         .where('chunk.unitid IN (:...unitIds)', { unitIds })
         .getMany();
@@ -266,10 +263,10 @@ export class TestResultsExportService {
       });
 
       chunks.forEach(chunk => {
-        if (!chunksByUnitId.has(chunk.unitid)) {
-          chunksByUnitId.set(chunk.unitid, []);
+        if (!chunksByUnitId.has(Number(chunk.unitid))) {
+          chunksByUnitId.set(Number(chunk.unitid), []);
         }
-        chunksByUnitId.get(chunk.unitid)!.push(chunk);
+        chunksByUnitId.get(Number(chunk.unitid))!.push(chunk);
       });
 
       lastStates.forEach(ls => {
@@ -286,63 +283,6 @@ export class TestResultsExportService {
         const unitChunks = chunksByUnitId.get(unit.id) || [];
         const unitLastStates = lastStatesByUnitId.get(unit.id) || [];
 
-        const chunkKeyMap = new Map<string, string>();
-        const chunkMetaByKey = new Map<string, { ts: number; type: string }>();
-
-        unitChunks.forEach(chunk => {
-          if (chunk.variables) {
-            const variables = chunk.variables.split(',').map(v => v.trim());
-            variables.forEach(variable => {
-              chunkKeyMap.set(variable, chunk.key);
-            });
-          }
-
-          // Store timestamp and type for each chunk key so we can use it in the export
-          if (!chunkMetaByKey.has(chunk.key)) {
-            chunkMetaByKey.set(chunk.key, {
-              ts: Number(chunk.ts) || 0,
-              type: chunk.type || 'state'
-            });
-          }
-        });
-
-        const responsesByChunkKey = new Map<string, TcMergeResponse[]>();
-
-        unitResponses.forEach(r => {
-          const chunkKey = chunkKeyMap.get(r.variableid) || r.subform || '';
-          if (!responsesByChunkKey.has(chunkKey)) {
-            responsesByChunkKey.set(chunkKey, []);
-          }
-
-          const value = parseStoredResponseValue(
-            r.value,
-            r.variableid
-          ) as ResponseValueType;
-
-          responsesByChunkKey.get(chunkKey)!.push({
-            id: r.variableid,
-            value: value,
-            status: statusNumberToString(r.status) || 'UNSET',
-            subform: r.subform ?? undefined
-          });
-        });
-
-        const exportChunks: Chunk[] = [];
-        responsesByChunkKey.forEach((chunkResponses, chunkKey) => {
-          const meta = chunkMetaByKey.get(chunkKey);
-          const resolvedSubForm =
-            chunkResponses.find(r => r.subform && r.subform.length > 0)
-              ?.subform || '';
-
-          exportChunks.push({
-            id: chunkKey,
-            subForm: resolvedSubForm,
-            responseType: meta?.type || 'state',
-            ts: meta?.ts || 0,
-            content: JSON.stringify(chunkResponses)
-          });
-        });
-
         const lastStateMap: { [key: string]: unknown } = {};
         unitLastStates.forEach(ls => {
           lastStateMap[ls.key] = ls.value;
@@ -354,7 +294,7 @@ export class TestResultsExportService {
           code: unit.booklet.person.code,
           bookletname: unit.booklet.bookletinfo.name,
           unitname: unit.name,
-          responses: JSON.stringify(exportChunks),
+          responses: JSON.stringify(exportResponseChunks(unitResponses, unitChunks)),
           laststate: JSON.stringify(lastStateMap),
           originalUnitId: unit.alias || unit.name
         };

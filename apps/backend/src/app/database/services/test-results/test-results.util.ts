@@ -143,6 +143,10 @@ export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
   }
 }
 
+export function isPrimitiveResponseArray(value: unknown): boolean {
+  return Array.isArray(value) && value.every(item => item === null || ['string', 'number', 'boolean'].includes(typeof item));
+}
+
 export function parseStoredResponseValue(value: string | null, variableId?: string): unknown {
   const normalizedVariableId = String(variableId || '').trim();
   const isMarkingPanel = normalizedVariableId.startsWith('marking-panel_');
@@ -170,15 +174,7 @@ export function parseStoredResponseValue(value: string | null, variableId?: stri
 
     try {
       const parsed = JSON.parse(trimmed);
-      if (!Array.isArray(parsed)) {
-        return raw;
-      }
-
-      const isPrimitiveArray = parsed.every(item => item === null ||
-          ['string', 'number', 'boolean'].includes(typeof item)
-      );
-
-      return isPrimitiveArray ? parsed : raw;
+      return isPrimitiveResponseArray(parsed) ? parsed : raw;
     } catch {
       return raw;
     }

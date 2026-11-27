@@ -75,19 +75,11 @@ describe('Import batch audit atomicity', () => {
     repositories.set(Unit, { manager, findOne: async () => ({ id: 5, name: 'U' }) });
     repositories.set(UnitLastState, { find: async () => [] });
     repositories.set(ChunkEntity, { delete: jest.fn() });
-    const deleteQuery = {
-      delete: jest.fn().mockReturnThis(),
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      andWhere: jest.fn().mockReturnThis(),
-      execute: async () => { const affected = pending.responses.length; pending.responses = []; return { affected }; }
-    };
     repositories.set(ResponseEntity, {
-      createQueryBuilder: () => deleteQuery,
-      save: async (entries: Array<{ value: string }>) => {
+      find: async () => [{ id: 100, variableid: 'v', subform: 's' }],
+      update: async (_id: number, entry: { value: string }) => {
         if (options.failResponseSave) throw new Error('response transformation failed');
-        pending.responses.push(...entries.map(entry => entry.value));
-        return entries.map((entry, index) => ({ ...entry, id: 100 + index }));
+        pending.responses = [entry.value];
       }
     });
     repositories.set(BookletLog, {
@@ -117,7 +109,7 @@ describe('Import batch audit atomicity', () => {
     workspaceId: 3, actorUserId: 7, actorType: 'job' as const, jobId: 'upload-1', source: 'upload' as const
   };
 
-  it('rolls back replacement deletions and inserts when the batch audit fails', async () => {
+  it('rolls back in-place response updates when the batch audit fails', async () => {
     const f = fixture({ failAudit: true });
     await expect(f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit)).rejects.toThrow('audit unavailable');
     expect(f.state()).toEqual({ responses: ['old-answer'], logs: ['old-log'], events: [] });
@@ -162,14 +154,14 @@ describe('Import batch audit atomicity', () => {
 
   it('commits replacement data together with a sanitized trusted event', async () => {
     const f = fixture();
-    expect(await f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit)).toMatchObject({ savedResponseCount: 1, deletedResponseCount: 1 });
+    expect(await f.service.processPersonBooklets([f.person], 3, 'replace', 'person', [], audit)).toMatchObject({ savedResponseCount: 1, deletedResponseCount: 0 });
     expect(f.state().responses).toEqual(['new-answer']);
     expect(f.state().events).toEqual([expect.objectContaining({
       workspaceId: 3,
       actorUserId: 7,
       jobId: 'upload-1',
       eventType: 'TEST_RESULTS_IMPORTED',
-      details: expect.objectContaining({ phase: 'responses', savedResponses: 1, deletedResponses: 1 })
+      details: expect.objectContaining({ phase: 'responses', savedResponses: 1, deletedResponses: 0 })
     })]);
     expect(JSON.stringify(f.state().events)).not.toContain('new-answer');
   });

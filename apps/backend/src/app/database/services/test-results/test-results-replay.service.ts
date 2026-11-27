@@ -1,4 +1,5 @@
 import {
+  ConflictException,
   Inject,
   Injectable, Logger
 } from '@nestjs/common';
@@ -7,6 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
 } from 'typeorm';
+import { chunkKeysByVariable } from './response-chunks';
 import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../workspace/workspace-constants';
 import { CacheService } from '../../../cache/cache.service';
 import { Booklet } from '../../entities/booklet.entity';
@@ -23,6 +25,39 @@ import {
 import { ReplayResourceNotFoundError } from './replay-resource-not-found.error';
 import { applyExclusionsToQuery, nonAutocoderGeneratedResponseCondition, parseStoredResponseValue } from './test-results.util';
 import { PersonWhere } from './workspace-test-results.types';
+
+type ReplayResponseRow = Pick<ResponseEntity, 'variableid' | 'value' | 'status' | 'subform' | 'source_chunk_key'>;
+
+function replayChunks(rows: ReplayResponseRow[], chunks: ChunkEntity[]) {
+  const legacySources = chunkKeysByVariable(chunks.filter(chunk => chunk.subform == null));
+  const groups = new Map<string, Map<string, {
+    id: string; value: unknown; status: ResponseStatusType; subform?: string;
+  }>>();
+  for (const row of rows) {
+    const candidates = row.source_chunk_key == null ? legacySources.get(row.variableid) : undefined;
+    const chunkKey = row.source_chunk_key ?? candidates?.values().next().value ?? row.subform ?? '';
+    const subform = row.source_chunk_key != null ? row.subform : null;
+    const identity = JSON.stringify([row.variableid, subform || '']);
+    if (!groups.has(chunkKey)) groups.set(chunkKey, new Map());
+    const responses = groups.get(chunkKey)!;
+    if ((candidates?.size ?? 0) > 1 || responses.has(identity)) {
+      throw new ConflictException({
+        statusCode: 409,
+        code: 'REPLAY_RESPONSE_AMBIGUOUS',
+        message: `Antwort ${row.variableid} ist für das Replay nicht eindeutig zuzuordnen.`
+      });
+    }
+    responses.set(identity, {
+      id: row.variableid,
+      value: parseStoredResponseValue(row.value, row.variableid),
+      status: statusNumberToString(row.status) ?? 'UNSET',
+      ...(subform ? { subform } : {})
+    });
+  }
+  return Array.from(groups, ([id, responses]) => ({
+    id, content: JSON.stringify(Array.from(responses.values()))
+  }));
+}
 
 @Injectable()
 export class TestResultsReplayService {
@@ -181,7 +216,8 @@ export class TestResultsReplayService {
         'response.variableid AS variableid',
         'response.value AS value',
         'response.status AS status',
-        'response.subform AS subform'
+        'response.subform AS subform',
+        'response.source_chunk_key AS source_chunk_key'
       ])
       .where('response.unitid = :unitDbId', { unitDbId })
       .andWhere(
@@ -189,67 +225,9 @@ export class TestResultsReplayService {
           'response'
         )
       )
-      .getRawMany<{
-      variableid: string;
-      value: string | null;
-      status: number;
-      subform: string | null;
-    }>();
+      .getRawMany<ReplayResponseRow>();
 
-    const chunkKeyMap = new Map<string, { key: string; ts: number }>();
-    chunks.forEach(chunk => {
-      if (chunk.variables) {
-        const chunkTs = Number(chunk.ts) || 0;
-        const variables = chunk.variables.split(',').map(v => v.trim());
-        variables.forEach(variable => {
-          const current = chunkKeyMap.get(variable);
-          if (!current || chunkTs >= current.ts) {
-            chunkKeyMap.set(variable, { key: chunk.key, ts: chunkTs });
-          }
-        });
-      }
-    });
-
-    const responsesByChunk = new Map<string, Map<string, {
-      id: string;
-      value: unknown;
-      status: ResponseStatusType;
-      chunkTs: number;
-    }>>();
-
-    responseRows.forEach(response => {
-      const mappedChunk = chunkKeyMap.get(response.variableid);
-      const chunkKey = mappedChunk?.key || response.subform || '';
-      const chunkTs = mappedChunk?.ts || 0;
-      const mappedResponse = {
-        id: response.variableid,
-        value: parseStoredResponseValue(response.value, response.variableid),
-        status: statusNumberToString(response.status) ?? 'UNSET',
-        chunkTs
-      };
-
-      if (!responsesByChunk.has(chunkKey)) {
-        responsesByChunk.set(chunkKey, new Map());
-      }
-      const chunkResponses = responsesByChunk.get(chunkKey)!;
-      const existing = chunkResponses.get(mappedResponse.id);
-      if (!existing || mappedResponse.chunkTs >= existing.chunkTs) {
-        chunkResponses.set(mappedResponse.id, mappedResponse);
-      }
-    });
-
-    const responsesArray = Array.from(responsesByChunk.entries()).map(([chunkKey, responseMap]) => ({
-      id: chunkKey,
-      content: JSON.stringify(Array.from(responseMap.values()).map(({
-        chunkTs: _chunkTs,
-        ...response
-      }) => response))
-    }));
-
-    const result = {
-      responses: responsesArray
-    };
-
+    const result = { responses: replayChunks(responseRows, chunks) };
     await this.cacheService.set(cacheKey, result);
     this.logger.log(
       `Cached replay responses: workspace=${workspaceId}, unitId=${unitId}`

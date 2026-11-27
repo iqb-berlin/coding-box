@@ -3,6 +3,7 @@ import {
   ParseBoolPipe
 } from '@nestjs/common';
 import {
+  ApiConflictResponse,
   ApiOkResponse,
   ApiOperation,
   ApiParam,
@@ -167,6 +168,7 @@ export class WorkspaceTestResultsResponseController {
   }
 
   @Get(':workspace_id/responses/:testPerson/:unitId')
+  @ApiConflictResponse({ description: 'REPLAY_RESPONSE_AMBIGUOUS: Stored responses have indistinguishable replay identities.' })
   @AllowWorkspaceTokenScopes(WORKSPACE_TOKEN_SCOPE_REPLAY_READ)
   @UseGuards(JwtOrWorkspaceTokenAuthGuard, WorkspaceGuard)
   @ApiParam({ name: 'workspace_id', type: Number })

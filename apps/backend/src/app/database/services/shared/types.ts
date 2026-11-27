@@ -73,6 +73,7 @@ export type TcMergeUnit = {
 };
 
 export type TcMergeChunk = {
+  subform?: string;
   id: string;
   type: string;
   ts: number;
@@ -84,10 +85,17 @@ export type Chunk = {
   content: string;
   ts: number;
   responseType: string;
-  subForm: string;
+  subForm?: string;
+  // Archive provenance: a string preserves an unresolved historical label.
+  // null identifies a confirmed response whose original wrapper label is unknown.
+  codingBoxLegacySubform?: string | null;
 };
 
 export type TcMergeSubForms = {
+  sourceChunkKey?: string;
+  legacySubform?: string | null;
+  unresolvedArchive?: boolean;
+  repeatsLegacyWrapper?: boolean;
   id: string;
   responses: TcMergeResponse[];
 };

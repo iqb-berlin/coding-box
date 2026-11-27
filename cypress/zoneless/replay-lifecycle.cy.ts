@@ -103,6 +103,19 @@ describe('Replay responsibilities without Zone.js', () => {
     cy.then(() => { expect(assetsRequests).to.equal(1); expect(responseRequests).to.equal(2); });
   });
 
+  it('explains ambiguous responses and clears the previous replay', () => {
+    visitBooklet();
+    cy.intercept('GET', '**/replay-response/**', {
+      statusCode: 409, body: { statusCode: 409, code: 'REPLAY_RESPONSE_AMBIGUOUS' }
+    }).as('ambiguousResponse');
+    cy.get('coding-box-units-replay .next-button').click();
+    frame().should('have.attr', 'data-page', '1');
+    cy.get('coding-box-units-replay .next-button').click();
+    cy.wait('@ambiguousResponse');
+    cy.contains('Das Replay kann die gespeicherten Antworten keiner eindeutigen Subform zuordnen.').should('be.visible');
+    cy.get('coding-box-unit-player iframe').should('not.exist');
+  });
+
   describe('plugin-player 7.0', () => {
     beforeEach(() => {
       cy.fixture<string>('replay-player-7.html').then(html => { replayPlayer = html; });

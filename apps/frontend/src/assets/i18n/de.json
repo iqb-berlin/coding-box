@@ -5342,6 +5342,7 @@
       "invalid-person": "Ungültige ID für Testperson",
       "invalid-player": "Ungültiger Player-Name",
       "responses-load-failed": "Fehler beim Laden der Antworten für Aufgabe \"{{value1}}\" von Testperson \"{{value2}}\"",
+      "ambiguous-responses": "Das Replay kann die gespeicherten Antworten keiner eindeutigen Subform zuordnen. Bitte prüfen Sie die Originaldaten der Aufgabe.",
       "page-not-found": "Keine valide Seite mit der ID \"{{value1}}\" gefunden",
       "page-unavailable": "Seite mit der ID \"{{value1}}\" kann nicht ausgewählt werden",
       "token-invalid": "Das Authentisierungs-Token ist ungültig",

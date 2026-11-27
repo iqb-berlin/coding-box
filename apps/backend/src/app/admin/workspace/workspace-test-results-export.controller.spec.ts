@@ -21,7 +21,8 @@ jest.mock('../../database/services/test-results', () => ({
 
 describe('WorkspaceTestResultsExportController', () => {
   const createController = (
-    recordEvent = jest.fn().mockResolvedValue(undefined)
+    recordEvent = jest.fn().mockResolvedValue(undefined),
+    service: Partial<WorkspaceTestResultsService> = {}
   ) => {
     const jobQueueService = {
       addExportJob: jest.fn().mockResolvedValue({ id: 'export-job-1' })
@@ -34,7 +35,7 @@ describe('WorkspaceTestResultsExportController', () => {
       getJobs: jest.fn().mockResolvedValue([])
     } as unknown as Queue<DatabaseExportJobData>;
     const controller = new WorkspaceTestResultsExportController(
-      {} as WorkspaceTestResultsService,
+      service as WorkspaceTestResultsService,
       jobQueueService,
       {} as ExportArtifactService,
       journalService,
@@ -57,6 +58,34 @@ describe('WorkspaceTestResultsExportController', () => {
     const handler = WorkspaceTestResultsExportController.prototype[methodName];
 
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(3);
+  });
+
+  it.each([false, true])('handles a failed CSV export after streaming started: %s', async started => {
+    const response = {
+      headersSent: false,
+      setHeader: jest.fn(),
+      status: jest.fn().mockReturnThis(),
+      json: jest.fn(),
+      destroy: jest.fn()
+    };
+    const service = {
+      exportTestResults: jest.fn(async () => {
+        response.headersSent = started;
+        throw new Error('Herkunft der Antwort ist im Altbestand nicht eindeutig.');
+      })
+    };
+    const { controller } = createController(undefined, service);
+
+    await controller.exportTestResults(7, response as never);
+
+    if (started) {
+      expect(response.destroy).toHaveBeenCalledTimes(1);
+      expect(response.json).not.toHaveBeenCalled();
+    } else {
+      expect(response.status).toHaveBeenCalledWith(500);
+      expect(response.json).toHaveBeenCalledWith({ error: 'Failed to export test results' });
+      expect(response.destroy).not.toHaveBeenCalled();
+    }
   });
 
   it('passes the workspace to export deletion and rejects a job outside that workspace', async () => {
