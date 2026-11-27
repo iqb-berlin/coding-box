@@ -2,6 +2,7 @@ CODING_BOX_BASE_DIR := $(shell git rev-parse --show-toplevel)
 CMD ?= status
 
 include $(CODING_BOX_BASE_DIR)/.env.coding-box
+CODING_BOX_IMAGE_PREFIX := $(if $(REGISTRY_PATH),$(REGISTRY_PATH)iqbberlin/,ghcr.io/iqb-berlin/)
 
 # Docker Compose strips dotenv quotes, while GNU Make preserves them when it
 # includes the same file. Normalize this value before exporting it to Compose.
@@ -107,8 +108,8 @@ coding-box-volumes-prune:
 
 # Remove all unused (not just dangling) images!
 coding-box-images-clean: .EXPORT_ALL_VARIABLES
-	if test "$(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q)";\
-		then docker rmi $(shell docker images -f reference=${REGISTRY_PATH}iqbberlin/coding-box-* -q);\
+	if test "$(shell docker images -f 'reference=$(CODING_BOX_IMAGE_PREFIX)coding-box-*' -q)";\
+		then docker rmi $(shell docker images -f 'reference=$(CODING_BOX_IMAGE_PREFIX)coding-box-*' -q);\
 	fi
 
 # Outputs the count of changesets that have not been deployed

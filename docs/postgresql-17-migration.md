@@ -4,7 +4,7 @@ Beim Anwendungsupdate Ihre bisherige `.env.coding-box` beibehalten. Solange `POS
 
 1. **Wartungsfenster beginnen.** Laufende Jobs abschließen lassen. Backend, Export-Worker und andere schreibende Zugriffe anhalten. Die aktive `.env.coding-box` sichern und den Namen des bisherigen Datenvolumes festhalten.
 2. **Sichern.** Mit den PostgreSQL-17-Werkzeugen die Rollen (`pg_dumpall --roles-only`) und die Kodierbox-Datenbank (`pg_dump -Fc`) geschützt sichern. Das bisherige Volume für den Rückfall aufbewahren.
-3. **Wiederherstellen.** Eine separate PostgreSQL-17-Instanz mit dem Image `iqbberlin/coding-box-db:<Release>-pg17`, einem neuen, leeren Volume und einem eigenen, auf der Quelle unbenutzten Administratornamen starten. Rollen mit `psql -v ON_ERROR_STOP=1 -d postgres` einspielen, dann die Datenbank mit `pg_restore --exit-on-error --create -d postgres` wiederherstellen. Tabellenbestände, Sequenzstände und Zugriffsrechte mit der Quelle vergleichen.
+3. **Wiederherstellen.** Eine separate PostgreSQL-17-Instanz mit dem Image `ghcr.io/iqb-berlin/coding-box-db:<Release>-pg17` (bei früheren Docker-Hub-Releases `iqbberlin/coding-box-db:<Release>-pg17`), einem neuen, leeren Volume und einem eigenen, auf der Quelle unbenutzten Administratornamen starten. Rollen mit `psql -v ON_ERROR_STOP=1 -d postgres` einspielen, dann die Datenbank mit `pg_restore --exit-on-error --create -d postgres` wiederherstellen. Tabellenbestände, Sequenzstände und Zugriffsrechte mit der Quelle vergleichen.
 4. **Umschalten.** Nach erfolgreicher Prüfung die separate Instanz stoppen. In der aktiven `.env.coding-box` die folgenden Werte setzen. Den Platzhalter durch den tatsächlichen Namen des geprüften Volumes ersetzen.
 
    ```dotenv
