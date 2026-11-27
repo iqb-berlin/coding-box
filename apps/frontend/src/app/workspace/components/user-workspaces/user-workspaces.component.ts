@@ -1,5 +1,5 @@
 import {
-  Component, DestroyRef, inject, signal, input, computed, ChangeDetectionStrategy
+  afterRenderEffect, ChangeDetectionStrategy, Component, computed, DestroyRef, ElementRef, inject, input, signal, viewChild
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
@@ -39,6 +39,10 @@ export class UserWorkspacesComponent {
   }
 
   protected readonly searchQuery = signal('');
+  protected readonly needsSearch = signal(false);
+  private readonly results = viewChild<ElementRef<HTMLElement>>('results');
+  private readonly searchSlot = viewChild<ElementRef<HTMLElement>>('searchSlot');
+
   protected readonly filteredWorkspaces = computed(() => {
     const workspaces = this.workspaces();
     const query = this.searchQuery().trim().toLowerCase();
@@ -46,6 +50,27 @@ export class UserWorkspacesComponent {
       workspaces.filter(workspace => this.workspaceLabel(workspace).toLowerCase().includes(query)) :
       workspaces;
   });
+
+  constructor() {
+    afterRenderEffect({ read: onCleanup => {
+      const results = this.results()?.nativeElement;
+      const slot = this.searchSlot()?.nativeElement;
+      const viewport = results?.closest<HTMLElement>('.app-main');
+      if (!results || !slot || !viewport || this.searchQuery()) return;
+
+      const measure = () => {
+        // Compare the unfiltered list at scroll origin, without the space occupied by search.
+        const listEnd = results.getBoundingClientRect().bottom + viewport.scrollTop - slot.getBoundingClientRect().height;
+        this.needsSearch.set(listEnd > viewport.getBoundingClientRect().bottom + 0.5);
+      };
+      measure();
+      const observer = new ResizeObserver(measure);
+      observer.observe(viewport);
+      observer.observe(results);
+      if (results.parentElement) observer.observe(results.parentElement);
+      onCleanup(() => observer.disconnect());
+    } });
+  }
 
   protected get authDataErrorMessage(): string {
     if (this.appService.authDataFailureCode === 'configuration-error') return 'error.auth_configuration_error_message';

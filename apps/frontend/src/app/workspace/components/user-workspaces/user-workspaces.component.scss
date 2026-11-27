@@ -52,6 +52,15 @@ h2 {
   line-height: 1.45;
 }
 
+.workspace-panel {
+  display: flex;
+  flex-direction: column;
+}
+
+.workspace-search-slot {
+  display: flow-root;
+}
+
 .workspace-search {
   inline-size: min(100%, 26rem);
   margin-block: 0.25rem 0.375rem;

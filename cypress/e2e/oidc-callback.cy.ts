@@ -21,7 +21,8 @@ describe('Backend OIDC callback', () => {
         userId: 7, userName: 'OIDC User', firstName: 'OIDC', lastName: 'User',
         email: 'oidc@example.org', isAdmin: false, workspaces: [
           { id: 12, name: 'OIDC Workspace' },
-          { id: 13, name: 'VERA Deutsch' }
+          { id: 13, name: 'VERA Deutsch' },
+          ...Array.from({ length: 6 }, (_, index) => ({ id: 14 + index, name: `Bereich ${index + 1}` }))
         ]
       });
     }).as('authData');
@@ -37,15 +38,28 @@ describe('Backend OIDC callback', () => {
     cy.get('coding-box-user-workspaces-area').should('contain.text', 'OIDC Workspace');
     cy.get('.login-button').should('not.exist');
     cy.get('.app--home').should('have.css', 'background-color', 'rgb(18, 52, 86)');
-    cy.get('img[alt="Instanzlogo"]').parent().should('have.css', 'background-color', 'rgb(18, 52, 86)');
-    cy.viewport(390, 844);
+    cy.get('.app-header img[alt="Instanzlogo"]').should('be.visible');
+    cy.viewport(1000, 950);
+    cy.get('.workspace-list a').should('have.length', 8);
+    cy.get('input[type="search"]').should('not.exist');
+    cy.get('.workspace-list').then(list => {
+      const listBottom = Math.ceil(list[0].getBoundingClientRect().bottom);
+      cy.viewport(1000, listBottom - 5);
+      cy.get('input[type="search"]').should('be.visible');
+      cy.viewport(1000, listBottom + 5);
+      cy.get('input[type="search"]').should('not.exist');
+    });
+    cy.viewport(1000, 460);
     cy.get('input[type="search"]').should('be.visible').focus().type('vera');
     cy.get('.workspace-list a').should('have.length', 1)
       .and('contain.text', 'VERA Deutsch').and('have.attr', 'href', '#/workspace-admin/13');
-    cy.get('input[type="search"]').clear().type('ohne treffer');
+    cy.viewport(1000, 950);
+    cy.get('input[type="search"]').should('be.focused').and('have.value', 'vera');
+    cy.get('input[type="search"]').type('{selectall}ohne treffer');
     cy.contains('[role="status"]', 'Keine passenden Arbeitsbereiche gefunden.').should('be.visible');
     cy.get('input[type="search"]').clear();
-    cy.get('.workspace-list a').should('have.length', 2);
+    cy.get('.workspace-list a').should('have.length', 8);
+    cy.get('input[type="search"]').should('not.exist');
     cy.window().then(win => {
       expect('Zone' in win).to.equal(false);
       expect(win.localStorage.getItem('auth_token')).to.equal(token);

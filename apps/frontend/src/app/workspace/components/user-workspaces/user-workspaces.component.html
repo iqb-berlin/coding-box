@@ -46,12 +46,16 @@
     } @else if (showEmptyWorkspaces) {
       <p class="workspace-feedback">{{ 'home.no-user-workspaces' | translate }}</p>
     } @else if (workspaces().length > 0) {
-      <mat-form-field appearance="outline" class="workspace-search" subscriptSizing="dynamic">
-        <mat-icon matIconPrefix aria-hidden="true">search</mat-icon>
-        <mat-label>{{ 'ui-text.user-workspaces.search' | translate }}</mat-label>
-        <input matInput type="search" #workspaceSearch [value]="searchQuery()" (input)="searchQuery.set(workspaceSearch.value)" />
-      </mat-form-field>
-      <div class="workspace-results">
+      <div #searchSlot class="workspace-search-slot">
+        @if (needsSearch() || searchQuery()) {
+          <mat-form-field appearance="outline" class="workspace-search" subscriptSizing="dynamic">
+            <mat-icon matIconPrefix aria-hidden="true">search</mat-icon>
+            <mat-label>{{ 'ui-text.user-workspaces.search' | translate }}</mat-label>
+            <input matInput type="search" #workspaceSearch [value]="searchQuery()" (input)="searchQuery.set(workspaceSearch.value)" />
+          </mat-form-field>
+        }
+      </div>
+      <div #results class="workspace-results">
         @if (filteredWorkspaces().length) {
           <ul class="workspace-list">
             @for (workspace of filteredWorkspaces(); track workspace.id) {
