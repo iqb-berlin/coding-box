@@ -1,7 +1,4 @@
 :host {
-  --home-content-width: 62rem;
-  --home-content-inline-padding: clamp(1rem, 4vw, 2rem);
-
   display: flex;
   flex-direction: column;
   min-block-size: 100%;
@@ -13,7 +10,7 @@ main {
   flex: 1;
   box-sizing: border-box;
   inline-size: 100%;
-  max-inline-size: var(--home-content-width);
+  max-inline-size: 62rem;
   margin-inline: auto;
-  padding: clamp(1.5rem, 5vw, 3.5rem) var(--home-content-inline-padding);
+  padding: clamp(1.5rem, 5vw, 3.5rem) clamp(1rem, 4vw, 2rem);
 }

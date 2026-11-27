@@ -1,18 +1,16 @@
 <footer class="app-info">
-  <div class="app-info-content">
-    <div class="operator">
-      <a href="https://www.iqb.hu-berlin.de/" target="_blank" rel="noopener">
-        {{ 'ui-text.app-info.institute-name' | translate }}
-      </a>
-      <span>{{ 'ui-text.app-info.version' | translate: { version: appVersion() } }}</span>
-    </div>
-    <nav [attr.aria-label]="'ui-text.app-info.legal-links' | translate">
-      @if (imprintUrl(); as url) {
-        <a [href]="url" target="_blank" rel="noopener">{{ 'ui-text.app-info.imprint' | translate }}</a>
-      } @else {
-        <button type="button" (click)="openNotice('imprint')">{{ 'ui-text.app-info.imprint' | translate }}</button>
-      }
-      <button type="button" (click)="openNotice('privacy')">{{ 'ui-text.app-info.privacy' | translate }}</button>
-    </nav>
+  <div class="operator">
+    <a href="https://www.iqb.hu-berlin.de/" target="_blank" rel="noopener">
+      {{ 'ui-text.app-info.institute-name' | translate }}
+    </a>
+    <span>{{ 'ui-text.app-info.version' | translate: { version: appVersion() } }}</span>
   </div>
+  <nav [attr.aria-label]="'ui-text.app-info.legal-links' | translate">
+    @if (imprintUrl(); as url) {
+      <a [href]="url" target="_blank" rel="noopener">{{ 'ui-text.app-info.imprint' | translate }}</a>
+    } @else {
+      <button type="button" (click)="openNotice('imprint')">{{ 'ui-text.app-info.imprint' | translate }}</button>
+    }
+    <button type="button" (click)="openNotice('privacy')">{{ 'ui-text.app-info.privacy' | translate }}</button>
+  </nav>
 </footer>
