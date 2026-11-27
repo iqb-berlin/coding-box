@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-version=$(node -p "require('./package.json').version")
+publisher="$PWD/scripts/ci/publish-release-images.sh"
+version=1.2.3
 prerelease="$version-beta.2"
 
 assert_compose_images() {
@@ -69,10 +70,18 @@ for image in "${images[@]}"; do
   docker image rm "$source" >/dev/null
 done
 
+publish_test_release() (
+  local tag=$1 archives=$2
+  cd "$temp" || exit
+  printf '{"version":"%s"}\n' "$tag" > package.json
+  printf '{"version":"%s","packages":{"":{"version":"%s"}}}\n' "$tag" "$tag" > package-lock.json
+  bash "$publisher" "$tag" "$archives" "$registry"
+)
+
 for image in db db-pg17 liquibase backend; do
   ln "$temp/archives/$image.tar.zst" "$temp/partial/"
 done
-if bash scripts/ci/publish-release-images.sh "$version" "$temp/partial" "$registry"; then
+if publish_test_release "$version" "$temp/partial"; then
   echo 'Publishing must fail when a checked image is missing.' >&2
   exit 1
 fi
@@ -91,7 +100,7 @@ assert_image() {
   [[ "$(docker image inspect --format '{{.Id}}' "$ref")" == "$(cat "$temp/$image.id")" ]]
 }
 
-bash scripts/ci/publish-release-images.sh "$prerelease" "$temp/archives" "$registry"
+publish_test_release "$prerelease" "$temp/archives"
 assert_tags db "$prerelease" "$prerelease-pg17"
 assert_image "db:$prerelease" db
 assert_image "db:$prerelease-pg17" db-pg17
@@ -100,7 +109,7 @@ for image in liquibase backend frontend; do
   assert_image "$image:$prerelease" "$image"
 done
 
-bash scripts/ci/publish-release-images.sh "$version" "$temp/archives" "$registry"
+publish_test_release "$version" "$temp/archives"
 assert_tags db "$prerelease" "$prerelease-pg17" "$version" "$version-pg17" latest latest-pg17
 assert_image "db:$version" db
 assert_image "db:$version-pg17" db-pg17

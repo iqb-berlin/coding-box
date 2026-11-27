@@ -20,7 +20,9 @@ Versions-Tags haben eigene Läufe. Der verbindliche GitHub-Check heißt
   Abhängigkeiten laden, ungültige Konfiguration ablehnen sowie API und Worker
   gegen eigene PostgreSQL- und Redis-Container starten und sauber stoppen.
   PRs nach `main` prüfen zusätzlich Typen, Tests, Lint und Audit in den Testimages.
-- Versions-Tags müssen zu den drei npm-Versionsfeldern passen. Die
+- Der vollständige Versions-Tag einschließlich eines Vorab-Zusatzes wie
+  `-beta.4` muss exakt zu den drei npm-Versionsfeldern passen. Das Frontend
+  zeigt die Version aus `package.json` an. Die
   Produktionsimage-Scans sind für Versions-Tags verbindlich.
 
 Berichte und Logs stehen in den Artefakten des jeweiligen GitHub-Laufs. Der

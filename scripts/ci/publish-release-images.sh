@@ -9,7 +9,7 @@ if [[ "$registry" != ghcr.io && ! "$registry" =~ ^127\.0\.0\.1:[0-9]+$ ]]; then
   echo "Unsupported release registry: $registry" >&2
   exit 1
 fi
-node scripts/ci/check-release-version.mjs "$tag"
+node "$(dirname "$0")/check-release-version.mjs" "$tag"
 
 images=(db db-pg17 liquibase backend frontend)
 version_refs=()

@@ -132,13 +132,7 @@ check-release-version:
     - if: "$CI_COMMIT_TAG =~ $PRERELEASE_RULES_REGEX"
     - if: "$CI_COMMIT_TAG =~ $RELEASE_RULES_REGEX"
   script:
-    - RELEASE_VERSION="${CI_COMMIT_TAG%%-*}"
-    - PACKAGE_VERSION="$(node -p "require('./package.json').version")"
-    - LOCK_VERSION="$(node -p "require('./package-lock.json').version")"
-    - LOCK_ROOT_VERSION="$(node -p "require('./package-lock.json').packages[''].version")"
-    - test "${RELEASE_VERSION}" = "${PACKAGE_VERSION}"
-    - test "${RELEASE_VERSION}" = "${LOCK_VERSION}"
-    - test "${RELEASE_VERSION}" = "${LOCK_ROOT_VERSION}"
+    - node scripts/ci/check-release-version.mjs "${CI_COMMIT_TAG}"
 
 build-main-pr-base-image:
   stage: build
