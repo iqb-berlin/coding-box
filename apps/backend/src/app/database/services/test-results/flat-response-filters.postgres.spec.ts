@@ -166,6 +166,15 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1001 }, []);
   });
 
+  it('checks loading on filtered units and counts session-only matches only in the results table', async () => {
+    const filters = { code: 'A', longLoading: 'yes', longLoadingThresholdMs: 100 };
+    await expectResponses({ ...filters, unit: 'UNIT_A' }, [1, 2, 3, 4]);
+    await expectResponses({ ...filters, unit: 'UNIT_B', longLoadingThresholdMs: 1000 }, [5]);
+    await expectResponses({ ...filters, unit: 'UNIT_B', longLoadingThresholdMs: 1001 }, []);
+    const choices = await optionsService.findFlatResponseFilterOptions(42, filters);
+    expect(choices.units).toEqual(['UNIT_B']);
+  });
+
   it('searches short values within the displayed Unicode prefix and handles ambiguous leading spaces', async () => {
     await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value) VALUES
       (20, 5, 'I', 3, repeat('ä',1999) || 'öx'), (21, 5, 'J', 3, repeat(' ',15) || '[] '),

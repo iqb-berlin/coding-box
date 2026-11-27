@@ -901,7 +901,6 @@ describe('WorkspaceTestResultsService', () => {
       (dataSource.createQueryBuilder as jest.Mock).mockReturnValue(booklets);
       qb.getRawMany.mockResolvedValueOnce([{ id: 5 }]);
       (dataSource.query as jest.Mock)
-        .mockResolvedValueOnce([{ unitid: 7 }])
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
 
@@ -933,31 +932,30 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: '%"quoted"%' });
-      expect(dataSource.query).toHaveBeenNthCalledWith(1, expect.stringContaining('p.workspace_id = $1'), [1, 5000]);
-      expect(qb.andWhere).toHaveBeenCalledWith('unit.id = ANY(:slowUnitIds)', { slowUnitIds: [7] });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('ul.unitid = unit.id'), { longLoadingThresholdMs: 5000 });
       const filterSql = qb.andWhere.mock.calls.map(([condition]) => condition).join('\n');
       expect(filterSql).not.toContain('s.loadcompletems');
       expect(filterSql).not.toContain('s.id IN (:...sessionIds)');
 
       expect(booklets.andWhere).toHaveBeenCalledWith('bookletEntity.id = ANY(:bookletIds)', { bookletIds: [5] });
-      expect(dataSource.query).toHaveBeenCalledTimes(3);
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect(dataSource.query).toHaveBeenCalledTimes(2);
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
         'LEFT JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
         'first_duration.duration_ms < $2'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([
+      expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
         [5],
         60000
       ]);
-      expect((dataSource.query as jest.Mock).mock.calls[2][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
         'CROSS JOIN LATERAL'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[2][0]).toContain(
+      expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
         'COUNT(DISTINCT progress_unit.id)'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[2][1]).toEqual([[5]]);
+      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([[5]]);
       expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
       expect(result.unitProgresses).toEqual([
         'Vollständig',
@@ -1064,7 +1062,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :variableIdRegex END',
+        'response.variableid ~ :variableIdRegex',
         { variableIdRegex: '^VAR_\\d+$' }
       );
       expect(qb.andWhere).toHaveBeenCalledWith(
@@ -1825,7 +1823,7 @@ describe('WorkspaceTestResultsService', () => {
           { unitRegex: '^Unit' }
         );
         expect(qb.andWhere).toHaveBeenCalledWith(
-          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ~ :responseRegex END',
+          'response.variableid ~ :responseRegex',
           { responseRegex: '^VAR_\\d+$' }
         );
       });

@@ -182,7 +182,6 @@ function applyProcessingFilters(qb: ResponseQuery, filters: FlatResponseFilters)
           AND bl_terminated.key = 'CONTROLLER'
           AND bl_terminated.parameter = 'TERMINATED'
           AND (bl_terminated.ts - bl_running.ts) < :shortProcessingThresholdMs
-        OFFSET 0
       )`,
       { shortProcessingThresholdMs }
     );
@@ -205,7 +204,6 @@ function applyProcessingFilters(qb: ResponseQuery, filters: FlatResponseFilters)
           AND bl_terminated.parameter = 'TERMINATED'
           AND (bl_terminated.ts - bl_running.ts) >= :processingDurationMinMs
           AND (bl_terminated.ts - bl_running.ts) <= :processingDurationMaxMs
-        OFFSET 0
       )`,
       {
         processingDurationMinMs: minMs,
@@ -293,10 +291,12 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters, pu
   }
 }
 
+// A STARTED/ENDED pair passes exactly when the largest possible gap passes.
+const unitLoadingDuration = "MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED') - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED')";
+
 export async function findLongLoadingUnitIds(
   connection: DataSource | QueryRunner, workspaceId: number, thresholdMs: number
 ): Promise<number[]> {
-  // A STARTED/ENDED pair passes exactly when the largest possible gap passes.
   const rows: { unitid: number }[] = await connection.query(
     `SELECT ul.unitid FROM unitlog ul
      JOIN unit u ON u.id = ul.unitid
@@ -304,11 +304,41 @@ export async function findLongLoadingUnitIds(
      JOIN persons p ON p.id = b.personid
      WHERE p.workspace_id = $1 AND p.consider AND ul.key IN ('STARTED', 'ENDED')
      GROUP BY ul.unitid
-     HAVING MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED')
-       - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED') >= $2`,
+     HAVING ${unitLoadingDuration} >= $2`,
     [workspaceId, thresholdMs]
   );
   return rows.map(row => row.unitid);
+}
+
+export async function buildLongLoadingFilter(
+  connection: DataSource | QueryRunner, workspaceId: number, filters: FlatResponseFilters, purpose: QueryPurpose
+) {
+  if (!filters.longLoadingOnly) return undefined;
+
+  const parameters: { longLoadingThresholdMs: number; slowUnitIds?: number[] } = {
+    longLoadingThresholdMs: filters.longLoadingThresholdMs
+  };
+  const textFilters = [
+    filters.code, filters.group, filters.login, filters.booklet, filters.unit, filters.response, filters.responseValue, filters.tags
+  ];
+  let unitCondition: string;
+  if (textFilters.some(Boolean)) {
+    // With candidate units already narrowed, use the unitlog(unitid) index.
+    unitCondition = `EXISTS (
+      SELECT 1 FROM unitlog ul WHERE ul.unitid = unit.id AND ul.key IN ('STARTED', 'ENDED')
+      HAVING ${unitLoadingDuration} >= :longLoadingThresholdMs
+    )`;
+  } else {
+    // Broad filters reuse the same slow units across page, count and option queries.
+    parameters.slowUnitIds = await findLongLoadingUnitIds(connection, workspaceId, filters.longLoadingThresholdMs);
+    unitCondition = parameters.slowUnitIds.length ? 'unit.id = ANY(:slowUnitIds)' : 'FALSE';
+  }
+  if (purpose === 'options') return { condition: unitCondition, parameters };
+
+  // Session loading qualifies all responses in a booklet only in the results table.
+  const sessionCondition = `EXISTS (SELECT 1 FROM session s WHERE s.bookletid = "bookletEntity"."id"
+    AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs)`;
+  return { condition: `(${sessionCondition} OR ${unitCondition})`, parameters };
 }
 
 function applyProcessingDurationCategory(qb: ResponseQuery, filters: FlatResponseFilters): void {

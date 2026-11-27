@@ -43,9 +43,9 @@ export function applyVariableRegexFilter<T extends ObjectLiteral>(
 ): void {
   // These characters have literal meaning anywhere outside a bracket expression.
   const condition = /^[a-zA-Z0-9_-]+$/.test(pattern) ?
-    `strpos(response.variableid, :${parameter}) > 0` :
+    `CASE WHEN person.workspace_id = :workspaceId THEN strpos(response.variableid, :${parameter}) > 0 END` :
     `response.variableid ~ :${parameter}`;
-  query.andWhere(`CASE WHEN person.workspace_id = :workspaceId THEN ${condition} END`, { [parameter]: pattern });
+  query.andWhere(condition, { [parameter]: pattern });
 }
 
 export function applyFlatResponseTextFilters<T extends ObjectLiteral>(

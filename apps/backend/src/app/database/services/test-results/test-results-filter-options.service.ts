@@ -8,7 +8,7 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 import { applyExclusionsToQuery, excludeAutocoderGeneratedResponses } from './test-results.util';
 
 import {
-  applyFlatResponseFilters, findLongLoadingUnitIds, FlatResponseFilters, normalizeFlatResponseFilters
+  applyFlatResponseFilters, buildLongLoadingFilter, FlatResponseFilters, normalizeFlatResponseFilters
 } from './flat-response-filters';
 
 @Injectable()
@@ -109,11 +109,8 @@ export class TestResultsFilterOptionsService {
     if (filters.tags) baseQb.innerJoin('unit.tags', 'unitTag');
     applyFlatResponseFilters(baseQb, filters, 'options');
 
-    if (filters.longLoadingOnly) {
-      // The option lists consider only unit logs. Reuse the matching IDs for every list.
-      const slowUnitIds = await findLongLoadingUnitIds(this.connection, workspaceId, filters.longLoadingThresholdMs);
-      baseQb.andWhere('unit.id = ANY(:slowUnitIds)', { slowUnitIds });
-    }
+    const loadingFilter = await buildLongLoadingFilter(this.connection, workspaceId, filters, 'options');
+    if (loadingFilter) baseQb.andWhere(loadingFilter.condition, loadingFilter.parameters);
     return baseQb;
   }
 
