@@ -59,6 +59,7 @@ Cypress.Commands.add(
       statusCode: 404,
       body: {}
     });
+    cy.intercept('GET', '**/api/legal-notice', { body: { html: '', isDefault: true } });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.intercept('GET', `**/api/auth-data?identity=${identity}`, {
       body: {
