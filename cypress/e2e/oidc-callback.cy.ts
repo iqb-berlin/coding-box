@@ -167,6 +167,9 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
 
   it('retains a refresh session during a provider outage and recovers through the retry button', () => {
     let available = false;
+    cy.intercept('GET', '**/api/legal-notice', {
+      body: { html: '<p>Datenschutz dieser Instanz</p>', isDefault: false, imprintUrl: 'https://example.org/impressum' }
+    }).as('legalNotice');
     cy.intercept('POST', '**/api/auth/refresh', request => {
       expect(request.body.refresh_token).to.equal('retained-refresh-token');
       request.reply(available ? {
@@ -179,6 +182,13 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
     cy.wait('@refresh');
     cy.get('.auth-refresh-unavailable').should('contain.text', 'outage-request-123');
     cy.get('.reauthentication-hint').should('not.exist');
+    cy.wait('@legalNotice').its('request.headers').should('not.have.property', 'authorization');
+    cy.contains('footer a', 'Impressum').should('have.attr', 'href', 'https://example.org/impressum');
+    cy.contains('footer button', 'Datenschutz').click();
+    cy.wait('@legalNotice').its('request.headers').should('not.have.property', 'authorization');
+    cy.contains('mat-dialog-content', 'Datenschutz dieser Instanz').should('be.visible');
+    cy.contains('mat-dialog-actions button', 'Schließen').click();
+    cy.get('mat-dialog-content').should('not.exist');
     cy.window().then(win => {
       expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token');
     });

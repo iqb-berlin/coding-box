@@ -59,17 +59,28 @@ export class UserWorkspacesComponent {
         const viewport = results?.closest<HTMLElement>('.app-main');
         if (!results || !slot || !viewport || this.searchQuery()) return;
 
+        const visualViewport = viewport.ownerDocument.defaultView?.visualViewport;
         const measure = () => {
+          const bounds = viewport.getBoundingClientRect();
+          const visibleHeight = visualViewport ?
+            Math.min(bounds.bottom, visualViewport.offsetTop + visualViewport.height) - Math.max(bounds.top, visualViewport.offsetTop) :
+            bounds.height;
           // Compare the unfiltered list at scroll origin, without the space occupied by search.
-          const listEnd = results.getBoundingClientRect().bottom + viewport.scrollTop - slot.getBoundingClientRect().height;
-          this.needsSearch.set(listEnd > viewport.getBoundingClientRect().bottom + 0.5);
+          const listHeight = results.getBoundingClientRect().bottom - bounds.top + viewport.scrollTop - slot.getBoundingClientRect().height;
+          this.needsSearch.set(listHeight > visibleHeight + 0.5);
         };
         measure();
         const observer = new ResizeObserver(measure);
         observer.observe(viewport);
         observer.observe(results);
         if (results.parentElement) observer.observe(results.parentElement);
-        onCleanup(() => observer.disconnect());
+        visualViewport?.addEventListener('resize', measure);
+        visualViewport?.addEventListener('scroll', measure);
+        onCleanup(() => {
+          observer.disconnect();
+          visualViewport?.removeEventListener('resize', measure);
+          visualViewport?.removeEventListener('scroll', measure);
+        });
       }
     });
   }
