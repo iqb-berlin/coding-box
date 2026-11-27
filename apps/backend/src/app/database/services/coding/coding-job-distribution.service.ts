@@ -3,7 +3,7 @@ import {
   Inject
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Connection, EntityManager } from 'typeorm';
+import { Repository, DataSource, EntityManager } from 'typeorm';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { ResponseMatchingFlag } from '../../../../../../../api-dto/coding/response-matching-flag';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
@@ -40,7 +40,7 @@ export class CodingJobDistributionService {
     private readonly codingJobRepository: Repository<CodingJob>,
     @InjectRepository(CodingJobUnit)
     private readonly codingJobUnitRepository: Repository<CodingJobUnit>,
-    private readonly connection: Connection,
+    private readonly connection: DataSource,
     @Inject(DERIVED_VARIABLE_READER) private readonly derivedVariableReader: DerivedVariableReader,
     private readonly access: CodingJobAccessService,
     private readonly aggregation: CodingJobAggregationService,

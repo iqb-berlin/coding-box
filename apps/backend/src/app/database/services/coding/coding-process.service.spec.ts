@@ -300,7 +300,7 @@ describe('CodingProcessService', () => {
             query: jest.fn().mockResolvedValue([]),
             createQueryBuilder: jest.fn().mockImplementation(() => mockQueryBuilder),
             manager: {
-              connection: {
+              dataSource: {
                 createQueryRunner: jest.fn().mockReturnValue(mockQueryRunner)
               }
             }
@@ -3509,7 +3509,7 @@ describe('CodingProcessService', () => {
           'autocoder-generated)'
         );
         expect(Autocoder.CodingSchemeFactory.code).not.toHaveBeenCalled();
-        expect(responseRepository.manager.connection.createQueryRunner)
+        expect(responseRepository.manager.dataSource.createQueryRunner)
           .not.toHaveBeenCalled();
         expect(mockResponseManagementService.updateResponsesInDatabase)
           .not.toHaveBeenCalled();
@@ -3858,7 +3858,7 @@ describe('CodingProcessService', () => {
           expect.objectContaining({ id: '07', alias: '07' })
         ])
       );
-      expect(responseRepository.manager.connection.createQueryRunner)
+      expect(responseRepository.manager.dataSource.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
@@ -3947,7 +3947,7 @@ describe('CodingProcessService', () => {
         expect.objectContaining({ id: 379724 }),
         expect.objectContaining({ id: 379725 })
       ]));
-      expect(responseRepository.manager.connection.createQueryRunner)
+      expect(responseRepository.manager.dataSource.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
@@ -4058,7 +4058,7 @@ describe('CodingProcessService', () => {
       expect(plan.codedResponses.filter(response => (
         response.variableid === 'M0_XX00_CMCa'
       ))).toHaveLength(0);
-      expect(responseRepository.manager.connection.createQueryRunner)
+      expect(responseRepository.manager.dataSource.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
@@ -4309,7 +4309,7 @@ describe('CodingProcessService', () => {
       );
 
       expect(result?.statistics.totalResponses).toBe(2);
-      expect(responseRepository.manager.connection.createQueryRunner)
+      expect(responseRepository.manager.dataSource.createQueryRunner)
         .not.toHaveBeenCalled();
       expect(mockResponseManagementService.updateResponsesInDatabase)
         .not.toHaveBeenCalled();
@@ -4357,7 +4357,7 @@ describe('CodingProcessService', () => {
           mockUnits,
           preflightManager
         );
-      expect(responseRepository.manager.connection.createQueryRunner)
+      expect(responseRepository.manager.dataSource.createQueryRunner)
         .not.toHaveBeenCalled();
     });
 

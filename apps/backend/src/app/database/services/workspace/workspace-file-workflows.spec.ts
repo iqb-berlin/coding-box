@@ -39,21 +39,25 @@ function fixture() {
   const runner = {
     manager,
     connect: jest.fn().mockResolvedValue(undefined),
-    query: jest.fn(async (sql: string) => {
+    query: jest.fn(async (sql: string): Promise<{ locked?: boolean; upload_order?: string }[]> => {
+      if (sql.includes('pg_current_xact_id')) return [{ upload_order: '42' }];
       events.push(sql.includes('pg_try') ? 'lock' : 'unlock');
       return [{ locked: true }];
     }),
     release: jest.fn(async () => { events.push('release'); })
   };
   const ordinaryFiles = {
-    manager: { connection: { createQueryRunner: jest.fn(() => runner) } },
+    manager: { dataSource: { createQueryRunner: jest.fn(() => runner) } },
     findOne: jest.fn(),
     find: jest.fn(),
     upsert: jest.fn(),
     createQueryBuilder: jest.fn()
   };
   const metadata = { invalidateMetadataCache: jest.fn(async () => { events.push('metadata'); }) };
-  const cache = { delete: jest.fn(async () => { events.push('exclusion'); }) };
+  const cache = {
+    delete: jest.fn(async () => { events.push('exclusion'); })
+  };
+  const statusRedis = { on: jest.fn(), eval: jest.fn().mockResolvedValue(1) };
   const results = { invalidateWorkspaceStatsCache: jest.fn(async () => { events.push('stats'); }) };
   const statistics = {
     invalidateCache: jest.fn(async () => { events.push('statistics'); }),
@@ -64,10 +68,10 @@ function fixture() {
   const processCache = { invalidateWorkspaceCaches: jest.fn(() => events.push('process-cache')) };
   const schema = { validateXmlViaXsdUrl: jest.fn().mockResolvedValue({ schemaValid: true, errors: [] }) };
   const service = createWorkspaceFilesService(
-    ordinaryFiles as never, {} as never, {} as never, {} as never, statistics as never, schema as never, new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache as never, results as never, metadata as never, codingFreshness as never, codingCache as never, processCache as never
+    ordinaryFiles as never, {} as never, {} as never, {} as never, statistics as never, schema as never, new WorkspaceFileStorageService(), new WorkspaceFileParsingService(), {} as never, {} as never, cache as never, results as never, metadata as never, codingFreshness as never, codingCache as never, processCache as never, statusRedis
   );
   return {
-    service, events, query, runner, manager, lockedFiles, ordinaryFiles, metadata, cache, results, statistics, codingFreshness, codingCache, processCache, schema
+    service, events, query, runner, manager, lockedFiles, ordinaryFiles, metadata, cache, results, statistics, codingFreshness, codingCache, processCache, schema, statusRedis
   };
 }
 
@@ -83,7 +87,7 @@ describe('workspace file workflow boundaries', () => {
     const f = fixture();
     f.runner.query.mockResolvedValue([{ locked: false }]);
     const action = {
-      upload: () => f.service.uploadTestFiles(7, [file('A.VOCS', '{}')], false),
+      upload: () => f.service.uploadTestFiles(7, [file('A.VOCS', '{}')], false, undefined, { trackProgress: true }),
       delete: () => f.service.deleteTestFiles(7, ['1']),
       dummy: () => f.service.createDummyTestTakerFile(7),
       testcenter: () => f.service.testCenterImport([{ workspace_id: 7, file_id: 'A.VOCS' }])
@@ -94,6 +98,7 @@ describe('workspace file workflow boundaries', () => {
     expect(f.manager.getRepository).not.toHaveBeenCalled();
     expect(f.lockedFiles.upsert).not.toHaveBeenCalled();
     expect(f.cache.delete).not.toHaveBeenCalled();
+    expect(f.statusRedis.eval).not.toHaveBeenCalled();
   });
 
   it('writes and marks freshness through the held lock manager, then invalidates caches before release', async () => {
@@ -137,6 +142,52 @@ describe('workspace file workflow boundaries', () => {
     expect(f.statistics.invalidateCache).toHaveBeenCalledWith(7);
     expect(f.statistics.invalidateIncompleteVariablesCache).toHaveBeenCalledWith(7);
     expect(f.runner.release).toHaveBeenCalledTimes(1);
+  });
+
+  it('reports intermediate progress for a single archive before processing its last batch', async () => {
+    const f = fixture();
+    const zip = new AdmZip();
+    for (let i = 0; i < 50; i += 1) {
+      zip.addFile(`${String(i).padStart(2, '0')}.voud`, Buffer.from('{}'));
+    }
+    const result = await f.service.uploadTestFiles(
+      7, [file('archive.zip', zip.toBuffer(), 'application/zip')], false, undefined, { trackProgress: true }
+    );
+
+    expect(result.uploaded).toBe(50);
+    expect(f.statusRedis.eval.mock.calls.map(([, , , , snapshot]) => {
+      const { status, progress } = JSON.parse(snapshot);
+      return [status, progress];
+    }))
+      .toEqual([['active', 0], ['active', 50], ['active', 99], ['completed', 100]]);
+    expect(f.statusRedis.eval.mock.invocationCallOrder[1]).toBeLessThan(f.lockedFiles.upsert.mock.invocationCallOrder[25]);
+  });
+
+  it('counts finished individual files while a ZIP in the same batch is still running', async () => {
+    const f = fixture();
+    const zip = new AdmZip();
+    for (let i = 0; i < 50; i += 1) zip.addFile(`entry-${i}.voud`, Buffer.from('{}'));
+    const files = [
+      ...Array.from({ length: 4 }, (_, i) => file(`single-${i}.voud`, '{}')),
+      file('archive.zip', zip.toBuffer(), 'application/zip')
+    ];
+
+    await expect(f.service.uploadTestFiles(7, files, false, undefined, { trackProgress: true }))
+      .resolves.toMatchObject({ uploaded: 54 });
+    const progress = f.statusRedis.eval.mock.calls.map(([, , , , snapshot]) => JSON.parse(snapshot).progress);
+    expect(progress).toEqual([0, 20, 40, 60, 80, 90, 99, 100]);
+  });
+
+  it('imports files and releases the workspace lock while status commands are pending', async () => {
+    const f = fixture();
+    f.statusRedis.eval.mockReturnValue(new Promise(() => {}));
+
+    await expect(f.service.uploadTestFiles(
+      7, [file('A.VOCS', '{"variableCodings":[]}')], false, undefined, { trackProgress: true }
+    )).resolves.toMatchObject({ uploaded: 1 });
+
+    expect(f.statusRedis.eval).toHaveBeenCalledTimes(3);
+    expect(f.events.slice(-2)).toEqual(['unlock', 'release']);
   });
 
   it.each(['schemer', 'player'])('keeps HTML %s identification and overwrite filtering', async kind => {

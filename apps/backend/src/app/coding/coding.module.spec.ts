@@ -6,7 +6,7 @@ import { getRedisConnectionToken } from '@nestjs-modules/ioredis';
 import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import {
-  Connection, DataSource, EntityManager, getMetadataArgsStorage
+  DataSource, EntityManager, getMetadataArgsStorage
 } from 'typeorm';
 import { TestResultsAnomaliesService } from '../database/services/test-results/test-results-anomalies.service';
 import { TestResultsCacheService } from '../database/services/test-results/test-results-cache.service';
@@ -143,10 +143,11 @@ async function createApplication(): Promise<TestingModule> {
     .overrideProvider(AUTH_RATE_LIMIT_REDIS).useValue({ disconnect: jest.fn() })
     .overrideProvider(DataSource)
     .useValue({})
-    .overrideProvider(Connection)
-    .useValue({})
     .overrideProvider(getRedisConnectionToken())
-    .useValue({ disconnect: jest.fn() });
+    .useValue({
+      disconnect: jest.fn(),
+      duplicate: () => ({ on: jest.fn(), disconnect: jest.fn() })
+    });
   const queues = [
     'test-person-coding', 'coding-statistics', 'data-export', 'flat-response-filter-options',
     'test-results-upload', 'codebook-generation', 'reset-coding-version', 'validation-task',
@@ -323,7 +324,7 @@ describe('CodingModule', () => {
         })
       };
       const transaction = jest.fn(async callback => callback(manager));
-      Object.assign(module.get(Connection), { transaction });
+      Object.assign(module.get(DataSource), { transaction });
       const canCode = jest.spyOn(module.get(UsersService), 'canUserCodeInWorkspace').mockResolvedValue(true);
       const facade = module.get(CodingJobService);
 

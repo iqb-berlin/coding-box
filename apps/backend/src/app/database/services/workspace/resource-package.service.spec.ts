@@ -436,7 +436,7 @@ describe('ResourcePackageService', () => {
 
   function createResourcePackageRepository(): Repository<ResourcePackage> {
     return {
-      manager: { connection: {} },
+      manager: { dataSource: {} },
       create: jest.fn((resourcePackage: ResourcePackage) => resourcePackage),
       save: jest.fn(async (resourcePackage: ResourcePackage) => {
         if (!resourcePackage.id) {

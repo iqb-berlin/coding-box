@@ -33,7 +33,9 @@ export class AutocoderBatchDataService {
     const repository = manager?.getRepository(Persons) || this.personsRepository;
     return repository.find({
       where: { workspace_id: workspaceId, id: In(personIds) },
-      select: ['id', 'group', 'login', 'code', 'uploaded_at']
+      select: {
+        id: true, group: true, login: true, code: true, uploaded_at: true
+      }
     });
   }
 

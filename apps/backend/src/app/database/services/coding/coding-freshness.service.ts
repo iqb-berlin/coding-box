@@ -475,7 +475,7 @@ export class CodingFreshnessService {
         version: 'v3',
         state: 'CURRENT'
       },
-      select: ['unit_id']
+      select: { unit_id: true }
     });
     const currentV3UnitIds = uniquePositiveIds(
       currentV3Rows.map(row => Number(row.unit_id))

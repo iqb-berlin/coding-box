@@ -170,7 +170,7 @@ export class ValidationTaskService {
     if (taskIds.length === 0) return new Map();
     const tasks = await this.taskRepository.find({
       where: { id: In(taskIds) },
-      select: ['id', 'workspace_id']
+      select: { id: true, workspace_id: true }
     });
     return new Map(tasks.map(t => [t.id, t.workspace_id]));
   }

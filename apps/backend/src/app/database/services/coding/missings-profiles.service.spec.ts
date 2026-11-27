@@ -232,7 +232,7 @@ describe('MissingsProfilesService', () => {
 
     expect(repo.find).toHaveBeenCalledWith({
       where: { workspace_id: 1 },
-      select: ['id', 'label']
+      select: { id: true, label: true }
     });
     expect(repo.findOne).not.toHaveBeenCalled();
     expect(repo.save).not.toHaveBeenCalled();

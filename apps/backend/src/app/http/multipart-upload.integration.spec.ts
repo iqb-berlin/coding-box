@@ -93,10 +93,11 @@ describe('Workspace multipart uploads', () => {
     expect(accepted.status).toBe(201);
     expect(await accepted.json()).toMatchObject({ uploaded: 1, failed: 0 });
     expect(filesService.uploadTestFiles).toHaveBeenCalledWith(
-      '47',
+      47,
       [expect.objectContaining({ originalname: 'unit.xml', buffer: Buffer.from('<Unit/>') })],
       false,
-      undefined
+      undefined,
+      { trackProgress: true }
     );
   });
 });

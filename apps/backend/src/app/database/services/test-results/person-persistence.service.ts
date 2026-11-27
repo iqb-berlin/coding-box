@@ -672,7 +672,7 @@ export class PersonPersistenceService {
                   subform: subform.id,
                   variableid: In(variables)
                 },
-                select: ['variableid', 'subform']
+                select: { variableid: true, subform: true }
               });
               const existingKeys = new Set(existing.map(r => `${r.variableid}@@${r.subform || ''}`));
               filteredEntries = responseEntries.filter(r => {
@@ -757,11 +757,10 @@ export class PersonPersistenceService {
 
     const targetKeys = new Set(entries.map(entry => this.responseEntryKey(entry)));
     const rows = await repository.find({
-      where: {
-        unitid: In(unitIds),
-        variableid: In(variableIds)
-      },
-      select: ['id', 'unitid', 'variableid', 'subform']
+      where: { unitid: In(unitIds), variableid: In(variableIds) },
+      select: {
+        id: true, unitid: true, variableid: true, subform: true
+      }
     });
 
     if (!Array.isArray(rows)) {
@@ -873,16 +872,15 @@ export class PersonPersistenceService {
     const issues: TestResultsUploadIssueDto[] = [];
 
     try {
-      const keys = persons.map(person => ({
-        group: person.group,
-        code: person.code,
-        login: person.login,
-        workspace_id: person.workspace_id
-      }));
-
       const existingPersons = await this.personsRepository.find({
-        where: keys,
-        select: ['group', 'code', 'login', 'workspace_id', 'booklets']
+        where: persons.map(({
+          group, code, login, workspace_id
+        }) => ({
+          group, code, login, workspace_id
+        })),
+        select: {
+          group: true, code: true, login: true, workspace_id: true, booklets: true
+        }
       });
 
       for (const originalPerson of persons) {
@@ -1109,10 +1107,10 @@ export class PersonPersistenceService {
         });
       } else {
         const existingSessions = await this.bookletSessionRepository.find({
-          where: {
-            booklet: { id: existingBooklet.id } as Booklet
-          },
-          select: ['browser', 'os', 'screen', 'loadcompletems', 'ts']
+          where: { booklet: { id: existingBooklet.id } as Booklet },
+          select: {
+            browser: true, os: true, screen: true, loadcompletems: true, ts: true
+          }
         });
         const existingSessionKeys = new Set(
           existingSessions.map(session => [

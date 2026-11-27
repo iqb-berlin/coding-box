@@ -90,7 +90,7 @@ export class CoderTrainingResultsApplyService {
     trainingId: number,
     request: ApplyTrainingDiscussionResultsRequestDto
   ): Promise<ApplyTrainingDiscussionResultsResultDto> {
-    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.connection,
+    return withWorkspaceTestResultsMutationPoolSlot(this.responseRepository.manager.dataSource,
       () => this.applyTrainingDiscussionResultsInPool(workspaceId, trainingId, request));
   }
 
@@ -107,7 +107,7 @@ export class CoderTrainingResultsApplyService {
       request.jobConflictStrategy
     );
     const queryRunner =
-      this.responseRepository.manager.connection.createQueryRunner();
+      this.responseRepository.manager.dataSource.createQueryRunner();
     let applyResult: ApplyTrainingDiscussionResultsResultDto | null = null;
     let shouldInvalidateIncompleteVariablesCache = false;
     let shouldInvalidateStatisticsAndAnalysis = false;

@@ -9,7 +9,11 @@ import { UnitPlayerComponent } from '../../apps/frontend/src/app/replay/componen
 import { ResponseDto } from '../../api-dto/responses/response-dto';
 import aspectSources from '../fixtures/aspect-players.json';
 
-type Start = { type: string; sessionId: string; unitDefinition: string };
+type Start = {
+  type: string; sessionId: string; unitDefinition: string;
+  playerConfig: { pagingMode: string; printMode?: string };
+  unitState: { dataParts: Record<string, string> };
+};
 type AspectElement = {
   type: string; id: string; alias: string; position: Record<string, unknown>; dimensions: Record<string, unknown>;
   [key: string]: unknown;
@@ -23,11 +27,12 @@ let playerHtml = '';
 @Component({
   selector: 'coding-box-aspect-assets-host',
   imports: [UnitPlayerComponent],
-  template: '<coding-box-unit-player [unitDef]="definition()" [unitPlayer]="player" [unitResponses]="responses()" />'
+  template: '<coding-box-unit-player [unitDef]="definition()" [unitPlayer]="player" [unitResponses]="responses()" [printMode]="print()" />'
 })
 class AspectAssetsHost {
   readonly definition = signal<string | undefined>(undefined);
   readonly responses = signal<ResponseDto | undefined>(undefined);
+  readonly print = signal(false);
   readonly player = playerHtml;
 }
 
@@ -131,7 +136,7 @@ aspectSources.forEach(({ version }) => {
       ).should('be.visible').and('have.value', value);
     }
 
-    function mountUnit(failImage = false, imagesOnly = false) {
+    function mountUnit({ failImage = false, imagesOnly = false, print = false } = {}) {
       cy.then(() => {
         if (imagesOnly) {
           unit.pages[0].sections[0].elements = unit.pages[0].sections[0].elements.filter(element => !['audio', 'video'].includes(element.type));
@@ -154,6 +159,7 @@ aspectSources.forEach(({ version }) => {
         fixture = result.fixture;
         fixture.nativeElement.style.display = 'block';
         fixture.nativeElement.style.height = '920px';
+        fixture.componentInstance.print.set(print);
         setAnswer('answer initial');
         fixture.componentInstance.definition.set(originalDefinition);
       });
@@ -174,7 +180,7 @@ aspectSources.forEach(({ version }) => {
     }
 
     it('reuses direct and rich-text images for twenty answers and direct navigation, then releases them', () => {
-      mountUnit(false, true);
+      mountUnit({ imagesOnly: true });
       answer('answer initial');
       body().find<HTMLImageElement>('img[src^="blob:"]').should($images => {
         expect($images.length).to.be.at.least(2);
@@ -198,6 +204,19 @@ aspectSources.forEach(({ version }) => {
       cy.get('@revokeObjectURL').should('have.callCount', 1);
     });
 
+    it('sends the saved response and displays both pages in print mode', () => {
+      mountUnit({ imagesOnly: true, print: true });
+      body().find('[data-element-alias="answer_1"]').should('be.visible');
+      body().find('[data-element-alias="answer_2"]').should('be.visible');
+      cy.then(() => {
+        const start = starts()[0];
+        expect(start.playerConfig).to.include({ pagingMode: 'concat-scroll', printMode: 'on' });
+        expect(JSON.parse(start.unitState.dataParts.elementCodes)).to.deep.equal([
+          { id: 'answer_1', status: 'VALUE_CHANGED', value: 'answer initial' }
+        ]);
+      });
+    });
+
     it('keeps cached media across twenty answers despite Aspect clearing src after successful metadata loading', () => {
       mountUnit();
       answer('answer initial');
@@ -215,7 +234,7 @@ aspectSources.forEach(({ version }) => {
     });
 
     it('falls back once after a revoked image Blob and keeps the next answer on the original definition', () => {
-      mountUnit(true);
+      mountUnit({ failImage: true });
       answer('answer initial');
       body().find<HTMLImageElement>('img[src^="data:image/png"]').should($images => {
         expect($images.length).to.be.at.least(2);

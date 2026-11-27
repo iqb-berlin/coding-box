@@ -281,7 +281,7 @@ export class ItemDatasetMetadataService {
     const [files, exclusions, aliases, variables] = await Promise.all([
       this.fileUploadRepository.find({
         where: { workspace_id: workspaceId, file_type: 'Booklet' },
-        select: ['file_id', 'data'],
+        select: { file_id: true, data: true },
         order: { file_id: 'ASC' }
       }),
       this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId),
@@ -448,7 +448,7 @@ export class ItemDatasetMetadataService {
     }
     const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Resource', file_id: In([...fileIds]) },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
     return new Map(files.map(file => [this.normalizeResourceRef(file.file_id), file.data]));
   }
@@ -460,7 +460,7 @@ export class ItemDatasetMetadataService {
   ): Promise<Map<string, UnitPositionMetadata>> {
     const files = await this.fileUploadRepository.find({
       where: { workspace_id: workspaceId, file_type: 'Unit' },
-      select: ['file_id', 'data']
+      select: { file_id: true, data: true }
     });
     const result = new Map<string, UnitPositionMetadata>();
     for (let index = 0; index < files.length; index += 1) {

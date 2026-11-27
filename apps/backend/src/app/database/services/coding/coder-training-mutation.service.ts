@@ -22,6 +22,7 @@ import { CodingJob } from '../../entities/coding-job.entity';
 import { JobDefinitionVariable, JobDefinitionVariableBundle } from '../../entities/job-definition.entity';
 import { assertCodingResourceCreation, assertCodingResourceMutation } from '../shared/coding-ownership.policy';
 import { lockWorkspaceTestResultsMutationInTransaction, withWorkspaceTestResultsMutationTransaction } from '../shared/workspace-test-results-lock.util';
+import { coderTrainingRelations } from './coder-training.util';
 import { CoderTrainingSamplingService } from './coder-training-sampling.service';
 import { CoderTrainingSelectionService } from './coder-training-selection.service';
 import { CoderTrainingResponse, TrainingJob, TrainingVariableConfig } from './coder-training.types';
@@ -391,7 +392,7 @@ export class CoderTrainingMutationService {
 
         const training = await coderTrainingRepository.findOne({
           where: { id: trainingId, workspace_id: workspaceId },
-          relations: ['codingJobs', 'variables', 'bundles', 'bundles.bundle', 'coders']
+          relations: coderTrainingRelations
         });
 
         if (!training) {
@@ -822,7 +823,7 @@ export class CoderTrainingMutationService {
             id: trainingId,
             workspace_id: workspaceId
           },
-          relations: ['codingJobs', 'codingJobs.codingJobUnits']
+          relations: { codingJobs: { codingJobUnits: true } }
         });
 
         if (!training) {
