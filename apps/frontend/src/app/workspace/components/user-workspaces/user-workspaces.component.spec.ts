@@ -167,7 +167,7 @@ describe('UserWorkspacesComponent', () => {
 
   it('filters workspace names case-insensitively and restores the original order when cleared', () => {
     // This test exercises filtering with the search open. Browser tests cover viewport geometry.
-    component['needsSearch'].set(true);
+    Reflect.get(component, 'needsSearch').set(true);
     fixture.componentRef.setInput('authDataLoaded', true);
     fixture.componentRef.setInput('workspaces', [
       { id: 7, name: 'VERA Deutsch' },
