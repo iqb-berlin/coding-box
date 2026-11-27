@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { getRepositoryToken } from '@nestjs/typeorm';
 import * as Autocoder from '@iqb/responses';
 import { VariableCodingData } from '@iqbspecs/coding-scheme';
-import { Repository } from 'typeorm';
+import { Any, In, Repository } from 'typeorm';
 import { WORKSPACE_FILE_METADATA_READER } from '../workspace/workspace-file-metadata-reader.token';
 import { CodingProcessService } from './coding-process.service';
 import { AutocoderBatchDataService } from './autocoder-batch-data.service';
@@ -290,7 +290,7 @@ describe('CodingProcessService', () => {
             query: jest.fn()
           }
         },
-        { provide: getRepositoryToken(Persons), useValue: { find: jest.fn() } },
+        { provide: getRepositoryToken(Persons), useValue: { find: jest.fn(), existsBy: jest.fn() } },
         { provide: getRepositoryToken(Unit), useValue: { createQueryBuilder: jest.fn().mockReturnValue(mockQueryBuilder) } },
         { provide: getRepositoryToken(Booklet), useValue: { find: jest.fn(), createQueryBuilder: jest.fn() } },
         {
@@ -376,6 +376,32 @@ describe('CodingProcessService', () => {
 
       expect(invalidateSpy).toHaveBeenCalledWith(7);
       expect(fileUploadRepository.query).not.toHaveBeenCalled();
+    });
+  });
+
+  it('rejects ambiguous legacy input and still accepts an unambiguous person ID', async () => {
+    jest.spyOn(personsRepository, 'existsBy').mockResolvedValueOnce(true).mockResolvedValueOnce(false);
+    await expect(service.codeTestPersons(7, '12', 1)).rejects.toThrow('Ambiguous testPersons');
+    expect(personsRepository.existsBy).toHaveBeenCalledWith({ workspace_id: 7, group: Any(['12']) });
+    expect(mockJobQueueService.addTestPersonCodingJob).not.toHaveBeenCalled();
+    await service.codeTestPersons(7, '12', 1);
+    expect(mockJobQueueService.addTestPersonCodingJob).toHaveBeenCalledWith(expect.objectContaining({ personIds: ['12'] }));
+  });
+
+  it('keeps numeric group names distinct from coinciding person IDs', async () => {
+    jest.spyOn(personsRepository, 'find').mockResolvedValue([{ id: 401 }, { id: 402 }] as Persons[]);
+    await service.startAutocoding(7, { groupNames: ['12', 'Group,A'] }, 1);
+    expect(personsRepository.find).toHaveBeenCalledWith({
+      where: { workspace_id: 7, group: In(['12', 'Group,A']), consider: true },
+      select: { id: true }
+    });
+    expect(mockJobQueueService.addTestPersonCodingJob).toHaveBeenLastCalledWith({
+      workspaceId: 7, personIds: ['401', '402'], groupNames: '12,Group,A', autoCoderRun: 1
+    });
+    await service.startAutocoding(7, { personIds: [12] }, 1);
+    expect(personsRepository.find).toHaveBeenCalledTimes(1);
+    expect(mockJobQueueService.addTestPersonCodingJob).toHaveBeenLastCalledWith({
+      workspaceId: 7, personIds: ['12'], groupNames: undefined, autoCoderRun: 1
     });
   });
 

@@ -194,7 +194,9 @@ try {
   const badBooklet = await insert('booklet', { infoid: info, personid: badPerson });
   const badUnit = await insert('unit', { bookletid: badBooklet, name: badName, alias: badName });
   await insert('response', { unitid: badUnit, variableid: 'A', status: 3, value: '1', subform: 'part-a' });
-  const started = await json(`/admin/workspace/${workspace}/coding?testPersons=${person}&autoCoderRun=1`);
+  // Selecting this group must code the valid person even though its name is the other person's ID.
+  await db.query('UPDATE persons SET "group" = $1 WHERE id = $2', [String(badPerson), person]);
+  const started = await json(`/admin/workspace/${workspace}/coding`, { selection: { groupNames: [String(badPerson)] }, autoCoderRun: 1 });
   const proof = await finishJob('test-person-coding', started.jobId, `/admin/workspace/${workspace}/coding/job/${started.jobId}`);
   for (const { unit, name, reference } of expectedRows) {
     const { rows } = await db.query('SELECT variableid,value,subform,status_v1,code_v1,score_v1,is_autocoder_generated FROM response WHERE unitid=$1 ORDER BY variableid', [unit]);
@@ -213,7 +215,7 @@ try {
   report.autocoderJob = proof;
   const snapshotSql = 'SELECT response.* FROM response JOIN unit ON unit.id=response.unitid JOIN booklet ON booklet.id=unit.bookletid WHERE booklet.personid=ANY($1::int[]) ORDER BY response.id';
   const beforeFailure = (await db.query(snapshotSql, [[person, badPerson]])).rows;
-  const failedStart = await json(`/admin/workspace/${workspace}/coding?testPersons=${badPerson}&autoCoderRun=1`);
+  const failedStart = await json(`/admin/workspace/${workspace}/coding`, { selection: { personIds: [badPerson] }, autoCoderRun: 1 });
   report.failedAutocoder = await finishJob('test-person-coding', failedStart.jobId, `/admin/workspace/${workspace}/coding/job/${failedStart.jobId}`, 'failed');
   assert.match(report.failedAutocoder.queue.failedReason, /duplicate output alias/);
   assert.deepEqual((await db.query(snapshotSql, [[person, badPerson]])).rows, beforeFailure, 'Failed whole-job preflight must not alter persisted responses');

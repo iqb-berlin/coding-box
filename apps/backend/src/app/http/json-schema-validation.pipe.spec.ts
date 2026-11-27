@@ -12,6 +12,10 @@ describe('JSON request contracts', () => {
   });
 
   it.each([
+    ['StartAutocoding', { autoCoderRun: 1, selection: { groupNames: ['12'], personIds: [12] } }],
+    ['StartAutocoding', { autoCoderRun: 2, selection: { groupNames: [] } }],
+    ['StartAutocoding', { autoCoderRun: 1, selection: { personIds: ['12'] } }],
+    ['StartAutocoding', { autoCoderRun: 3, selection: { personIds: [12] } }],
     ['WorkspaceCodingVersionController_resetCodingVersion', { version: 'v4' }],
     ['WorkspaceCodingVersionController_previewReset', { version: 'v4', unitFilters: [], variableFilters: [] }],
     ['WorkspaceCodingVersionController_previewReset', { version: 'v1', unitFilters: ['   '], variableFilters: [] }],

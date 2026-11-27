@@ -41,9 +41,10 @@ describe('CodingExecutionService', () => {
     });
 
     const req = httpMock.expectOne(
-      `${mockServerUrl}admin/workspace/1/coding?testPersons=10&autoCoderRun=2`
+      `${mockServerUrl}admin/workspace/1/coding`
     );
-    expect(req.request.method).toBe('GET');
+    expect(req.request.method).toBe('POST');
+    expect(req.request.body).toEqual({ selection: { personIds: [10] }, autoCoderRun: 2 });
     req.flush(mockRes);
   });
 

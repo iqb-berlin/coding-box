@@ -44,6 +44,13 @@ export const requestBodySchemas = {
     scoreMode: values('import', 'derive'),
     existingCodingMode: values('skip-conflicts', 'fill-empty', 'overwrite')
   }, ['file']),
+  StartAutocoding: object({
+    autoCoderRun: values(1, 2),
+    selection: either(
+      { ...object({ groupNames: { ...array(nonEmptyString), minItems: 1 } }, ['groupNames']), additionalProperties: false },
+      { ...object({ personIds: { ...array(positiveInteger), minItems: 1 } }, ['personIds']), additionalProperties: false }
+    )
+  }, ['selection', 'autoCoderRun']),
   BackgroundExportRequest: either(
     object({
       ...exportTransport,
@@ -553,3 +560,5 @@ export const requestBodySchemas = {
 export type RequestBodyName = keyof typeof requestBodySchemas;
 
 export type RequestBody<Name extends RequestBodyName> = InferRequest<typeof requestBodySchemas[Name]>;
+
+export type AutocodingSelection = RequestBody<'StartAutocoding'>['selection'];

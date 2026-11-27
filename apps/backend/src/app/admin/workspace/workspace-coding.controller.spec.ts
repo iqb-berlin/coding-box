@@ -8,6 +8,7 @@ import { WorkspaceCodingController } from './workspace-coding.controller';
 
 describe('WorkspaceCodingController', () => {
   const codingProcessService = {
+    startAutocoding: jest.fn(),
     codeTestPersons: jest.fn().mockResolvedValue({ totalResponses: 0, statusCounts: {} })
   };
   const autoCodingRunGuardService = {
@@ -39,6 +40,14 @@ describe('WorkspaceCodingController', () => {
       AccessLevelGuard
     ]);
     expect(Reflect.getMetadata('accessLevel', handler)).toBe(3);
+  });
+
+  it('checks the workspace and run before forwarding an explicit selection', async () => {
+    const selection = { groupNames: ['12'] };
+    await createController().startAutocoding(7, { selection, autoCoderRun: 2 });
+    expect(jobQueueService.assertNoDependencyConflicts).toHaveBeenCalledWith('test-person-coding', 7);
+    expect(autoCodingRunGuardService.assertAutoCodingRunCanStart).toHaveBeenCalledWith(7, 2);
+    expect(codingProcessService.startAutocoding).toHaveBeenCalledWith(7, selection, 2);
   });
 
   it('rejects unsupported autocoder run values before queue checks', async () => {

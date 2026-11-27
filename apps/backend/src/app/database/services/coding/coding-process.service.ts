@@ -1,8 +1,9 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
-  EntityManager, In, Repository, QueryRunner
+  Any, EntityManager, In, Repository, QueryRunner
 } from 'typeorm';
+import type { AutocodingSelection } from '../../../../../../../api-dto/request-contracts';
 import Persons from '../../entities/persons.entity';
 import { Unit } from '../../entities/unit.entity';
 import { ResponseEntity } from '../../entities/response.entity';
@@ -53,44 +54,37 @@ export class CodingProcessService {
     testPersonIdsOrGroups: string,
     autoCoderRun: number
   ): Promise<CodingStatisticsWithJob> {
+    const entries = (testPersonIdsOrGroups || '').split(',').filter(item => item.trim() !== '');
+    if (!entries.every(item => !Number.isNaN(Number(item)))) {
+      return this.startAutocoding(workspace_id, { groupNames: entries }, autoCoderRun);
+    }
+    // Legacy clients cannot distinguish numeric groups from person IDs.
+    if (entries.length && await this.personsRepository.existsBy({ workspace_id, group: Any(entries) })) {
+      throw new BadRequestException('Ambiguous testPersons selection. Use POST with groupNames or personIds.');
+    }
+    return this.startAutocoding(workspace_id, { personIds: entries.map(Number) }, autoCoderRun);
+  }
+
+  async startAutocoding(
+    workspace_id: number,
+    selection: AutocodingSelection,
+    autoCoderRun: number
+  ): Promise<CodingStatisticsWithJob> {
     const resolvedAutoCoderRun = normalizeAutoCoderRun(autoCoderRun);
-
-    if (
-      !workspace_id ||
-      !testPersonIdsOrGroups ||
-      testPersonIdsOrGroups.trim() === ''
-    ) {
-      this.logger.warn(
-        'Ungültige Eingabeparameter: workspace_id oder testPersonIdsOrGroups fehlen.'
-      );
+    if (!workspace_id || ('personIds' in selection ? selection.personIds : selection.groupNames).length === 0) {
       return { totalResponses: 0, statusCounts: {} };
     }
 
-    const groupsOrIds = testPersonIdsOrGroups
-      .split(',')
-      .filter(item => item.trim() !== '');
-    if (groupsOrIds.length === 0) {
-      this.logger.warn('Keine gültigen Gruppen oder Personen-IDs angegeben.');
-      return { totalResponses: 0, statusCounts: {} };
-    }
-
-    const areAllNumbers = groupsOrIds.every(
-      item => !Number.isNaN(Number(item))
-    );
-
-    let personIds: string[] = [];
-
-    if (areAllNumbers) {
-      personIds = groupsOrIds;
-      this.logger.log(`Using provided person IDs: ${personIds.length} persons`);
+    let personIds: string[];
+    if ('personIds' in selection) {
+      personIds = selection.personIds.map(String);
     } else {
-      this.logger.log(`Fetching persons for groups: ${groupsOrIds.join(', ')}`);
-
+      const { groupNames } = selection;
       try {
         const persons = await this.personsRepository.find({
           where: {
             workspace_id,
-            group: In(groupsOrIds),
+            group: In(groupNames),
             consider: true
           },
           select: { id: true }
@@ -103,12 +97,12 @@ export class CodingProcessService {
 
         if (personIds.length === 0) {
           this.logger.warn(
-            `No persons found in groups: ${groupsOrIds.join(', ')}`
+            `No persons found in groups: ${groupNames.join(', ')}`
           );
           return {
             totalResponses: 0,
             statusCounts: {},
-            message: `No persons found in the selected groups: ${groupsOrIds.join(
+            message: `No persons found in the selected groups: ${groupNames.join(
               ', '
             )}`
           };
@@ -141,7 +135,7 @@ export class CodingProcessService {
     const bullJob = await this.jobQueueService.addTestPersonCodingJob({
       workspaceId: workspace_id,
       personIds,
-      groupNames: !areAllNumbers ? groupsOrIds.join(',') : undefined,
+      groupNames: 'groupNames' in selection ? selection.groupNames.join(',') : undefined,
       autoCoderRun: resolvedAutoCoderRun
     });
 

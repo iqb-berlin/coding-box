@@ -16,6 +16,7 @@ import {
   tap,
   throwError
 } from 'rxjs';
+import type { AutocodingSelection } from '../../../../../../api-dto/request-contracts';
 import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { SERVER_URL } from '../../injection-tokens';
 import { suppressGlobalHttpErrorContext } from '../../core/interceptors/http-error-context';
@@ -471,17 +472,14 @@ export class TestPersonCodingService {
 
   codeTestPersons(
     workspaceId: number,
-    testPersonIds: string,
+    selection: AutocodingSelection,
     autoCoderRun: 1 | 2
   ): Observable<CodingStatisticsWithJob> {
-    const params = new HttpParams()
-      .set('testPersons', testPersonIds)
-      .set('autoCoderRun', autoCoderRun.toString());
-
     return this.http
-      .get<CodingStatisticsWithJob>(
+      .post<CodingStatisticsWithJob>(
         `${this.serverUrl}admin/workspace/${workspaceId}/coding`,
-        { headers: this.authHeader, params }
+        { selection, autoCoderRun },
+        { headers: this.authHeader }
       )
       .pipe(
         catchError(error => of({

@@ -107,55 +107,47 @@ describe('TestPersonCodingService', () => {
   });
 
   describe('codeTestPersons', () => {
-    it('should send a GET request to code test persons', () => {
-      const mockTestPersonIds = '1,2,3';
+    it('posts numeric and comma-containing group names as distinct names', () => {
+      const selection = { groupNames: ['12', 'Group,A'] };
       const mockResponse: CodingStatistics = {
         totalResponses: 3,
         statusCounts: { coded: 3 }
       };
 
       service
-        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
+        .codeTestPersons(mockWorkspaceId, selection, 1)
         .subscribe(response => {
           expect(response).toEqual(mockResponse);
         });
 
-      const req = httpMock.expectOne(
-        request => request.url ===
-            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
-          request.params.get('testPersons') === mockTestPersonIds &&
-          request.params.get('autoCoderRun') === '1'
-      );
-      expect(req.request.method).toBe('GET');
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding`);
+      expect(req.request.body).toEqual({ selection, autoCoderRun: 1 });
+      expect(req.request.method).toBe('POST');
       expect(req.request.headers.get('Authorization')).toBe(`Bearer ${mockAuthToken}`);
       req.flush(mockResponse);
     });
 
     it('should handle errors and return empty statistics with an error message', () => {
-      const mockTestPersonIds = '1,2,3';
+      const selection = { groupNames: ['12', 'Group,A'] };
 
       service
-        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 1)
+        .codeTestPersons(mockWorkspaceId, selection, 1)
         .subscribe(response => {
           expect(response.totalResponses).toBe(0);
           expect(response.statusCounts).toEqual({});
           expect(response.message).toContain('Http failure response');
         });
 
-      const req = httpMock.expectOne(
-        request => request.url ===
-            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
-          request.params.get('testPersons') === mockTestPersonIds &&
-          request.params.get('autoCoderRun') === '1'
-      );
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding`);
+      expect(req.request.body).toEqual({ selection, autoCoderRun: 1 });
       req.error(new ProgressEvent('error'));
     });
 
     it('should surface backend error messages when coding is blocked', () => {
-      const mockTestPersonIds = '1,2,3';
+      const selection = { groupNames: ['12', 'Group,A'] };
 
       service
-        .codeTestPersons(mockWorkspaceId, mockTestPersonIds, 2)
+        .codeTestPersons(mockWorkspaceId, selection, 2)
         .subscribe(response => {
           expect(response).toEqual({
             totalResponses: 0,
@@ -164,12 +156,8 @@ describe('TestPersonCodingService', () => {
           });
         });
 
-      const req = httpMock.expectOne(
-        request => request.url ===
-            `${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding` &&
-          request.params.get('testPersons') === mockTestPersonIds &&
-          request.params.get('autoCoderRun') === '2'
-      );
+      const req = httpMock.expectOne(`${mockServerUrl}admin/workspace/${mockWorkspaceId}/coding`);
+      expect(req.request.body).toEqual({ selection, autoCoderRun: 2 });
       req.flush(
         { message: 'Der 2. Autocoder-Lauf kann nicht gestartet werden.' },
         { status: 400, statusText: 'Bad Request' }
