@@ -122,7 +122,7 @@ test('unsuffixed release images remain on PostgreSQL 14 and CI tests both major 
   assert.match(image, /^postgres:17\.12-.*@sha256:[a-f0-9]{64}$/);
   assert.match(readFileSync('database/Postgres.Dockerfile', 'utf8'), /^ARG POSTGRES_IMAGE=postgres:14\./m);
   assert.equal(config('docker-compose.coding-box.prod.yaml').services.db.image,
-    '${REGISTRY_PATH}iqbberlin/coding-box-db:${TAG}${POSTGRES_IMAGE_SUFFIX:-}');
+    '${REGISTRY_PATH:-ghcr.io/iqb-berlin/}${REGISTRY_PATH:+iqbberlin/}coding-box-db:${TAG}${POSTGRES_IMAGE_SUFFIX:-}');
   const primary = ci['test-backend-integration'];
   assert.equal(primary.variables.BACKEND_INTEGRATION_POSTGRES_VERSION, '14.25');
   assert(primary.services.some(service => service.name.includes('postgres:14.25-')));

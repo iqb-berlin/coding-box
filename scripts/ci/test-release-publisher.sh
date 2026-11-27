@@ -1,6 +1,32 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+version=$(node -p "require('./package.json').version")
+prerelease="$version-beta.2"
+
+assert_compose_images() {
+  local registry_path=$1 image_prefix=$2 postgres_suffix=$3
+  REGISTRY_PATH="$registry_path" POSTGRES_IMAGE_SUFFIX="$postgres_suffix" \
+    TAG="$version" SERVER_NAME=kodierbox.invalid docker compose \
+    --env-file .env.coding-box.template -f docker-compose.yaml -f docker-compose.coding-box.prod.yaml \
+    config --format json |
+    jq -e --arg prefix "$image_prefix" --arg tag "$version" --arg suffix "$postgres_suffix" '
+      .services |
+      [.db.image, .liquibase.image, .backend.image, ."backend-export-worker".image, .frontend.image] == [
+        ($prefix + "coding-box-db:" + $tag + $suffix),
+        ($prefix + "coding-box-liquibase:" + $tag),
+        ($prefix + "coding-box-backend:" + $tag),
+        ($prefix + "coding-box-backend:" + $tag),
+        ($prefix + "coding-box-frontend:" + $tag)
+      ]
+    ' >/dev/null
+}
+
+assert_compose_images '' 'ghcr.io/iqb-berlin/' ''
+assert_compose_images '' 'ghcr.io/iqb-berlin/' '-pg17'
+assert_compose_images 'docker.io/' 'docker.io/iqbberlin/' '-pg17'
+echo 'Production Compose image references verified.'
+
 images=(db db-pg17 liquibase backend frontend)
 for image in "${images[@]}"; do
   if docker image inspect "coding-box-$image:ci" >/dev/null 2>&1; then
@@ -17,7 +43,7 @@ cleanup() {
     docker stop "$container" >/dev/null
   fi
   if [[ -n "$registry" ]]; then
-    docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$registry/iqbberlin/*" |
+    docker image ls --format '{{.Repository}}:{{.Tag}}' --filter "reference=$registry/iqb-berlin/*" |
       while IFS= read -r ref; do docker image rm "$ref" >/dev/null; done
   fi
   for image in "${images[@]}"; do
@@ -33,8 +59,6 @@ registry=$(docker port "$container" 5000/tcp)
 curl --fail --silent --show-error --retry 20 --retry-delay 1 --retry-connrefused \
   "http://$registry/v2/" >/dev/null
 
-version=$(node -p "require('./package.json').version")
-prerelease="$version-beta.2"
 mkdir "$temp/archives" "$temp/partial" "$temp/fixture"
 for image in "${images[@]}"; do
   source="coding-box-$image:ci"
@@ -57,12 +81,12 @@ curl -fsS "http://$registry/v2/_catalog" | jq -e '.repositories == []' >/dev/nul
 assert_tags() {
   local repo=$1
   shift
-  curl -fsS "http://$registry/v2/iqbberlin/coding-box-$repo/tags/list" |
+  curl -fsS "http://$registry/v2/iqb-berlin/coding-box-$repo/tags/list" |
     jq -e --args '(.tags | sort) == ($ARGS.positional | sort)' "$@" >/dev/null
 }
 
 assert_image() {
-  local ref="$registry/iqbberlin/coding-box-$1" image=$2
+  local ref="$registry/iqb-berlin/coding-box-$1" image=$2
   docker image pull --quiet "$ref"
   [[ "$(docker image inspect --format '{{.Id}}' "$ref")" == "$(cat "$temp/$image.id")" ]]
 }

@@ -33,33 +33,40 @@ Der Publish-Job läuft bei einem Push eines Versions-Tags nach erfolgreichem
 `Kodierbox required checks`. Er lädt die fünf geprüften Image-Archive aus
 demselben Workflow-Lauf. Die Images werden direkt aus diesen Archiven veröffentlicht.
 
-| Docker-Hub-Repository | Versions-Tag | Zusätzlicher Tag bei stabilen Releases |
+| GitHub Container Registry | Versions-Tag | Zusätzlicher Tag bei stabilen Releases |
 | --- | --- | --- |
-| `iqbberlin/coding-box-db` (PostgreSQL 14) | `<Version>` | `latest` |
-| `iqbberlin/coding-box-db` (PostgreSQL 17) | `<Version>-pg17` | `latest-pg17` |
-| `iqbberlin/coding-box-liquibase` | `<Version>` | `latest` |
-| `iqbberlin/coding-box-backend` | `<Version>` | `latest` |
-| `iqbberlin/coding-box-frontend` | `<Version>` | `latest` |
+| `ghcr.io/iqb-berlin/coding-box-db` (PostgreSQL 14) | `<Version>` | `latest` |
+| `ghcr.io/iqb-berlin/coding-box-db` (PostgreSQL 17) | `<Version>-pg17` | `latest-pg17` |
+| `ghcr.io/iqb-berlin/coding-box-liquibase` | `<Version>` | `latest` |
+| `ghcr.io/iqb-berlin/coding-box-backend` | `<Version>` | `latest` |
+| `ghcr.io/iqb-berlin/coding-box-frontend` | `<Version>` | `latest` |
 
 Bei einem Vorab-Release ist `<Version>` der vollständige Git-Tag, zum Beispiel
 `1.17.5-beta.2`. Die stabilen Aliase werden erst nach allen fünf Versions-Tags
-aktualisiert. Für Server, die von Docker Hub ziehen (`REGISTRY_PATH` leer), gelten
-weiterhin `TAG` und `POSTGRES_IMAGE_SUFFIX`.
+aktualisiert. Bei leerem `REGISTRY_PATH` verwendet die Compose-Datei des
+Ziel-Releases GHCR. Ein gesetzter `REGISTRY_PATH` verwendet den angegebenen
+Registry-Pfad mit dem bisherigen Namensraum `iqbberlin/`. Für das erste
+GHCR-Release einen vorhandenen Registry-Override aus `.env.coding-box` entfernen.
+Die installierte PostgreSQL-Version bestimmt weiterhin den Wert von
+`POSTGRES_IMAGE_SUFFIX`.
 
 ### Einmalige Freischaltung
 
-1. Das GitHub-Environment `dockerhub-release` anlegen und auf Versions-Tags
-   beschränken. Dort `DOCKERHUB_USER` und
-   `DOCKERHUB_TOKEN` für ein Konto mit Schreibzugriff auf die vier
-   Docker-Hub-Repositories hinterlegen.
-2. Die bisherige Veröffentlichung derselben Tags deaktivieren.
-3. Die Repository-Variable `DOCKERHUB_RELEASE_ENABLED` auf `true` setzen.
+1. Das GitHub-Environment `ghcr-release` auf Versions-Tags beschränken. Der
+   Publish-Job meldet sich mit dem eingebauten `GITHUB_TOKEN` und
+   `packages: write` an. Wenn ein Zielpaket schon existiert, braucht dieses
+   Repository dort Schreibzugriff unter **Manage Actions access**.
+2. Die Repository-Variable `GHCR_RELEASE_ENABLED` zur Release-Freigabe auf
+   `true` setzen.
 
 ### Ablauf pro Release
 
 1. Den Versions-Tag vom vorbereiteten Release-Commit mit dem GitHub-Workflow zu
    GitHub pushen.
-2. Warten, bis `Publish checked images to Docker Hub` erfolgreich war.
+2. Warten, bis `Publish checked images to GHCR` erfolgreich war. Beim ersten
+   Push sind neue Pakete zunächst privat. Alle vier Pakete in GitHub Packages
+   auf **Public** setzen und die fünf Versions-Images ohne Registry-Anmeldung
+   abrufen.
 3. Das GitHub-Release zum vorhandenen Tag veröffentlichen. Vorab-Releases dabei
    als Pre-release markieren. `make coding-box-update` prüft, ob zum gewählten Tag
    ein GitHub-Release vorliegt, und schlägt standardmäßig das jüngste stabile
@@ -72,4 +79,5 @@ veröffentlichen, da jeder stabile Publish die `latest`-Aliase aktualisiert.
 
 Der Pflichtcheck `Test image publishing on a local registry` prüft die Namen,
 die Tags und die Identität aller Images in einer kurzlebigen Registry auf dem
-Runner. Er prüft auch den Abbruch bei einem fehlenden Archiv.
+Runner. Er prüft auch die Image-Referenzen für beide PostgreSQL-Versionen in
+der Produktions-Compose-Datei und den Abbruch bei einem fehlenden Archiv.

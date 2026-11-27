@@ -5,7 +5,7 @@ tag=${1:?Release tag required}
 archive_dir=${2:?Image archive directory required}
 registry=${3:?Target registry required}
 
-if [[ "$registry" != docker.io && ! "$registry" =~ ^127\.0\.0\.1:[0-9]+$ ]]; then
+if [[ "$registry" != ghcr.io && ! "$registry" =~ ^127\.0\.0\.1:[0-9]+$ ]]; then
   echo "Unsupported release registry: $registry" >&2
   exit 1
 fi
@@ -23,7 +23,7 @@ for image in "${images[@]}"; do
   if [[ "$image" == db-pg17 ]]; then
     suffix='-pg17'
   fi
-  repository="$registry/iqbberlin/coding-box-${image%-pg17}"
+  repository="$registry/iqb-berlin/coding-box-${image%-pg17}"
   source="coding-box-$image:ci"
   version_ref="$repository:$tag$suffix"
   docker image tag "$source" "$version_ref"
