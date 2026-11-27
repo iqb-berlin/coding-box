@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { HttpClient, HttpParams } from '@angular/common/http';
+import { HttpClient, HttpErrorResponse, HttpParams } from '@angular/common/http';
 import {
   catchError,
   concat,
@@ -326,7 +326,7 @@ export class FileService {
             last(),
             switchMap(() => {
               const completeUrl = `${this.serverUrl}admin/workspace/${workspaceId}/upload/results/${uploadId}/complete`;
-              return this.http.post<TestResultsUploadJobDto[]>(
+              return defer(() => this.http.post<TestResultsUploadJobDto[]>(
                 completeUrl,
                 {
                   overwriteExisting: options.overwriteExisting,
@@ -335,10 +335,10 @@ export class FileService {
                   ...(options.filters || {})
                 },
                 { headers: this.authHeader }
-              ).pipe(retry({
+              )).pipe(retry({
                 count: 3,
-                delay: (error, attempt) => ([0, 409, 502, 503, 504].includes(error.status) ?
-                  timer(1000 * attempt) : throwError(() => error))
+                delay: (error: HttpErrorResponse, attempt) => ([0, 409, 502, 503, 504].includes(error.status) ?
+                  timer(1000 * (2 ** (attempt - 1))) : throwError(() => error))
               }));
             })
           );
