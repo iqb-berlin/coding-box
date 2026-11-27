@@ -329,6 +329,8 @@ export class WorkspaceTestResultsExportController {
     } catch (error) {
       if (!response.headersSent) {
         response.status(500).json({ error: 'Failed to export test results' });
+      } else {
+        response.destroy();
       }
     }
   }

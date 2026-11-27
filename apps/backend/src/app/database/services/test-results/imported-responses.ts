@@ -1,9 +1,9 @@
-import { In } from 'typeorm';
+import { In, IsNull } from 'typeorm';
 import type { EntityManager, Repository } from 'typeorm';
-import { chunkKeysByVariable } from './response-chunks';
+import { chunkKeysByVariable, chunkRowsForImport } from './response-chunks';
 import type { ChunkEntity } from '../../entities/chunk.entity';
 import type { ResponseEntity } from '../../entities/response.entity';
-import type { TcMergeResponse, TcMergeSubForms } from '../shared';
+import type { TcMergeChunk, TcMergeResponse, TcMergeSubForms } from '../shared';
 import { statusStringToNumber } from '../../utils/response-status-converter';
 
 export type ResponseInsertEntry = {
@@ -166,4 +166,18 @@ export async function planResponseImport(
   const plan = matchImportedResponses(incoming, existing, mode, previous);
   if (replacing) await assertReplaceableResponses(manager || responses.manager, plan.matches);
   return plan;
+}
+
+export async function planChunkImport(
+  unitid: number, incoming: TcMergeChunk[], isNewUnit: boolean, chunks: Repository<ChunkEntity>, responses: Repository<ResponseEntity>
+) {
+  const where = { unitid, key: In([...new Set(incoming.map(chunk => chunk.id))]) };
+  const previous = isNewUnit ? [] : await chunks.findBy(where);
+  const legacyRows = previous.some(chunk => chunk.subform == null && !chunk.variables) ?
+    await responses.find({
+      where: { unitid, source_chunk_key: IsNull(), is_autocoder_generated: false },
+      select: { subform: true }
+    }) : [];
+  const legacyForms = new Set(legacyRows.map(row => row.subform ?? ''));
+  return { where, chunkEntries: chunkRowsForImport(unitid, incoming, previous, legacyForms) };
 }

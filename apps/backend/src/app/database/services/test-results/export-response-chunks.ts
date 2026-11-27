@@ -3,13 +3,15 @@ import type { ChunkEntity } from '../../entities/chunk.entity';
 import type { ResponseEntity } from '../../entities/response.entity';
 import type { Chunk, TcMergeResponse } from '../shared';
 import { statusNumberToString } from '../../utils/response-status-converter';
+import { isPrimitiveResponseArray } from './test-results.util';
 
-function archiveValue(stored: string | null): ResponseValueType {
+function archiveValue(stored: string | null, variableId: string): ResponseValueType {
   if (!stored?.startsWith('[')) return stored;
   try {
     const value: unknown = JSON.parse(stored);
     // Keep arrays typed when the importer can recreate the exact stored text.
-    if (Array.isArray(value) && JSON.stringify(value) === stored) return value;
+    if (Array.isArray(value) && JSON.stringify(value) === stored &&
+      (variableId.trim().startsWith('marking-panel_') || isPrimitiveResponseArray(value))) return value;
   } catch {
     // Free-text answers can also start with an opening bracket.
   }
@@ -60,7 +62,7 @@ export function exportResponseChunks(responses: ResponseEntity[], chunks: ChunkE
     const form = row.subform ?? '';
     const answer: TcMergeResponse = {
       id: row.variableid,
-      value: archiveValue(row.value),
+      value: archiveValue(row.value, row.variableid),
       status: statusNumberToString(row.status) || 'UNSET',
       subform: legacy ? undefined : form || undefined
     };

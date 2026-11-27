@@ -4,8 +4,9 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Brackets, EntityManager, In, Repository
 } from 'typeorm';
-import { chunkRowsForImport } from './response-chunks';
-import { importedResponses, planResponseImport, ResponseInsertEntry } from './imported-responses';
+import {
+  importedResponses, planChunkImport, planResponseImport, ResponseInsertEntry
+} from './imported-responses';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Log,
@@ -542,10 +543,9 @@ export class PersonPersistenceService {
         return;
       }
 
-      const keys = [...new Set(unit.chunks.map(chunk => chunk.id))];
-      const where = { unitid: savedUnit.id, key: In(keys) };
-      const previous = isNewUnit ? [] : await repository.findBy(where);
-      const chunkEntries = chunkRowsForImport(savedUnit.id, unit.chunks, previous);
+      const { where, chunkEntries } = await planChunkImport(
+        savedUnit.id, unit.chunks, isNewUnit, repository, manager?.getRepository(ResponseEntity) || this.responseRepository
+      );
       if (!isNewUnit && chunkEntries.length) await repository.delete(where);
       if (chunkEntries.length > 0) {
         await repository.insert(chunkEntries);

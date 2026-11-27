@@ -2688,6 +2688,35 @@ describe('WorkspaceTestResultsService', () => {
         .toEqual(pairs.map(([part, form]) => [part, form, form]));
     });
 
+    it('rejects crossed historical chunk names before caching a replay', async () => {
+      const unitQb = mockQueryBuilder();
+      unitQb.getRawOne.mockResolvedValue({ unitId: 77 });
+      (unitRepository.createQueryBuilder as jest.Mock).mockReturnValue(unitQb);
+      const responseQb = mockQueryBuilder();
+      responseQb.getRawMany.mockResolvedValue([
+        {
+          variableid: 'x', value: 'from A', status: 3, subform: 'B', source_chunk_key: null
+        },
+        {
+          variableid: 'x', value: 'from B', status: 3, subform: 'A', source_chunk_key: null
+        }
+      ]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseQb);
+      (chunkRepository.find as jest.Mock).mockResolvedValue([
+        {
+          key: 'A', variables: 'x', ts: 10, subform: null
+        },
+        {
+          key: 'B', variables: 'x', ts: 20, subform: null
+        }
+      ]);
+
+      await expect(service.findUnitResponse(1, 'login@code@group@booklet', 'unit')).rejects.toMatchObject({
+        response: { statusCode: 409, code: 'REPLAY_RESPONSE_AMBIGUOUS' }
+      });
+      expect(cacheService.set).not.toHaveBeenCalled();
+    });
+
     it('returns no replay responses for an ignored booklet without looking up the unit', async () => {
       (workspaceExclusionService.resolveExclusionsForQueries as jest.Mock).mockResolvedValue({
         globalIgnoredUnits: [],

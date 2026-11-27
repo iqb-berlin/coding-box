@@ -8,7 +8,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import {
   Repository
 } from 'typeorm';
-import { chunkResolver } from './response-chunks';
+import { chunkKeysByVariable } from './response-chunks';
 import { REPLAY_RESPONSE_CACHE_SUFFIX } from '../workspace/workspace-constants';
 import { CacheService } from '../../../cache/cache.service';
 import { Booklet } from '../../entities/booklet.entity';
@@ -29,21 +29,22 @@ import { PersonWhere } from './workspace-test-results.types';
 type ReplayResponseRow = Pick<ResponseEntity, 'variableid' | 'value' | 'status' | 'subform' | 'source_chunk_key'>;
 
 function replayChunks(rows: ReplayResponseRow[], chunks: ChunkEntity[]) {
-  const resolveChunk = chunkResolver(chunks);
+  const legacySources = chunkKeysByVariable(chunks.filter(chunk => chunk.subform == null));
   const groups = new Map<string, Map<string, {
     id: string; value: unknown; status: ResponseStatusType; subform?: string;
   }>>();
   for (const row of rows) {
-    const chunkKey = resolveChunk(row);
+    const candidates = row.source_chunk_key == null ? legacySources.get(row.variableid) : undefined;
+    const chunkKey = row.source_chunk_key ?? candidates?.values().next().value ?? row.subform ?? '';
     const subform = row.source_chunk_key != null ? row.subform : null;
     const identity = JSON.stringify([row.variableid, subform || '']);
     if (!groups.has(chunkKey)) groups.set(chunkKey, new Map());
     const responses = groups.get(chunkKey)!;
-    if (responses.has(identity)) {
+    if ((candidates?.size ?? 0) > 1 || responses.has(identity)) {
       throw new ConflictException({
         statusCode: 409,
         code: 'REPLAY_RESPONSE_AMBIGUOUS',
-        message: `Antwort ${row.variableid} im Datenteil "${chunkKey}" ist für das Replay nicht eindeutig zuzuordnen.`
+        message: `Antwort ${row.variableid} ist für das Replay nicht eindeutig zuzuordnen.`
       });
     }
     responses.set(identity, {

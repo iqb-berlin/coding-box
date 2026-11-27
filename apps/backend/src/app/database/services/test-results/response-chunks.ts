@@ -75,26 +75,13 @@ export function selectResponseFromUnit(unit: TcMergeUnit, variableId: string, su
 // Historical rows only have the variable lists and the old chunk-level subform.
 export function chunkKeysByVariable(chunks: ChunkEntity[]) {
   const byVariable = new Map<string, Set<string>>();
-  for (const chunk of [...chunks].sort((a, b) => Number(a.ts) - Number(b.ts))) {
+  for (const chunk of chunks) {
     for (const variable of (chunk.variables || '').split(',').map(v => v.trim()).filter(Boolean)) {
       if (!byVariable.has(variable)) byVariable.set(variable, new Set());
-      const keys = byVariable.get(variable)!;
-      keys.delete(chunk.key);
-      keys.add(chunk.key);
+      byVariable.get(variable)!.add(chunk.key);
     }
   }
   return byVariable;
-}
-
-export function chunkResolver(chunks: ChunkEntity[]) {
-  const byVariable = chunkKeysByVariable(chunks);
-  return (response: { variableid: string; subform: string | null; source_chunk_key?: string | null }) => {
-    if (response.source_chunk_key != null) return response.source_chunk_key;
-    const candidates = byVariable.get(response.variableid);
-    const form = response.subform || '';
-    if (candidates?.has(form)) return form;
-    return candidates ? Array.from(candidates).pop() ?? form : form;
-  };
 }
 
 export function countChunkResponses(
@@ -149,7 +136,7 @@ export function countChunkResponses(
 
 // Keep memberships omitted by a partial upload, including their timestamps.
 // Parts absent from the upload are never selected for replacement.
-export function chunkRowsForImport(unitid: number, chunks: TcMergeChunk[], previous: ChunkEntity[]) {
+export function chunkRowsForImport(unitid: number, chunks: TcMergeChunk[], previous: ChunkEntity[], legacyForms: Set<string>) {
   const incoming = new Map<string, Set<string>>();
   const rows = new Map<string, Omit<ChunkEntity, 'id' | 'unit'>>();
   const add = (key: string, type: string, ts: number, subform: string | null | undefined, variables: string[]) => {
@@ -168,6 +155,11 @@ export function chunkRowsForImport(unitid: number, chunks: TcMergeChunk[], previ
     add(chunk.id, String(chunk.type || '').trim(), Number(chunk.ts) || 0, chunk.subform, variables);
   }
   for (const chunk of previous) {
+    // Old imports can have only a wrapper timestamp for all answers in a part.
+    if (chunk.subform == null && !chunk.variables && legacyForms.has(chunk.key)) {
+      add(chunk.key, chunk.type, chunk.ts, chunk.subform, []);
+      continue;
+    }
     const missing = (chunk.variables || '').split(',').map(v => v.trim()).filter(variable => {
       const forms = incoming.get(JSON.stringify([chunk.key, variable]));
       return variable && (!forms || (chunk.subform != null && !forms.has(chunk.subform)));

@@ -39,6 +39,7 @@ import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.serv
 import { WorkspaceTestResultsService } from './workspace-test-results.service';
 import { JournalService } from '../shared/journal.service';
 import { Chunk, Response, TcMergeResponse } from '../shared';
+import { exportResponseChunks } from './export-response-chunks';
 import { TestResultsExportService } from './test-results-export.service';
 import { UploadResultsService } from './upload-results.service';
 import { TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
@@ -528,6 +529,32 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     } finally {
       await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
     }
+  });
+
+  it('keeps the timestamp and source of an omitted historical response after a partial import', async () => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('page', 10, [answer('x', 'first'), answer('y', 'second')], undefined, 'old-type')];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const [x, y] = await storedResponses();
+    const unitid = x.unitid;
+    await repository(ResponseEntity).update({ unitid }, { source_chunk_key: null, subform: 'page' });
+    await repository(ChunkEntity).update({ unitid }, { variables: '', subform: null });
+
+    rows[0].responses = [part('page', 30, [answer('x', 'updated')])];
+    expect((await importRun(service, 'partial', 'replace')).success).toBe(true);
+
+    const cleanup = new TestResultsDeletionQueryService(repository(Persons), repository(Unit), repository(Booklet), connection, createMock());
+    const targets = await cleanup.resolveResponseCleanupTargets(workspaceId, { unitNames: ['U1'], answeredFrom: 5, answeredBefore: 20 });
+    expect(targets.responseIds).toEqual([y.id]);
+    const chunks = exportResponseChunks(await storedResponses(), await repository(ChunkEntity).findBy({ unitid }));
+    expect(chunks.map(chunk => [JSON.parse(chunk.content)[0].id, chunk.id, chunk.ts, chunk.responseType]).sort()).toEqual([
+      ['x', 'page', 30, 'state'], ['y', 'page', 10, 'old-type']
+    ]);
+
+    rows[0].responses = [part('page', 40, [answer('y', 'second')])];
+    expect((await importRun(service, 'remaining', 'merge')).success).toBe(true);
+    expect(await repository(ChunkEntity).findBy({ unitid, variables: '' })).toEqual([]);
   });
 
   it('uses the response membership timestamp in cleanup previews after an empty part arrives', async () => {
