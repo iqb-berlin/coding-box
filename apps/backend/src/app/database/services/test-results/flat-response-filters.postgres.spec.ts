@@ -1,10 +1,13 @@
 import { createMock } from '@golevelup/ts-jest';
-import { DataSource } from 'typeorm';
+import { DataSource, SelectQueryBuilder } from 'typeorm';
 import { TestResultsResponsesService } from './test-results-responses.service';
+import { TestResultsSearchService } from './test-results-search.service';
+import { findLongLoadingUnitIds } from './flat-response-filters';
 import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { CodingListService } from '../coding/coding-list.service';
 import Workspace from '../../entities/workspace.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -26,6 +29,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   let db: DataSource;
   let service: TestResultsResponsesService;
   let optionsService: TestResultsFilterOptionsService;
+  let searchService: TestResultsSearchService;
 
   beforeAll(async () => {
     db = new DataSource({
@@ -52,7 +56,11 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       CREATE UNLOGGED TABLE "${schema}".unit (id INT PRIMARY KEY, bookletid INT, name TEXT, alias TEXT);
       CREATE UNLOGGED TABLE "${schema}".response (
         id INT PRIMARY KEY, unitid INT, variableid TEXT, status SMALLINT, value TEXT,
-        is_autocoder_generated BOOLEAN DEFAULT false);
+        is_autocoder_generated BOOLEAN DEFAULT false,
+        status_v1 SMALLINT, status_v2 SMALLINT, status_v3 SMALLINT,
+        code_v1 BIGINT, code_v2 BIGINT, code_v3 BIGINT, score_v2 BIGINT);
+      CREATE UNLOGGED TABLE "${schema}".coding_job (id INT PRIMARY KEY, status TEXT, workspace_id INT);
+      CREATE UNLOGGED TABLE "${schema}".coding_job_unit (response_id INT, coding_job_id INT, workspace_id INT);
       CREATE UNLOGGED TABLE "${schema}".unit_tag (id INT PRIMARY KEY, "unitId" INT, tag TEXT);
       CREATE UNLOGGED TABLE "${schema}".bookletlog (id INT PRIMARY KEY, bookletid INT, key TEXT, parameter TEXT, ts BIGINT);
       CREATE UNLOGGED TABLE "${schema}".session (
@@ -75,14 +83,16 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (1, 1, 'A', 3, NULL), (2, 1, 'B', 3, '   '), (3, 1, 'C', 3, ' [] '), (4, 1, 'D', 3, 'answer A'),
         (5, 2, 'E', 3, 'answer B'), (6, 3, 'F', 3, 'answer C'), (7, 4, 'G', 3, '0'), (8, 5, 'H', 3, '[1]'),
         (10, 6, 'J', 3, 'foreign'), (11, 7, 'K', 3, 'not considered'), (12, 8, 'L', 3, 'ignored unit');
-      INSERT INTO "${schema}".response VALUES (9, 1, 'I', 3, 'generated', true);
+      INSERT INTO "${schema}".response (id, unitid, variableid, status, value, is_autocoder_generated)
+        VALUES (9, 1, 'I', 3, 'generated', true);
       INSERT INTO "${schema}".unit_tag VALUES
         (1, 1, 'review-alpha'), (2, 1, 'review-beta'), (3, 2, 'review-alpha'), (4, 3, 'other');
       INSERT INTO "${schema}".bookletlog VALUES
         (1, 1, 'CONTROLLER', 'RUNNING', 1000), (2, 1, 'CONTROLLER', 'TERMINATED', 61000),
         (3, 2, 'CONTROLLER', 'RUNNING', 1000), (4, 2, 'CONTROLLER', 'TERMINATED', 60000),
         (5, 3, 'CONTROLLER', 'RUNNING', 1000), (6, 3, 'CONTROLLER', 'TERMINATED', 62000),
-        (7, 4, 'CONTROLLER', 'RUNNING', 1000), (8, 4, 'CONTROLLER', 'TERMINATED', 121000);
+        (7, 4, 'CONTROLLER', 'RUNNING', 1000), (8, 4, 'CONTROLLER', 'TERMINATED', 121000),
+        (9, 1, 'CONNECTION', 'LOST', 20000), (10, 6, 'CONNECTION', 'LOST', 30000);
       INSERT INTO "${schema}".session VALUES
         (101, 1, 'Firefox', 'Linux', '1920x1080', 100), (102, 1, 'Chrome', 'Windows', '1280x720', 100),
         (201, 2, 'Firefox', 'Mac', '1920x1080', 100), (301, 3, 'Chrome', 'Linux', '1920x1080', 100),
@@ -96,6 +106,12 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusions);
     service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusions, anomalies);
     optionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusions);
+    searchService = new TestResultsSearchService(
+      db.getRepository(ResponseEntity),
+      db,
+      createMock<CodingListService>({ getVariablePageMap: async () => new Map() }),
+      exclusions
+    );
   });
 
   afterAll(async () => {
@@ -117,6 +133,38 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
   });
 
+  it.each([false, true])('keeps count and page on the same snapshot with regexSearch=%s', async regexSearch => {
+    await db.query('UPDATE response SET status_v2 = 5 WHERE id = 5');
+    const getRawMany = SelectQueryBuilder.prototype.getRawMany;
+    const count = jest.spyOn(SelectQueryBuilder.prototype, 'getRawMany')
+      .mockImplementationOnce(async function readCountAndChangeStatus(this: SelectQueryBuilder<ResponseEntity>) {
+        const rows = await getRawMany.call(this);
+        expect(rows).toEqual([{ total: '1', firstId: 5 }]);
+        // This uses the other pool connection and commits before the page query.
+        await db.query('UPDATE response SET status_v2 = CASE id WHEN 4 THEN 5 ELSE 8 END WHERE id IN (4, 5)');
+        return rows;
+      });
+    try {
+      const filters = {
+        version: 'v2' as const, codedStatus: 'CODING_COMPLETE', variableId: regexSearch ? '[DE]' : undefined, regexSearch
+      };
+      await expect(searchService.searchResponses(42, filters)).resolves.toMatchObject({
+        total: 1, data: [{ responseId: 5, codedStatus: 'CODING_COMPLETE' }]
+      });
+      await expect(searchService.searchResponses(42, filters)).resolves.toMatchObject({
+        total: 1, data: [{ responseId: 4, codedStatus: 'CODING_COMPLETE' }]
+      });
+    } finally {
+      count.mockRestore();
+      await db.query('UPDATE response SET status_v2 = NULL WHERE id IN (4, 5)');
+    }
+  });
+
+  it('combines a nonempty person code with matching tags without duplicating responses', async () => {
+    const rows = await expectResponses({ code: 'A', tags: 'review' }, [1, 2, 3, 4, 5]);
+    expect(rows[0].tags).toEqual(['review-alpha', 'review-beta']);
+  });
+
   it('counts meaningful values while excluding NULL, whitespace and empty arrays', async () => {
     const rows = await expectResponses({ hasValue: 'yes' }, [4, 5, 6, 7, 8]);
     expect(rows.map(row => row.responseValue)).toContain('0');
@@ -129,6 +177,105 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     [{ processingDurationMin: '00:59', processingDurationMax: '01:01' }, [1, 2, 3, 4, 5, 6]]
   ])('applies inclusive duration bounds to IDs and total: %j', async (filters, ids) => {
     await expectResponses(filters, ids);
+  });
+
+  it('keeps booklet anomaly counts independent of the page and other filters', async () => {
+    await expectResponses({ logAnomalies: 'connection_lost', limit: 2, page: 2 }, [3, 4], 4);
+    await expectResponses({ logAnomalies: 'connection_lost', response: 'D' }, [4]);
+    await expectResponses({ logAnomalies: 'connection_lost', unit: 'UNIT_B' }, []);
+    await expectResponses({ logAnomalies: 'debug' }, []);
+  });
+
+  it('applies person, booklet and unit regexes before collecting log matches', async () => {
+    const filters = {
+      logAnomalies: 'connection_lost',
+      code: '^A$',
+      group: '^group$',
+      login: '^person$',
+      booklet: '^BOOKLET_A$',
+      unit: '^UNIT_A$',
+      regexSearch: true
+    };
+    await expectResponses({ ...filters, limit: 2, page: 2 }, [3, 4], 4);
+    await expectResponses({ ...filters, login: '^other$' }, []);
+    await expectResponses({ ...filters, response: '^D$' }, [4]);
+  });
+
+  it('matches session or unit loading, including equality at the threshold', async () => {
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 100 }, [1, 2, 3, 4, 5, 6, 7, 8]);
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1000 }, [5]);
+    await expectResponses({ longLoading: 'true', longLoadingThresholdMs: 1001 }, []);
+  });
+
+  it('checks loading on filtered units and counts session-only matches only in the results table', async () => {
+    const filters = { code: 'A', longLoading: 'yes', longLoadingThresholdMs: 100 };
+    await expectResponses({ ...filters, unit: 'UNIT_A' }, [1, 2, 3, 4]);
+    await expectResponses({ ...filters, unit: 'UNIT_B', longLoadingThresholdMs: 1000 }, [5]);
+    await expectResponses({ ...filters, unit: 'UNIT_B', longLoadingThresholdMs: 1001 }, []);
+    const choices = await optionsService.findFlatResponseFilterOptions(42, filters);
+    expect(choices.units).toEqual(['UNIT_B']);
+  });
+
+  it('searches short values within the displayed Unicode prefix and handles ambiguous leading spaces', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value) VALUES
+      (20, 5, 'I', 3, repeat('ä',1999) || 'öx'), (21, 5, 'J', 3, repeat(' ',15) || '[] '),
+      (22, 5, 'K', 3, repeat(' ',16) || '[]x'), (23, 5, 'L', 3, repeat(' ',32) || '[]')`);
+    try {
+      await expectResponses({ unit: 'UNIT_E', responseValue: 'ö' }, [20]);
+      await expectResponses({ unit: 'UNIT_E', responseValue: 'x' }, [22]);
+      await expectResponses({ unit: 'UNIT_E', hasValue: 'true' }, [8, 20, 22]);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 20 AND 23`);
+    }
+  });
+
+  it('keeps partial variable IDs case-insensitive and preserves LIKE wildcards within the workspace', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status) VALUES
+      (31, 1, 'TeXtA34', 3), (32, 1, 'TEXT_34', 3), (33, 1, 'text9934', 3),
+      (34, 6, 'TextB34', 3), (35, 7, 'TextC34', 3), (36, 8, 'TextD34', 3)`);
+    try {
+      const [partial, total] = await service.findFlatResponses(42, { response: 'text_34', page: 1, limit: 50 });
+      expect(total).toBe(2);
+      expect(partial.map(row => row.responseId).sort((a, b) => a - b)).toEqual([31, 32]);
+      await expectResponses({ response: '"text_34"' }, [32]);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 31 AND 36`);
+    }
+  });
+
+  it('matches literal regex substrings case-sensitively and preserves regex syntax', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status) VALUES
+      (41, 1, 'pre-ID_1-x', 3), (42, 1, 'pre-IDa1-x', 3), (43, 1, 'pre-id_1-x', 3)`);
+    try {
+      await expectResponses({ regexSearch: true, response: 'ID_1-' }, [41]);
+      await expectResponses({ regexSearch: true, response: '^pre-ID.1' }, [41, 42]);
+      await expectResponses({ regexSearch: true, response: 'a'.repeat(256) }, []);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 41 AND 43`);
+    }
+  });
+
+  it('gets the total once for a regex page and preserves it beyond the last page', async () => {
+    await expectResponses({
+      regexSearch: true, response: '.', page: 2, limit: 3
+    }, [4, 5, 6], 8);
+    await expectResponses({
+      regexSearch: true, response: '.', page: 4, limit: 3
+    }, [], 8);
+    await expectResponses({ regexSearch: true, response: '^absent$' }, []);
+  });
+
+  it('returns consecutive pages at the 500-row size offered by the result browser', async () => {
+    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value)
+      SELECT i, 1, 'PAGE', 3, 'page-size-fixture' FROM generate_series(1000, 1500) AS i`);
+    try {
+      const filters = { responseValue: 'page-size-fixture', limit: 500 };
+      await expectResponses(filters, Array.from({ length: 500 }, (_, index) => 1000 + index), 501);
+      await expectResponses({ ...filters, page: 2 }, [1500], 501);
+      await expectResponses({ ...filters, page: 3 }, [], 501);
+    } finally {
+      await db.query(`DELETE FROM "${schema}".response WHERE id BETWEEN 1000 AND 1500`);
+    }
   });
 
   it('ignores invalid duration bounds consistently', async () => {
@@ -152,6 +299,20 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ tags: 'review', page: 3, limit: 2 }, [5], 5);
   });
 
+  it('scopes slow units to the workspace and skips persons excluded from consideration', async () => {
+    await db.query(`INSERT INTO unitlog (id, unitid, key, ts) VALUES
+      (10, 6, 'STARTED', 0), (11, 6, 'ENDED', 5000),
+      (12, 7, 'STARTED', 0), (13, 7, 'ENDED', 5000)`);
+    try {
+      await expect(findLongLoadingUnitIds(db, 43, 5000)).resolves.toEqual([6]);
+      await expect(findLongLoadingUnitIds(db, 42, 5000)).resolves.toEqual([]);
+      const empty = await optionsService.findFlatResponseFilterOptions(42, { longLoading: 'yes', longLoadingThresholdMs: 5000 });
+      expect(Object.values(empty).every(values => values.length === 0)).toBe(true);
+    } finally {
+      await db.query('DELETE FROM unitlog WHERE id BETWEEN 10 AND 13');
+    }
+  });
+
   it('keeps options scoped by unit loading and duration while listing alternative sessions', async () => {
     const result = await optionsService.findFlatResponseFilterOptions(42, {
       longLoading: 'yes',
@@ -165,6 +326,26 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     expect(result.units).toEqual(['UNIT_B']);
     expect(result.sessionIds).toEqual(['201']);
     expect(result.processingDurations).toEqual(['Kurz']);
+  });
+
+  it('derives person and session choices from booklets with matching responses and preserves tag matches', async () => {
+    const options = await optionsService.findFlatResponseFilterOptions(42, { response: 'E', tags: 'alpha' });
+    expect(options).toMatchObject({
+      codes: ['A'],
+      groups: ['group'],
+      logins: ['person'],
+      booklets: ['BOOKLET_B'],
+      units: ['UNIT_B'],
+      tags: ['review-alpha'],
+      responses: ['E'],
+      responseStatuses: ['VALUE_CHANGED'],
+      sessionIds: ['201'],
+      sessionBrowsers: ['Firefox'],
+      sessionOs: ['Mac'],
+      processingDurations: ['Kurz']
+    });
+    const empty = await optionsService.findFlatResponseFilterOptions(42, { response: 'nonexistent' });
+    expect(Object.values(empty).every(values => values.length === 0)).toBe(true);
   });
 
   it('combines value, duration, session and tag filters in the real queries', async () => {

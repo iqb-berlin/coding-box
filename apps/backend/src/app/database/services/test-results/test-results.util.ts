@@ -5,7 +5,6 @@ import {
 import {
   assertValidRegexSearchPattern
 } from '../../../utils/regex-search.util';
-import { ResponseEntity } from '../../entities/response.entity';
 import {
   applyResolvedExclusionsToQuery,
   normalizeExclusionBookletId
@@ -39,8 +38,18 @@ export function parseQuotedExactSearchFilter(filter: string): TextSearchFilter {
   };
 }
 
-export function applyFlatResponseTextFilters(
-  query: SelectQueryBuilder<ResponseEntity>,
+export function applyVariableRegexFilter<T extends ObjectLiteral>(
+  query: SelectQueryBuilder<T>, pattern: string, parameter: 'variableIdRegex' | 'responseRegex'
+): void {
+  // These characters have literal meaning anywhere outside a bracket expression.
+  const condition = /^[a-zA-Z0-9_-]+$/.test(pattern) ?
+    `CASE WHEN person.workspace_id = :workspaceId THEN strpos(response.variableid, :${parameter}) > 0 END` :
+    `response.variableid ~ :${parameter}`;
+  query.andWhere(condition, { [parameter]: pattern });
+}
+
+export function applyFlatResponseTextFilters<T extends ObjectLiteral>(
+  query: SelectQueryBuilder<T>,
   filters: {
     code: string;
     group: string;
@@ -92,9 +101,7 @@ export function applyFlatResponseTextFilters(
 
     const responseRegex = assertValidRegexSearchPattern(response, 'response');
     if (responseRegex) {
-      query.andWhere('response.variableid ~ :responseRegex', {
-        responseRegex
-      });
+      applyVariableRegexFilter(query, responseRegex, 'responseRegex');
     }
     return;
   }
@@ -127,7 +134,9 @@ export function applyFlatResponseTextFilters(
         { responseExact: responseFilter.value }
       );
     } else {
-      query.andWhere('response.variableid ILIKE :response', {
+      // Evaluate the substring against responses from the joined workspace.
+      // A global ILIKE scan is expensive for common variable IDs across workspaces.
+      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END', {
         response: `%${responseFilter.value}%`
       });
     }

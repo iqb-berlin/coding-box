@@ -16,23 +16,26 @@ import {
   withRegexSearchStatementTimeout,
   withResponseValueSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import { Booklet } from '../../entities/booklet.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   statusNumberToString
 } from '../../utils/response-status-converter';
 import {
-  WorkspaceExclusionService
+  ResolvedWorkspaceExclusions, WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import {
-  applyExclusionsToQuery, excludeAutocoderGeneratedResponses
+  applyExclusionsToQuery, applyFlatResponseTextFilters, applyIgnoredBookletsToQuery, excludeAutocoderGeneratedResponses
 } from './test-results.util';
-import { FlatResponseOptions, FlatResponseResult, LogAnomalySummary } from './workspace-test-results.types';
 import {
-  applyFlatResponseFilters, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
+  FlatResponseOptions, FlatResponseResult, LogAnomalyCode, LogAnomalySummary, LogAnomalyThresholds
+} from './workspace-test-results.types';
+import {
+  applyFlatResponseFilters, buildLongLoadingFilter, FlatResponseFilters, normalizeFlatResponseFilters, RESPONSE_VALUE_SEARCH_PREFIX_LENGTH
 } from './flat-response-filters';
 
-const MAX_FLAT_RESPONSE_PAGE_SIZE = 200;
+const MAX_FLAT_RESPONSE_PAGE_SIZE = 500;
 
 @Injectable()
 export class TestResultsResponsesService {
@@ -122,10 +125,17 @@ export class TestResultsResponsesService {
       repeatedStartThreshold: options.repeatedStartThreshold
     });
     const logAnomalyCodes = this.anomalies.expandLogAnomalyCodes(filters.logAnomalies);
+    const matchingBooklets = logAnomalyCodes.length ?
+      await this.findMatchingBookletIds(workspaceId, logAnomalyCodes, logAnomalyThresholds, exclusions, filters, queryRunner) :
+      undefined;
+    if (matchingBooklets?.length === 0) return [[], 0];
+
+    const loadingFilter = await buildLongLoadingFilter(queryRunner || this.connection, workspaceId, filters, 'responses');
     const createQuery = () => {
       const query = this.createFlatResponseQuery(workspaceId, filters, queryRunner);
       applyExclusionsToQuery(query, exclusions, { bookletInfoAlias: 'bookletinfo' });
-      this.anomalies.applyLogAnomalyFilters(query, logAnomalyCodes, logAnomalyThresholds, exclusions);
+      if (matchingBooklets) query.andWhere('bookletEntity.id = ANY(:matchingBooklets)', { matchingBooklets });
+      if (loadingFilter) query.andWhere(loadingFilter.condition, loadingFilter.parameters);
       return query;
     };
     const rowQuery = createQuery();
@@ -135,12 +145,20 @@ export class TestResultsResponsesService {
       .then(r => Number(r?.cnt || 0));
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const selectRows = () => this.selectFlatResponseRows(
-      rowQuery, validPage, validLimit, Boolean(filters.tags)
-    );
-    const [total, raw] = queryRunner ?
-      [await countRows(), await selectRows()] :
-      await Promise.all([countRows(), selectRows()]);
+    const pageQuery = this.createFlatResponsePageQuery(rowQuery, validPage, validLimit, Boolean(filters.tags));
+    let total: number;
+    let raw: Record<string, unknown>[];
+    if (filters.responseValue || (filters.regexSearch && filters.response)) {
+      // These searches run sequentially on one transaction. Evaluate their text predicate once.
+      raw = await pageQuery.addSelect('COUNT(*) OVER()', 'matchedCount').getRawMany();
+      if (raw.length) total = Number(raw[0].matchedCount);
+      else total = validPage === 1 ? 0 : await countRows();
+    } else if (queryRunner) {
+      total = await countRows();
+      raw = await pageQuery.getRawMany();
+    } else {
+      [total, raw] = await Promise.all([countRows(), pageQuery.getRawMany()]);
+    }
 
     const mapped = (raw || []).map(r => {
       const tagsStr = String(r.tags || '');
@@ -188,6 +206,28 @@ export class TestResultsResponsesService {
     ];
   }
 
+  private async findMatchingBookletIds(
+    workspaceId: number,
+    codes: LogAnomalyCode[],
+    thresholds: LogAnomalyThresholds,
+    exclusions: ResolvedWorkspaceExclusions,
+    filters: FlatResponseFilters,
+    runner?: QueryRunner
+  ): Promise<number[]> {
+    const query = this.connection.getRepository(Booklet).createQueryBuilder('bookletEntity', runner)
+      .innerJoin('bookletEntity.person', 'person')
+      .innerJoin('bookletEntity.bookletinfo', 'bookletinfo')
+      .select('bookletEntity.id', 'id')
+      .where('person.workspace_id = :workspaceId', { workspaceId })
+      .andWhere('person.consider = TRUE');
+    if (filters.unit) query.innerJoin('bookletEntity.units', 'unit').distinct(true);
+    applyFlatResponseTextFilters(query, { ...filters, response: '' });
+    applyIgnoredBookletsToQuery(query, exclusions.ignoredBooklets, 'bookletinfo');
+    this.anomalies.applyLogAnomalyFilters(query, codes, thresholds, exclusions);
+    const rows = await query.getRawMany<{ id: number }>();
+    return rows.map(row => row.id);
+  }
+
   private createFlatResponseQuery(
     workspaceId: number,
     filters: FlatResponseFilters,
@@ -205,7 +245,7 @@ export class TestResultsResponsesService {
     return query;
   }
 
-  private selectFlatResponseRows(
+  private createFlatResponsePageQuery(
     qb: SelectQueryBuilder<ResponseEntity>,
     validPage: number,
     validLimit: number,
@@ -243,7 +283,6 @@ export class TestResultsResponsesService {
       .addOrderBy('response.variableid', 'ASC')
       .addOrderBy('response.id', 'ASC')
       .offset((validPage - 1) * validLimit)
-      .limit(validLimit)
-      .getRawMany();
+      .limit(validLimit);
   }
 }

@@ -15,6 +15,7 @@ import {
   toRegexSearchException,
   withRegexSearchStatementTimeout
 } from '../../../utils/regex-search.util';
+import Persons from '../../entities/persons.entity';
 import { ResponseEntity } from '../../entities/response.entity';
 import {
   CodingVersion,
@@ -30,11 +31,44 @@ import {
   WorkspaceExclusionService
 } from '../workspace/workspace-exclusion.service';
 import {
-  applyExclusionsToQuery, createGeoGebraValueCondition, excludeAutocoderGeneratedResponses, parseQuotedExactSearchFilter
+  applyExclusionsToQuery, applyVariableRegexFilter, createGeoGebraValueCondition, excludeAutocoderGeneratedResponses, parseQuotedExactSearchFilter
 } from './test-results.util';
 import {
-  EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, EFFECTIVE_CODING_STATUS_SORT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
+  EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, ResponseSearchSortBy, ResponseSearchSortDirection
 } from './workspace-test-results.types';
+
+interface ResponseSearchFilters {
+  value?: string;
+  variableId?: string;
+  unitName?: string;
+  bookletName?: string;
+  status?: string;
+  codedStatus?: string;
+  group?: string;
+  code?: string;
+  codingCode?: string;
+  score?: string;
+  version?: 'v1' | 'v2' | 'v3';
+  geogebra?: boolean;
+  derivedOnly?: boolean;
+  responseSource?: 'base' | 'derived' | 'all';
+  personLogin?: string;
+  regexSearch?: boolean;
+}
+
+interface ResponseStatusFilter {
+  value: number | null;
+  grouped: boolean;
+  expression: string;
+}
+
+const RESPONSE_SEARCH_COLUMNS = [
+  'response.id', 'response.variableid', 'response.value', 'response.status',
+  'response.status_v1', 'response.status_v2', 'response.status_v3',
+  'response.code_v1', 'response.code_v2', 'response.code_v3',
+  'unit.id', 'unit.name', 'unit.alias', 'booklet.id', 'bookletinfo.id', 'bookletinfo.name',
+  'person.id', 'person.login', 'person.code', 'person.group'
+];
 
 @Injectable()
 export class TestResultsSearchService {
@@ -134,24 +168,7 @@ export class TestResultsSearchService {
 
   async searchResponses(
     workspaceId: number,
-    searchParams: {
-      value?: string;
-      variableId?: string;
-      unitName?: string;
-      bookletName?: string;
-      status?: string;
-      codedStatus?: string;
-      group?: string;
-      code?: string;
-      codingCode?: string;
-      score?: string;
-      version?: 'v1' | 'v2' | 'v3';
-      geogebra?: boolean;
-      derivedOnly?: boolean;
-      responseSource?: 'base' | 'derived' | 'all';
-      personLogin?: string;
-      regexSearch?: boolean;
-    },
+    searchParams: ResponseSearchFilters,
     options: {
       page?: number;
       limit?: number;
@@ -198,36 +215,29 @@ export class TestResultsSearchService {
         )} (page: ${page}, limit: ${limit})`
       );
 
-      const runSearch = async (
-        queryRunner?: QueryRunner
-      ): Promise<{
-        data: {
-          responseId: number;
-          variableId: string;
-          value: string;
-          status: string;
-          code?: number | null;
-          score?: number | null;
-          codedStatus?: string;
-          unitId: number;
-          unitName: string;
-          unitAlias: string | null;
-          bookletId: number;
-          bookletName: string;
-          personId: number;
-          personLogin: string;
-          personCode: string;
-          personGroup: string;
-          variablePage?: string;
-        }[];
-        total: number;
-      }> => {
+      const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
+      const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
+        'base' :
+        requestedResponseSource;
+
+      // An unknown exact person code can be answered from the workspace/code
+      // index before loading the workspace's coding scheme metadata.
+      if (searchParams.code && !searchParams.regexSearch && responseSource !== 'base') {
+        const exists = await this.connection.getRepository(Persons).existsBy({
+          workspace_id: workspaceId, code: searchParams.code, consider: true
+        });
+        if (!exists) return { data: [], total: 0 };
+      }
+
+      const statusFilter = this.createStatusFilter(version, searchParams);
+      const buildQuery = async () => {
         const query = this.responseRepository
-          .createQueryBuilder('response', queryRunner)
-          .innerJoinAndSelect('response.unit', 'unit')
-          .innerJoinAndSelect('unit.booklet', 'booklet')
-          .innerJoinAndSelect('booklet.person', 'person')
-          .innerJoinAndSelect('booklet.bookletinfo', 'bookletinfo')
+          .createQueryBuilder('response')
+          .innerJoin('response.unit', 'unit')
+          .innerJoin('unit.booklet', 'booklet')
+          .innerJoin('booklet.person', 'person')
+          .innerJoin('booklet.bookletinfo', 'bookletinfo')
+          .select([...RESPONSE_SEARCH_COLUMNS, `response.score_${version}`])
           .where('person.workspace_id = :workspaceId', { workspaceId })
           .andWhere('person.consider = :consider', { consider: true });
 
@@ -235,27 +245,13 @@ export class TestResultsSearchService {
         applyExclusionsToQuery(query, exclusions);
 
         if (searchParams.value) {
-          query.andWhere('response.value ILIKE :value', {
+          query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN response.value ILIKE :value END', {
             value: `%${searchParams.value}%`
           });
         }
 
         if (searchParams.variableId) {
-          const variableIdFilter = parseQuotedExactSearchFilter(searchParams.variableId);
-          if (searchParams.regexSearch) {
-            const variableIdRegex = assertValidRegexSearchPattern(searchParams.variableId, 'variableId');
-            if (variableIdRegex) {
-              query.andWhere('response.variableid ~ :variableIdRegex', { variableIdRegex });
-            }
-          } else if (variableIdFilter.exact) {
-            query.andWhere('LOWER(response.variableid) = LOWER(:variableId)', {
-              variableId: variableIdFilter.value
-            });
-          } else {
-            query.andWhere('response.variableid ILIKE :variableId', {
-              variableId: `%${variableIdFilter.value}%`
-            });
-          }
+          this.applyVariableIdFilter(query, searchParams.variableId, searchParams.regexSearch);
         }
 
         if (searchParams.unitName) {
@@ -291,13 +287,11 @@ export class TestResultsSearchService {
         }
 
         if (searchParams.codedStatus) {
-          const codedStatusNumber = statusStringToNumber(searchParams.codedStatus);
-          if (codedStatusNumber === null) {
+          if (statusFilter.value === null) {
             query.andWhere('1=0');
           } else {
-            const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-            query.andWhere(`${effectiveStatusExpression} = :codedStatus`, {
-              codedStatus: codedStatusNumber
+            query.andWhere(`${statusFilter.expression} = :codedStatus`, {
+              codedStatus: statusFilter.value
             });
           }
         }
@@ -363,125 +357,32 @@ export class TestResultsSearchService {
           );
         }
 
-        const requestedResponseSource = searchParams.derivedOnly ? 'derived' : searchParams.responseSource || 'base';
-        const responseSource = searchParams.geogebra && requestedResponseSource === 'all' ?
-          'base' :
-          requestedResponseSource;
-
-        if (responseSource === 'derived') {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-          query.andWhere('response.is_autocoder_generated = :derivedOnly', {
-            derivedOnly: true
-          });
-          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-            ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
-          });
-          await this.applyValidCodingVariableFilter(query, workspaceId);
-        } else if (responseSource === 'all') {
-          const effectiveStatusExpression = getEffectiveCodingStatusExpression(version);
-          query.andWhere(`${effectiveStatusExpression} IS NOT NULL`);
-          query.andWhere(`${effectiveStatusExpression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
-            ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
-          });
-          await this.applyValidCodingVariableFilter(query, workspaceId);
-        } else {
-          excludeAutocoderGeneratedResponses(query);
-        }
-
-        const total = await query.getCount();
-        this.applyResponseSearchSorting(
-          query,
-          version,
-          searchParams.geogebra === true,
-          options.sortBy,
-          options.sortDirection
-        );
-
-        if (total === 0) {
-          this.logger.log(
-            `No responses found matching the criteria in workspace: ${workspaceId}`
-          );
-          return { data: [], total: 0 };
-        }
-
-        query.skip(skip).take(limit);
-
-        query.addSelect(
-          getEffectiveCodingStatusExpression(version),
-          EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
-        );
-        const { entities: responses, raw: rawResponses } =
-          await query.getRawAndEntities();
-
-        this.logger.log(
-          `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
-        );
-
-        // Pre-load variable page maps for all unique units
-        const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
-        const variablePageMaps = new Map<string, Map<string, string>>();
-        for (const unitName of uniqueUnitNames) {
-          const pageMap = await this.codingListService.getVariablePageMap(
-            unitName,
-            workspaceId
-          );
-          variablePageMaps.set(unitName, pageMap);
-        }
-
-        const data = responses.map((response, responseIndex) => {
-          const code = response[
-            `code_${version}` as keyof ResponseEntity
-          ] as number;
-          const score = response[
-            `score_${version}` as keyof ResponseEntity
-          ] as number;
-          const rawEffectiveCodingStatus = rawResponses[responseIndex]?.[
-            EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
-          ];
-          const codedStatus = rawEffectiveCodingStatus === null ||
-            rawEffectiveCodingStatus === undefined ?
-            null :
-            Number(rawEffectiveCodingStatus);
-          const variablePage =
-            variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
-          '0';
-
-          return {
-            responseId: response.id,
-            variableId: response.variableid,
-            value: response.value || '',
-            status: statusNumberToString(response.status) || 'UNSET',
-            code,
-            score,
-            codedStatus: statusNumberToString(codedStatus) || 'UNSET',
-            code_v1: response.code_v1,
-            code_v2: response.code_v2,
-            code_v3: response.code_v3,
-            status_v1: statusNumberToString(response.status_v1) || 'UNSET',
-            status_v2: statusNumberToString(response.status_v2) || 'UNSET',
-            status_v3: statusNumberToString(response.status_v3) || 'UNSET',
-            unitId: response.unit.id,
-            unitName: response.unit.name,
-            unitAlias: response.unit.alias,
-            bookletId: response.unit.booklet.id,
-            bookletName: response.unit.booklet.bookletinfo.name,
-            personId: response.unit.booklet.person.id,
-            personLogin: response.unit.booklet.person.login,
-            personCode: response.unit.booklet.person.code,
-            personGroup: response.unit.booklet.person.group,
-            variablePage
-          };
-        });
-
-        return { data, total };
+        await this.applyResponseSourceFilter(query, workspaceId, responseSource, statusFilter);
+        return query;
       };
 
-      return searchParams.regexSearch ?
-        await withRegexSearchStatementTimeout(this.connection, runSearch) :
-        await runSearch();
+      const query = await buildQuery();
+      const boundIdScan = !options.sortBy && !searchParams.geogebra && (statusFilter.grouped || !searchParams.codedStatus);
+      const readPage = async (queryRunner?: QueryRunner) => {
+        if (queryRunner) query.setQueryRunner(queryRunner);
+        const total = await this.countMatchingResponses(query, boundIdScan);
+        this.applyResponseSearchSorting(query, version, searchParams.geogebra === true, options.sortBy, options.sortDirection);
+        if (total === 0) return { total, entities: [], raw: [] };
+
+        query.offset(skip).limit(limit);
+        // Keep the computed alias distinct from the mapped status_v1 column in TypeORM.
+        query.addSelect(`(${getEffectiveCodingStatusExpression(version)})`, EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS);
+        return { total, ...await query.getRawAndEntities() };
+      };
+
+      const { total, entities, raw } = await this.readResponseSearchPage(readPage, searchParams.regexSearch, boundIdScan);
+      this.logger.log(
+        `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${entities.length} for page ${page}`
+      );
+      const data = await this.mapResponseSearchRows(workspaceId, version, entities, raw);
+      return { data, total };
     } catch (error) {
-      const regexError = toRegexSearchException(error);
+      const regexError = searchParams.regexSearch ? toRegexSearchException(error) : null;
       if (regexError) {
         throw regexError;
       }
@@ -493,6 +394,137 @@ export class TestResultsSearchService {
       throw new Error(
         `An error occurred while searching for responses: ${getErrorMessage(error)}`
       );
+    }
+  }
+
+  private readResponseSearchPage<T>(
+    readPage: (queryRunner?: QueryRunner) => Promise<T>, regexSearch: boolean | undefined, boundIdScan: boolean
+  ): Promise<T> {
+    // The ID bound is valid only if count and page see the same committed rows.
+    if (regexSearch) {
+      return withRegexSearchStatementTimeout(this.connection, readPage, undefined, boundIdScan ? 'REPEATABLE READ' : undefined);
+    }
+    if (boundIdScan) {
+      return this.connection.transaction('REPEATABLE READ', manager => readPage(manager.queryRunner));
+    }
+    return readPage();
+  }
+
+  private async mapResponseSearchRows(
+    workspaceId: number, version: CodingVersion, responses: ResponseEntity[], rawResponses: Record<string, unknown>[]
+  ) {
+    // Pre-load variable page maps for all unique units
+    const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+    const variablePageMaps = new Map<string, Map<string, string>>();
+    for (const unitName of uniqueUnitNames) {
+      const pageMap = await this.codingListService.getVariablePageMap(
+        unitName,
+        workspaceId
+      );
+      variablePageMaps.set(unitName, pageMap);
+    }
+
+    return responses.map((response, responseIndex) => {
+      const code = response[
+        `code_${version}` as keyof ResponseEntity
+      ] as number;
+      const score = response[
+        `score_${version}` as keyof ResponseEntity
+      ] as number;
+      const codedStatus = Number(rawResponses[responseIndex]?.[EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS]);
+      const variablePage =
+        variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
+      '0';
+
+      return {
+        responseId: response.id,
+        variableId: response.variableid,
+        value: response.value || '',
+        status: statusNumberToString(response.status) || 'UNSET',
+        code,
+        score,
+        codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+        code_v1: response.code_v1,
+        code_v2: response.code_v2,
+        code_v3: response.code_v3,
+        status_v1: statusNumberToString(response.status_v1) || 'UNSET',
+        status_v2: statusNumberToString(response.status_v2) || 'UNSET',
+        status_v3: statusNumberToString(response.status_v3) || 'UNSET',
+        unitId: response.unit.id,
+        unitName: response.unit.name,
+        unitAlias: response.unit.alias,
+        bookletId: response.unit.booklet.id,
+        bookletName: response.unit.booklet.bookletinfo.name,
+        personId: response.unit.booklet.person.id,
+        personLogin: response.unit.booklet.person.login,
+        personCode: response.unit.booklet.person.code,
+        personGroup: response.unit.booklet.person.group,
+        variablePage
+      };
+    });
+  }
+
+  private createStatusFilter(version: CodingVersion, filters: ResponseSearchFilters): ResponseStatusFilter {
+    // Use indexed job lookups when the response set is already narrowed by person, unit or GeoGebra.
+    const exactPerson = Boolean(filters.code) && !filters.regexSearch;
+    const grouped = version !== 'v1' && !exactPerson && !filters.geogebra && !filters.unitName;
+    const expression = grouped ?
+      `(CASE WHEN person.workspace_id = :workspaceId THEN ${getEffectiveCodingStatusExpression(version, 'response', 'grouped')} END)` :
+      getEffectiveCodingStatusExpression(version);
+    return { grouped, expression, value: filters.codedStatus ? statusStringToNumber(filters.codedStatus) : null };
+  }
+
+  private async applyResponseSourceFilter(
+    query: SelectQueryBuilder<ResponseEntity>,
+    workspaceId: number,
+    responseSource: NonNullable<ResponseSearchFilters['responseSource']>,
+    status: ResponseStatusFilter
+  ): Promise<void> {
+    if (responseSource === 'derived') {
+      query.andWhere('response.is_autocoder_generated = :derivedOnly', { derivedOnly: true });
+    }
+    if (responseSource === 'derived' || responseSource === 'all') {
+      if (!status.grouped) query.andWhere(`${status.expression} IS NOT NULL`);
+      // A selected, eligible status already excludes NULL and ignored statuses.
+      if (!status.grouped || status.value === null ||
+          TestResultsSearchService.ignoredDerivedCodingStatuses.includes(status.value)) {
+        query.andWhere(`${status.expression} NOT IN (:...ignoredDerivedCodingStatuses)`, {
+          ignoredDerivedCodingStatuses: TestResultsSearchService.ignoredDerivedCodingStatuses
+        });
+      }
+      await this.applyValidCodingVariableFilter(query, workspaceId);
+    } else {
+      excludeAutocoderGeneratedResponses(query);
+    }
+  }
+
+  private async countMatchingResponses(query: SelectQueryBuilder<ResponseEntity>, boundIdScan: boolean): Promise<number> {
+    // The joins are to-one. For eligible ID-ordered pages, start the ordered
+    // scan at the first matching ID instead of reading earlier workspaces.
+    const count = query.clone().select('COUNT(*)', 'total');
+    if (boundIdScan) count.addSelect('MIN(response.id)', 'firstId');
+    const [row] = await count.getRawMany<{ total: string; firstId?: number | null }>();
+    if (row.firstId != null) query.andWhere('response.id >= :firstId', { firstId: row.firstId });
+    return Number(row.total);
+  }
+
+  private applyVariableIdFilter(
+    query: SelectQueryBuilder<ResponseEntity>, variableId: string, regexSearch?: boolean
+  ): void {
+    const variableIdFilter = parseQuotedExactSearchFilter(variableId);
+    if (regexSearch) {
+      const variableIdRegex = assertValidRegexSearchPattern(variableId, 'variableId');
+      if (variableIdRegex) {
+        applyVariableRegexFilter(query, variableIdRegex, 'variableIdRegex');
+      }
+    } else if (variableIdFilter.exact) {
+      query.andWhere('CASE WHEN person.workspace_id = :workspaceId THEN LOWER(response.variableid) = LOWER(:variableId) END', {
+        variableId: variableIdFilter.value
+      });
+    } else {
+      query.andWhere('response.variableid ILIKE :variableId', {
+        variableId: `%${variableIdFilter.value}%`
+      });
     }
   }
 
@@ -513,12 +545,8 @@ export class TestResultsSearchService {
     }
 
     if (sortBy === 'codedstatus') {
-      query.addSelect(
-        getEffectiveCodingStatusExpression(version),
-        EFFECTIVE_CODING_STATUS_SORT_ALIAS
-      );
       query
-        .orderBy(EFFECTIVE_CODING_STATUS_SORT_ALIAS, direction)
+        .orderBy(EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS, direction)
         .addOrderBy('response.id', 'ASC');
       return;
     }
