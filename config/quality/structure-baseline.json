@@ -171,10 +171,7 @@
       "file": {},
       "functions": {
         "class WorkspaceTestResultsImportController#1/method addTestResults#1": {
-          "max-lines-per-function": 180
-        },
-        "class WorkspaceTestResultsImportController#1/method completeChunkedUpload#1": {
-          "max-lines-per-function": 119
+          "max-lines-per-function": 166
         }
       }
     },

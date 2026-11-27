@@ -8,6 +8,8 @@ import {
   map,
   Observable,
   of,
+  retry,
+  timer,
   switchMap,
   tap,
   throwError
@@ -333,7 +335,11 @@ export class FileService {
                   ...(options.filters || {})
                 },
                 { headers: this.authHeader }
-              );
+              ).pipe(retry({
+                count: 3,
+                delay: (error, attempt) => ([0, 409, 502, 503, 504].includes(error.status) ?
+                  timer(1000 * attempt) : throwError(() => error))
+              }));
             })
           );
         })

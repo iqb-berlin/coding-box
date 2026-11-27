@@ -20,7 +20,7 @@ ENV NODE_ENV=production
 USER node
 
 WORKDIR /usr/src/coding-box-${PROJECT}
-RUN mkdir packages
+RUN mkdir -p packages temp/result-uploads/multipart
 
 # Preserve the workspace lockfile's dependency locations. Nx's pruned lockfile
 # can relocate incompatible nested dependencies (for example Express 4 and 5).

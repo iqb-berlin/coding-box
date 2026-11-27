@@ -17,7 +17,10 @@ import { WorkspaceTestResultsImportController } from '../workspace/workspace-tes
 import { WorkspaceTestResultsExportController } from '../workspace/workspace-test-results-export.controller';
 import { Setting } from '../../database/entities/setting.entity';
 
+import { ResultUploadStagingService } from '../workspace/result-upload-staging.service';
+
 @Module({
+  providers: [ResultUploadStagingService],
   imports: [
     WorkspaceSettingsModule,
     DatabaseModule,
