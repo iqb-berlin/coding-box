@@ -1,5 +1,4 @@
 import { Component, input, ChangeDetectionStrategy } from '@angular/core';
-import { TranslateModule } from '@ngx-translate/core';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
 import { UserWorkspacesComponent } from '../user-workspaces/user-workspaces.component';
 import { AuthBootstrapStatus } from '../../../core/services/app.service';
@@ -9,7 +8,7 @@ import { AuthBootstrapStatus } from '../../../core/services/app.service';
   selector: 'coding-box-user-workspaces-area',
   templateUrl: './user-workspaces-area.component.html',
   styleUrls: ['./user-workspaces-area.component.scss'],
-  imports: [TranslateModule, UserWorkspacesComponent]
+  imports: [UserWorkspacesComponent]
 })
 export class UserWorkspacesAreaComponent {
   readonly workspaces = input.required<WorkspaceFullDto[]>();

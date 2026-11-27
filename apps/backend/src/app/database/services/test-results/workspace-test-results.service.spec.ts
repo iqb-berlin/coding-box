@@ -62,6 +62,7 @@ const mockQueryBuilder = () => ({
   ]),
   setParameter: jest.fn().mockReturnThis(),
   setParameters: jest.fn().mockReturnThis(),
+  setQueryRunner: jest.fn().mockReturnThis(),
   getParameters: jest.fn().mockReturnValue({ workspaceId: 1, consider: true, searchText: '%needle%' }),
   getQuery: jest.fn().mockReturnValue('SELECT "matchingPerson"."group" FROM persons "matchingPerson"'),
   addGroupBy: jest.fn().mockReturnThis(),
@@ -224,7 +225,7 @@ describe('WorkspaceTestResultsService', () => {
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
       }),
       query: jest.fn().mockResolvedValue([]),
-      transaction: jest.fn()
+      transaction: jest.fn((_isolation, work) => work({ queryRunner: dataSource.createQueryRunner() }))
     } as unknown as DataSource;
 
     service = createWorkspaceTestResultsService(personsRepository,
@@ -897,15 +898,9 @@ describe('WorkspaceTestResultsService', () => {
     it('keeps scoped option predicates and derives log options from filtered booklets', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getQueryAndParameters
-        .mockReturnValueOnce([
-          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
-          [1]
-        ])
-        .mockReturnValueOnce([
-          'SELECT DISTINCT "bookletEntity"."id" AS "bookletId" FROM response WHERE person.workspace_id = $1',
-          [1]
-        ]);
+      const booklets = mockQueryBuilder();
+      (dataSource.createQueryBuilder as jest.Mock).mockReturnValue(booklets);
+      qb.getRawMany.mockResolvedValueOnce([{ id: 5 }]);
       (dataSource.query as jest.Mock)
         .mockResolvedValueOnce([{ v: 'Kurz' }, { v: 'Lang' }])
         .mockResolvedValueOnce([{ v: 'complete' }, { v: 'incomplete' }]);
@@ -928,24 +923,22 @@ describe('WorkspaceTestResultsService', () => {
       expect(qb.where).not.toHaveBeenCalledWith('session.screen IS NOT NULL');
       expect(qb.where).not.toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith('unitTag.tag IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
-      expect(qb.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.browser IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.os IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.screen IS NOT NULL');
+      expect(booklets.andWhere).toHaveBeenCalledWith('session.id IS NOT NULL');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'LEFT(response.value, 2000) ILIKE :responseValue',
         { responseValue: '%needle%' }
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith('(unit.alias ILIKE :unit OR unit.name ILIKE :unit)', { unit: '%"quoted"%' });
-      expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('FROM unitlog ul_started'),
-        { longLoadingThresholdMs: 5000 }
-      );
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('ul.unitid = unit.id'), { longLoadingThresholdMs: 5000 });
       const filterSql = qb.andWhere.mock.calls.map(([condition]) => condition).join('\n');
       expect(filterSql).not.toContain('s.loadcompletems');
       expect(filterSql).not.toContain('s.id IN (:...sessionIds)');
 
+      expect(booklets.andWhere).toHaveBeenCalledWith('bookletEntity.id = ANY(:bookletIds)', { bookletIds: [5] });
       expect(dataSource.query).toHaveBeenCalledTimes(2);
       expect((dataSource.query as jest.Mock).mock.calls[0][0]).toContain(
         'LEFT JOIN LATERAL'
@@ -954,7 +947,7 @@ describe('WorkspaceTestResultsService', () => {
         'first_duration.duration_ms < $2'
       );
       expect((dataSource.query as jest.Mock).mock.calls[0][1]).toEqual([
-        1,
+        [5],
         60000
       ]);
       expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
@@ -963,7 +956,7 @@ describe('WorkspaceTestResultsService', () => {
       expect((dataSource.query as jest.Mock).mock.calls[1][0]).toContain(
         'COUNT(DISTINCT progress_unit.id)'
       );
-      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([1]);
+      expect((dataSource.query as jest.Mock).mock.calls[1][1]).toEqual([[5]]);
       expect(result.processingDurations).toEqual(['Kurz', 'Lang']);
       expect(result.unitProgresses).toEqual([
         'Vollständig',
@@ -973,10 +966,27 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('searchResponses', () => {
+    it('skips coding metadata only when an exact code has no considered workspace person', async () => {
+      const existsBy = jest.fn().mockResolvedValueOnce(false).mockResolvedValueOnce(true);
+      (dataSource.getRepository as jest.Mock).mockReturnValue({ existsBy });
+      const filters = { responseSource: 'all' as const, code: 'Person-A' };
+
+      await expect(service.searchResponses(23, filters)).resolves.toEqual({ data: [], total: 0 });
+      expect(existsBy).toHaveBeenCalledWith({ workspace_id: 23, code: 'Person-A', consider: true });
+      expect(codingListService.getValidVariablePairKeys).not.toHaveBeenCalled();
+
+      const qb = mockQueryBuilder();
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      await expect(service.searchResponses(23, filters)).resolves.toEqual({ data: [], total: 0 });
+      expect(codingListService.getValidVariablePairKeys).toHaveBeenCalledWith(23);
+      expect(qb.andWhere).toHaveBeenCalledWith('person.code = :code', { code: 'Person-A' });
+    });
+
     it('should filter by autocoder-generated responses when derivedOnly is set', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       const result = await service.searchResponses(
         1,
@@ -1003,7 +1013,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should exclude autocoder-generated responses from default response searches', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1019,7 +1029,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter variable IDs by contains search by default', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1036,7 +1046,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter selected response fields with regex when requested', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1078,10 +1088,26 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
+    it.each([{ geogebra: true }, { unitName: 'Unit1' }, { code: 'Person-A' }])('uses individual job lookups for a narrowed manual status search', async filter => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
+      await service.searchResponses(1, { version: 'v2', codedStatus: '5', ...filter });
+      expect(qb.andWhere).toHaveBeenCalledWith(expect.stringContaining('effective_status_cju.response_id = response.id'), { codedStatus: 5 });
+    });
+
+    it('preserves the database timeout reason when a normal status search is cancelled', async () => {
+      const qb = mockQueryBuilder();
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
+      qb.getRawMany.mockRejectedValue(Object.assign(new Error('canceling statement due to statement timeout'), { code: '57014' }));
+      await expect(service.searchResponses(1, { version: 'v2', codedStatus: '5' }))
+        .rejects.toThrow('canceling statement due to statement timeout');
+    });
+
     it('should convert PostgreSQL invalid regex errors into bad request errors', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockRejectedValue({
+      qb.getRawMany.mockRejectedValue({
         code: '2201B',
         message: 'invalid regular expression: brackets [] not balanced'
       });
@@ -1096,7 +1122,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter variable IDs exactly when wrapped in double quotes', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1105,7 +1131,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'LOWER(response.variableid) = LOWER(:variableId)',
+        'CASE WHEN person.workspace_id = :workspaceId THEN LOWER(response.variableid) = LOWER(:variableId) END',
         { variableId: '01_unique' }
       );
       expect(qb.andWhere).not.toHaveBeenCalledWith(
@@ -1117,7 +1143,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter response value by contains search', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1126,7 +1152,7 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        'response.value ILIKE :value',
+        'CASE WHEN person.workspace_id = :workspaceId THEN response.value ILIKE :value END',
         { value: '%answer%' }
       );
     });
@@ -1134,7 +1160,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter coding code and score on the selected version', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1155,7 +1181,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should return no response search results for invalid coding code filters', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1173,7 +1199,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should filter GeoGebra searches by raw and data-uri ggb response values', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1189,7 +1215,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should sort response searches by requested column before pagination', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1210,7 +1236,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should normalize invalid version values before building response search sort expressions', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1233,7 +1259,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should sort codedStatus response searches through a selected alias before pagination', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1246,18 +1272,14 @@ describe('WorkspaceTestResultsService', () => {
         }
       );
 
-      expect(qb.addSelect).toHaveBeenCalledWith(
-        getEffectiveCodingStatusExpression('v3'),
-        'effective_coding_status_sort'
-      );
-      expect(qb.orderBy).toHaveBeenCalledWith('effective_coding_status_sort', 'ASC');
+      expect(qb.orderBy).toHaveBeenCalledWith('effective_coding_status_output', 'ASC');
       expect(qb.addOrderBy).toHaveBeenCalledWith('response.id', 'ASC');
     });
 
     it('should keep the GeoGebra default ordering when no explicit sort is requested', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1273,7 +1295,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should treat GeoGebra all-source searches as base responses', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1290,7 +1312,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should include base and derived responses with kodierstatistical statuses when responseSource is all', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1315,7 +1337,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should apply codedStatus through the effective version status expression', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1329,10 +1351,10 @@ describe('WorkspaceTestResultsService', () => {
       );
     });
 
-    it('should return the effective v2 status while preserving raw version statuses', async () => {
+    it.each(['v1', 'v2'] as const)('returns the effective %s status alongside the stored v1 status', async version => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(1);
+      qb.getRawMany.mockResolvedValue([{ total: '1', firstId: 1 }]);
       qb.getRawAndEntities.mockResolvedValue({
         entities: [{
           id: 1,
@@ -1369,14 +1391,25 @@ describe('WorkspaceTestResultsService', () => {
 
       const result = await service.searchResponses(
         1,
-        { version: 'v2', responseSource: 'all' },
+        { version, responseSource: 'all' },
         { page: 1, limit: 100 }
       );
 
       expect(qb.addSelect).toHaveBeenCalledWith(
-        getEffectiveCodingStatusExpression('v2'),
+        `(${getEffectiveCodingStatusExpression(version)})`,
         'effective_coding_status_output'
       );
+      expect(qb.select).toHaveBeenCalledWith('COUNT(*)', 'total');
+      expect(qb.andWhere).toHaveBeenCalledWith('response.id >= :firstId', { firstId: 1 });
+      expect(dataSource.transaction).toHaveBeenCalledWith('REPEATABLE READ', expect.any(Function));
+      expect(qb.setQueryRunner).toHaveBeenCalledWith((dataSource.createQueryRunner as jest.Mock).mock.results[0].value);
+      const [columns] = qb.select.mock.calls[0];
+      expect(columns.filter((column: string) => column.startsWith('person.'))).toEqual([
+        'person.id', 'person.login', 'person.code', 'person.group'
+      ]);
+      expect(qb.innerJoinAndSelect).not.toHaveBeenCalled();
+      expect(qb.offset).toHaveBeenCalledWith(0);
+      expect(qb.limit).toHaveBeenCalledWith(100);
       expect(result.data[0]).toMatchObject({
         codedStatus: 'CODING_INCOMPLETE',
         status_v1: 'CODING_INCOMPLETE',
@@ -1387,7 +1420,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should apply DERIVE_ERROR codedStatus filters numerically', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1395,6 +1428,7 @@ describe('WorkspaceTestResultsService', () => {
         { page: 1, limit: 100 }
       );
 
+      expect(qb.addSelect).not.toHaveBeenCalledWith('MIN(response.id)', 'firstId');
       expect(qb.andWhere).toHaveBeenCalledWith(
         'response.status_v1 = :codedStatus',
         { codedStatus: 4 }
@@ -1404,7 +1438,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should return no response search results for invalid codedStatus filters', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1422,7 +1456,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should apply the v3 effective status expression for derived-only searches', async () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1431,7 +1465,8 @@ describe('WorkspaceTestResultsService', () => {
       );
 
       expect(qb.andWhere).toHaveBeenCalledWith(
-        expect.stringContaining('COALESCE(response.status_v3')
+        expect.stringContaining('COALESCE(response.status_v3'),
+        { ignoredDerivedCodingStatuses: [0, 1, 2, 3, 10] }
       );
       expect(qb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining('NOT IN (:...ignoredDerivedCodingStatuses)'),
@@ -1443,7 +1478,7 @@ describe('WorkspaceTestResultsService', () => {
       const qb = mockQueryBuilder();
       (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
       codingListService.getValidVariablePairKeys.mockResolvedValue([]);
-      qb.getCount.mockResolvedValue(0);
+      qb.getRawMany.mockResolvedValue([{ total: '0' }]);
 
       await service.searchResponses(
         1,
@@ -1538,15 +1573,12 @@ describe('WorkspaceTestResultsService', () => {
       unitQb.getRawMany.mockResolvedValue(['unit1', 'unit2']);
       unitQb.getRawOne.mockResolvedValue({ count: 2 });
 
-      const responseCountQb = mockQueryBuilder();
       const responseStatusQb = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock)
-        .mockReturnValueOnce(responseCountQb)
-        .mockReturnValueOnce(responseStatusQb);
-      responseCountQb.getCount.mockResolvedValue(100);
+      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValue(responseStatusQb);
       responseStatusQb.getRawMany.mockResolvedValue([
         { status: '0', count: '5' },
-        { status: '1', count: '10' }
+        { status: '1', count: '10' },
+        { status: '99', count: '3' }
       ]);
 
       const sessionBrowserQb = mockQueryBuilder();
@@ -1567,12 +1599,11 @@ describe('WorkspaceTestResultsService', () => {
       expect(result.testGroups).toBe(2);
       expect(result.uniqueBooklets).toBe(1); // 1 booklet row mock
       expect(result.uniqueUnits).toBe(2);
-      expect(result.uniqueResponses).toBe(100);
-      expect(result.responseStatusCounts).toEqual({ UNSET: 5, NOT_REACHED: 10 });
+      expect(result.uniqueResponses).toBe(18);
+      expect(result.responseStatusCounts).toEqual({ UNSET: 5, NOT_REACHED: 10, 99: 3 });
       expect(result.sessionBrowserCounts).toEqual({ Chrome: 20 });
-      expect(responseCountQb.andWhere).toHaveBeenCalledWith(
-        'response.is_autocoder_generated IS NOT TRUE'
-      );
+      expect(responseRepository.createQueryBuilder).toHaveBeenCalledTimes(1);
+      expect(responseStatusQb.getCount).not.toHaveBeenCalled();
       expect(responseStatusQb.andWhere).toHaveBeenCalledWith(
         'response.is_autocoder_generated IS NOT TRUE'
       );
@@ -1608,7 +1639,8 @@ describe('WorkspaceTestResultsService', () => {
 
       (sessionRepository.createQueryBuilder as jest.Mock).mockReturnValue(qb);
 
-      await service.getWorkspaceTestResultsOverview(workspaceId);
+      const emptyOverview = await service.getWorkspaceTestResultsOverview(workspaceId);
+      expect(emptyOverview.uniqueResponses).toBe(0);
 
       expect(unitQb.andWhere).toHaveBeenCalledWith(
         expect.stringContaining("REGEXP_REPLACE(UPPER(unit.name), '\\.XML$', '', 'i') NOT IN"),
@@ -1726,7 +1758,7 @@ describe('WorkspaceTestResultsService', () => {
           { responseExact: '01_unique' }
         );
         expect(qb.andWhere).not.toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
+          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END',
           expect.anything()
         );
       });
@@ -1747,7 +1779,7 @@ describe('WorkspaceTestResultsService', () => {
 
       [dataQb, countQb].forEach(qb => {
         expect(qb.andWhere).toHaveBeenCalledWith(
-          'response.variableid ILIKE :response',
+          'CASE WHEN person.workspace_id = :workspaceId THEN response.variableid ILIKE :response END',
           { response: '%01%' }
         );
       });
@@ -1761,7 +1793,7 @@ describe('WorkspaceTestResultsService', () => {
         .mockReturnValueOnce(countQb);
 
       await service.findFlatResponses(1, {
-        page: 1,
+        page: 2,
         limit: 10,
         code: '^P-',
         group: '^G[12]$',
@@ -1887,7 +1919,7 @@ describe('WorkspaceTestResultsService', () => {
         .mockReturnValueOnce(countQb);
 
       await service.findFlatResponses(1, {
-        page: 1,
+        page: 2,
         limit: 10,
         responseValue: 'needle'
       });
@@ -1919,7 +1951,7 @@ describe('WorkspaceTestResultsService', () => {
     });
 
     it.each([
-      [{ hasValue: 'yes' }, 'BTRIM(COALESCE(response.value', undefined],
+      [{ hasValue: 'yes' }, 'BTRIM(SUBSTRING(response.value', undefined],
       [{ processingDurationMin: '01:15' }, '>= :processingDurationMinMs', { processingDurationMinMs: 75000, processingDurationMaxMs: Number.MAX_SAFE_INTEGER }],
       [{ processingDurationMax: '02:30' }, '<= :processingDurationMaxMs', { processingDurationMinMs: 0, processingDurationMaxMs: 150000 }],
       [{ sessionIds: '5, invalid, -1, 8' }, 's.id IN (:...sessionIds)', { sessionIds: [5, 8] }]
@@ -2008,7 +2040,7 @@ describe('WorkspaceTestResultsService', () => {
     it('should convert PostgreSQL regex timeouts into bad request errors', async () => {
       const dataQb = mockQueryBuilder();
       const countQb = mockQueryBuilder();
-      countQb.getRawOne.mockRejectedValue({
+      dataQb.getRawMany.mockRejectedValue({
         code: '57014',
         message: 'canceling statement due to statement timeout'
       });

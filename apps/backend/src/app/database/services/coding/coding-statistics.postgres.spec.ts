@@ -1,5 +1,6 @@
 import { createMock } from '@golevelup/ts-jest';
 import { DataSource, Repository } from 'typeorm';
+import { getEffectiveCodingStatusExpression } from '../../utils/effective-coding-status-expression.util';
 import { CodingStatisticsService } from './coding-statistics.service';
 import { ResponseEntity } from '../../entities/response.entity';
 import { CacheService } from '../../../cache/cache.service';
@@ -40,8 +41,8 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
         status_v1 SMALLINT, status_v2 SMALLINT, status_v3 SMALLINT,
         code_v2 INT, score_v2 INT, autocoder_invalidated_version TEXT,
         is_autocoder_generated BOOLEAN);
-      CREATE UNLOGGED TABLE "${schema}".coding_job (id INT PRIMARY KEY, status TEXT);
-      CREATE UNLOGGED TABLE "${schema}".coding_job_unit (response_id INT, coding_job_id INT);
+      CREATE UNLOGGED TABLE "${schema}".coding_job (id INT PRIMARY KEY, status TEXT, workspace_id INT NOT NULL);
+      CREATE UNLOGGED TABLE "${schema}".coding_job_unit (response_id INT, coding_job_id INT, workspace_id INT);
       INSERT INTO "${schema}".persons VALUES (1,42,true),(2,43,true),(3,42,false);
       INSERT INTO "${schema}".bookletinfo VALUES (1,'BOOKLET_A'),(2,'BOOKLET_B');
       INSERT INTO "${schema}".booklet VALUES (1,1,1),(2,1,2),(3,2,1),(4,3,1);
@@ -84,6 +85,35 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
     );
   }
 
+  it('matches individual job lookups for open, applied, mixed and missing assignments', async () => {
+    await db.transaction(async manager => {
+      await manager.query(`INSERT INTO coding_job (id, status, workspace_id) VALUES (501, 'open', 42), (502, 'results_applied', 42), (503, NULL, 42);
+        INSERT INTO coding_job_unit (response_id, coding_job_id, workspace_id)
+        VALUES (501,501,42), (502,502,42), (503,501,42), (503,502,NULL), (504,503,42), (505,501,NULL), (505,503,42), (NULL,502,42);
+        INSERT INTO response (id, status_v1, status_v2, status_v3, code_v2, score_v2)
+        VALUES (501,5,8,NULL,NULL,NULL), (502,5,8,1,NULL,NULL), (503,5,8,NULL,NULL,NULL),
+          (504,5,8,NULL,NULL,NULL), (505,5,8,NULL,NULL,NULL), (506,5,8,NULL,NULL,NULL);`);
+      try {
+        for (const version of ['v2', 'v3'] as const) {
+          const query = manager.createQueryBuilder()
+            .select(getEffectiveCodingStatusExpression(version), 'individual')
+            .addSelect(getEffectiveCodingStatusExpression(version, 'response', 'grouped'), 'grouped')
+            .from('response', 'response')
+            .where('response.id BETWEEN 501 AND 506')
+            .orderBy('response.id');
+          const rows = await query.setParameter('workspaceId', 42).getRawMany<{ individual: number; grouped: number }>();
+          expect(rows.map(row => row.individual)).toEqual([5, 8, 8, 8, 5, 8]);
+          expect(rows.map(row => row.grouped)).toEqual(rows.map(row => row.individual));
+          const otherWorkspace = await query.setParameter('workspaceId', 43).getRawMany<{ grouped: number }>();
+          expect(otherWorkspace.map(row => row.grouped)).toEqual([8, 8, 8, 8, 8, 8]);
+        }
+      } finally {
+        await manager.query(`DELETE FROM coding_job_unit WHERE coding_job_id BETWEEN 501 AND 503;
+          DELETE FROM coding_job WHERE id BETWEEN 501 AND 503; DELETE FROM response WHERE id BETWEEN 501 AND 506;`);
+      }
+    });
+  });
+
   it.each([
     ['v1', { 5: 1, 8: 1 }], ['v2', { 6: 1, 7: 1 }], ['v3', { 6: 1, 7: 1 }]
   ] as const)('preserves %s status, exact pairs, case, workspace and derived-response boundaries', async (version, statusCounts) => {
@@ -106,7 +136,7 @@ describePostgres('Coding statistics unit scope against PostgreSQL', () => {
 
   it.each(['v2', 'v3'] as const)('preserves the open manual-coding placeholder fallback in %s', async version => {
     await db.query('UPDATE response SET status_v2=8,status_v3=NULL WHERE id=1');
-    await db.query("INSERT INTO coding_job VALUES (1,'open'); INSERT INTO coding_job_unit VALUES (1,1)");
+    await db.query("INSERT INTO coding_job VALUES (1,'open',42); INSERT INTO coding_job_unit VALUES (1,1,42)");
     try {
       const result = await service().getCodingStatistics(42, version, true);
       expect(result.statusCounts).toEqual(version === 'v2' ? { 5: 1, 7: 1 } : { 5: 1, 6: 1 });

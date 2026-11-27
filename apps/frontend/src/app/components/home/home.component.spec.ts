@@ -169,7 +169,8 @@ describe('HomeComponent', () => {
     authStatusSubject.next('ready');
     await fixture.whenStable();
 
-    expect(fixture.nativeElement.textContent).toContain(translateGerman('home.no-user-workspaces'));
+    expect(fixture.nativeElement.querySelector('h2').textContent.trim()).toBe('Keine Arbeitsbereiche verfügbar');
+    expect(fixture.nativeElement.textContent).toContain('Ihnen sind noch keine Arbeitsbereiche zugewiesen.');
     expect(fixture.nativeElement.textContent).not.toContain(translateGerman('home.loading-user-workspaces'));
   });
 

@@ -25,8 +25,6 @@ export type ResponseSearchSortBy =
 
 export type ResponseSearchSortDirection = 'asc' | 'desc';
 
-export const EFFECTIVE_CODING_STATUS_SORT_ALIAS = 'effective_coding_status_sort';
-
 export const EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS = 'effective_coding_status_output';
 
 export type WorkspaceOverviewStats = {

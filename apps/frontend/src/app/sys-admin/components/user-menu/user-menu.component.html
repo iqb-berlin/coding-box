@@ -1,4 +1,4 @@
-<button mat-button [style]="{color:'lightgrey'}"
+<button mat-button class="user-menu-trigger"
         [matMenuTriggerFor]="menuUser"
         [matTooltip]="'home.user-menu' | translate"
         matTooltipPosition="above" [attr.aria-label]="'home.user-menu' | translate">
@@ -6,8 +6,16 @@
 </button>
 <mat-menu #menuUser="matMenu">
   <div class="user-info">
-    <div class="user-name">{{ userName() }}</div>
-    <div class="user-status">{{ userStatus() }}</div>
+    @if (fullName()) {
+      <div class="user-name">{{ fullName() }}</div>
+    }
+    @if (loginName()) {
+      <div>{{ 'ui-text.user-menu.signed-in-as' | translate: { login: loginName() } }}</div>
+    }
+    @if (authData().userId > 0) {
+      <div class="permissions-label">{{ 'ui-text.user-menu.permissions' | translate }}</div>
+      <div class="user-status">{{ (authData().isAdmin ? 'ui-text.user-menu.admin' : 'ui-text.user-menu.member') | translate }}</div>
+    }
   </div>
   <mat-divider></mat-divider>
   <coding-box-account-action [type]="'editMyData'"

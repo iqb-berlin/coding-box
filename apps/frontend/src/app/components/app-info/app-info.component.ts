@@ -1,10 +1,11 @@
 import {
   Component, inject, input, ChangeDetectionStrategy
 } from '@angular/core';
-import { SafeUrl } from '@angular/platform-browser';
 import { TranslateModule } from '@ngx-translate/core';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { toSignal } from '@angular/core/rxjs-interop';
+import { catchError, map, of } from 'rxjs';
 import { MatDialog } from '@angular/material/dialog';
+import { SystemSettingsService } from '../../core/services/system-settings.service';
 import { ImpressumDialogComponent } from '../../shared/dialogs/impressum-dialog.component';
 
 @Component({
@@ -13,21 +14,21 @@ import { ImpressumDialogComponent } from '../../shared/dialogs/impressum-dialog.
   templateUrl: './app-info.component.html',
   styleUrls: ['./app-info.component.scss'],
   standalone: true,
-  imports: [MatAnchor, TranslateModule, MatButton]
+  imports: [TranslateModule]
 })
 export class AppInfoComponent {
   private dialog = inject(MatDialog);
 
-  readonly appTitle = input.required<string>();
-  readonly introHtml = input.required<SafeUrl | undefined>();
-  readonly appName = input.required<string>();
   readonly appVersion = input.required<string>();
-  readonly userName = input.required<string | undefined>();
-  readonly userLongName = input.required<string | undefined>();
-  readonly isUserLoggedIn = input.required<boolean>();
-  readonly isAdmin = input.required<boolean>();
-  protected openImpressumDialog(): void {
+
+  protected readonly imprintUrl = toSignal(inject(SystemSettingsService).getLegalNotice().pipe(
+    map(notice => notice.imprintUrl),
+    catchError(() => of(undefined))
+  ));
+
+  protected openNotice(section: 'imprint' | 'privacy'): void {
     this.dialog.open(ImpressumDialogComponent, {
+      data: { section },
       width: '600px',
       maxHeight: '90vh'
     });

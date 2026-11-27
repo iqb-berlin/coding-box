@@ -87,14 +87,14 @@ export function toInvalidRegexSearchPatternException(
 export async function withRegexSearchStatementTimeout<T>(
   dataSource: Pick<DataSource, 'createQueryRunner'>,
   work: (queryRunner: QueryRunner) => Promise<T>,
-  timeoutMs = REGEX_SEARCH_STATEMENT_TIMEOUT_MS
+  timeoutMs = REGEX_SEARCH_STATEMENT_TIMEOUT_MS,
+  isolationLevel?: 'REPEATABLE READ'
 ): Promise<T> {
   const queryRunner = dataSource.createQueryRunner();
 
-  await queryRunner.connect();
-  await queryRunner.startTransaction();
-
   try {
+    await queryRunner.connect();
+    await queryRunner.startTransaction(isolationLevel);
     await queryRunner.query(`SET LOCAL statement_timeout = '${timeoutMs}ms'`);
     const result = await work(queryRunner);
     await queryRunner.commitTransaction();

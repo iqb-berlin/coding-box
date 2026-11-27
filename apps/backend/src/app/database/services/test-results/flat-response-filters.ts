@@ -1,4 +1,4 @@
-import { SelectQueryBuilder } from 'typeorm';
+import { DataSource, QueryRunner, SelectQueryBuilder } from 'typeorm';
 import { ResponseEntity } from '../../entities/response.entity';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -86,7 +86,6 @@ export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatRespons
   applyProcessingFilters(qb, filters);
   applyUnitProgressFilter(qb, filters);
   applySessionFilters(qb, filters, purpose);
-  applyLongLoadingFilter(qb, filters, purpose);
 }
 
 function applyFilterOptionText(qb: ResponseQuery, filters: FlatResponseFilters): void {
@@ -115,8 +114,13 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
     }
   }
   if (responseValue) {
+    // Short terms have no searchable trigram. Read only the displayed prefix
+    // after the workspace join instead of inspecting values in other workspaces.
+    const predicate = responseValue.length < 3 ?
+      `CASE WHEN person.workspace_id = :workspaceId THEN SUBSTRING(response.value, 1, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue END` :
+      `LEFT(response.value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue`;
     qb.andWhere(
-      `LEFT(response.value, ${RESPONSE_VALUE_SEARCH_PREFIX_LENGTH}) ILIKE :responseValue`,
+      predicate,
       { responseValue: `%${responseValue}%` }
     );
   }
@@ -154,7 +158,10 @@ function applyResponseFilters(qb: ResponseQuery, filters: FlatResponseFilters, p
 
   if (hasValueOnly) {
     qb.andWhere(
-      "BTRIM(COALESCE(response.value, '')) <> '' AND BTRIM(COALESCE(response.value, '')) <> '[]'"
+      `CASE WHEN person.workspace_id = :workspaceId THEN
+        CASE WHEN BTRIM(SUBSTRING(response.value, 1, 16)) NOT IN ('', '[', '[]') THEN TRUE
+          ELSE BTRIM(response.value) NOT IN ('', '[]') END
+      END`
     );
   }
 }
@@ -284,26 +291,54 @@ function applySessionFilters(qb: ResponseQuery, filters: FlatResponseFilters, pu
   }
 }
 
-function applyLongLoadingFilter(qb: ResponseQuery, filters: FlatResponseFilters, purpose: QueryPurpose): void {
-  const { longLoadingOnly, longLoadingThresholdMs } = filters;
-  if (!longLoadingOnly) return;
-  const unitLoading = `EXISTS (
-    SELECT 1
-    FROM unitlog ul_started
-    JOIN unitlog ul_ended ON ul_ended.unitid = ul_started.unitid
-    WHERE ul_started.unitid = unit.id
-      AND ul_started.key = 'STARTED'
-      AND ul_ended.key = 'ENDED'
-      AND (ul_ended.ts - ul_started.ts) >= :longLoadingThresholdMs
-  )`;
-  // The option lists historically consider only unit logs.
-  const condition = purpose === 'options' ? unitLoading : `(EXISTS (
-    SELECT 1
-    FROM session s
-    WHERE s.bookletid = "bookletEntity"."id"
-      AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs
-  ) OR ${unitLoading})`;
-  qb.andWhere(condition, { longLoadingThresholdMs });
+// A STARTED/ENDED pair passes exactly when the largest possible gap passes.
+const unitLoadingDuration = "MAX(ul.ts) FILTER (WHERE ul.key = 'ENDED') - MIN(ul.ts) FILTER (WHERE ul.key = 'STARTED')";
+
+export async function findLongLoadingUnitIds(
+  connection: DataSource | QueryRunner, workspaceId: number, thresholdMs: number
+): Promise<number[]> {
+  const rows: { unitid: number }[] = await connection.query(
+    `SELECT ul.unitid FROM unitlog ul
+     JOIN unit u ON u.id = ul.unitid
+     JOIN booklet b ON b.id = u.bookletid
+     JOIN persons p ON p.id = b.personid
+     WHERE p.workspace_id = $1 AND p.consider AND ul.key IN ('STARTED', 'ENDED')
+     GROUP BY ul.unitid
+     HAVING ${unitLoadingDuration} >= $2`,
+    [workspaceId, thresholdMs]
+  );
+  return rows.map(row => row.unitid);
+}
+
+export async function buildLongLoadingFilter(
+  connection: DataSource | QueryRunner, workspaceId: number, filters: FlatResponseFilters, purpose: QueryPurpose
+) {
+  if (!filters.longLoadingOnly) return undefined;
+
+  const parameters: { longLoadingThresholdMs: number; slowUnitIds?: number[] } = {
+    longLoadingThresholdMs: filters.longLoadingThresholdMs
+  };
+  const textFilters = [
+    filters.code, filters.group, filters.login, filters.booklet, filters.unit, filters.response, filters.responseValue, filters.tags
+  ];
+  let unitCondition: string;
+  if (textFilters.some(Boolean)) {
+    // With candidate units already narrowed, use the unitlog(unitid) index.
+    unitCondition = `EXISTS (
+      SELECT 1 FROM unitlog ul WHERE ul.unitid = unit.id AND ul.key IN ('STARTED', 'ENDED')
+      HAVING ${unitLoadingDuration} >= :longLoadingThresholdMs
+    )`;
+  } else {
+    // Broad filters reuse the same slow units across page, count and option queries.
+    parameters.slowUnitIds = await findLongLoadingUnitIds(connection, workspaceId, filters.longLoadingThresholdMs);
+    unitCondition = parameters.slowUnitIds.length ? 'unit.id = ANY(:slowUnitIds)' : 'FALSE';
+  }
+  if (purpose === 'options') return { condition: unitCondition, parameters };
+
+  // Session loading qualifies all responses in a booklet only in the results table.
+  const sessionCondition = `EXISTS (SELECT 1 FROM session s WHERE s.bookletid = "bookletEntity"."id"
+    AND COALESCE(s.loadcompletems, 0) >= :longLoadingThresholdMs)`;
+  return { condition: `(${sessionCondition} OR ${unitCondition})`, parameters };
 }
 
 function applyProcessingDurationCategory(qb: ResponseQuery, filters: FlatResponseFilters): void {

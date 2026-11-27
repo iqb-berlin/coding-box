@@ -1,11 +1,13 @@
 import { Router, UrlTree } from '@angular/router';
 
+export const AUTH_QUERY_PARAM_LOGIN_REQUIRED = 'login-required';
 export const AUTH_QUERY_PARAM_SESSION_EXPIRED = 'session-expired';
 export const AUTH_QUERY_PARAM_AUTH_DATA_FAILED = 'auth-data-failed';
 export const AUTH_QUERY_PARAM_ACCESS_DENIED = 'access-denied';
 
 type AuthQueryParamReason =
-  typeof AUTH_QUERY_PARAM_SESSION_EXPIRED
+  typeof AUTH_QUERY_PARAM_LOGIN_REQUIRED
+  | typeof AUTH_QUERY_PARAM_SESSION_EXPIRED
   | typeof AUTH_QUERY_PARAM_AUTH_DATA_FAILED
   | typeof AUTH_QUERY_PARAM_ACCESS_DENIED;
 
@@ -31,6 +33,10 @@ export function createAuthRedirectUrlTree(
   }
 
   return router.createUrlTree(['/home'], { queryParams });
+}
+
+export function createLoginUrlTree(router: Router, returnUrl: string): UrlTree {
+  return createAuthRedirectUrlTree(router, AUTH_QUERY_PARAM_LOGIN_REQUIRED, returnUrl);
 }
 
 export function createReAuthenticationUrlTree(

@@ -82,7 +82,7 @@ describe('Access Level Guard', () => {
 
       expect(result).toBe(redirect);
       expect(mockRouter.createUrlTree).toHaveBeenCalledWith(['/home'], {
-        queryParams: { auth: 'session-expired', returnUrl: state.url }
+        queryParams: { auth: 'login-required', returnUrl: state.url }
       });
       expect(mockUserService.getUsers).not.toHaveBeenCalled();
       expect(mockWorkspaceAccessService.hasAssignedCodingJobs).not.toHaveBeenCalled();

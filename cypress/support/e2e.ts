@@ -55,10 +55,11 @@ Cypress.Commands.add(
     isAdmin = true,
     accessLevel
   }: WorkspaceStubOptions) => {
-    cy.intercept('GET', '**/api//admin/logo/settings', {
+    cy.intercept('GET', '**/api/admin/logo/settings', {
       statusCode: 404,
       body: {}
     });
+    cy.intercept('GET', '**/api/legal-notice', { body: { html: '', isDefault: true } });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.intercept('GET', `**/api/auth-data?identity=${identity}`, {
       body: {

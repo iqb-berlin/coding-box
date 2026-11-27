@@ -45,6 +45,7 @@ describe('ImpressumDialogComponent', () => {
     fixture = TestBed.createComponent(ImpressumDialogComponent);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.textContent).toContain('https://www.iqb.hu-berlin.de/de/datenschutz/');
+    expect(fixture.nativeElement.textContent).toContain('Die Angaben dieser Instanz konnten nicht geladen werden');
+    expect(fixture.nativeElement.querySelector('a[href="https://www.iqb.hu-berlin.de/de/datenschutz/"]')).toBeTruthy();
   });
 });

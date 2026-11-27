@@ -32,6 +32,7 @@ describe('AppComponent', () => {
   let appService: {
     appLogo: { bodyBackground: string; data: string; alt: string };
     dataLoading: boolean;
+    loadLogoSettings: jest.Mock;
     authData$: Observable<AuthDataDto>;
     processMessagePost: jest.Mock;
     loadAuthenticatedUser: jest.Mock;
@@ -78,6 +79,7 @@ describe('AppComponent', () => {
     appService = {
       appLogo: { bodyBackground: '', data: '', alt: '' },
       dataLoading: false,
+      loadLogoSettings: jest.fn(),
       authData$: of(AppService.defaultAuthData),
       processMessagePost: jest.fn(),
       loadAuthenticatedUser: jest.fn().mockReturnValue(of(true)),

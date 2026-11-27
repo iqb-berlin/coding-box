@@ -195,6 +195,31 @@ test('develop, main and tag pipelines retain their existing registry configurati
   }
 });
 
+test('the PostgreSQL 17 image is scanned before prerelease and release publication', () => {
+  const releaseScan = 'scan-main-commit-db-image-postgres17';
+  const postgres17Image = '${CI_REGISTRY_IMAGE}/iqbberlin/coding-box-db:${CI_COMMIT_SHA}-pg17';
+  const featureScan = resolve('scan-db-image-postgres17');
+  assert.ok(selected('scan-db-image-postgres17', { ...config.variables, ...featurePush }));
+  assert.equal(featureScan.allow_failure, false);
+  assert.deepEqual(featureScan.needs, ['build-db-image']);
+  assert.equal(featureScan.variables.FULL_IMAGE_NAME, postgres17Image);
+  assert.ok(resolve('build-db-image').script.some(command => command.includes(':${CI_COMMIT_SHA}-pg17')));
+
+  const scan = resolve(releaseScan);
+  assert.equal(scan.variables.FULL_IMAGE_NAME, postgres17Image);
+  assert.deepEqual(scan.needs, ['build-main-commit-db-image']);
+  assert.ok(resolve('build-main-commit-db-image').script.some(command => command.includes(':${CI_COMMIT_SHA}-pg17')));
+  assert.ok(scan.script.some(command => command.includes('--exit-code 1') && command.includes('CRITICAL')));
+  for (const [tag, publisher] of [['2.0.0-beta.2', 'build-pre-release'], ['2.0.0', 'build-release']]) {
+    const env = { ...config.variables, CI_PIPELINE_SOURCE: 'push', CI_COMMIT_TAG: tag };
+    for (const name of ['scan-main-commit-db-image', releaseScan]) {
+      assert.ok(selected(name, env), name);
+      assert.equal(selectedRule(resolve(name).rules, env).allow_failure, false, name);
+      assert.ok(resolve(publisher).needs.some(dependency => dependency.job === name && !dependency.optional), name);
+    }
+  }
+});
+
 test('all live browser jobs install a Docker client and bound daemon readiness', () => {
   for (const name of ['test-replay-live', 'test-auth-live', 'test-workflows-live']) {
     const setup = resolve(name).before_script.join('\n');
