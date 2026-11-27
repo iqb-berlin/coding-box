@@ -79,3 +79,7 @@ test('requires a project name and gives failed assertions a diagnostic fallback'
   assert.match(suite.xml, /time="0"/);
   assert.match(suite.xml, /Test failed without an assertion message/);
 });
+
+test('merge gate verification deliberately fails', () => {
+  assert.fail('Intentional CI failure for the isolated merge-gate verification');
+});
