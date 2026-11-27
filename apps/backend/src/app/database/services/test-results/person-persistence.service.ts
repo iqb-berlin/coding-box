@@ -5,7 +5,7 @@ import {
   Brackets, EntityManager, In, Repository
 } from 'typeorm';
 import { chunkRowsForImport } from './response-chunks';
-import { importedResponses, matchImportedResponses, ResponseInsertEntry } from './imported-responses';
+import { importedResponses, planResponseImport, ResponseInsertEntry } from './imported-responses';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import {
   Log,
@@ -581,17 +581,8 @@ export class PersonPersistenceService {
         success: true, saved: 0, skipped: 0, deleted: 0, addedResponseIds: []
       };
       const incoming = importedResponses(Number(savedUnit.id), subforms);
-      const variables = Array.from(new Set(incoming.map(({ entry }) => entry.variableid)));
-      const existing = isNewUnit || !variables.length ? [] : await repository.find({
-        where: { unitid: Number(savedUnit.id), variableid: In(variables), is_autocoder_generated: false },
-        select: {
-          id: true, variableid: true, subform: true, source_chunk_key: true
-        }
-      });
-      const needsChunkHistory = existing.length > 0 && incoming.some(item => item.chunkKey !== undefined);
       const chunkRepository = manager?.getRepository(ChunkEntity) || this.chunkRepository;
-      const previousChunks = needsChunkHistory ? await chunkRepository.findBy({ unitid: savedUnit.id }) : [];
-      const plan = matchImportedResponses(incoming, existing, overwriteMode, previousChunks);
+      const plan = await planResponseImport(incoming, overwriteMode, isNewUnit ? undefined : Number(savedUnit.id), repository, chunkRepository, manager);
       result.skipped = plan.skipped;
       for (const { row, entry } of plan.matches) {
         if (overwriteMode === 'replace') {

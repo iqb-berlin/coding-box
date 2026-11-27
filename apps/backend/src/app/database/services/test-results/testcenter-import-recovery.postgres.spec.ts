@@ -366,14 +366,14 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
         responseType: 'state',
         ts: 42,
         content: JSON.stringify([{
-          id: 'VAR', status: 'VALUE_CHANGED', value: 'edited', subform: 'A'
+          id: 'VAR', status: 'VALUE_CHANGED', value: original.value, subform: 'A'
         }])
       }];
       expect((await importRun(service, 'reimport', mode)).success).toBe(true);
       expect(await repo.findBy({ unitid: original.unitid })).toEqual([expect.objectContaining({
         id: original.id,
         code_v2: 7,
-        value: mode === 'replace' ? 'edited' : original.value,
+        value: original.value,
         source_chunk_key: mode === 'skip' ? null : 'main',
         subform: mode === 'skip' ? 'main' : 'A'
       })]);
@@ -397,7 +397,7 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     const cases = [{ id: left.id, code: 7 }, { id: right.id, code: 9 }];
     const job = await addManualCases(cases);
     try {
-      const first = part('A', 20, [answer('x', 'new first', 'left')], 'B');
+      const first = part('A', 20, [answer('x', 'first', 'left')], 'B');
       rows[0].responses = [first];
       if (mode !== 'skip') {
         await expect(exportCsv()).rejects.toThrow('nicht eindeutig');
@@ -405,14 +405,14 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
         expect((await importRun(service, 'partial', mode)).success).toBe(false);
         expect(await storedResponses()).toMatchObject([{ id: left.id, subform: 'B' }, { id: right.id, subform: 'A' }]);
       }
-      rows[0].responses = [part('B', 21, [answer('x', 'new second', 'right')], 'A'), first];
+      rows[0].responses = [part('B', 21, [answer('x', 'second', 'right')], 'A'), first];
       expect((await importRun(service, 'crossed', mode)).success).toBe(true);
       expect(await storedResponses()).toMatchObject([
         {
-          id: left.id, subform: mode === 'skip' ? 'B' : 'left', source_chunk_key: mode === 'skip' ? null : 'A', code_v2: 7, value: mode === 'replace' ? 'new first' : 'first'
+          id: left.id, subform: mode === 'skip' ? 'B' : 'left', source_chunk_key: mode === 'skip' ? null : 'A', code_v2: 7, value: 'first'
         },
         {
-          id: right.id, subform: mode === 'skip' ? 'A' : 'right', source_chunk_key: mode === 'skip' ? null : 'B', code_v2: 9, value: mode === 'replace' ? 'new second' : 'second'
+          id: right.id, subform: mode === 'skip' ? 'A' : 'right', source_chunk_key: mode === 'skip' ? null : 'B', code_v2: 9, value: 'second'
         }
       ]);
       expect(await manualCases(job)).toEqual(cases);
@@ -447,6 +447,77 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
         },
         { id: genuine.id, subform: 'elementCodes', source_chunk_key: 'elementCodes' }
       ]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+    }
+  });
+
+  it.each(['merge', 'replace'] as const)('restores an old CSV in an empty workspace and reconciles the original on %s', async mode => {
+    rows = rows.slice(0, 1);
+    const archived = [part('elementCodes', 10, [
+      answer('x', 'original', 'elementCodes'), answer('y', 'other', 'historical-wrapper')
+    ], 'elementCodes')];
+    const csv = await writeToBuffer([{ ...rows[0], responses: JSON.stringify(archived) }], { headers: true, delimiter: ';' });
+    expect(await uploadCsv(csv, mode)).toEqual([]);
+    const [original, other] = await storedResponses();
+    expect(original).toMatchObject({ subform: 'elementCodes', source_chunk_key: null });
+    expect(other).toMatchObject({ subform: 'historical-wrapper', source_chunk_key: null });
+    const memberships = await repository(ChunkEntity).findBy({ unitid: original.unitid });
+    expect(memberships.map(chunk => [chunk.variables, chunk.subform, Number(chunk.ts)]).sort()).toEqual([['x', null, 10], ['y', null, 10]]);
+    const cases = [{ id: original.id, code: 7 }];
+    const job = await addManualCases(cases);
+    try {
+      rows[0].responses = [
+        part('elementCodes', 20, [answer('x', 'original')]),
+        part('elementCodes', 20, [answer('y', 'other', 'real-form')], 'historical-wrapper')
+      ];
+      expect((await importRun(createService(), 'raw-after-csv', mode)).success).toBe(true);
+      expect(await storedResponses()).toMatchObject([
+        {
+          id: original.id, subform: '', source_chunk_key: 'elementCodes', code_v2: 7
+        },
+        { id: other.id, subform: 'real-form', source_chunk_key: 'elementCodes' }
+      ]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+    }
+  });
+
+  it('rejects changed values and raw statuses on scored responses and rolls back the whole replacement', async () => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('page', 10, [answer('free', 'before'), answer('scored', 'correct')])];
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const [free, scored] = await storedResponses();
+    await repository(ResponseEntity).update(scored.id, { status_v1: 5, code_v1: 1, score_v1: 1 });
+    for (const replacement of [answer('scored', 'wrong'), { ...answer('scored', 'correct'), status: 'DISPLAYED' as const }]) {
+      const parts = [part('page', 20, [answer('free', 'after'), replacement])];
+      const csv = await writeToBuffer([{ ...rows[0], responses: JSON.stringify(parts) }], { headers: true, delimiter: ';' });
+      expect(await uploadCsv(csv, 'replace')).toEqual([expect.stringContaining('Antwort scored')]);
+      expect(await storedResponses()).toMatchObject([
+        { id: free.id, value: 'before' },
+        {
+          id: scored.id, value: 'correct', status: 3, status_v1: 5, code_v1: '1', score_v1: '1'
+        }
+      ]);
+      expect(await repository(ChunkEntity).findBy({ unitid: scored.unitid })).toMatchObject([{ ts: '10' }]);
+    }
+  });
+
+  it('protects a manual job result before it has been transferred to the response', async () => {
+    rows = rows.slice(0, 1);
+    const service = createService();
+    expect((await importRun(service, 'seed')).success).toBe(true);
+    const [original] = await storedResponses();
+    const cases = [{ id: original.id, code: 0 }];
+    const job = await addManualCases(cases);
+    try {
+      await repository(ResponseEntity).update(original.id, { code_v2: null });
+      rows[0].responses = [part('main', 20, [answer('VAR', 'changed')])];
+      expect((await importRun(service, 'changed-assigned', 'replace')).success).toBe(false);
+      expect(await storedResponses()).toMatchObject([{ id: original.id, value: original.value, code_v2: null }]);
       expect(await manualCases(job)).toEqual(cases);
     } finally {
       await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);

@@ -856,7 +856,7 @@
     },
     "apps/backend/src/app/database/services/test-results/person-persistence.service.ts": {
       "file": {
-        "max-lines": 979
+        "max-lines": 970
       },
       "functions": {
         "class PersonPersistenceService#1/method processPersonBooklets#1": {

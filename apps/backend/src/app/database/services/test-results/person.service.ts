@@ -431,7 +431,7 @@ export class PersonService {
         const laststate = this.parseLastState(row.laststate, row, issues);
 
         person.booklets = person.booklets.map(b => (b.id === booklet.id ?
-          { ...b, units: [...b.units, this.createUnit(row, laststate, subforms, variables, parsedResponses)] } :
+          { ...b, units: [...b.units, this.createUnit(row, laststate, subforms, variables, parsedResponses, fromCsv)] } :
           b)
         );
       } catch (error) {
@@ -524,11 +524,12 @@ export class PersonService {
     laststate: TcMergeLastState[],
     subforms: TcMergeSubForms[],
     variables: Set<string>,
-    parsedResponses: Chunk[]
+    parsedResponses: Chunk[],
+    fromCsv: boolean
   ): TcMergeUnit {
     const chunks = chunkMemberships(parsedResponses, variables, (chunk, error) => {
       this.logger.error(`Error parsing variables for chunk ID ${chunk.id}: ${getErrorMessage(error)}`);
-    });
+    }, fromCsv);
 
     return {
       id: row.unitname,

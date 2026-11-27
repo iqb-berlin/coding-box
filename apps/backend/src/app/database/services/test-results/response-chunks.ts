@@ -23,22 +23,26 @@ export function extractResponseGroups(chunks: Chunk[], onError: (chunk: Chunk, e
       groups.clear();
     }
     if (!groups.size) groups.set('', []);
+    // The old CSV exporter copied the first nonempty stored label to the
+    // wrapper. Other answers in that same envelope can carry different labels.
+    const repeatsLegacyWrapper = fromCsv && chunk.codingBoxLegacySubform === undefined &&
+      !!chunk.subForm && chunk.subForm === Array.from(groups.keys()).find(Boolean);
     return Array.from(groups, ([id, responses]) => ({
       id,
       sourceChunkKey,
-      legacySubform,
-      unresolvedArchive,
-      repeatsLegacyWrapper: fromCsv && chunk.codingBoxLegacySubform === undefined && !!id && chunk.subForm === id,
-      responses
+      responses,
+      repeatsLegacyWrapper,
+      legacySubform: repeatsLegacyWrapper ? id : legacySubform,
+      unresolvedArchive: unresolvedArchive || repeatsLegacyWrapper
     }));
   });
 }
 
-export function chunkMemberships(chunks: Chunk[], fallback: Set<string>, onError: (chunk: Chunk, error: unknown) => void): TcMergeChunk[] {
+export function chunkMemberships(chunks: Chunk[], fallback: Set<string>, onError: (chunk: Chunk, error: unknown) => void, fromCsv = false): TcMergeChunk[] {
   return chunks.flatMap(chunk => {
     // A synthetic archive envelope with no source metadata is not a stored part.
     if (typeof chunk.codingBoxLegacySubform === 'string' && !chunk.id && !chunk.responseType && !chunk.ts) return [];
-    return extractResponseGroups([chunk], onError).map(group => {
+    return extractResponseGroups([chunk], onError, fromCsv).map(group => {
       const variables = group.responses.map(response => String(response.id || '').trim()).filter(Boolean);
       return {
         id: group.sourceChunkKey!,
