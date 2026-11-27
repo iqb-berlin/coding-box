@@ -118,11 +118,11 @@ describe('UploadResultsService', () => {
     expect(service).toBeDefined();
   });
 
-  it.each([undefined, 'chunked-upload-session'])('queues trusted provenance and the supplied session job id (%s)', async jobId => {
+  it('passes the trusted initiating user to the queued import without storing file buffers', async () => {
     const queue = (service as unknown as { jobQueueService: JobQueueService }).jobQueueService;
     jest.mocked(queue.addUploadJob).mockResolvedValue({ id: '123' } as never);
-    await service.uploadTestResults(3, [{ buffer: Buffer.from('raw answers'), originalname: 'results.csv' } as FileIo], 'responses', false, 'strict', 'skip', 'person', undefined, 7, jobId);
-    expect(queue.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }), jobId ? { jobId } : undefined);
+    await service.uploadTestResults(3, [{ buffer: Buffer.from('raw answers'), originalname: 'results.csv' } as FileIo], 'responses', false, 'strict', 'skip', 'person', undefined, 7);
+    expect(queue.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }));
     expect(jest.mocked(queue.addUploadJob).mock.calls[0][0].file).not.toHaveProperty('buffer');
   });
 

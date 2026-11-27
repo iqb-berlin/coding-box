@@ -921,8 +921,7 @@ export class UploadResultsService {
     overwriteMode: 'skip' | 'merge' | 'replace' = 'skip',
     scope: 'person' | 'workspace' | 'group' | 'booklet' | 'unit' | 'response' = 'person',
     scopeFilters: { groupName?: string; bookletName?: string; unitNameOrAlias?: string; variableId?: string; subform?: string } | undefined = undefined,
-    requestedByUserId?: number,
-    chunkedJobId?: string
+    requestedByUserId?: number
   ): Promise<TestResultsUploadJobDto[]> {
     if (!Array.isArray(originalFiles) || originalFiles.length === 0) {
       this.logger.error('The uploaded files parameter is not an array or is empty.');
@@ -955,11 +954,13 @@ export class UploadResultsService {
         overwriteMode,
         scope,
         scopeFilters
-      }, chunkedJobId ? { jobId: chunkedJobId } : undefined);
+      });
     });
 
     const jobs = await Promise.all(jobPromises);
-    return jobs.map(job => ({ jobId: requireJobId(job) }));
+    const jobDtos = jobs.map(job => ({ jobId: requireJobId(job) }));
+
+    return jobDtos;
   }
 
   private normalizeLogCsvValue(value: string, key?: string): string {
