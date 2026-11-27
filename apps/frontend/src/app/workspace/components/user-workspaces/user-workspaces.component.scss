@@ -1,5 +1,7 @@
 :host {
-  display: block;
+  display: flex;
+  flex-direction: column;
+  flex: 1;
   color: #172f35;
 }
 
@@ -14,7 +16,7 @@
 
 .login-panel {
   box-sizing: border-box;
-  max-inline-size: 29rem;
+  inline-size: min(100%, 29rem);
   margin: clamp(0.5rem, 6vh, 4rem) auto 0;
 }
 
@@ -55,6 +57,7 @@ h2 {
 .workspace-panel {
   display: flex;
   flex-direction: column;
+  flex: 1;
 }
 
 .workspace-search-slot {

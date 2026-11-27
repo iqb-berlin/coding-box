@@ -16,8 +16,9 @@
     </button>
   </section>
 } @else {
+  @let emptyWorkspaceList = showEmptyWorkspaces;
   <section class="workspace-panel" aria-labelledby="workspace-title">
-    <h2 id="workspace-title">{{ 'ui-text.user-workspaces.choose' | translate }}</h2>
+    <h2 id="workspace-title">{{ (emptyWorkspaceList ? 'ui-text.user-workspaces.empty-title' : 'ui-text.user-workspaces.choose') | translate }}</h2>
     @if (showLoading) {
       <div class="workspace-state" role="status">
         <mat-spinner diameter="24"></mat-spinner>
@@ -43,7 +44,7 @@
           </button>
         </div>
       </div>
-    } @else if (showEmptyWorkspaces) {
+    } @else if (emptyWorkspaceList) {
       <p class="workspace-feedback">{{ 'home.no-user-workspaces' | translate }}</p>
     } @else if (workspaces().length > 0) {
       <div #searchSlot class="workspace-search-slot">

@@ -463,7 +463,7 @@
     "auth-data-load-error": "Die Sitzungsdaten konnten noch nicht geladen werden. Bitte versuchen Sie es erneut oder melden Sie sich neu an.",
     "retry-auth-data": "Erneut laden",
     "relogin": "Neu anmelden",
-    "no-user-workspaces": "Für diese Anmeldung wurden keine Arbeitsbereiche gefunden.",
+    "no-user-workspaces": "Ihnen sind noch keine Arbeitsbereiche zugewiesen.",
     "user-menu": "Profil verwalten",
     "appName": "{{name}}",
     "appVersion": " {{version}}",
@@ -4298,6 +4298,7 @@
     },
     "user-workspaces": {
       "choose": "Arbeitsbereich auswählen",
+      "empty-title": "Keine Arbeitsbereiche verfügbar",
       "purpose": "Mit der IQB-Kodierbox kodieren Sie Antworten aus Testungen.",
       "login-required": "Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.",
       "sign-in-again": "Erneut anmelden",
