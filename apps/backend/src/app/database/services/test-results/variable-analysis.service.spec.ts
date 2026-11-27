@@ -301,12 +301,17 @@ describe('VariableAnalysisService', () => {
     expect(cacheService.get).not.toHaveBeenCalled();
   });
 
+  it.each(['waiting', 'prioritized', 'delayed'])('exposes %s jobs as waiting in list and detail', async state => {
+    const job = createJob({ state });
+    jobQueueService.getVariableAnalysisJob.mockResolvedValue(job);
+    jobQueueService.getVariableAnalysisJobs.mockResolvedValue([job]);
+    await expect(service.getAnalysisJob(job.id, 1)).resolves.toMatchObject({ status: 'waiting' });
+    await expect(service.getAnalysisJobs(1)).resolves.toEqual([expect.objectContaining({ status: 'waiting' })]);
+  });
+
   it('creates jobs unless one is already active', async () => {
-    jest
-      .spyOn(service, 'getAnalysisJobs')
-      .mockResolvedValueOnce([])
-      .mockResolvedValueOnce([{ status: 'processing' } as never]);
-    jobQueueService.addVariableAnalysisJob.mockResolvedValue({ id: 'job-1' });
+    jobQueueService.addVariableAnalysisJob.mockResolvedValueOnce({ id: 'job-1' })
+      .mockRejectedValueOnce(new ConflictException());
 
     await expect(service.createAnalysisJob(1, 2, 'VAR')).resolves.toMatchObject(
       {

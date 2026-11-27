@@ -130,6 +130,8 @@ describe('JobQueueService', () => {
       workspaceId: 1, matchingFlags: [], threshold: 0, cacheKey: 'k'
     })).resolves.toHaveProperty('data.cacheKey', 'k');
     await expect(service.getCodingAnalysisJob('job-1')).resolves.toHaveProperty('id', 'job-1');
+    queues[9].getJobs.mockResolvedValue([]);
+    queues[9].add.mockImplementation(async (_name, data, opts) => ({ ...createJob(data), id: opts.jobId }));
     await expect(service.addVariableAnalysisJob({ workspaceId: 1, unitId: 2 })).resolves.toHaveProperty('data.unitId', 2);
     await expect(service.getVariableAnalysisJob('job-1')).resolves.toHaveProperty('id', 'job-1');
     queues[10].getJobs.mockResolvedValue([]);

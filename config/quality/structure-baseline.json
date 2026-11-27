@@ -1060,7 +1060,7 @@
     },
     "apps/backend/src/app/database/services/test-results/variable-analysis.service.ts": {
       "file": {
-        "max-lines": 1331
+        "max-lines": 1321
       },
       "functions": {}
     },
@@ -1187,7 +1187,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1199
+        "max-lines": 1193
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {

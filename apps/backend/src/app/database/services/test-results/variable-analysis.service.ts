@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ConflictException,
   Injectable,
   Logger,
   NotFoundException
@@ -118,17 +117,6 @@ export class VariableAnalysisService {
     }
     const analysisMode = options.analysisMode ?? 'values';
     const codingVersion = analysisMode === 'codes' ? options.codingVersion ?? 'v1' : undefined;
-    const existingJobs = await this.getAnalysisJobs(workspaceId);
-    const hasActiveJob = existingJobs.some(
-      j => j.status === 'pending' || j.status === 'processing'
-    );
-
-    if (hasActiveJob) {
-      throw new ConflictException(
-        `A variable analysis job is already in progress for workspace ${workspaceId}`
-      );
-    }
-
     const jobData: VariableAnalysisJobData = {
       workspaceId,
       unitId,
@@ -179,7 +167,7 @@ export class VariableAnalysisService {
       variableId: job.data.variableId,
       analysisMode: job.data.analysisMode,
       codingVersion: job.data.codingVersion,
-      status: state === 'active' ? 'processing' : state, // Map 'active' to 'processing' to match previous enum if needed
+      status: state,
       progress,
       error: job.failedReason,
       timestamp: job.timestamp,
@@ -358,7 +346,7 @@ export class VariableAnalysisService {
           variableId: job.data.variableId,
           analysisMode: job.data.analysisMode,
           codingVersion: job.data.codingVersion,
-          status: state === 'active' ? 'processing' : state,
+          status: state,
           progress,
           error: job.failedReason,
           timestamp: job.timestamp,

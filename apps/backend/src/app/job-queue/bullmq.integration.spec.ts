@@ -102,6 +102,29 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
     await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: true });
   });
 
+  it('admits one concurrent analysis per workspace and releases the slot after completion', async () => {
+    const queueName = 'variable-analysis';
+    const analyses = app.get<Queue>(getQueueToken(queueName));
+    const starts = await Promise.allSettled(Array.from({ length: 8 }, () => service.addVariableAnalysisJob({ workspaceId: 7 })));
+    expect(starts.filter(start => start.status === 'fulfilled')).toHaveLength(1);
+    for (const start of starts) {
+      if (start.status === 'rejected') expect(start.reason.getStatus()).toBe(409);
+    }
+    expect(await analyses.getWaitingCount()).toBe(1);
+    await service.addVariableAnalysisJob({ workspaceId: 8 });
+    const [first] = await analyses.getWaiting();
+    const done = new QueueEvents(queueName, options);
+    await done.waitUntilReady();
+    const worker = new Worker(queueName, async () => true, options);
+    try {
+      await first.waitUntilFinished(done, 5000);
+      await expect(service.addVariableAnalysisJob({ workspaceId: first.data.workspaceId })).resolves.toBeDefined();
+    } finally {
+      await worker.close();
+      await done.close();
+    }
+  });
+
   it('persists preview results in a separate queue with a Redis-enforced global concurrency limit', async () => {
     const previewQueue = app.get<Queue>(getQueueToken('coding-reset-preview'));
     const previewEvents = new QueueEvents('coding-reset-preview', options);

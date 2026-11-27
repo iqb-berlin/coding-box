@@ -14,6 +14,7 @@ import { overviewProgress, sanitizeJobData } from './job-queue-overview';
 import { ContentPoolJobData, ContentPoolJobResult, validateContentPoolJobData } from '../admin/content-pool/content-pool-job';
 import { requireJobId, withQueueJobId, jobMatchesWorkspace } from './job-queue.util';
 import { listWorkspaceExportJobs, removeExpiredCsvExportJobs } from './data-export-queue-jobs';
+import { enqueueVariableAnalysis } from './variable-analysis-queue';
 import { addCodingResetPreviewJob, ResetCodingPreviewJobData, ResetCodingVersionJobData } from './coding-reset-preview-queue.util';
 import { getErrorMessage, getErrorStack } from '../utils/error.util';
 import { FileIo } from '../admin/workspace/file-io.interface';
@@ -1129,14 +1130,7 @@ export class JobQueueService {
     data: VariableAnalysisJobData,
     options?: JobsOptions
   ): Promise<Job<VariableAnalysisJobData>> {
-    this.logger.log(
-      `Adding variable analysis job for workspace ${data.workspaceId}`
-    );
-    return this.variableAnalysisQueue.add('variable-analysis', data, withQueueJobId({
-      removeOnComplete: { age: 86400 },
-      removeOnFail: { age: 604800 },
-      ...options
-    }));
+    return enqueueVariableAnalysis(this.variableAnalysisQueue, data, options);
   }
 
   async getVariableAnalysisJob(

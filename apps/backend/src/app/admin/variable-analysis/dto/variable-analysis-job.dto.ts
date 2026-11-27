@@ -59,7 +59,9 @@ export class VariableAnalysisJobDto implements VariableAnalysisOptions {
     dto.workspace_id = job.workspaceId || (job.data && job.data.workspaceId);
     dto.unit_id = job.unitId || (job.data && job.data.unitId);
     dto.variable_id = job.variableId || (job.data && job.data.variableId);
-    dto.status = job.status;
+    if (job.status === 'active') dto.status = 'processing';
+    else if (['prioritized', 'delayed', 'waiting-children'].includes(job.status)) dto.status = 'waiting';
+    else dto.status = job.status;
     dto.progress = job.progress;
     dto.error = job.error; // Bull job failedReason or similar
     dto.created_at = new Date(job.timestamp ?? job.created_at ?? Date.now());
