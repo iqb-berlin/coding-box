@@ -62,6 +62,7 @@ const mockQueryBuilder = () => ({
   ]),
   setParameter: jest.fn().mockReturnThis(),
   setParameters: jest.fn().mockReturnThis(),
+  setQueryRunner: jest.fn().mockReturnThis(),
   getParameters: jest.fn().mockReturnValue({ workspaceId: 1, consider: true, searchText: '%needle%' }),
   getQuery: jest.fn().mockReturnValue('SELECT "matchingPerson"."group" FROM persons "matchingPerson"'),
   addGroupBy: jest.fn().mockReturnThis(),
@@ -224,7 +225,7 @@ describe('WorkspaceTestResultsService', () => {
         createQueryBuilder: jest.fn(() => mockQueryBuilder())
       }),
       query: jest.fn().mockResolvedValue([]),
-      transaction: jest.fn()
+      transaction: jest.fn((_isolation, work) => work({ queryRunner: dataSource.createQueryRunner() }))
     } as unknown as DataSource;
 
     service = createWorkspaceTestResultsService(personsRepository,
@@ -1400,6 +1401,8 @@ describe('WorkspaceTestResultsService', () => {
       );
       expect(qb.select).toHaveBeenCalledWith('COUNT(*)', 'total');
       expect(qb.andWhere).toHaveBeenCalledWith('response.id >= :firstId', { firstId: 1 });
+      expect(dataSource.transaction).toHaveBeenCalledWith('REPEATABLE READ', expect.any(Function));
+      expect(qb.setQueryRunner).toHaveBeenCalledWith((dataSource.createQueryRunner as jest.Mock).mock.results[0].value);
       const [columns] = qb.select.mock.calls[0];
       expect(columns.filter((column: string) => column.startsWith('person.'))).toEqual([
         'person.id', 'person.login', 'person.code', 'person.group'

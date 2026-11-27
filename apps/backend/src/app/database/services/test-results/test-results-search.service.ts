@@ -230,9 +230,9 @@ export class TestResultsSearchService {
       }
 
       const statusFilter = this.createStatusFilter(version, searchParams);
-      const runSearch = async (queryRunner?: QueryRunner) => {
+      const buildQuery = async () => {
         const query = this.responseRepository
-          .createQueryBuilder('response', queryRunner)
+          .createQueryBuilder('response')
           .innerJoin('response.unit', 'unit')
           .innerJoin('unit.booklet', 'booklet')
           .innerJoin('booklet.person', 'person')
@@ -358,95 +358,29 @@ export class TestResultsSearchService {
         }
 
         await this.applyResponseSourceFilter(query, workspaceId, responseSource, statusFilter);
-
-        const total = await this.countMatchingResponses(
-          query, !options.sortBy && !searchParams.geogebra && (statusFilter.grouped || !searchParams.codedStatus)
-        );
-        this.applyResponseSearchSorting(
-          query,
-          version,
-          searchParams.geogebra === true,
-          options.sortBy,
-          options.sortDirection
-        );
-
-        if (total === 0) {
-          this.logger.log(
-            `No responses found matching the criteria in workspace: ${workspaceId}`
-          );
-          return { data: [], total: 0 };
-        }
-
-        query.offset(skip).limit(limit);
-
-        // Keep the computed alias distinct from the mapped status_v1 column in TypeORM.
-        query.addSelect(
-          `(${getEffectiveCodingStatusExpression(version)})`,
-          EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS
-        );
-        const { entities: responses, raw: rawResponses } =
-          await query.getRawAndEntities();
-
-        this.logger.log(
-          `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${responses.length} for page ${page}`
-        );
-
-        // Pre-load variable page maps for all unique units
-        const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
-        const variablePageMaps = new Map<string, Map<string, string>>();
-        for (const unitName of uniqueUnitNames) {
-          const pageMap = await this.codingListService.getVariablePageMap(
-            unitName,
-            workspaceId
-          );
-          variablePageMaps.set(unitName, pageMap);
-        }
-
-        const data = responses.map((response, responseIndex) => {
-          const code = response[
-            `code_${version}` as keyof ResponseEntity
-          ] as number;
-          const score = response[
-            `score_${version}` as keyof ResponseEntity
-          ] as number;
-          const codedStatus = Number(rawResponses[responseIndex]?.[EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS]);
-          const variablePage =
-            variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
-          '0';
-
-          return {
-            responseId: response.id,
-            variableId: response.variableid,
-            value: response.value || '',
-            status: statusNumberToString(response.status) || 'UNSET',
-            code,
-            score,
-            codedStatus: statusNumberToString(codedStatus) || 'UNSET',
-            code_v1: response.code_v1,
-            code_v2: response.code_v2,
-            code_v3: response.code_v3,
-            status_v1: statusNumberToString(response.status_v1) || 'UNSET',
-            status_v2: statusNumberToString(response.status_v2) || 'UNSET',
-            status_v3: statusNumberToString(response.status_v3) || 'UNSET',
-            unitId: response.unit.id,
-            unitName: response.unit.name,
-            unitAlias: response.unit.alias,
-            bookletId: response.unit.booklet.id,
-            bookletName: response.unit.booklet.bookletinfo.name,
-            personId: response.unit.booklet.person.id,
-            personLogin: response.unit.booklet.person.login,
-            personCode: response.unit.booklet.person.code,
-            personGroup: response.unit.booklet.person.group,
-            variablePage
-          };
-        });
-
-        return { data, total };
+        return query;
       };
 
-      return searchParams.regexSearch ?
-        await withRegexSearchStatementTimeout(this.connection, runSearch) :
-        await runSearch();
+      const query = await buildQuery();
+      const boundIdScan = !options.sortBy && !searchParams.geogebra && (statusFilter.grouped || !searchParams.codedStatus);
+      const readPage = async (queryRunner?: QueryRunner) => {
+        if (queryRunner) query.setQueryRunner(queryRunner);
+        const total = await this.countMatchingResponses(query, boundIdScan);
+        this.applyResponseSearchSorting(query, version, searchParams.geogebra === true, options.sortBy, options.sortDirection);
+        if (total === 0) return { total, entities: [], raw: [] };
+
+        query.offset(skip).limit(limit);
+        // Keep the computed alias distinct from the mapped status_v1 column in TypeORM.
+        query.addSelect(`(${getEffectiveCodingStatusExpression(version)})`, EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS);
+        return { total, ...await query.getRawAndEntities() };
+      };
+
+      const { total, entities, raw } = await this.readResponseSearchPage(readPage, searchParams.regexSearch, boundIdScan);
+      this.logger.log(
+        `Found ${total} responses matching the criteria in workspace: ${workspaceId}, returning ${entities.length} for page ${page}`
+      );
+      const data = await this.mapResponseSearchRows(workspaceId, version, entities, raw);
+      return { data, total };
     } catch (error) {
       const regexError = searchParams.regexSearch ? toRegexSearchException(error) : null;
       if (regexError) {
@@ -461,6 +395,73 @@ export class TestResultsSearchService {
         `An error occurred while searching for responses: ${getErrorMessage(error)}`
       );
     }
+  }
+
+  private readResponseSearchPage<T>(
+    readPage: (queryRunner?: QueryRunner) => Promise<T>, regexSearch: boolean | undefined, boundIdScan: boolean
+  ): Promise<T> {
+    // The ID bound is valid only if count and page see the same committed rows.
+    if (regexSearch) {
+      return withRegexSearchStatementTimeout(this.connection, readPage, undefined, boundIdScan ? 'REPEATABLE READ' : undefined);
+    }
+    if (boundIdScan) {
+      return this.connection.transaction('REPEATABLE READ', manager => readPage(manager.queryRunner));
+    }
+    return readPage();
+  }
+
+  private async mapResponseSearchRows(
+    workspaceId: number, version: CodingVersion, responses: ResponseEntity[], rawResponses: Record<string, unknown>[]
+  ) {
+    // Pre-load variable page maps for all unique units
+    const uniqueUnitNames = [...new Set(responses.map(r => r.unit.name))];
+    const variablePageMaps = new Map<string, Map<string, string>>();
+    for (const unitName of uniqueUnitNames) {
+      const pageMap = await this.codingListService.getVariablePageMap(
+        unitName,
+        workspaceId
+      );
+      variablePageMaps.set(unitName, pageMap);
+    }
+
+    return responses.map((response, responseIndex) => {
+      const code = response[
+        `code_${version}` as keyof ResponseEntity
+      ] as number;
+      const score = response[
+        `score_${version}` as keyof ResponseEntity
+      ] as number;
+      const codedStatus = Number(rawResponses[responseIndex]?.[EFFECTIVE_CODING_STATUS_OUTPUT_ALIAS]);
+      const variablePage =
+        variablePageMaps.get(response.unit.name)?.get(response.variableid) ||
+      '0';
+
+      return {
+        responseId: response.id,
+        variableId: response.variableid,
+        value: response.value || '',
+        status: statusNumberToString(response.status) || 'UNSET',
+        code,
+        score,
+        codedStatus: statusNumberToString(codedStatus) || 'UNSET',
+        code_v1: response.code_v1,
+        code_v2: response.code_v2,
+        code_v3: response.code_v3,
+        status_v1: statusNumberToString(response.status_v1) || 'UNSET',
+        status_v2: statusNumberToString(response.status_v2) || 'UNSET',
+        status_v3: statusNumberToString(response.status_v3) || 'UNSET',
+        unitId: response.unit.id,
+        unitName: response.unit.name,
+        unitAlias: response.unit.alias,
+        bookletId: response.unit.booklet.id,
+        bookletName: response.unit.booklet.bookletinfo.name,
+        personId: response.unit.booklet.person.id,
+        personLogin: response.unit.booklet.person.login,
+        personCode: response.unit.booklet.person.code,
+        personGroup: response.unit.booklet.person.group,
+        variablePage
+      };
+    });
   }
 
   private createStatusFilter(version: CodingVersion, filters: ResponseSearchFilters): ResponseStatusFilter {

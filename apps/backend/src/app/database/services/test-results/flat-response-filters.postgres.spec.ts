@@ -1,11 +1,13 @@
 import { createMock } from '@golevelup/ts-jest';
-import { DataSource } from 'typeorm';
+import { DataSource, SelectQueryBuilder } from 'typeorm';
 import { TestResultsResponsesService } from './test-results-responses.service';
+import { TestResultsSearchService } from './test-results-search.service';
 import { findLongLoadingUnitIds } from './flat-response-filters';
 import { TestResultsFilterOptionsService } from './test-results-filter-options.service';
 import { TestResultsAnomaliesService } from './test-results-anomalies.service';
 import { FlatResponseOptions } from './workspace-test-results.types';
 import { WorkspaceExclusionService } from '../workspace/workspace-exclusion.service';
+import { CodingListService } from '../coding/coding-list.service';
 import Workspace from '../../entities/workspace.entity';
 import Persons from '../../entities/persons.entity';
 import { Booklet } from '../../entities/booklet.entity';
@@ -27,6 +29,7 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
   let db: DataSource;
   let service: TestResultsResponsesService;
   let optionsService: TestResultsFilterOptionsService;
+  let searchService: TestResultsSearchService;
 
   beforeAll(async () => {
     db = new DataSource({
@@ -53,7 +56,11 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
       CREATE UNLOGGED TABLE "${schema}".unit (id INT PRIMARY KEY, bookletid INT, name TEXT, alias TEXT);
       CREATE UNLOGGED TABLE "${schema}".response (
         id INT PRIMARY KEY, unitid INT, variableid TEXT, status SMALLINT, value TEXT,
-        is_autocoder_generated BOOLEAN DEFAULT false);
+        is_autocoder_generated BOOLEAN DEFAULT false,
+        status_v1 SMALLINT, status_v2 SMALLINT, status_v3 SMALLINT,
+        code_v1 BIGINT, code_v2 BIGINT, code_v3 BIGINT, score_v2 BIGINT);
+      CREATE UNLOGGED TABLE "${schema}".coding_job (id INT PRIMARY KEY, status TEXT, workspace_id INT);
+      CREATE UNLOGGED TABLE "${schema}".coding_job_unit (response_id INT, coding_job_id INT, workspace_id INT);
       CREATE UNLOGGED TABLE "${schema}".unit_tag (id INT PRIMARY KEY, "unitId" INT, tag TEXT);
       CREATE UNLOGGED TABLE "${schema}".bookletlog (id INT PRIMARY KEY, bookletid INT, key TEXT, parameter TEXT, ts BIGINT);
       CREATE UNLOGGED TABLE "${schema}".session (
@@ -76,7 +83,8 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
         (1, 1, 'A', 3, NULL), (2, 1, 'B', 3, '   '), (3, 1, 'C', 3, ' [] '), (4, 1, 'D', 3, 'answer A'),
         (5, 2, 'E', 3, 'answer B'), (6, 3, 'F', 3, 'answer C'), (7, 4, 'G', 3, '0'), (8, 5, 'H', 3, '[1]'),
         (10, 6, 'J', 3, 'foreign'), (11, 7, 'K', 3, 'not considered'), (12, 8, 'L', 3, 'ignored unit');
-      INSERT INTO "${schema}".response VALUES (9, 1, 'I', 3, 'generated', true);
+      INSERT INTO "${schema}".response (id, unitid, variableid, status, value, is_autocoder_generated)
+        VALUES (9, 1, 'I', 3, 'generated', true);
       INSERT INTO "${schema}".unit_tag VALUES
         (1, 1, 'review-alpha'), (2, 1, 'review-beta'), (3, 2, 'review-alpha'), (4, 3, 'other');
       INSERT INTO "${schema}".bookletlog VALUES
@@ -98,6 +106,12 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const anomalies = new TestResultsAnomaliesService(db.getRepository(Unit), db.getRepository(Booklet), db.getRepository(BookletLog), db.getRepository(Session), db.getRepository(UnitLog), exclusions);
     service = new TestResultsResponsesService(db.getRepository(ResponseEntity), db, exclusions, anomalies);
     optionsService = new TestResultsFilterOptionsService(db.getRepository(ResponseEntity), db, exclusions);
+    searchService = new TestResultsSearchService(
+      db.getRepository(ResponseEntity),
+      db,
+      createMock<CodingListService>({ getVariablePageMap: async () => new Map() }),
+      exclusions
+    );
   });
 
   afterAll(async () => {
@@ -117,6 +131,33 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     const [{ current_schema: currentSchema }] = await db.query('SELECT current_schema()');
     expect(currentSchema).toBe(schema);
     await expectResponses({}, [1, 2, 3, 4, 5, 6, 7, 8]);
+  });
+
+  it.each([false, true])('keeps count and page on the same snapshot with regexSearch=%s', async regexSearch => {
+    await db.query('UPDATE response SET status_v2 = 5 WHERE id = 5');
+    const getRawMany = SelectQueryBuilder.prototype.getRawMany;
+    const count = jest.spyOn(SelectQueryBuilder.prototype, 'getRawMany')
+      .mockImplementationOnce(async function readCountAndChangeStatus(this: SelectQueryBuilder<ResponseEntity>) {
+        const rows = await getRawMany.call(this);
+        expect(rows).toEqual([{ total: '1', firstId: 5 }]);
+        // This uses the other pool connection and commits before the page query.
+        await db.query('UPDATE response SET status_v2 = CASE id WHEN 4 THEN 5 ELSE 8 END WHERE id IN (4, 5)');
+        return rows;
+      });
+    try {
+      const filters = {
+        version: 'v2' as const, codedStatus: 'CODING_COMPLETE', variableId: regexSearch ? '[DE]' : undefined, regexSearch
+      };
+      await expect(searchService.searchResponses(42, filters)).resolves.toMatchObject({
+        total: 1, data: [{ responseId: 5, codedStatus: 'CODING_COMPLETE' }]
+      });
+      await expect(searchService.searchResponses(42, filters)).resolves.toMatchObject({
+        total: 1, data: [{ responseId: 4, codedStatus: 'CODING_COMPLETE' }]
+      });
+    } finally {
+      count.mockRestore();
+      await db.query('UPDATE response SET status_v2 = NULL WHERE id IN (4, 5)');
+    }
   });
 
   it('combines a nonempty person code with matching tags without duplicating responses', async () => {
