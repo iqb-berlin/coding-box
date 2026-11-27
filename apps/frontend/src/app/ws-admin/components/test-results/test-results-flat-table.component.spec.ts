@@ -120,6 +120,26 @@ describe('TestResultsFlatTableComponent', () => {
     fixture.destroy();
   });
 
+  it('shows coding code zero separately from the person code and filters the selected run', () => {
+    component.flatFilters.update(filters => ({
+      ...filters, codingCode: '0', codingVersion: 'v3', code: 'person'
+    }));
+    testResultService.getFlatResponses.mockReturnValue(of({
+      data: [{
+        codingCode: 0, code: 'person', tags: [], logAnomalies: []
+      }],
+      total: 1,
+      page: 1,
+      limit: 100
+    }));
+    fixture.detectChanges();
+    expect(testResultService.getFlatResponses).toHaveBeenCalledWith(1,
+      expect.objectContaining({ codingCode: '0', codingVersion: 'v3', code: 'person' }),
+      expect.anything());
+    expect(fixture.nativeElement.querySelector('td.mat-column-codingCode').textContent.trim()).toBe('0');
+    expect(fixture.nativeElement.querySelector('td.mat-column-code').textContent.trim()).toBe('person');
+  });
+
   it('uses translated table labels, empty state and action descriptions', async () => {
     const translate = TestBed.inject(TranslateService);
     translate.setTranslation('probe', {

@@ -133,6 +133,12 @@ describe('AppComponent', () => {
     window.history.replaceState(null, '', '/');
   });
 
+  it('uses a neutral background before the first replay navigation completes', () => {
+    jest.spyOn(TestBed.inject(LocationStrategy), 'path').mockReturnValue('/replay/person/unit');
+    const view = TestBed.createComponent(AppComponent);
+    expect(view.componentInstance.appBackground()).toBe('white');
+  });
+
   it('reads the shared session and reflects clearing it without maintaining a second login flag', async () => {
     const fixture = TestBed.createComponent(AppComponent);
     await fixture.componentInstance.ngOnInit();

@@ -121,9 +121,13 @@ describe('WsSettingsComponent', () => {
     component = fixture.componentInstance;
     fixture.detectChanges();
     httpMock = TestBed.inject(HttpTestingController);
+    httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/available').flush({});
   });
 
   afterEach(() => {
+    httpMock.match(req => /\/export\/sqlite\/available$/.test(req.url)).forEach(req => {
+      if (!req.cancelled) req.flush({});
+    });
     httpMock.verify();
     jest.restoreAllMocks();
   });
@@ -875,6 +879,10 @@ describe('WsSettingsComponent', () => {
         expect(statusRequest.request.method).toBe('GET');
         statusRequest.flush({ status: 'completed', progress: 100 });
 
+        fixture.detectChanges();
+        const downloadButton = fixture.nativeElement.querySelector('.database-export-actions button[mat-stroked-button]');
+        expect(downloadButton).toBeTruthy();
+        downloadButton.click();
         const downloadRequest = httpMock.expectOne('http://test-url/admin/workspace/1/export/sqlite/job/job-1/download');
         expect(downloadRequest.request.method).toBe('GET');
         downloadRequest.flush(new Blob(['test']));

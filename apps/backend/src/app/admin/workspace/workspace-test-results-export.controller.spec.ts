@@ -2,6 +2,10 @@ import 'reflect-metadata';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
+import type { AddressInfo } from 'node:net';
+import { once } from 'node:events';
+import { DatabaseSync } from 'node:sqlite';
+import express from 'express';
 import { Logger } from '@nestjs/common';
 import { Queue } from 'bullmq';
 import { WorkspaceTestResultsExportController } from './workspace-test-results-export.controller';
@@ -52,6 +56,8 @@ describe('WorkspaceTestResultsExportController', () => {
   it.each([
     'startWorkspaceDatabaseExportJob',
     'getWorkspaceDatabaseExportJobStatus',
+    'prepareDatabaseDownload',
+    'availableWorkspaceDatabaseExport',
     'downloadWorkspaceDatabaseExport'
   ] as const)('requires study-manager access for %s', methodName => {
     const handler = WorkspaceTestResultsExportController.prototype[methodName];
@@ -75,6 +81,82 @@ describe('WorkspaceTestResultsExportController', () => {
     deleteExportJob.mockResolvedValue(true);
     await expect(controller.deleteExportJob(7, '18')).resolves.toMatchObject({ success: true });
     expect(deleteExportJob).toHaveBeenLastCalledWith('18', 7);
+  });
+
+  it('retains the completed file for repeated downloads and restricts preparation to its owner', async () => {
+    const { controller, databaseExportQueue } = createController();
+    const filePath = __filename;
+    const result = {
+      filePath, fileName: 'workspace.sqlite', requestedByUserId: 5, workspaceId: 7, createdAt: Date.now()
+    };
+    const job = {
+      data: { scope: 'workspace', workspaceId: 7, requestedByUserId: 5 }, id: 'job', returnvalue: result, getState: async () => 'completed'
+    };
+    Object.assign(databaseExportQueue, { getJob: jest.fn().mockResolvedValue(job), getCompleted: jest.fn().mockResolvedValue([job]) });
+    const url = '/api/admin/workspace/7/export/sqlite/job/job/download';
+    const prepare = { user: { id: '5' }, originalUrl: `${url}/prepare` };
+    const response = {
+      cookie: jest.fn(), json: jest.fn(), setHeader: jest.fn(), download: jest.fn()
+    };
+    await expect(controller.availableWorkspaceDatabaseExport(7, prepare as never)).resolves.toMatchObject({ readyJobId: 'job' });
+    await expect(controller.availableWorkspaceDatabaseExport(8, prepare as never)).resolves.not.toHaveProperty('readyJobId');
+    await expect(controller.prepareDatabaseDownload(7, 'job', { ...prepare, user: { id: '6' } } as never, response as never))
+      .rejects.toMatchObject({ status: 403 });
+    await controller.prepareDatabaseDownload(7, 'job', prepare as never, response as never);
+    const [key, value] = response.cookie.mock.calls[0];
+    const request = { originalUrl: `${url}/file`, get: () => `${key}=${value}` };
+    await controller.downloadPreparedDatabaseFile(7, 'job', request as never, response as never);
+    await controller.downloadPreparedDatabaseFile(7, 'job', request as never, response as never);
+    expect(response.download).toHaveBeenCalledTimes(2);
+    await expect(controller.downloadPreparedDatabaseFile(7, 'job', { ...request, get: () => '' } as never, response as never))
+      .rejects.toMatchObject({ status: 404 });
+    result.createdAt = 0;
+    await expect(controller.downloadPreparedDatabaseFile(7, 'job', request as never, response as never))
+      .rejects.toMatchObject({ status: 404 });
+  });
+
+  it('resumes an interrupted native SQLite download from the same completed file', async () => {
+    const { controller, databaseExportQueue } = createController();
+    const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'workspace-sqlite-download-'));
+    const filePath = path.join(directory, 'export.sqlite');
+    const db = new DatabaseSync(filePath);
+    db.exec('CREATE TABLE answers (content BLOB); INSERT INTO answers VALUES (zeroblob(4194304))');
+    db.close();
+    const bytes = fs.readFileSync(filePath);
+    const result = {
+      filePath, fileName: 'export.sqlite', workspaceId: 7, requestedByUserId: 5, createdAt: Date.now()
+    };
+    Object.assign(databaseExportQueue, {
+      getJob: async () => ({
+        data: { scope: 'workspace', workspaceId: 7 }, returnvalue: result, getState: async () => 'completed'
+      })
+    });
+
+    const app = express();
+    app.get('/prepare', (req, res) => controller.prepareDatabaseDownload(7, 'job', Object.assign(req, { user: { id: 5 } }) as never, res));
+    app.get('/file', (req, res) => controller.downloadPreparedDatabaseFile(7, 'job', req, res));
+    const server = app.listen(0, '127.0.0.1');
+    try {
+      await once(server, 'listening');
+      const base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+      const prepare = await fetch(`${base}/prepare`);
+      const cookie = prepare.headers.getSetCookie()[0].split(';')[0];
+      const abort = new AbortController();
+      const first = await fetch(`${base}/file`, { headers: { cookie }, signal: abort.signal });
+      expect(first.status).toBe(200);
+      const { value } = await first.body!.getReader().read();
+      abort.abort();
+      const offset = value!.length;
+      expect(offset).toBeLessThan(bytes.length);
+      const rest = await fetch(`${base}/file`, { headers: { cookie, Range: `bytes=${offset}-` } });
+      expect(rest.status).toBe(206);
+      expect(rest.headers.get('content-range')).toBe(`bytes ${offset}-${bytes.length - 1}/${bytes.length}`);
+      expect(Buffer.concat([value!, Buffer.from(await rest.arrayBuffer())]).equals(bytes)).toBe(true);
+    } finally {
+      server.closeAllConnections();
+      await new Promise<void>(resolve => { server.close(() => resolve()); });
+      fs.rmSync(directory, { recursive: true, force: true });
+    }
   });
 
   it('does not expose server file paths in database export job status', async () => {

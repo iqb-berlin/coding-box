@@ -74,6 +74,8 @@ export class AppComponent implements OnInit, OnDestroy {
   });
 
   protected readonly appBackground = computed(() => {
+    this.navigationEnd();
+    if (/^\/(?:replay|print-view)(?:[/?#]|$)/.test(this.url.path())) return 'white';
     const background = this.appService.appLogo.bodyBackground;
     return this.homeLayout() && background === standardLogo.bodyBackground ? undefined : background;
   });

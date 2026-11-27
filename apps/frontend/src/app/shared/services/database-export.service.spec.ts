@@ -53,9 +53,9 @@ describe('DatabaseExportService', () => {
     await jest.advanceTimersByTimeAsync(0);
   }
 
-  it.each(['system', 'workspace'] as const)('exports the %s scope with one download and releases the blob URL', async kind => {
-    const scope = kind === 'system' ? { kind } : { kind, workspaceId: 5 };
-    const url = kind === 'system' ? baseUrl : 'http://test/api/admin/workspace/5/export/sqlite';
+  it('downloads a system export and releases the blob URL', async () => {
+    const scope = { kind: 'system' } as const;
+    const url = baseUrl;
     const createElement = document.createElement.bind(document);
     let filename = '';
     jest.spyOn(document, 'createElement').mockImplementation((tag, options) => {
@@ -85,7 +85,7 @@ describe('DatabaseExportService', () => {
     expect(download.request.responseType).toBe('blob');
     expect(service.isExporting()).toBe(true);
     download.flush(new Blob(['sqlite']));
-    expect(filename).toMatch(kind === 'system' ? /^database-export-.*\.sqlite$/ : /^workspace-5-export-.*\.sqlite$/);
+    expect(filename).toMatch(/^database-export-.*\.sqlite$/);
     expect(window.URL.revokeObjectURL).toHaveBeenCalledWith('blob:export');
     expect(service.isExporting()).toBe(false);
     expect(service.status()).toBe('completed');
@@ -93,6 +93,27 @@ describe('DatabaseExportService', () => {
     expect(service.error()).toBeNull();
     await jest.advanceTimersByTimeAsync(10000);
     http.expectNone(`${url}/job/job-1`);
+  });
+
+  it('restores the workspace artifact and retries a download without creating a job', () => {
+    const url = 'http://test/api/admin/workspace/5/export/sqlite';
+    const original = Object.getOwnPropertyDescriptor(window, 'isSecureContext');
+    Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+    try {
+      service.restoreWorkspace(5);
+      http.expectOne(`${url}/available`).flush({ readyJobId: 'saved' });
+      service.downloadWorkspaceFile();
+      http.expectOne(`${url}/job/saved/download/prepare`).flush({}, { status: 503, statusText: 'Unavailable' });
+      expect(service.availableFile()?.jobId).toBe('saved');
+      service.downloadWorkspaceFile();
+      http.expectOne(`${url}/job/saved/download/prepare`).flush({});
+      expect(HTMLAnchorElement.prototype.click).toHaveBeenCalledTimes(1);
+      expect(window.URL.createObjectURL).not.toHaveBeenCalled();
+      http.expectNone(`${url}/job`);
+    } finally {
+      if (original) Object.defineProperty(window, 'isSecureContext', original);
+      else Reflect.deleteProperty(window, 'isSecureContext');
+    }
   });
 
   it('lets a slow status request finish without overlapping or cancelling it', async () => {

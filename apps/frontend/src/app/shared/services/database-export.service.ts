@@ -6,11 +6,12 @@ import {
 import { MatSnackBar } from '@angular/material/snack-bar';
 import { TranslateService } from '@ngx-translate/core';
 import {
-  EMPTY, Subscription, concatMap, exhaustMap, finalize, takeWhile, tap, timer
+  EMPTY, Observable, of, Subscription, concatMap, exhaustMap, finalize, takeWhile, tap, timer
 } from 'rxjs';
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService } from '../../core/services/app.service';
 import { takeUntilWorkspaceChanged } from '../utils/workspace-request.operator';
+import { downloadInBrowser, prepareBrowserDownload } from '../utils/browser-download';
 import { extractHttpErrorMessage } from '../utils/http-error-message.util';
 
 type DatabaseExportScope = { kind: 'system' } | { kind: 'workspace'; workspaceId: number };
@@ -43,6 +44,7 @@ const messages = {
 @Injectable()
 export class DatabaseExportService {
   private readonly http = inject(HttpClient);
+  private readonly headers = new HttpHeaders({ Accept: 'application/json' });
   private readonly serverUrl = inject(SERVER_URL).replace(/\/$/, '');
   private readonly document = inject(DOCUMENT);
   private readonly app = inject(AppService);
@@ -53,6 +55,10 @@ export class DatabaseExportService {
   private readonly statusState = signal<DatabaseExportStatus | null>(null);
   private readonly errorState = signal<string | null>(null);
   private request?: Subscription;
+  private preparation?: Subscription;
+  private discovery?: Subscription;
+  private readonly readyFile = signal<{ workspaceId: number; jobId: string } | null>(null);
+  readonly availableFile = this.readyFile.asReadonly();
 
   readonly isExporting = this.exporting.asReadonly();
   readonly progress = this.progressState.asReadonly();
@@ -70,20 +76,58 @@ export class DatabaseExportService {
     const baseUrl = scope.kind === 'system' ?
       `${this.serverUrl}/admin/database/export/sqlite` :
       `${this.serverUrl}/admin/workspace/${workspaceId}/export/sqlite`;
-    const headers = new HttpHeaders({ Accept: 'application/json' });
+    this.discovery?.unsubscribe();
+    this.watch(scope, baseUrl, this.http.post<{ jobId: string }>(`${baseUrl}/job`, {}, { headers: this.headers }), 'start');
+  }
+
+  restoreWorkspace(workspaceId: number): void {
+    this.cancel();
+    if (!workspaceId) return;
+    const baseUrl = `${this.serverUrl}/admin/workspace/${workspaceId}/export/sqlite`;
+    this.discovery = this.http.get<{ readyJobId?: string; runningJobId?: string }>(`${baseUrl}/available`).pipe(
+      takeUntilWorkspaceChanged(this.app, workspaceId)
+    ).subscribe({
+      next: ({ readyJobId, runningJobId }) => {
+        if (readyJobId) this.readyFile.set({ workspaceId, jobId: readyJobId });
+        if (runningJobId) this.watch({ kind: 'workspace', workspaceId }, baseUrl, of({ jobId: runningJobId }), 'status');
+      },
+      error: error => this.reportError(extractHttpErrorMessage(error, this.translate.instant(messages.workspace.status)))
+    });
+  }
+
+  downloadWorkspaceFile(): void {
+    const file = this.readyFile();
+    if (!file || file.workspaceId !== this.app.selectedWorkspaceId) return;
+    const url = `${this.serverUrl}/admin/workspace/${file.workspaceId}/export/sqlite/job/${file.jobId}/download`;
+    this.preparation?.unsubscribe();
+    this.errorState.set(null);
+    const transfer: Observable<string | Blob> = window.isSecureContext ?
+      prepareBrowserDownload(this.http, url) :
+      this.http.get(url, { responseType: 'blob' });
+    this.preparation = transfer.pipe(takeUntilWorkspaceChanged(this.app, file.workspaceId)).subscribe({
+      next: data => downloadInBrowser(data, `workspace-${file.workspaceId}-${file.jobId}.sqlite`),
+      error: error => {
+        if (error.status === 404 && this.readyFile() === file) this.readyFile.set(null);
+        this.reportError(extractHttpErrorMessage(error, this.translate.instant(messages.workspace.download)));
+      }
+    });
+  }
+
+  private watch(
+    scope: DatabaseExportScope, baseUrl: string, job: Observable<{ jobId: string }>, initialPhase: ExportPhase
+  ): void {
+    let phase = initialPhase;
+    const workspaceId = scope.kind === 'workspace' ? scope.workspaceId : undefined;
     const text = messages[scope.kind];
-    let phase: ExportPhase = 'start';
     this.exporting.set(true);
     this.progressState.set(0);
     this.statusState.set('queued');
     this.errorState.set(null);
-
-    const export$ = this.http.post<{ jobId: string }>(`${baseUrl}/job`, {}, { headers }).pipe(
+    const export$ = job.pipe(
       concatMap(({ jobId }) => {
         phase = 'status';
         return timer(0, 2000).pipe(
-          // A slow status request must finish instead of being cancelled at every tick.
-          exhaustMap(() => this.http.get<DatabaseExportJobState>(`${baseUrl}/job/${jobId}`, { headers })),
+          exhaustMap(() => this.http.get<DatabaseExportJobState>(`${baseUrl}/job/${jobId}`, { headers: this.headers })),
           takeWhile(state => state.status === 'queued' || state.status === 'running', true),
           concatMap(state => {
             this.statusState.set(state.status);
@@ -93,12 +137,15 @@ export class DatabaseExportService {
             }
             if (state.status !== 'completed') return EMPTY;
 
-            phase = 'download';
             this.progressState.set(100);
-            return this.http.get(`${baseUrl}/job/${jobId}/download`, { headers, responseType: 'blob' }).pipe(
+            if (workspaceId !== undefined) {
+              this.readyFile.set({ workspaceId, jobId });
+              return EMPTY;
+            }
+            phase = 'download';
+            return this.http.get(`${baseUrl}/job/${jobId}/download`, { headers: this.headers, responseType: 'blob' }).pipe(
               tap(blob => {
-                const prefix = workspaceId === undefined ? 'database-export' : `workspace-${workspaceId}-export`;
-                this.saveBlob(blob, `${prefix}-${new Date().toISOString().slice(0, 10)}.sqlite`);
+                this.saveBlob(blob, `database-export-${new Date().toISOString().slice(0, 10)}.sqlite`);
                 this.snackBar.open(this.translate.instant(text.success), this.translate.instant('close'), { duration: 3000 });
               })
             );
@@ -122,6 +169,8 @@ export class DatabaseExportService {
   }
 
   cancel(): void {
+    this.discovery?.unsubscribe();
+    this.preparation?.unsubscribe();
     this.request?.unsubscribe();
     this.request = undefined;
     this.reset();
@@ -134,6 +183,7 @@ export class DatabaseExportService {
   private reset(): void {
     this.exporting.set(false);
     this.progressState.set(0);
+    this.readyFile.set(null);
     this.statusState.set(null);
     this.errorState.set(null);
   }

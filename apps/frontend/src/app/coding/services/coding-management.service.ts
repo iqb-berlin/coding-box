@@ -7,6 +7,7 @@ import {
 } from 'rxjs/operators';
 import { TranslateService } from '@ngx-translate/core';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { downloadInBrowser } from '../../shared/utils/browser-download';
 import { CodingExecutionService } from './coding-execution.service';
 import { CodingStatisticsService } from './coding-statistics.service';
 import {
@@ -57,7 +58,8 @@ type ActiveDownloadOperation = {
   workspaceId: number;
   jobId: string;
   progressSubject: BehaviorSubject<number | null>;
-  resolve: (value: Blob | PromiseLike<Blob>) => void;
+  nativeCsv: boolean;
+  resolve: (value: Blob | string) => void;
   reject: (reason?: unknown) => void;
   pollingSubscription?: Subscription;
   fileSubscription?: Subscription;
@@ -615,12 +617,11 @@ export class CodingManagementService {
       const { jobId } = jobStartResult;
 
       // Poll for status
-      const blob = await this.pollJobAndProgress('coding-results', workspaceId, jobId, this.downloadProgress$);
-
-      // Handle file download
       const ext = this.getCodingResultsDownloadExtension(format, includeGeoGebraFiles);
-      this.saveBlob(blob, `coding-results-${version}-${this.getDateString()}.${ext}`);
-      this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
+      const file = await this.pollJobAndProgress('coding-results', workspaceId, jobId, this.downloadProgress$, ext === 'csv' && window.isSecureContext);
+      downloadInBrowser(typeof file === 'string' ? `${file}?version=${version}` : file, `coding-results-${version}-${this.getDateString()}.${ext}`);
+      this.showSuccessSnackbar(this.translateService.instant(typeof file === 'string' ?
+        'coding-management.download-dialog.download-started' : 'coding-management.download-dialog.download-complete'));
     } catch (error) {
       if (isDownloadCancelledError(error)) {
         this.showInfoSnackbar(this.translateService.instant('coding-management.download-dialog.download-cancelled'));
@@ -675,7 +676,7 @@ export class CodingManagementService {
       const blob = await this.pollJobAndProgress('coding-list', workspaceId, jobId, this.codingListDownloadProgress$);
 
       const ext = format === 'excel' ? 'xlsx' : format;
-      this.saveBlob(blob, `coding-list-${this.getDateString()}.${ext}`);
+      downloadInBrowser(blob, `coding-list-${this.getDateString()}.${ext}`);
 
       this.showSuccessSnackbar(this.translateService.instant('coding-management.download-dialog.download-complete'));
     } catch (error) {
@@ -694,13 +695,15 @@ export class CodingManagementService {
     kind: DownloadOperationKind,
     workspaceId: number,
     jobId: string,
-    progressSubject: BehaviorSubject<number | null>
-  ): Promise<Blob> {
-    return new Promise<Blob>((resolve, reject) => {
+    progressSubject: BehaviorSubject<number | null>,
+    nativeCsv = false
+  ): Promise<Blob | string> {
+    return new Promise<Blob | string>((resolve, reject) => {
       const operation: ActiveDownloadOperation = {
         workspaceId,
         jobId,
         progressSubject,
+        nativeCsv,
         resolve,
         reject
       };
@@ -826,7 +829,10 @@ export class CodingManagementService {
     operation: ActiveDownloadOperation
   ): void {
     operation.completedWhileCancelPending = false;
-    operation.fileSubscription = this.exportService.downloadExportFile(operation.workspaceId, operation.jobId).subscribe({
+    const transfer: Observable<Blob | string> = operation.nativeCsv ?
+      this.exportService.prepareResultsCsvDownload(operation.workspaceId, operation.jobId) :
+      this.exportService.downloadExportFile(operation.workspaceId, operation.jobId);
+    operation.fileSubscription = transfer.subscribe({
       next: fileBlob => {
         this.activeDownloads.delete(kind);
         operation.resolve(fileBlob);
@@ -906,20 +912,5 @@ export class CodingManagementService {
 
   private getDateString(): string {
     return new Date().toISOString().slice(0, 10);
-  }
-
-  private saveBlob(blob: Blob | null, filename: string, errorMsg?: string): void {
-    if (!blob || !(blob instanceof Blob)) {
-      if (errorMsg) this.showErrorSnackbar(errorMsg, false);
-      return;
-    }
-    const url = window.URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = filename;
-    document.body.appendChild(a);
-    a.click();
-    window.URL.revokeObjectURL(url);
-    document.body.removeChild(a);
   }
 }

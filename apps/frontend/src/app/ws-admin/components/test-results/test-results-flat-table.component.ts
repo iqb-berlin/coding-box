@@ -97,6 +97,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
     'response',
     'responseStatus',
     'responseValue',
+    'codingCode',
     'frequencies',
     'tags',
     'actions'
@@ -218,6 +219,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
 
   private createDefaultFlatFilters(): FlatResponseFilters {
     return {
+      codingCode: '',
+      codingVersion: 'v1',
       code: '',
       group: '',
       login: '',
@@ -468,6 +471,12 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
     );
   }
 
+  onCodingCodeInput(field: HTMLInputElement): void {
+    if (!field.validity.valid) return;
+    this.setFlatFiltersField('codingCode', field.value === '' ? '' : String(field.valueAsNumber));
+    this.onFlatFilterChanged();
+  }
+
   onFlatFilterChanged(): void {
     if (this.suppressNextFlatFilterChange) {
       this.suppressNextFlatFilterChange = false;
@@ -510,6 +519,7 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
         'responseStatus',
         'logStatus',
         'responseValue',
+        'codingCode',
         'frequencies',
         'tags',
         'actions'
@@ -544,6 +554,8 @@ export class TestResultsFlatTableComponent implements OnInit, OnChanges {
     this.data.loadPage({
       page: validPage + 1,
       limit,
+      codingCode: this.flatFilters().codingCode,
+      codingVersion: this.flatFilters().codingVersion,
       code: this.flatFilters().code,
       group: this.flatFilters().group,
       login: this.flatFilters().login,

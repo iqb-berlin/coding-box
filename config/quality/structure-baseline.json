@@ -163,7 +163,7 @@
           "max-lines-per-function": 128
         },
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponses#1": {
-          "max-lines-per-function": 109
+          "max-lines-per-function": 106
         }
       }
     },
@@ -1391,7 +1391,7 @@
     },
     "apps/frontend/src/app/coding/services/coding-management.service.ts": {
       "file": {
-        "max-lines": 826
+        "max-lines": 820
       },
       "functions": {
         "class CodingManagementService#1/method statisticsDiffer#1": {
@@ -1450,12 +1450,6 @@
           "max-lines-per-function": 115
         }
       }
-    },
-    "apps/frontend/src/app/shared/services/test-result/test-result.service.ts": {
-      "file": {
-        "max-lines": 815
-      },
-      "functions": {}
     },
     "apps/frontend/src/app/ws-admin/components/export/export.component.ts": {
       "file": {},

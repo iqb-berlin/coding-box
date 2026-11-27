@@ -64,6 +64,32 @@ describe('Zoneless information dialogs from the results table', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
+  it('filters coding code zero in the selected run and keeps both actions together at wide and narrow widths', () => {
+    cy.viewport(2400, 1000);
+    cy.intercept('GET', '**/test-results/flat-responses?*', req => {
+      req.reply({ body: { data: [{ bookletId: 1, responseId: 1, unitId: 10, personId: 20,
+        code: 'C', codingCode: 0, group: 'G', login: 'synthetic', booklet: 'BOOKLET_ZL',
+        unit: 'UNIT_ZL', response: 'v', responseStatus: 'VALUE_CHANGED', responseValue: '2', tags: [] }], total: 1 } });
+    }).as('filteredRows');
+    cy.contains('mat-form-field', 'Angezeigter Kodierlauf').find('mat-select').click();
+    cy.contains('mat-option', 'Manuelle Kodierung').click();
+    cy.wait('@filteredRows').its('request.query.codingVersion').should('equal', 'v2');
+    cy.contains('mat-label', 'Kodiercode').click();
+    cy.focused().should('have.attr', 'type', 'number');
+    cy.focused().type('0');
+    cy.wait('@filteredRows').its('request.query').should('include', { codingCode: '0', codingVersion: 'v2' });
+    cy.get('td.mat-column-codingCode').should('have.text', '0');
+    cy.get('td.mat-column-code').should('have.text', 'C');
+    for (const width of [2400, 390]) {
+      cy.viewport(width, 1000);
+      cy.get('.flat-filter-actions button').should($buttons => {
+        const [settings, reset] = Array.from($buttons, button => button.getBoundingClientRect());
+        expect(reset.top).to.be.closeTo(settings.top, 1);
+        expect(reset.left - settings.right).to.be.closeTo(4, 1);
+      });
+    }
+  });
+
   it('renders independently delayed frequencies and note indicators after the rows', () => {
     let releaseFrequencies: () => void;
     let releaseNotes: () => void;

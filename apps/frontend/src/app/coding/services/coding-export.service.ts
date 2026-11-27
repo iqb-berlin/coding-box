@@ -3,6 +3,7 @@ import { HttpClient, HttpParams } from '@angular/common/http';
 import {
   Observable, catchError, map, of, switchMap
 } from 'rxjs';
+import { prepareBrowserDownload } from '../../shared/utils/browser-download';
 import { SERVER_URL } from '../../injection-tokens';
 import { AppService, WorkspaceTokenPolicy } from '../../core/services/app.service';
 import { CodeBookContentSetting } from '../../../../../../api-dto/coding/codebook-content-setting';
@@ -348,6 +349,10 @@ export class CodingExportService {
     return this.http.get<ExportJobStatusResponseDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}`
     );
+  }
+
+  prepareResultsCsvDownload(workspaceId: number, jobId: string): Observable<string> {
+    return prepareBrowserDownload(this.http, `${this.serverUrl}admin/workspace/${workspaceId}/coding/export/job/${jobId}/download`);
   }
 
   downloadExportFile(workspaceId: number, jobId: string): Observable<Blob> {

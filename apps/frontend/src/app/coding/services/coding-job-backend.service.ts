@@ -6,6 +6,7 @@ import {
 import {
   map, switchMap, tap
 } from 'rxjs/operators';
+import { prepareBrowserDownload } from '../../shared/utils/browser-download';
 import { SERVER_URL } from '../../injection-tokens';
 import { ValidationTaskStateService } from '../../shared/services/validation/validation-task-state.service';
 import type {
@@ -1259,8 +1260,7 @@ export class CodingJobBackendService {
   }
 
   prepareResultsCsvDownload(workspaceId: number, jobId: string): Observable<string> {
-    const url = `${this.exportJobUrl(workspaceId, jobId)}/download`;
-    return this.http.get(`${url}/prepare`, { headers: this.authHeader }).pipe(map(() => `${url}/file`));
+    return prepareBrowserDownload(this.http, `${this.exportJobUrl(workspaceId, jobId)}/download`);
   }
 
   listArchivedItemMatrixDiagnostics(workspaceId: number): Observable<ItemMatrixDiagnosticsArchiveEntryDto[]> {

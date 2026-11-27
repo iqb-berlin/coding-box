@@ -11,8 +11,10 @@ import {
   ApiResponse,
   ApiTags
 } from '@nestjs/swagger';
-import { Response } from 'express';
+import { Request, Response } from 'express';
 import * as fs from 'fs';
+import { WorkspaceDownloadTicket, workspaceDownloadPath } from './workspace-download-ticket';
+import { WORKSPACE_SQLITE_RETENTION_MS } from '../database/database-export-retention';
 import { isTestDataCsvExport, requireJobId, withQueueJobId } from '../../job-queue/job-queue.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { ValidatedBody } from '../../http/validated-body.decorator';
@@ -48,6 +50,7 @@ type PublicDatabaseExportJobResult = Omit<DatabaseExportJobResult, 'filePath'>;
 @ApiTags('Admin Workspace Test Results')
 @Controller('admin/workspace')
 export class WorkspaceTestResultsExportController {
+  private readonly downloadTicket = new WorkspaceDownloadTicket();
   private readonly logger = new Logger(WorkspaceTestResultsExportController.name);
 
   constructor(
@@ -242,48 +245,82 @@ export class WorkspaceTestResultsExportController {
     @Req() req: RequestWithUser,
     @Res() res: Response
   ): Promise<void> {
-    const job = await this.getWorkspaceDatabaseExportJob(jobId, workspace_id);
+    const result = await this.availableDatabaseFile(jobId, workspace_id, Number(req.user.id));
+    this.sendDatabaseFile(result, res);
+  }
 
-    const state = await job.getState();
-    if (state !== 'completed') {
-      throw new BadRequestException(
-        'Der Export ist noch nicht abgeschlossen und kann noch nicht heruntergeladen werden.'
-      );
-    }
-
-    const result = job.returnvalue as DatabaseExportJobResult | undefined;
-    if (!result?.filePath) {
-      throw new NotFoundException('Export result metadata is missing.');
-    }
-
-    if (result.requestedByUserId !== Number(req.user.id)) {
-      throw new ForbiddenException(
-        'Dieser Export wurde von einem anderen Benutzer angefordert.'
-      );
-    }
-
-    if (result.workspaceId !== workspace_id) {
-      throw new BadRequestException('Invalid workspace ID.');
-    }
-
-    if (!fs.existsSync(result.filePath)) {
-      throw new NotFoundException('Die Exportdatei wurde nicht gefunden.');
-    }
-
-    res.setHeader('Content-Type', 'application/x-sqlite3');
-    res.setHeader('Content-Disposition', `attachment; filename="${result.fileName}"`);
-    res.setHeader('Content-Length', String(result.fileSize));
-
-    const stream = fs.createReadStream(result.filePath);
-    this.cleanupExportFileAfterResponse(res, result.filePath);
-    stream.on('error', () => {
-      this.cleanupExportFile(result.filePath);
-      if (!res.headersSent) {
-        res.status(500).json({ error: 'Fehler beim Lesen der Exportdatei.' });
+  @Get(':workspace_id/export/sqlite/available')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async availableWorkspaceDatabaseExport(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Req() req: RequestWithUser
+  ): Promise<{ readyJobId?: string; runningJobId?: string }> {
+    const ownsJob = (job: Job<DatabaseExportJobData>) => job.data.scope === 'workspace' &&
+      job.data.workspaceId === workspaceId && job.data.requestedByUserId === Number(req.user.id);
+    const pending = await this.databaseExportQueue.getJobs(['active', 'waiting', 'prioritized', 'delayed']);
+    const runningJobId = pending.find(job => ownsJob(job) && !job.data.isCancelled)?.id;
+    const cutoff = Date.now() - WORKSPACE_SQLITE_RETENTION_MS;
+    for (let offset = 0; ; offset += 50) {
+      const jobs = await this.databaseExportQueue.getCompleted(offset, offset + 49);
+      for (const job of jobs) {
+        if (job.finishedOn && job.finishedOn < cutoff) return { runningJobId };
+        const result: DatabaseExportJobResult | undefined = job.returnvalue;
+        if (ownsJob(job) && result && result.createdAt > cutoff && fs.existsSync(result.filePath)) {
+          return { readyJobId: job.id, runningJobId };
+        }
       }
-    });
+      if (jobs.length < 50) return { runningJobId };
+    }
+  }
 
-    stream.pipe(res);
+  @Get(':workspace_id/export/sqlite/job/:jobId/download/prepare')
+  @UseGuards(JwtAuthGuard, WorkspaceGuard, AccessLevelGuard)
+  @RequireAccessLevel(3)
+  async prepareDatabaseDownload(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('jobId') jobId: string,
+    @Req() req: RequestWithUser,
+    @Res() res: Response
+  ): Promise<void> {
+    await this.availableDatabaseFile(jobId, workspaceId, Number(req.user.id));
+    this.downloadTicket.issue(workspaceDownloadPath(req).replace(/\/prepare$/, '/file'), res);
+    res.json({});
+  }
+
+  @Get(':workspace_id/export/sqlite/job/:jobId/download/file')
+  async downloadPreparedDatabaseFile(
+    @Param('workspace_id', ParseIntPipe) workspaceId: number,
+    @Param('jobId') jobId: string,
+    @Req() req: Request,
+    @Res() res: Response
+  ): Promise<void> {
+    if (!this.downloadTicket.matches(workspaceDownloadPath(req), req.get('cookie'))) {
+      throw new NotFoundException('Export download unavailable');
+    }
+    this.sendDatabaseFile(await this.availableDatabaseFile(jobId, workspaceId), res);
+  }
+
+  private async availableDatabaseFile(jobId: string, workspaceId: number, userId?: number): Promise<DatabaseExportJobResult> {
+    const job = await this.getWorkspaceDatabaseExportJob(jobId, workspaceId);
+    if (await job.getState() !== 'completed') {
+      throw new BadRequestException('Der Export ist noch nicht abgeschlossen.');
+    }
+    const result = job.returnvalue as DatabaseExportJobResult | undefined;
+    if (!result?.filePath || result.workspaceId !== workspaceId || result.createdAt <= Date.now() - WORKSPACE_SQLITE_RETENTION_MS ||
+      !fs.existsSync(result.filePath)) {
+      throw new NotFoundException('Die Exportdatei ist nicht mehr verfügbar.');
+    }
+    if (userId !== undefined && result.requestedByUserId !== userId) {
+      throw new ForbiddenException('Dieser Export wurde von einem anderen Benutzer angefordert.');
+    }
+    return result;
+  }
+
+  private sendDatabaseFile(result: DatabaseExportJobResult, res: Response): void {
+    res.download(result.filePath, result.fileName, {
+      headers: { 'Cache-Control': 'no-store, no-transform', 'Content-Type': 'application/x-sqlite3' }
+    });
   }
 
   @Get(':workspace_id/results/export')
@@ -674,7 +711,7 @@ export class WorkspaceTestResultsExportController {
     job: Job<DatabaseExportJobData>
   ): 'queued' | 'running' | 'completed' | 'failed' | 'cancelled' {
     if (
-      (state === 'waiting' || state === 'delayed' || state === 'active') &&
+      (state === 'waiting' || state === 'prioritized' || state === 'delayed' || state === 'active') &&
       job.data?.isCancelled
     ) {
       return 'cancelled';
@@ -686,6 +723,7 @@ export class WorkspaceTestResultsExportController {
 
     switch (state) {
       case 'waiting':
+      case 'prioritized':
       case 'delayed':
         return 'queued';
       case 'active':
@@ -722,36 +760,5 @@ export class WorkspaceTestResultsExportController {
       scope: result.scope,
       workspaceId: result.workspaceId
     };
-  }
-
-  private cleanupExportFileAfterResponse(
-    res: Response,
-    filePath: string
-  ): void {
-    let cleaned = false;
-    const cleanup = () => {
-      if (cleaned) {
-        return;
-      }
-      cleaned = true;
-      this.cleanupExportFile(filePath);
-    };
-
-    res.once('finish', cleanup);
-    res.once('close', () => {
-      if (res.writableEnded) {
-        cleanup();
-      }
-    });
-  }
-
-  private cleanupExportFile(filePath: string): void {
-    try {
-      if (fs.existsSync(filePath)) {
-        fs.unlinkSync(filePath);
-      }
-    } catch {
-      // Best-effort cleanup; download failures should surface through the stream.
-    }
   }
 }

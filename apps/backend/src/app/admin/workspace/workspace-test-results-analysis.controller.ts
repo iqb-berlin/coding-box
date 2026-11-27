@@ -35,11 +35,7 @@ export class WorkspaceTestResultsAnalysisController {
     description:
       'Retrieves paginated flat response rows for a workspace with optional filters'
   })
-  @ApiParam({
-    name: 'workspace_id',
-    type: Number,
-    description: 'ID of the workspace'
-  })
+  @ApiParam({ name: 'workspace_id', type: Number, description: 'ID of the workspace' })
   @ApiOkResponse({
     description: 'Flat responses retrieved successfully.'
   })
@@ -90,7 +86,9 @@ export class WorkspaceTestResultsAnalysisController {
                                          @Query('includeLogAnomalies') includeLogAnomalies?: string,
                                          @Query('focusLostThresholdMs', new DefaultValuePipe(300000), ParseIntPipe) focusLostThresholdMs?: number,
                                          @Query('sessionSpanThresholdMs', new DefaultValuePipe(86400000), ParseIntPipe) sessionSpanThresholdMs?: number,
-                                         @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number
+                                         @Query('repeatedStartThreshold', new DefaultValuePipe(2), ParseIntPipe) repeatedStartThreshold?: number,
+                                         @Query('codingVersion') codingVersion?: string,
+                                         @Query('codingCode', new ParseIntPipe({ optional: true })) codingCode?: number
   ): Promise<{ data: unknown[]; total: number; page: number; limit: number }> {
     const effectiveRegexSearch = regexSearch === true &&
       await this.workspaceSettings.isRegexSearchEnabled(workspace_id);
@@ -129,13 +127,12 @@ export class WorkspaceTestResultsAnalysisController {
         includeLogAnomalies,
         focusLostThresholdMs,
         sessionSpanThresholdMs,
-        repeatedStartThreshold
+        repeatedStartThreshold,
+        codingVersion,
+        codingCode
       });
     return {
-      data,
-      total,
-      page,
-      limit
+      data, total, page, limit
     };
   }
 

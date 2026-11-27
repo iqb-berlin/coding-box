@@ -34,6 +34,7 @@ export interface PersonTestResult {
 }
 
 export interface FlatTestResultResponseRow {
+  codingCode?: number | null;
   bookletId: number;
   responseId: number;
   unitId: number;
@@ -464,6 +465,8 @@ export class TestResultService {
   getFlatResponses(
     workspaceId: number,
     options: {
+      codingCode?: string;
+      codingVersion?: string;
       page: number;
       limit: number;
       code?: string;
@@ -501,54 +504,14 @@ export class TestResultService {
     },
     requestOptions: { suppressGlobalHttpError?: boolean } = {}
   ): Observable<FlatTestResultResponsesResponse> {
-    let params = new HttpParams()
-      .set('page', String(options.page))
-      .set('limit', String(options.limit));
-
-    const addIf = (key: string, value?: string) => {
-      const v = (value || '').trim();
-      if (v) {
-        params = params.set(key, v);
-      }
-    };
-
-    addIf('code', options.code);
-    addIf('group', options.group);
-    addIf('login', options.login);
-    addIf('booklet', options.booklet);
-    addIf('unit', options.unit);
-    addIf('response', options.response);
-    addIf('responseStatus', options.responseStatus);
-    addIf('responseValue', options.responseValue);
-    addIf('tags', options.tags);
-    if (options.regexSearch) {
-      params = params.set('regexSearch', 'true');
+    const {
+      page, limit, regexSearch, ...filters
+    } = options;
+    let params = new HttpParams().set('page', page).set('limit', limit);
+    for (const [key, value] of Object.entries(filters)) {
+      if (value?.trim()) params = params.set(key, value.trim());
     }
-    addIf('geogebra', options.geogebra);
-    addIf('audioLow', options.audioLow);
-    addIf('hasValue', options.hasValue);
-    addIf('audioLowThreshold', options.audioLowThreshold);
-    addIf('shortProcessing', options.shortProcessing);
-    addIf('shortProcessingThresholdMs', options.shortProcessingThresholdMs);
-    addIf('longLoading', options.longLoading);
-    addIf('longLoadingThresholdMs', options.longLoadingThresholdMs);
-    addIf('processingDurations', options.processingDurations);
-    addIf(
-      'processingDurationThresholdMs',
-      options.processingDurationThresholdMs
-    );
-    addIf('processingDurationMin', options.processingDurationMin);
-    addIf('processingDurationMax', options.processingDurationMax);
-    addIf('unitProgress', options.unitProgress);
-    addIf('sessionBrowsers', options.sessionBrowsers);
-    addIf('sessionOs', options.sessionOs);
-    addIf('sessionScreens', options.sessionScreens);
-    addIf('sessionIds', options.sessionIds);
-    addIf('logAnomalies', options.logAnomalies);
-    addIf('includeLogAnomalies', options.includeLogAnomalies);
-    addIf('focusLostThresholdMs', options.focusLostThresholdMs);
-    addIf('sessionSpanThresholdMs', options.sessionSpanThresholdMs);
-    addIf('repeatedStartThreshold', options.repeatedStartThreshold);
+    if (regexSearch) params = params.set('regexSearch', 'true');
 
     return this.http.get<FlatTestResultResponsesResponse>(
       `${this.serverUrl}admin/workspace/${workspaceId}/test-results/flat-responses`,

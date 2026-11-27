@@ -68,7 +68,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   protected readonly settingsSave = inject(WorkspaceSettingsSaveFacade);
 
   private appService: AppService = inject(AppService);
-  private readonly databaseExport = inject(DatabaseExportService);
+  protected readonly databaseExport = inject(DatabaseExportService);
   private workspaceSettingsService = inject(WorkspaceSettingsService);
   private clipboard = inject(Clipboard);
   private snackBar = inject(MatSnackBar);
@@ -118,6 +118,7 @@ export class WsSettingsComponent implements OnInit, OnDestroy {
   }
 
   private loadWorkspaceSettings(workspaceId: number): void {
+    this.databaseExport.restoreWorkspace(workspaceId);
     this.hasLoadedEvaluationMode.set(false);
     this.settingsSave.whenSettled(workspaceId).pipe(
       takeUntilWorkspaceChanged(this.appService, workspaceId),

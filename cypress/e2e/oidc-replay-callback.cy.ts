@@ -27,6 +27,7 @@ describe('OIDC replay callback startup', () => {
     cy.visit('/?auth_code=delayed#/replay/person/UNIT?workspaceId=12&codingJobId=100&mode=coding', {
       onBeforeLoad(win) { win.sessionStorage.setItem('oidc_login_verifier', 'verifier'); }
     });
+    cy.get('.app').should('have.css', 'background-image', 'none').and('have.css', 'background-color', 'rgb(255, 255, 255)');
     cy.wait('@delayedExchange');
     cy.wait('@delayedAuthData');
     cy.wait('@replayRequest');

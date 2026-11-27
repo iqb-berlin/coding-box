@@ -72,6 +72,7 @@ Cypress.Commands.add(
         workspaces: [{ id: workspaceId, name: workspaceName }]
       }
     }).as('authData');
+    cy.intercept('GET', `**/api/admin/workspace/${workspaceId}/export/sqlite/available`, { body: {} });
     cy.intercept('GET', `**/api/admin/users/access/${workspaceId}`, {
       body: accessLevel === undefined ? [] : [{ id: userId, accessLevel, canCode: accessLevel === 1 }]
     });
