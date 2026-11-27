@@ -68,7 +68,7 @@ function checkOmittedResponses(existing: ResponseEntity[], matched: Set<number>,
     // Updating these memberships would discard the only timestamp evidence for
     // an omitted historical case. A complete original import can disambiguate it.
     if (row.source_chunk_key == null || (parts.has(row.source_chunk_key) && unscoped.get(row.variableid)?.has(row.source_chunk_key))) {
-      throw new Error(`Datenteil für bestehende Antwort ${row.variableid} ist im Altbestand nicht eindeutig.`);
+      throw new Error(`Datenteil für bestehende Antwort ${row.variableid} ist im Altbestand nicht eindeutig. Bitte die Originaldaten der Unit prüfen.`);
     }
   }
 }
@@ -100,12 +100,10 @@ export function matchImportedResponses(incoming: IncomingResponse[], existing: R
     const rows = byVariable.get(entry.variableid) || [];
     const candidates = rows.filter(row => {
       if (row.source_chunk_key == null && item.legacySubform !== undefined) {
-        // Reproduce the old importer's wrapper-first identity. A wrapper may
-        // itself name a different part that contains the same variable.
+        // Legacy identity came from the wrapper. A single known source part
+        // can still contain several forms of the same variable.
+        if (item.legacySubform === null || (row.subform ?? '') !== item.legacySubform) return false;
         const parts = sources.get(row.variableid);
-        // A normalized CSV carries no evidence of the original wrapper name.
-        if (item.legacySubform === null) return parts?.size === 1 && parts.has(item.chunkKey!);
-        if ((row.subform ?? '') !== item.legacySubform) return false;
         if (!parts?.size) return true;
         return parts.has(item.chunkKey!) && Array.from(parts).every(part => incomingParts.get(row.variableid)!.has(part));
       }

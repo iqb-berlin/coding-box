@@ -3072,7 +3072,10 @@ describe('ReplayComponent', () => {
     );
   });
 
-  it('should clear stale replay state and finalize statistics once for a 404', () => {
+  it.each([
+    { status: 404, code: 'REPLAY_UNIT_NOT_FOUND' },
+    { status: 409, code: 'REPLAY_RESPONSE_AMBIGUOUS' }
+  ])('clears stale replay state and records $code once', ({ status, code }) => {
     replayBackendService.storeReplayStatistics.mockClear();
     component.unitId.set('stale-unit');
     component.player.set('stale-player');
@@ -3082,14 +3085,7 @@ describe('ReplayComponent', () => {
     const privateComponent = component as unknown as {
       catchError: (error: HttpErrorResponse) => void;
     };
-    privateComponent.catchError(new HttpErrorResponse({
-      status: 404,
-      error: {
-        statusCode: 404,
-        code: 'REPLAY_UNIT_NOT_FOUND',
-        message: 'Replay unit was not found.'
-      }
-    }));
+    privateComponent.catchError(new HttpErrorResponse({ status, error: { statusCode: status, code } }));
     component.onResponseVisible();
 
     expect(component.unitId()).toBe('');
@@ -3100,7 +3096,8 @@ describe('ReplayComponent', () => {
     expect(replayBackendService.storeReplayStatistics).toHaveBeenCalledWith(
       expect.any(Number),
       expect.objectContaining({
-        success: false
+        success: false,
+        ...(status === 409 ? { errorMessage: translateGerman('ui-text.replay.ambiguous-responses') } : {})
       }),
       'valid-token',
       expect.any(String)

@@ -1,7 +1,7 @@
 import { statusStringToNumber } from '../../utils/response-status-converter';
 import type { TestResultsUploadIssueDto } from '../../../../../../../api-dto/files/test-results-upload-result.dto';
 import type {
-  Chunk, TcMergeChunk, TcMergeResponse, TcMergeSubForms
+  Chunk, TcMergeChunk, TcMergeResponse, TcMergeSubForms, TcMergeUnit
 } from '../shared';
 import type { ChunkEntity } from '../../entities/chunk.entity';
 
@@ -53,6 +53,23 @@ export function chunkMemberships(chunks: Chunk[], fallback: Set<string>, onError
       };
     });
   }).filter(chunk => chunk.id || chunk.type || chunk.ts || chunk.variables.length);
+}
+
+export function selectResponseFromUnit(unit: TcMergeUnit, variableId: string, subform: string): TcMergeUnit {
+  const omittedWrappers = new Set(unit.subforms
+    .filter(group => group.id !== subform && group.responses.some(response => response.id === variableId))
+    .map(group => group.legacySubform));
+  const subforms = unit.subforms.filter(group => group.id === subform).map(group => ({
+    ...group,
+    // A wrapper shared with an omitted answer no longer identifies a legacy case.
+    legacySubform: omittedWrappers.has(group.legacySubform) ? null : group.legacySubform,
+    responses: group.responses.filter(response => response.id === variableId)
+  })).filter(group => group.responses.length);
+  const sources = new Set(subforms.map(group => group.sourceChunkKey));
+  const chunks = unit.chunks.filter(chunk => sources.has(chunk.id) &&
+    (chunk.subform === undefined || chunk.subform === subform) && chunk.variables.includes(variableId))
+    .map(chunk => ({ ...chunk, variables: [variableId] }));
+  return { ...unit, chunks, subforms };
 }
 
 // Historical rows only have the variable lists and the old chunk-level subform.

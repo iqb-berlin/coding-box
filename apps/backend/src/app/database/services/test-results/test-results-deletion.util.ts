@@ -16,15 +16,20 @@ export function responseMatchesChunkCondition(
   chunkAlias: string,
   responseAlias: string
 ): string {
-  const matchesVariable = `${responseAlias}.variableid = ANY(string_to_array(COALESCE(${chunkAlias}.variables, ''), ','))`;
+  const matchesVariable = (alias: string) => `${responseAlias}.variableid = ANY(string_to_array(COALESCE(${alias}.variables, ''), ','))`;
   return `(
       (${responseAlias}.source_chunk_key = ${chunkAlias}.key AND (
         ${chunkAlias}.subform IS NULL OR ${chunkAlias}.subform = COALESCE(${responseAlias}.subform, '')
-      ) AND (${matchesVariable} OR COALESCE(${chunkAlias}.variables, '') = ''))
+      ) AND ${matchesVariable(chunkAlias)})
       OR (${responseAlias}.source_chunk_key IS NULL AND ${chunkAlias}.subform IS NULL AND (
-        ${matchesVariable} OR (
+        ${matchesVariable(chunkAlias)} OR (
           COALESCE(${chunkAlias}.variables, '') = ''
           AND COALESCE(${chunkAlias}.key, '') = COALESCE(${responseAlias}.subform, '')
+          AND NOT EXISTS (
+            SELECT 1 FROM chunk explicit_chunk
+            WHERE explicit_chunk.unitid = ${responseAlias}.unitid AND explicit_chunk.subform IS NULL
+              AND ${matchesVariable('explicit_chunk')}
+          )
         )
       ))
     )`;

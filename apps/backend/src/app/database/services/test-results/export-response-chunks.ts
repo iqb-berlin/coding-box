@@ -3,14 +3,25 @@ import type { ChunkEntity } from '../../entities/chunk.entity';
 import type { ResponseEntity } from '../../entities/response.entity';
 import type { Chunk, TcMergeResponse } from '../shared';
 import { statusNumberToString } from '../../utils/response-status-converter';
-import { parseStoredResponseValue } from './test-results.util';
+
+function archiveValue(stored: string | null): ResponseValueType {
+  if (!stored?.startsWith('[')) return stored;
+  try {
+    const value: unknown = JSON.parse(stored);
+    // Keep arrays typed when the importer can recreate the exact stored text.
+    if (Array.isArray(value) && JSON.stringify(value) === stored) return value;
+  } catch {
+    // Free-text answers can also start with an opening bracket.
+  }
+  return stored;
+}
 
 function indexChunkMemberships(chunks: ChunkEntity[]) {
   const byVariable = new Map<string, ChunkEntity[]>();
   const emptyParts = new Map<string, ChunkEntity[]>();
   for (const chunk of chunks) {
     const variables = (chunk.variables || '').split(',').map(id => id.trim()).filter(Boolean);
-    if (!variables.length) {
+    if (!variables.length && chunk.subform == null) {
       if (!emptyParts.has(chunk.key)) emptyParts.set(chunk.key, []);
       emptyParts.get(chunk.key)!.push(chunk);
     }
@@ -29,7 +40,7 @@ function sourceRecords(row: ResponseEntity, { byVariable, emptyParts }: ReturnTy
   const memberships = (byVariable.get(row.variableid) || []).filter(chunk => (legacy ? chunk.subform == null : chunk.key === key));
   const exact = memberships.filter(chunk => !legacy && chunk.subform === form);
   const candidates = exact.length ? exact : memberships.filter(chunk => legacy || chunk.subform == null);
-  if (!candidates.length) candidates.push(...(emptyParts.get(key) || []));
+  if (legacy && !candidates.length) candidates.push(...(emptyParts.get(key) || []));
   const metadata = new Map(candidates.map(chunk => [
     JSON.stringify([chunk.key, Number(chunk.ts), chunk.type]), chunk
   ]));
@@ -49,7 +60,7 @@ export function exportResponseChunks(responses: ResponseEntity[], chunks: ChunkE
     const form = row.subform ?? '';
     const answer: TcMergeResponse = {
       id: row.variableid,
-      value: parseStoredResponseValue(row.value, row.variableid) as ResponseValueType,
+      value: archiveValue(row.value),
       status: statusNumberToString(row.status) || 'UNSET',
       subform: legacy ? undefined : form || undefined
     };

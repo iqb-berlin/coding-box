@@ -43,6 +43,8 @@ import { TestResultsExportService } from './test-results-export.service';
 import { UploadResultsService } from './upload-results.service';
 import { TestResultsUploadJobData } from '../../../job-queue/job-queue.service';
 import { responseMatchesChunkCondition } from './test-results-deletion.util';
+import { TestResultsDeletionQueryService } from './test-results-deletion-query.service';
+import { TestResultsReplayService } from './test-results-replay.service';
 import { CacheService } from '../../../cache/cache.service';
 import { ImportOptionsDto } from '../../../../../../../api-dto/files/import-options.dto';
 
@@ -96,12 +98,14 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     .orderBy('r.id')
     .getMany();
 
-  const answer = (id: string, value: string, subform?: string): TcMergeResponse => ({
+  const answer = (id: string, value: TcMergeResponse['value'], subform?: string): TcMergeResponse => ({
     id, value, subform, status: 'VALUE_CHANGED'
   });
   const part = (id: string, ts: number, answers: TcMergeResponse[], subForm?: string, responseType = 'state'): Chunk => ({
     id, ts, subForm, responseType, content: JSON.stringify(answers)
   });
+
+  const responseCsv = (chunks: Chunk[]) => writeToBuffer([{ ...rows[0], responses: JSON.stringify(chunks) }], { headers: true, delimiter: ';' });
 
   const exportCsv = async () => {
     const exporter = new TestResultsExportService(
@@ -483,6 +487,108 @@ describePostgres('Testcenter import recovery against PostgreSQL', () => {
     } finally {
       await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
     }
+  });
+
+  it.each(['merge', 'replace'] as const)('keeps the omitted historical manual case on a response-scoped %s', async mode => {
+    rows = rows.slice(0, 1);
+    const rightValue = mode === 'replace' ? 'left answer' : 'right answer';
+    const parts = [part('page', 10, [answer('x', 'left answer', 'L'), answer('x', rightValue, 'R')])];
+    rows[0].responses = parts;
+    const service = createService();
+    expect((await importRun(service, 'original')).success).toBe(true);
+    const normalized = await exportCsv();
+
+    // The target has only the historical left answer, identified by its wrapper.
+    const [left, right] = await storedResponses();
+    await repository(ResponseEntity).delete(right.id);
+    await repository(ChunkEntity).delete({ unitid: left.unitid, subform: 'R' });
+    await repository(ChunkEntity).update({ unitid: left.unitid }, { subform: null });
+    await repository(ResponseEntity).update(left.id, { source_chunk_key: null, subform: 'page' });
+    const cases = [{ id: left.id, code: 7 }];
+    const job = await addManualCases(cases);
+    const filter = { variableId: 'x', subform: 'R' };
+    try {
+      for (const csv of [normalized, await responseCsv(parts)]) {
+        expect(await uploadCsv(csv, mode, workspaceId, filter)).toEqual([expect.stringContaining('nicht eindeutig')]);
+        expect(await storedResponses()).toMatchObject([{
+          id: left.id, value: 'left answer', subform: 'page', source_chunk_key: null, code_v2: 7
+        }]);
+        expect(await manualCases(job)).toEqual(cases);
+      }
+      rows[0].responses = [part('page', 10, [answer('x', 'left answer', 'L')])];
+      expect((await importRun(service, 'identify-left', 'merge')).success).toBe(true);
+      expect(await uploadCsv(normalized, mode, workspaceId, filter)).toEqual([]);
+      expect(await storedResponses()).toMatchObject([
+        {
+          id: left.id, value: 'left answer', subform: 'L', code_v2: 7
+        },
+        { value: rightValue, subform: 'R', code_v2: null }
+      ]);
+      expect(await manualCases(job)).toEqual(cases);
+    } finally {
+      await connection.query('DELETE FROM coding_job WHERE id=$1', [job]);
+    }
+  });
+
+  it('uses the response membership timestamp in cleanup previews after an empty part arrives', async () => {
+    rows = rows.slice(0, 1);
+    rows[0].responses = [part('page', 10, [answer('x', 'original')])];
+    const service = createService();
+    expect((await importRun(service, 'answered')).success).toBe(true);
+    rows[0].responses = [part('page', 30, [])];
+    expect((await importRun(service, 'empty', 'replace')).success).toBe(true);
+    const [record] = await storedResponses();
+    const query = new TestResultsDeletionQueryService(repository(Persons), repository(Unit), repository(Booklet), connection, createMock());
+    const targets = (answeredFrom: number, answeredBefore: number) => query.resolveResponseCleanupTargets(
+      workspaceId, { unitNames: ['U1'], answeredFrom, answeredBefore }
+    );
+    expect((await targets(20, 40)).responseIds).toEqual([]);
+    expect((await targets(5, 20)).preview.responseCleanup?.samples).toMatchObject([{ responseId: record.id, answeredAt: 10 }]);
+
+    await repository(ResponseEntity).update(record.id, { source_chunk_key: null, subform: 'page' });
+    await repository(ChunkEntity).update({ unitid: record.unitid }, { subform: null });
+    expect((await targets(20, 40)).responseIds).toEqual([]);
+    expect((await targets(5, 20)).responseIds).toEqual([record.id]);
+    // Legacy data with only the wrapper timestamp still uses the historical fallback.
+    await repository(ChunkEntity).delete({ unitid: record.unitid, variables: 'x' });
+    expect((await targets(20, 40)).responseIds).toEqual([record.id]);
+  });
+
+  it.each([true, false])('replays both explicit subforms or reports an ambiguous old archive (normalized=%s)', async normalized => {
+    const chunk = part('page', 10, [answer('x', 'one', 'L'), answer('x', 'two', 'R')], 'L');
+    if (normalized) chunk.codingBoxLegacySubform = null;
+    expect(await uploadCsv(await responseCsv([chunk]), 'merge')).toEqual([]);
+    expect((await storedResponses()).map(r => r.subform).sort()).toEqual(['L', 'R']);
+    const cache = createMock<CacheService>({ get: jest.fn().mockResolvedValue(null), generateUnitResponseCacheKey: () => 'replay' });
+    const exclusions = createMock<WorkspaceExclusionService>({
+      resolveExclusionsForQueries: jest.fn().mockResolvedValue({ globalIgnoredUnits: [], ignoredBooklets: [], testletIgnoredUnits: [] })
+    });
+    const replay = new TestResultsReplayService(
+      repository(Persons), repository(Unit), repository(Booklet), repository(ResponseEntity), repository(BookletInfo), repository(ChunkEntity), cache, exclusions
+    );
+    const row = rows[0];
+    const result = replay.findUnitResponse(workspaceId, [row.loginname, row.code, row.groupname, row.bookletname].join('@'), row.unitname);
+    if (normalized) {
+      const { responses } = await result;
+      expect(responses.map(r => r.id)).toEqual(['page']);
+      const answers = JSON.parse(responses[0].content) as TcMergeResponse[];
+      expect(answers.sort((a, b) => a.subform!.localeCompare(b.subform!))).toEqual([answer('x', 'one', 'L'), answer('x', 'two', 'R')]);
+    } else {
+      await expect(result).rejects.toMatchObject({ response: { statusCode: 409, code: 'REPLAY_RESPONSE_AMBIGUOUS', message: expect.stringContaining('nicht eindeutig') } });
+      expect(cache.set).not.toHaveBeenCalled();
+    }
+  });
+
+  it('reimports its own CSV for scored marking panels without changing their raw values', async () => {
+    rows = rows.slice(0, 1);
+    const values = [['2-2-#f9f871'], null, '  ', '[ "1-1-#abcdef" ]', '{"marks":["1-1-#abcdef"]}'];
+    rows[0].responses = [part('page', 10, values.map((value, index) => answer(`marking-panel_${index}`, value)))];
+    expect((await importRun(createService(), 'markings')).success).toBe(true);
+    const [first] = await storedResponses();
+    await repository(ResponseEntity).update({ unitid: first.unitid }, { status_v1: 5, code_v1: 1 });
+    const before = await storedResponses();
+    expect(await uploadCsv(await exportCsv(), 'replace')).toEqual([]);
+    expect(await storedResponses()).toEqual(before);
   });
 
   it('rejects changed values and raw statuses on scored responses and rolls back the whole replacement', async () => {

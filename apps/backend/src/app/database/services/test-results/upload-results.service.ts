@@ -10,7 +10,7 @@ import { Job } from 'bullmq';
 import { DataSource } from 'typeorm';
 import { requireJobId } from '../../../job-queue/job-queue.util';
 import { getErrorMessage, toError } from '../../../utils/error.util';
-import { countChunkResponses } from './response-chunks';
+import { countChunkResponses, selectResponseFromUnit } from './response-chunks';
 import { FileIo } from '../../../admin/workspace/file-io.interface';
 import { Log, Person, Response } from '../shared';
 import { PersonService } from './person.service';
@@ -433,20 +433,7 @@ export class UploadResultsService {
                 }
                 return true;
               })
-              .map(u => {
-                if (scope !== 'response') {
-                  return u;
-                }
-                const subforms = u.subforms.filter(sf => sf.id === subform).map(sf => ({
-                  ...sf,
-                  responses: sf.responses.filter(response => response.id === variableId)
-                })).filter(sf => sf.responses.length);
-                const sources = new Set(subforms.map(sf => sf.sourceChunkKey));
-                const chunks = u.chunks.filter(chunk => sources.has(chunk.id) &&
-                  (chunk.subform === undefined || chunk.subform === subform) && chunk.variables.includes(variableId))
-                  .map(chunk => ({ ...chunk, variables: [variableId] }));
-                return { ...u, chunks, subforms };
-              })
+              .map(u => (scope === 'response' ? selectResponseFromUnit(u, variableId, subform) : u))
           }))
       }));
 

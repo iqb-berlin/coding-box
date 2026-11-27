@@ -989,7 +989,7 @@
       "file": {},
       "functions": {
         "class TestResultsReplayService#1/method findUnitResponse#1": {
-          "max-lines-per-function": 167
+          "max-lines-per-function": 133
         }
       }
     },
@@ -1025,7 +1025,7 @@
     },
     "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
       "file": {
-        "max-lines": 920
+        "max-lines": 907
       },
       "functions": {
         "class UploadResultsService#1/method buildImportSummary#1": {
