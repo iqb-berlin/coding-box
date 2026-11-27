@@ -35,6 +35,9 @@ jobs:
   install:
     runs-on: ubuntu-24.04
     timeout-minutes: 15
+    container:
+      # Native Node add-ons are also mounted into the prebuilt Debian live stack.
+      image: node:24.22.1-bookworm
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -45,7 +48,9 @@ jobs:
           cache: npm
       - run: npm ci --prefer-offline --no-fund
       - name: Archive Linux dependencies
-        run: tar --zstd -cf "$RUNNER_TEMP/dependencies.tar.zst" node_modules
+        run: |
+          apt-get update -qq && apt-get install -y --no-install-recommends zstd
+          tar --zstd -cf "$RUNNER_TEMP/dependencies.tar.zst" node_modules
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: dependencies
@@ -114,7 +119,7 @@ jobs:
         with:
           name: backend-coverage
           path: coverage/apps/backend/
-          if-no-files-found: error
+          if-no-files-found: ${{ job.status == 'success' && 'error' || 'warn' }}
           retention-days: 30
 
   test-backend-integration:
@@ -187,7 +192,7 @@ jobs:
         with:
           name: frontend-coverage
           path: coverage/apps/frontend/
-          if-no-files-found: error
+          if-no-files-found: ${{ job.status == 'success' && 'error' || 'warn' }}
           retention-days: 30
 
   test-browser:
