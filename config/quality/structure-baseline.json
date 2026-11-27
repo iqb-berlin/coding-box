@@ -953,7 +953,7 @@
       "file": {},
       "functions": {
         "class TestResultsFilterOptionsService#1/method findFlatResponseFilterOptions#1": {
-          "max-lines-per-function": 201
+          "max-lines-per-function": 132
         }
       }
     },
@@ -980,7 +980,7 @@
     },
     "apps/backend/src/app/database/services/test-results/test-results-query.service.ts": {
       "file": {
-        "max-lines": 1053
+        "max-lines": 1040
       },
       "functions": {
         "class TestResultsQueryService#1/method findBookletLogsByUnitId#1": {
@@ -993,7 +993,7 @@
           "max-lines-per-function": 127
         },
         "class TestResultsQueryService#1/method getWorkspaceTestResultsOverview#1": {
-          "max-lines-per-function": 162
+          "max-lines-per-function": 149
         },
         "class TestResultsQueryService#1/method quickSearchTestResults#1": {
           "max-lines-per-function": 157
@@ -1012,11 +1012,11 @@
       "file": {},
       "functions": {
         "class TestResultsSearchService#1/method searchResponses#1": {
-          "max-lines-per-function": 332
+          "max-lines-per-function": 203
         },
-        "class TestResultsSearchService#1/method searchResponses#1/function runSearch#1": {
-          "complexity": 39,
-          "max-lines-per-function": 253
+        "class TestResultsSearchService#1/method searchResponses#1/function buildQuery#1": {
+          "complexity": 28,
+          "max-lines-per-function": 116
         }
       }
     },
