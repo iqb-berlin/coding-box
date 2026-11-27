@@ -1,12 +1,3 @@
-.workspaces {
-  box-sizing: border-box;
-  border-radius: 8px;
-  background: lightgray;
-  width: 100%;
-  min-height: 100%;
-  padding: clamp(20px, 4vw, 50px);
-}
-
-.mat-raised-button {
-  width: 100%;
+:host {
+  display: block;
 }

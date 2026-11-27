@@ -55,7 +55,7 @@ Cypress.Commands.add(
     isAdmin = true,
     accessLevel
   }: WorkspaceStubOptions) => {
-    cy.intercept('GET', '**/api//admin/logo/settings', {
+    cy.intercept('GET', '**/api/admin/logo/settings', {
       statusCode: 404,
       body: {}
     });

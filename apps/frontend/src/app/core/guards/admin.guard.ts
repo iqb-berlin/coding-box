@@ -11,7 +11,7 @@ import { AuthService } from '../services/auth.service';
 import {
   createAccessDeniedUrlTree,
   createAuthDataFailedUrlTree,
-  createReAuthenticationUrlTree
+  createLoginUrlTree
 } from './auth-redirect';
 import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
 import { hasAdminBypass } from './admin-access';
@@ -25,7 +25,7 @@ const isAdminAccessAllowed = async (
   const router = inject(Router);
 
   if (!authService.isLoggedIn()) {
-    return createReAuthenticationUrlTree(router, state.url);
+    return createLoginUrlTree(router, state.url);
   }
 
   const userRoles = authService.getRoles() || [];

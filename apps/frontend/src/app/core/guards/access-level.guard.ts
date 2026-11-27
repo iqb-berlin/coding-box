@@ -14,7 +14,7 @@ import { WorkspaceAccessService } from '../services/workspace-access.service';
 import {
   createAccessDeniedUrlTree,
   createAuthDataFailedUrlTree,
-  createReAuthenticationUrlTree
+  createLoginUrlTree
 } from './auth-redirect';
 import { createRequiredAuthDataGuardResult, waitForRequiredAuthData } from './auth-data-ready';
 import {
@@ -60,7 +60,7 @@ function createWorkspaceAccessGuard(
     const router = inject(Router);
 
     if (!authService.isLoggedIn()) {
-      return createReAuthenticationUrlTree(router, state.url);
+      return createLoginUrlTree(router, state.url);
     }
 
     const userService = inject(UserService);

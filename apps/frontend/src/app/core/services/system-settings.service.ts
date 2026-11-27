@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
+import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
 import { SERVER_URL } from '../../injection-tokens';
 import {
   ContentPoolConnectionTestRequest,
@@ -57,7 +58,8 @@ export class SystemSettingsService {
 
   getLegalNotice(): Observable<LegalNoticeDto> {
     return this.http.get<LegalNoticeDto>(
-      `${this.serverUrl}legal-notice`
+      `${this.serverUrl}legal-notice`,
+      { context: suppressGlobalAndAuthRedirectHttpErrorContext() }
     );
   }
 

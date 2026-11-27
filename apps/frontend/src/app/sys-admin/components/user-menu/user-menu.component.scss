@@ -1,6 +1,16 @@
+.user-menu-trigger {
+  --mat-button-text-label-text-color: var(--app-header-icon-color, lightgrey);
+  min-inline-size: var(--app-header-icon-button-width, 64px);
+}
+
 .user-info {
   padding: 16px;
-  text-align: center;
+  overflow-wrap: anywhere;
+
+  .permissions-label {
+    margin-block: 0.75rem 0.25rem;
+    font-weight: 500;
+  }
 
   .user-name {
     font-weight: 500;

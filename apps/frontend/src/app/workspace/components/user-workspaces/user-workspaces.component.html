@@ -1,18 +1,27 @@
-<div class="workspaces">
-  @if(this.authService.isLoggedIn()){
+@let signInAgain = showSessionExpired;
+@if (signInAgain || !authService.isLoggedIn()) {
+  @let action = signInAgain ? 'ui-text.user-workspaces.sign-in-again' : 'home.login';
+  <section class="login-panel" aria-labelledby="sign-in-title">
+    <h2 id="sign-in-title">{{ action | translate }}</h2>
+    <p class="login-description">{{ 'ui-text.user-workspaces.purpose' | translate }}</p>
+    @if (signInAgain) {
+      <p class="reauthentication-hint" role="status">
+        <mat-icon aria-hidden="true">lock</mat-icon>
+        <span>{{ 'ui-text.user-workspaces.session-ended' | translate }}</span>
+      </p>
+    }
+    <button mat-flat-button color="primary" type="button" class="login-button" (click)="login()">
+      <mat-icon>login</mat-icon>
+      {{ action | translate }}
+    </button>
+  </section>
+} @else {
+  <section class="workspace-panel" aria-labelledby="workspace-title">
+    <h2 id="workspace-title">{{ 'ui-text.user-workspaces.choose' | translate }}</h2>
     @if (showLoading) {
       <div class="workspace-state" role="status">
-        <mat-spinner diameter="28"></mat-spinner>
+        <mat-spinner diameter="24"></mat-spinner>
         <p>{{ 'home.loading-user-workspaces' | translate }}</p>
-      </div>
-    } @else if (showSessionExpired) {
-      <div class="workspace-state workspace-state-error" role="alert">
-        <mat-icon>lock</mat-icon>
-        <p>{{ 'error.reauthentication_message' | translate }}</p>
-        <button mat-raised-button color="primary" type="button" (click)="login()">
-          <mat-icon>login</mat-icon>
-          <span>{{ 'home.login' | translate }}</span>
-        </button>
       </div>
     } @else if (showAuthDataError) {
       <div class="workspace-state workspace-state-error" role="alert">
@@ -20,57 +29,47 @@
         <p>{{ authDataErrorMessage | translate }}</p>
         <div class="workspace-state-actions">
           <button
-            mat-raised-button
+            mat-flat-button
             color="primary"
             type="button"
             [disabled]="authDataReloadRunning()"
             (click)="reloadAuthData()">
             <mat-icon>refresh</mat-icon>
-            <span>{{ 'home.retry-auth-data' | translate }}</span>
+            {{ 'home.retry-auth-data' | translate }}
           </button>
           <button mat-stroked-button color="primary" type="button" (click)="login()">
             <mat-icon>login</mat-icon>
-            <span>{{ 'home.relogin' | translate }}</span>
+            {{ 'home.relogin' | translate }}
           </button>
         </div>
       </div>
     } @else if (showEmptyWorkspaces) {
-      <div>
-        <p>{{'home.no-user-workspaces' | translate}}</p>
-      </div>
+      <p class="workspace-feedback">{{ 'home.no-user-workspaces' | translate }}</p>
     } @else if (workspaces().length > 0) {
-      <div class="fx-column-start-stretch workspace-gap">
-        <h1>{{ 'admin.workspaces' | translate }}</h1>
-        @for (ws of workspaces(); track ws.id) {
-          <div class="fx-column-start-stretch">
-            <div class="fx-row-space-between-center">
-              <a mat-raised-button color="primary" class="workspace"
-                 [routerLink]="['/workspace-admin/' + ws.id]">
-                {{ws.name}}
-              </a>
-            </div>
-          </div>
+      <mat-form-field appearance="outline" class="workspace-search" subscriptSizing="dynamic">
+        <mat-icon matIconPrefix aria-hidden="true">search</mat-icon>
+        <mat-label>{{ 'ui-text.user-workspaces.search' | translate }}</mat-label>
+        <input matInput type="search" #workspaceSearch [value]="searchQuery()" (input)="searchQuery.set(workspaceSearch.value)" />
+      </mat-form-field>
+      <div class="workspace-results">
+        @if (filteredWorkspaces().length) {
+          <ul class="workspace-list">
+            @for (workspace of filteredWorkspaces(); track workspace.id) {
+              <li>
+                <a class="workspace" [routerLink]="['/workspace-admin', workspace.id]">
+                  <span>{{ workspaceLabel(workspace) }}</span>
+                  <mat-icon aria-hidden="true">chevron_right</mat-icon>
+                </a>
+              </li>
+            }
+          </ul>
         }
+        <div role="status">
+          @if (!filteredWorkspaces().length) {
+            <p class="workspace-feedback">{{ 'ui-text.user-workspaces.no-matches' | translate }}</p>
+          }
+        </div>
       </div>
     }
-  }@else {
-    <div class="login-panel">
-      @if (appService.needsReAuthentication) {
-        <div class="reauthentication-hint" role="status">
-          <mat-icon>lock</mat-icon>
-          <div>
-            <strong>{{ 'error.reauthentication_title' | translate }}</strong>
-            <p>{{ 'error.reauthentication_message' | translate }}</p>
-          </div>
-        </div>
-      }
-      <p>
-        {{ 'ui-text.user-workspaces.login-required' | translate }}
-      </p>
-      <button mat-raised-button color="primary" class="login-button" (click)="login()">
-        <mat-icon>login</mat-icon>
-        <span>{{ 'login' | translate }}</span>
-      </button>
-    </div>
-  }
-</div>
+  </section>
+}

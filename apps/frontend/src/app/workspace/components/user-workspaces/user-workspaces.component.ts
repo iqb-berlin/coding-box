@@ -1,13 +1,16 @@
 import {
-  Component, DestroyRef, inject, signal, input, ChangeDetectionStrategy
+  Component, DestroyRef, inject, signal, input, computed, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import { TranslateModule } from '@ngx-translate/core';
 import { RouterLink } from '@angular/router';
-import { MatAnchor, MatButton } from '@angular/material/button';
+import { MatButton } from '@angular/material/button';
+import { MatFormField, MatLabel, MatPrefix } from '@angular/material/form-field';
+import { MatInput } from '@angular/material/input';
 import { MatIcon } from '@angular/material/icon';
 import { MatProgressSpinner } from '@angular/material/progress-spinner';
 import { WorkspaceFullDto } from '../../../../../../../api-dto/workspaces/workspace-full-dto';
+import { injectUiTranslator } from '../../../shared/utils/ui-translator';
 import { AuthService } from '../../../core/services/auth.service';
 import { AppService, AuthBootstrapStatus } from '../../../core/services/app.service';
 
@@ -16,7 +19,9 @@ import { AppService, AuthBootstrapStatus } from '../../../core/services/app.serv
   selector: 'coding-box-user-workspaces',
   templateUrl: './user-workspaces.component.html',
   styleUrls: ['./user-workspaces.component.scss'],
-  imports: [MatAnchor, RouterLink, TranslateModule, MatButton, MatIcon, MatProgressSpinner]
+  imports: [
+    RouterLink, TranslateModule, MatButton, MatFormField, MatLabel, MatPrefix, MatInput, MatIcon, MatProgressSpinner
+  ]
 })
 
 export class UserWorkspacesComponent {
@@ -27,6 +32,20 @@ export class UserWorkspacesComponent {
   readonly authBootstrapStatus = input<AuthBootstrapStatus>('checking');
   readonly authDataLoaded = input(false);
   protected readonly authDataReloadRunning = signal(false);
+  private readonly uiTranslate = injectUiTranslator();
+
+  protected workspaceLabel(workspace: WorkspaceFullDto): string {
+    return workspace.name || this.uiTranslate('ui-text.user-workspaces.unnamed', { id: workspace.id });
+  }
+
+  protected readonly searchQuery = signal('');
+  protected readonly filteredWorkspaces = computed(() => {
+    const workspaces = this.workspaces();
+    const query = this.searchQuery().trim().toLowerCase();
+    return query ?
+      workspaces.filter(workspace => this.workspaceLabel(workspace).toLowerCase().includes(query)) :
+      workspaces;
+  });
 
   protected get authDataErrorMessage(): string {
     if (this.appService.authDataFailureCode === 'configuration-error') return 'error.auth_configuration_error_message';
@@ -42,9 +61,8 @@ export class UserWorkspacesComponent {
   }
 
   protected get showSessionExpired(): boolean {
-    return this.authService.isLoggedIn() === true &&
-      !this.authDataLoaded() &&
-      this.authBootstrapStatus() === 'session-expired';
+    if (!this.authService.isLoggedIn()) return this.appService.needsReAuthentication;
+    return !this.authDataLoaded() && this.authBootstrapStatus() === 'session-expired';
   }
 
   protected get showAuthDataError(): boolean {

@@ -77,6 +77,7 @@ services:
         condition: service_healthy
     environment:
       APP_ROLE: api
+      PUBLIC_IMPRINT_URL: ${PUBLIC_IMPRINT_URL:-}
       API_HOST: backend
       HTTP_PORT: ${HTTP_PORT:-4200}
       JWT_SECRET: ${JWT_SECRET}

@@ -3501,12 +3501,13 @@
     "save-alt-text": "Alternativtext speichern",
     "reset-logo": "Zum Standard-Logo zurücksetzen",
     "background-title": "Hintergrund-Einstellungen",
-    "background-color": "Hintergrundfarbe",
+    "background-color": "Hintergrund",
     "background-placeholder": "z.B. #ff0000, rgb(255,0,0), oder linear-gradient(...)",
-    "background-hint": "Geben Sie eine Farbe oder einen Farbverlauf im CSS-Format ein",
-    "save-background": "Hintergrundfarbe speichern",
-    "reset-background": "Standard-Farbverlauf wiederherstellen",
+    "background-hint": "Geben Sie eine CSS-Farbe, einen Farbverlauf oder ein Hintergrundbild ein, z. B. url(/bilder/hintergrund.jpg) center / cover.",
+    "save-background": "Hintergrund speichern",
+    "reset-background": "Standardhintergrund wiederherstellen",
     "legal-notice-title": "Impressum/Datenschutz",
+    "instance-notice-hint": "Hinterlegen Sie hier die Datenschutzerklärung dieser Kodierbox. Ohne separat konfigurierte Impressumsadresse wird dieser Text auch unter „Impressum“ angezeigt.",
     "text": "Text",
     "html-hint": "HTML wird beim Anzeigen bereinigt.",
     "restore-default": "Standard wiederherstellen",
@@ -3535,8 +3536,8 @@
     "logo-reset-error": "Fehler beim Zurücksetzen des Logos",
     "alt-text-saved": "Alternativtext erfolgreich gespeichert",
     "alt-text-save-error": "Fehler beim Speichern des Alternativtexts",
-    "background-saved": "Hintergrundfarbe erfolgreich gespeichert",
-    "background-save-error": "Fehler beim Speichern der Hintergrundfarbe",
+    "background-saved": "Hintergrund gespeichert",
+    "background-save-error": "Fehler beim Speichern des Hintergrunds",
     "background-restored": "Hintergrundfarbe auf Standard zurückgesetzt",
     "background-reset-error": "Fehler beim Zurücksetzen der Hintergrundfarbe",
     "legal-notice-load-error": "Impressum/Datenschutz-Text konnte nicht geladen werden.",
@@ -4261,12 +4262,18 @@
       "anchor-reset-failed": "Replay-Anchor konnte nicht zurückgesetzt werden",
       "schema-loading": "Kodierungsschema wird geladen..."
     },
+    "user-menu": {
+      "signed-in-as": "Angemeldet als {{login}}",
+      "permissions": "Berechtigungen",
+      "admin": "Sie dürfen Nutzerrechte und Arbeitsbereiche verwalten.",
+      "member": "Es gelten die Berechtigungen Ihrer zugewiesenen Arbeitsbereiche."
+    },
     "app-info": {
-      "intro-prefix": "Das",
+      "imprint": "Impressum",
+      "privacy": "Datenschutz",
+      "legal-links": "Rechtliche Informationen",
       "institute-name": "Institut zur Qualitätsentwicklung im Bildungswesen (IQB)",
-      "application-description": "betreibt auf diesen Seiten eine Anwendung für die Kodierung von Antworten aus Testungen.",
-      "version": "Version:",
-      "user": "Benutzer:"
+      "version": "Version {{version}}"
     },
     "error-message-display": {
       "consequences": "Konsequenzen:",
@@ -4290,7 +4297,14 @@
       "title": "Nutzer Zugriffs Rechte für Arbeitsbereich(e)"
     },
     "user-workspaces": {
-      "login-required": "Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen."
+      "choose": "Arbeitsbereich auswählen",
+      "purpose": "Mit der IQB-Kodierbox kodieren Sie Antworten aus Testungen.",
+      "login-required": "Bitte melden Sie sich an, um auf Ihre Arbeitsbereiche zuzugreifen.",
+      "sign-in-again": "Erneut anmelden",
+      "session-ended": "Ihre Sitzung ist abgelaufen. Offene Eingaben lassen sich erst nach der Anmeldung speichern.",
+      "search": "Arbeitsbereiche durchsuchen",
+      "no-matches": "Keine passenden Arbeitsbereiche gefunden.",
+      "unnamed": "Arbeitsbereich {{id}}"
     },
     "booklet-info-dialog": {
       "title": "Testheft-Information: {{bookletId}}",
@@ -5153,6 +5167,8 @@
       "delete-from-database": "Aus Datenbank löschen"
     },
     "impressum-dialog": {
+      "no-instance-policy": "Für diese Kodierbox wurde noch keine eigene Datenschutzerklärung hinterlegt.",
+      "unavailable": "Die Angaben dieser Instanz konnten nicht geladen werden. Hier sehen Sie die allgemeinen Kontaktinformationen.",
       "title": "IQB-Kodierbox - Impressum/Datenschutz"
     },
     "metadata-dialog": {

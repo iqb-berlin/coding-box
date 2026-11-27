@@ -3,6 +3,7 @@ import { HttpClient } from '@angular/common/http';
 import { Observable } from 'rxjs';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
 import { AppLogoDto } from '../../../../../../api-dto/app-logo-dto';
+import { suppressGlobalAndAuthRedirectHttpErrorContext } from '../interceptors/http-error-context';
 import { SERVER_URL } from '../../injection-tokens';
 
 @Injectable({
@@ -10,7 +11,7 @@ import { SERVER_URL } from '../../injection-tokens';
 })
 export class LogoService {
   private http = inject(HttpClient);
-  readonly serverUrl = inject(SERVER_URL);
+  readonly serverUrl = inject(SERVER_URL).replace(/\/$/, '');
 
   /**
    * Uploads a logo file to the server
@@ -46,6 +47,8 @@ export class LogoService {
    * @returns An Observable with the logo settings
    */
   getLogoSettings(): Observable<AppLogoDto> {
-    return this.http.get<AppLogoDto>(`${this.serverUrl}/admin/logo/settings`, {});
+    return this.http.get<AppLogoDto>(`${this.serverUrl}/admin/logo/settings`, {
+      context: suppressGlobalAndAuthRedirectHttpErrorContext()
+    });
   }
 }
