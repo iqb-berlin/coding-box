@@ -1,6 +1,6 @@
 describe('zoneless migration build', () => {
   it('boots without loading ZoneJS', () => {
-    cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
+    cy.intercept('GET', '**/api/admin/logo/settings', { statusCode: 404, body: {} });
     cy.visit('/');
     cy.get('coding-box-home').should('be.visible');
     cy.get('.app-header img').should('have.attr', 'alt', 'Startseite');
@@ -15,7 +15,7 @@ describe('zoneless migration build', () => {
       cy.intercept('GET', '**/api/admin/content-pool/settings', {
         body: { enabled: false, baseUrl: '', hasApplicationToken: false }
       });
-      cy.intercept('PUT', '**/api//admin/logo/settings', { body: { success: true } }).as('saveLogo');
+      cy.intercept('PUT', '**/api/admin/logo/settings', { body: { success: true } }).as('saveLogo');
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(win => { win.location.hash = '/admin/settings'; });

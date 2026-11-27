@@ -2,11 +2,6 @@ import {
   Component, OnInit, DestroyRef, inject, signal, ChangeDetectionStrategy
 } from '@angular/core';
 import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
-import { MatFormFieldModule } from '@angular/material/form-field';
-import { MatInputModule } from '@angular/material/input';
-import { MatButtonModule } from '@angular/material/button';
-import { ReactiveFormsModule } from '@angular/forms';
-import { TranslateModule } from '@ngx-translate/core';
 import {
   catchError, forkJoin, of
 } from 'rxjs';
@@ -14,6 +9,7 @@ import {
   ActivatedRoute, NavigationStart, Params, Router
 } from '@angular/router';
 import { MatSnackBar } from '@angular/material/snack-bar';
+import { version } from '../../../../../../package.json';
 import { injectUiTranslator } from '../../shared/utils/ui-translator';
 import { AppService, AuthBootstrapStatus } from '../../core/services/app.service';
 import { AuthService } from '../../core/services/auth.service';
@@ -24,6 +20,7 @@ import { WorkspaceFullDto } from '../../../../../../api-dto/workspaces/workspace
 import { UserService } from '../../shared/services/user/user.service';
 import {
   AUTH_QUERY_PARAM_ACCESS_DENIED,
+  AUTH_QUERY_PARAM_LOGIN_REQUIRED,
   AUTH_QUERY_PARAM_AUTH_DATA_FAILED,
   AUTH_QUERY_PARAM_SESSION_EXPIRED
 } from '../../core/guards/auth-redirect';
@@ -37,11 +34,6 @@ import {
   selector: 'coding-box-home',
   standalone: true,
   imports: [
-    MatFormFieldModule,
-    MatInputModule,
-    MatButtonModule,
-    ReactiveFormsModule,
-    TranslateModule,
     AppInfoComponent,
     UserWorkspacesAreaComponent
   ],
@@ -61,6 +53,7 @@ export class HomeComponent implements OnInit {
   private authService = inject(AuthService);
 
   readonly workspaces = signal<WorkspaceFullDto[]>([]);
+  protected readonly appVersion = version;
   protected readonly authData = signal(AppService.defaultAuthData);
   protected readonly authBootstrapStatus = signal<AuthBootstrapStatus>('checking');
   private isPersonalCodingJobsRedirectChecked = false;
@@ -173,6 +166,12 @@ export class HomeComponent implements OnInit {
     const returnUrl = typeof params.returnUrl === 'string' ? params.returnUrl : undefined;
 
     switch (authReason) {
+      case AUTH_QUERY_PARAM_LOGIN_REQUIRED:
+        this.resetAuthDataFailedQueryParamState();
+        if (!this.authService.isLoggedIn()) {
+          this.appService.reAuthenticationReturnUrl = this.appService.normalizeInternalRoute(returnUrl);
+        }
+        break;
       case AUTH_QUERY_PARAM_SESSION_EXPIRED:
         this.resetAuthDataFailedQueryParamState();
         if (this.authService.isLoggedIn() === false) {
@@ -242,6 +241,4 @@ export class HomeComponent implements OnInit {
     this.authDataFailedQueryParamActive = false;
     this.authDataFailedMessageShown = false;
   }
-
-  protected readonly Number = Number;
 }

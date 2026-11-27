@@ -185,10 +185,6 @@ export class AppService {
   private authDataRefreshRequestId = 0;
   private latestAppliedAuthDataRefreshRequestId = 0;
 
-  constructor() {
-    this.loadLogoSettings();
-  }
-
   get selectedWorkspaceId(): number {
     return this.selectedWorkspaceIdValue();
   }
@@ -361,7 +357,7 @@ export class AppService {
     return error.error?.code !== 'configuration-error' && RETRYABLE_AUTH_BOOTSTRAP_ERROR_STATUSES.has(error.status ?? -1);
   }
 
-  private loadLogoSettings(): void {
+  loadLogoSettings(): void {
     this.logoService.getLogoSettings().subscribe({
       next: settings => {
         if (settings) {

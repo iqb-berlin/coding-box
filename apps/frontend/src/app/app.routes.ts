@@ -10,11 +10,17 @@ export const routes: Routes = [
   {
     path: 'home',
     title: pageTitle('home'),
+    data: { homeLayout: true },
     loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent)
   },
   ...replayRoutes,
   ...codingRoutes,
   ...sysAdminRoutes,
   ...wsAdminRoutes,
-  { path: '**', title: pageTitle('home'), loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent) }
+  {
+    path: '**',
+    title: pageTitle('home'),
+    data: { homeLayout: true },
+    loadComponent: () => import('./components/home/home.component').then(m => m.HomeComponent)
+  }
 ];

@@ -7,7 +7,7 @@ describe('OIDC replay callback startup', () => {
     })}.signature`;
     let exchanged = false;
     let bootstrapped = false;
-    cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
+    cy.intercept('GET', '**/api/admin/logo/settings', { statusCode: 404, body: {} });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.intercept('POST', '**/api/admin/workspace/12/replay-statistics', { body: {} });
     cy.intercept('POST', '**/api/auth/exchange', req => {

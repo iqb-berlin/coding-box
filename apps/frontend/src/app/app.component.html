@@ -1,4 +1,4 @@
-<div class="app" [style.background]="appService.appLogo.bodyBackground">
+<div class="app" [class.app--home]="homeLayout()" [style.background]="appBackground()">
   @if (appService.dataLoading) {
     <div class="spinner-container fx-column-start-center">
       <mat-spinner class="fx-flex-fix-100"></mat-spinner>
@@ -8,7 +8,7 @@
 
   @if (!url.path().includes('replay') && !url.path().includes('print-view'))
   {
-    <div class="fx-row-space-between-center app-header">
+    <header class="app-header">
       <a [routerLink]="['/']" [attr.aria-label]="'home.go-home' | translate">
         <img
           [src]="appService.appLogo.data"
@@ -17,10 +17,7 @@
         />
       </a>
 
-      <h1
-        class="app-title"
-        [class.margin-logged-in]="authService.isLoggedIn()"
-        [class.margin-logged-out]="!authService.isLoggedIn()">
+      <h1 class="app-title">
         {{ 'ui-text.app.title' | translate }}
       </h1>
 
@@ -34,7 +31,6 @@
             mat-button
             class="icon-button-large admin-button"
             [routerLink]="['/admin']"
-            [style]="{color:'lightgrey'}"
             [matTooltip]="'home.goto-admin' | translate"
             matTooltipPosition="above"
             data-cy="goto-admin"
@@ -48,7 +44,7 @@
           <coding-box-user-menu></coding-box-user-menu>
         }
       </div>
-    </div>
+    </header>
     <coding-box-system-notification-banner></coding-box-system-notification-banner>
   }
   <div class="app-main">

@@ -68,6 +68,16 @@ export class AppComponent implements OnInit, OnDestroy {
   readonly errorMessage = signal('');
   readonly authData = toSignal(this.appService.authData$, { initialValue: AppService.defaultAuthData });
   private readonly navigationEnd = toSignal(this.router.events.pipe(filter(event => event instanceof NavigationEnd)));
+  protected readonly homeLayout = computed(() => {
+    this.navigationEnd();
+    return this.router.routerState.root.firstChild?.snapshot.data.homeLayout === true;
+  });
+
+  protected readonly appBackground = computed(() => {
+    const background = this.appService.appLogo.bodyBackground;
+    return this.homeLayout() && background === standardLogo.bodyBackground ? undefined : background;
+  });
+
   protected readonly currentWorkspaceName = computed(() => {
     this.navigationEnd();
     const workspaceId = this.getWorkspaceIdFromUrl();
@@ -182,6 +192,7 @@ export class AppComponent implements OnInit, OnDestroy {
 
   private setAuthState(): void {
     this.session.establish(this.authService.getLoggedUser());
+    this.appService.loadLogoSettings();
   }
 
   private async handleAuthCallback(): Promise<string | undefined> {

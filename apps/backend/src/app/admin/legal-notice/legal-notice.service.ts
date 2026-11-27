@@ -21,7 +21,9 @@ export class LegalNoticeService {
       where: { key: this.settingKey }
     });
 
+    const imprintUrl = URL.parse(process.env.PUBLIC_IMPRINT_URL || '');
     return {
+      ...(imprintUrl?.protocol === 'https:' && { imprintUrl: imprintUrl.href }),
       html: setting?.content || defaultLegalNoticeHtml,
       isDefault: !setting
     };

@@ -9,7 +9,7 @@ import { AuthService } from '../services/auth.service';
 import { UserService } from '../../shared/services/user/user.service';
 import {
   createAuthDataFailedUrlTree,
-  createReAuthenticationUrlTree
+  createLoginUrlTree
 } from './auth-redirect';
 import {
   RequiredAuthDataStatus,
@@ -76,7 +76,7 @@ const isAccessAllowed = async (
   const router = inject(Router);
 
   if (!authService.isLoggedIn()) {
-    return createReAuthenticationUrlTree(router, state.url);
+    return createLoginUrlTree(router, state.url);
   }
 
   try {

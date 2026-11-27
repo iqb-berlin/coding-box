@@ -6,8 +6,11 @@ describe('Backend OIDC callback', () => {
       sub: 'oidc-user', preferred_username: 'OIDC User', exp: Math.floor(Date.now() / 1000) + 3600
     })}.signature`;
     const browserVerifier = 'V'.repeat(43);
-    cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
+    cy.intercept('GET', '**/api/admin/logo/settings', {
+      body: { data: 'assets/images/IQB-LogoA.png?custom', alt: 'Instanzlogo', bodyBackground: '#123456' }
+    });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
+    cy.intercept('GET', '**/api/admin/users/access/*', { body: [] });
     cy.intercept('POST', '**/api/auth/exchange', request => {
       expect(request.body).to.deep.equal({ code: 'login-code', browser_verifier: browserVerifier });
       request.reply({ access_token: token, refresh_token: 'refresh-token', token_type: 'Bearer', expires_in: 3600 });
@@ -16,7 +19,11 @@ describe('Backend OIDC callback', () => {
       expect(request.headers.authorization).to.equal(`Bearer ${token}`);
       request.reply({
         userId: 7, userName: 'OIDC User', firstName: 'OIDC', lastName: 'User',
-        email: 'oidc@example.org', isAdmin: false, workspaces: [{ id: 12, name: 'OIDC Workspace' }]
+        email: 'oidc@example.org', isAdmin: false, workspaces: [
+          { id: 12, name: 'OIDC Workspace' },
+          { id: 13, name: 'VERA Deutsch' },
+          ...Array.from({ length: 6 }, (_, index) => ({ id: 14 + index, name: `Bereich ${index + 1}` }))
+        ]
       });
     }).as('authData');
 
@@ -30,6 +37,29 @@ describe('Backend OIDC callback', () => {
     cy.location('search').should('eq', '');
     cy.get('coding-box-user-workspaces-area').should('contain.text', 'OIDC Workspace');
     cy.get('.login-button').should('not.exist');
+    cy.get('.app--home').should('have.css', 'background-color', 'rgb(18, 52, 86)');
+    cy.get('.app-header img[alt="Instanzlogo"]').should('be.visible');
+    cy.viewport(1000, 950);
+    cy.get('.workspace-list a').should('have.length', 8);
+    cy.get('input[type="search"]').should('not.exist');
+    cy.get('.workspace-list').then(list => {
+      const listBottom = Math.ceil(list[0].getBoundingClientRect().bottom);
+      cy.viewport(1000, listBottom - 5);
+      cy.get('input[type="search"]').should('be.visible');
+      cy.viewport(1000, listBottom + 5);
+      cy.get('input[type="search"]').should('not.exist');
+    });
+    cy.viewport(1000, 460);
+    cy.get('input[type="search"]').should('be.visible').focus().type('vera');
+    cy.get('.workspace-list a').should('have.length', 1)
+      .and('contain.text', 'VERA Deutsch').and('have.attr', 'href', '#/workspace-admin/13');
+    cy.viewport(1000, 950);
+    cy.get('input[type="search"]').should('be.focused').and('have.value', 'vera');
+    cy.get('input[type="search"]').type('{selectall}ohne treffer');
+    cy.contains('[role="status"]', 'Keine passenden Arbeitsbereiche gefunden.').should('be.visible');
+    cy.get('input[type="search"]').clear();
+    cy.get('.workspace-list a').should('have.length', 8);
+    cy.get('input[type="search"]').should('not.exist');
     cy.window().then(win => {
       expect('Zone' in win).to.equal(false);
       expect(win.localStorage.getItem('auth_token')).to.equal(token);
@@ -55,7 +85,7 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
   });
 
   beforeEach(() => {
-    cy.intercept('GET', '**/api//admin/logo/settings', { statusCode: 404, body: {} });
+    cy.intercept('GET', '**/api/admin/logo/settings', { statusCode: 404, body: {} });
     cy.intercept('GET', '**/api/system-notifications/active', { body: [] });
     cy.intercept('GET', '**/api/auth-data*', {
       body: { userId: 7, userName: 'OIDC User', isAdmin: true, workspaces: [{ id: 12, name: 'Recovered Workspace' }] }
@@ -137,6 +167,9 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
 
   it('retains a refresh session during a provider outage and recovers through the retry button', () => {
     let available = false;
+    cy.intercept('GET', '**/api/legal-notice', {
+      body: { html: '<p>Datenschutz dieser Instanz</p>', isDefault: false, imprintUrl: 'https://example.org/impressum' }
+    }).as('legalNotice');
     cy.intercept('POST', '**/api/auth/refresh', request => {
       expect(request.body.refresh_token).to.equal('retained-refresh-token');
       request.reply(available ? {
@@ -149,6 +182,13 @@ describe('OIDC renewal and bootstrap diagnostics', () => {
     cy.wait('@refresh');
     cy.get('.auth-refresh-unavailable').should('contain.text', 'outage-request-123');
     cy.get('.reauthentication-hint').should('not.exist');
+    cy.wait('@legalNotice').its('request.headers').should('not.have.property', 'authorization');
+    cy.contains('footer a', 'Impressum').should('have.attr', 'href', 'https://example.org/impressum');
+    cy.contains('footer button', 'Datenschutz').click();
+    cy.wait('@legalNotice').its('request.headers').should('not.have.property', 'authorization');
+    cy.contains('mat-dialog-content', 'Datenschutz dieser Instanz').should('be.visible');
+    cy.contains('mat-dialog-actions button', 'Schließen').click();
+    cy.get('mat-dialog-content').should('not.exist');
     cy.window().then(win => {
       expect(win.localStorage.getItem('refresh_token')).to.equal('retained-refresh-token');
     });
