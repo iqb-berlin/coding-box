@@ -63,6 +63,11 @@ describe('zoneless test-results view', () => {
           request.url = gate.url;
           request.continue();
         }).as('uploadComplete');
+        if (!leaveView) {
+          cy.intercept({
+            method: 'POST', url: '**/upload/results/upload-1/complete', times: 1
+          }, { statusCode: 409, body: { message: 'Workspace busy' } }).as('completionConflict');
+        }
       });
       const codingFreshness = { workspaceId: 5, currentRevision: 0, items: [] };
       cy.task<{ id: string; url: string }>('deferred:create', { body: codingFreshness }).then(gate => {
@@ -134,6 +139,7 @@ describe('zoneless test-results view', () => {
       cy.get('coding-box-test-results-upload-options-dialog')
         .contains('button', 'Upload starten').click();
       cy.wait(['@uploadInit', '@uploadChunk']);
+      if (!leaveView) cy.wait('@completionConflict');
       cy.get('coding-box-test-results-import-progress-dialog').should('be.visible')
         .and('contain.text', 'Import wird vorbereitet')
         .and('not.contain.text', '100%')
@@ -145,6 +151,8 @@ describe('zoneless test-results view', () => {
       }
       cy.then(() => cy.task('deferred:release', completionId));
       cy.wait(['@uploadComplete', '@uploadStatus']);
+      cy.get('@uploadInit.all').should('have.length', 1);
+      cy.get('@uploadChunk.all').should('have.length', 1);
       cy.get('coding-box-test-results-import-progress-dialog')
         .should('contain.text', 'Datei wird eingelesen')
         .find('mat-progress-bar').should('have.attr', 'aria-valuenow', '42');

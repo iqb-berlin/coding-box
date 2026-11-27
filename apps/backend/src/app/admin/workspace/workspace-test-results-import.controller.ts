@@ -5,6 +5,7 @@ import {
 import { randomUUID } from 'crypto';
 import * as fs from 'fs';
 import * as path from 'path';
+import { pipeline } from 'stream/promises';
 import {
   ApiBearerAuth,
   ApiBody,
@@ -23,6 +24,7 @@ import { ValidatedBody } from '../../http/validated-body.decorator';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
 import { AccessLevelGuard, RequireAccessLevel } from './access-level.guard';
 import { WorkspaceGuard } from './workspace.guard';
+import { FileIo } from './file-io.interface';
 import { WorkspaceId } from './workspace.decorator';
 import { UploadResultsService } from '../../database/services/test-results';
 import { readTestResultsUploadProgress } from '../../../../../../api-dto/files/test-results-upload-progress.dto';
@@ -31,9 +33,14 @@ import { ChunkedUploadInitResponseDto, ChunkedUploadChunkResponseDto } from '../
 import { CacheService } from '../../cache/cache.service';
 import { JobQueueService } from '../../job-queue/job-queue.service';
 
+import { ResultUploadStagingService, RESULT_UPLOAD_ROOT, UPLOAD_SESSION_TTL } from './result-upload-staging.service';
+
 const CHUNK_SIZE = 5 * 1024 * 1024; // 5 MB
-const UPLOAD_SESSION_TTL = 3600; // 1 hour
-const UPLOADS_BASE_DIR = '/tmp/chunked-uploads';
+
+const uploadScopes = ['workspace', 'person', 'group', 'booklet', 'unit', 'response'] as const;
+function normalizeUploadScope(scope?: string): typeof uploadScopes[number] {
+  return uploadScopes.find(value => value === scope?.toLowerCase()) ?? 'person';
+}
 
 interface ChunkedUploadSession {
   uploadId: string;
@@ -57,7 +64,8 @@ export class WorkspaceTestResultsImportController {
   constructor(
     private uploadResults: UploadResultsService,
     private cacheService: CacheService,
-    private jobQueueService: JobQueueService
+    private jobQueueService: JobQueueService,
+    private staging: ResultUploadStagingService
   ) {}
 
   private async invalidateFlatResponseFilterOptionsCache(
@@ -100,7 +108,7 @@ export class WorkspaceTestResultsImportController {
     required: true,
     description: 'Type of results to upload (logs or responses)'
   })
-  @UseInterceptors(FilesInterceptor('files', 10, { dest: '/tmp' }))
+  @UseInterceptors(FilesInterceptor('files', 10, { dest: path.join(RESULT_UPLOAD_ROOT, 'multipart') }))
   @ApiConsumes('multipart/form-data')
   @ApiBody({
     schema: {
@@ -199,22 +207,6 @@ export class WorkspaceTestResultsImportController {
         }
       }
 
-      const finalScope = (scope || '').toLowerCase();
-      const allowedScopes = [
-        'workspace',
-        'person',
-        'group',
-        'booklet',
-        'unit',
-        'response'
-      ] as const;
-      type UploadScope = (typeof allowedScopes)[number];
-      const normalizedScope: UploadScope = (
-        allowedScopes as readonly string[]
-      ).includes(finalScope) ?
-        (finalScope as UploadScope) :
-        'person';
-
       // Non-blocking cache invalidation - fire and forget
       const t1 = Date.now();
       this.invalidateFlatResponseFilterOptionsCache(workspace_id)
@@ -239,7 +231,7 @@ export class WorkspaceTestResultsImportController {
         shouldOverwrite,
         mode,
         finalOverwriteMode,
-        normalizedScope,
+        normalizeUploadScope(scope),
         {
           groupName,
           bookletName,
@@ -247,7 +239,8 @@ export class WorkspaceTestResultsImportController {
           variableId,
           subform
         },
-        request?.user.id
+        request?.user.id,
+        file => `multipart-${file.filename}`
       );
 
       const totalTime = Date.now() - startTime;
@@ -377,9 +370,9 @@ export class WorkspaceTestResultsImportController {
 
     const uploadId = randomUUID();
     const totalChunks = Math.ceil(body.fileSize / CHUNK_SIZE);
-    const tempDir = path.join(UPLOADS_BASE_DIR, uploadId);
+    const tempDir = path.join(RESULT_UPLOAD_ROOT, uploadId);
 
-    fs.mkdirSync(tempDir, { recursive: true });
+    await fs.promises.mkdir(tempDir, { recursive: true });
 
     const session: ChunkedUploadSession = {
       uploadId,
@@ -393,11 +386,9 @@ export class WorkspaceTestResultsImportController {
       tempDir
     };
 
-    await this.cacheService.set(
-      this.uploadSessionKey(uploadId),
-      session,
-      UPLOAD_SESSION_TTL
-    );
+    if (!await this.cacheService.set(this.uploadSessionKey(uploadId), session, UPLOAD_SESSION_TTL)) {
+      throw new Error('Could not initialize upload session');
+    }
 
     this.logger.log(
       `Chunked upload initialized: ${uploadId}, file=${body.fileName}, size=${body.fileSize}, chunks=${totalChunks}`
@@ -425,7 +416,7 @@ export class WorkspaceTestResultsImportController {
     @Param('chunkIndex', ParseIntPipe) chunkIndex: number,
     @Req() req: Request
   ): Promise<ChunkedUploadChunkResponseDto> {
-    const session = await this.cacheService.get<ChunkedUploadSession>(
+    const session = await this.cacheService.getStrict<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
     );
     if (!session) {
@@ -444,37 +435,25 @@ export class WorkspaceTestResultsImportController {
       );
     }
 
-    const chunkPath = path.join(
-      session.tempDir,
-      `chunk_${String(chunkIndex).padStart(6, '0')}`
-    );
-
-    await new Promise<void>((resolve, reject) => {
-      const writeStream = fs.createWriteStream(chunkPath);
-      req.pipe(writeStream);
-      writeStream.on('finish', resolve);
-      writeStream.on('error', reject);
-      req.on('error', reject);
-    });
-
-    if (!session.receivedChunks.includes(chunkIndex)) {
-      session.receivedChunks.push(chunkIndex);
+    const partial = path.join(session.tempDir, `part-${randomUUID()}`);
+    try {
+      await pipeline(req, fs.createWriteStream(partial));
+      return await this.staging.withUploadLock(uploadId, async () => {
+        const key = this.uploadSessionKey(uploadId);
+        const current = await this.cacheService.getStrict<ChunkedUploadSession>(key);
+        if (!current) throw new NotFoundException('Upload session expired or completed');
+        const chunkPath = path.join(current.tempDir, `chunk_${String(chunkIndex).padStart(6, '0')}`);
+        // Once acknowledged, a part is immutable. Retried PUTs return its receipt.
+        if (!current.receivedChunks.includes(chunkIndex)) {
+          await fs.promises.rename(partial, chunkPath);
+          current.receivedChunks.push(chunkIndex);
+        }
+        if (!await this.cacheService.set(key, current, UPLOAD_SESSION_TTL)) throw new Error('Could not persist upload progress');
+        return { received: true, chunksReceived: current.receivedChunks.length, totalChunks: current.totalChunks };
+      });
+    } finally {
+      await fs.promises.rm(partial, { force: true });
     }
-    await this.cacheService.set(
-      this.uploadSessionKey(uploadId),
-      session,
-      UPLOAD_SESSION_TTL
-    );
-
-    this.logger.log(
-      `Chunk ${chunkIndex}/${session.totalChunks - 1} received for upload ${uploadId} (${session.receivedChunks.length}/${session.totalChunks})`
-    );
-
-    return {
-      received: true,
-      chunksReceived: session.receivedChunks.length,
-      totalChunks: session.totalChunks
-    };
   }
 
   @Post(':workspace_id/upload/results/:uploadId/complete')
@@ -495,7 +474,28 @@ export class WorkspaceTestResultsImportController {
     @ValidatedBody('ChunkedUploadCompleteRequestDto', true) body: RequestBody<'ChunkedUploadCompleteRequestDto'> = {},
     @Req() request?: { user: { id: number } }
   ): Promise<TestResultsUploadJobDto[]> {
-    const session = await this.cacheService.get<ChunkedUploadSession>(
+    const jobId = `upload-${uploadId}`;
+    const findAccepted = () => this.jobQueueService.getWorkspaceJob(workspaceId, 'test-results-upload', jobId);
+    try {
+      const prepared = await this.staging.withUploadLock(uploadId, async () => (
+        await findAccepted() ? null : this.prepareUpload(workspaceId, uploadId)
+      ));
+      if (prepared) {
+        await this.enqueuePreparedUpload(prepared, body, request?.user.id);
+        await this.cacheService.delete(this.uploadSessionKey(uploadId));
+        this.invalidateFlatResponseFilterOptionsCache(workspaceId).catch(error => {
+          this.logger.error(`Cache invalidation failed: ${error.message}`, error.stack);
+        });
+      }
+    } catch (error) {
+      // A parallel completion or a lost Redis acknowledgement can win the race.
+      if (!await findAccepted()) throw error;
+    }
+    return [{ jobId }];
+  }
+
+  private async prepareUpload(workspaceId: number, uploadId: string) {
+    const session = await this.cacheService.getStrict<ChunkedUploadSession>(
       this.uploadSessionKey(uploadId)
     );
     if (!session) {
@@ -519,30 +519,7 @@ export class WorkspaceTestResultsImportController {
       throw new BadRequestException(`Missing chunks: ${missing.join(', ')}`);
     }
 
-    // Merge chunks into a single file
-    const mergedPath = path.join(session.tempDir, 'merged.csv');
-    const writeStream = fs.createWriteStream(mergedPath);
-
-    for (let i = 0; i < session.totalChunks; i++) {
-      const chunkPath = path.join(
-        session.tempDir,
-        `chunk_${String(i).padStart(6, '0')}`
-      );
-      const chunkData = fs.readFileSync(chunkPath);
-      writeStream.write(chunkData);
-      fs.unlinkSync(chunkPath);
-    }
-
-    await new Promise<void>((resolve, reject) => {
-      writeStream.end(() => resolve());
-      writeStream.on('error', reject);
-    });
-
-    const mergedSize = fs.statSync(mergedPath).size;
-    this.logger.log(
-      `Merged ${session.totalChunks} chunks into ${mergedPath} (${mergedSize} bytes)`
-    );
-
+    const mergedPath = await this.staging.assemble(session);
     // Build a file object compatible with the existing upload pipeline
     const file = {
       fieldname: 'files',
@@ -550,12 +527,20 @@ export class WorkspaceTestResultsImportController {
       encoding: '7bit',
       mimetype: session.mimeType,
       buffer: Buffer.alloc(0),
-      size: mergedSize,
+      size: session.fileSize,
       path: mergedPath,
-      destination: session.tempDir,
+      destination: path.dirname(mergedPath),
       filename: 'merged.csv'
     };
 
+    return { file, session };
+  }
+
+  private async enqueuePreparedUpload(
+    prepared: { file: FileIo; session: ChunkedUploadSession },
+    body: RequestBody<'ChunkedUploadCompleteRequestDto'>, requestedByUserId?: number
+  ) {
+    const { file, session } = prepared;
     // Parse options
     const shouldOverwrite = body.overwriteExisting !== false;
     const personMatchMode =
@@ -569,36 +554,15 @@ export class WorkspaceTestResultsImportController {
       else if (requestedOverwriteMode === 'merge') finalOverwriteMode = 'merge';
     }
 
-    const finalScope = (body.scope || '').toLowerCase();
-    const allowedScopes = [
-      'workspace',
-      'person',
-      'group',
-      'booklet',
-      'unit',
-      'response'
-    ] as const;
-    type UploadScope = (typeof allowedScopes)[number];
-    const normalizedScope: UploadScope = (
-      allowedScopes as readonly string[]
-    ).includes(finalScope) ?
-      (finalScope as UploadScope) :
-      'person';
-
-    // Invalidate cache
-    this.invalidateFlatResponseFilterOptionsCache(workspaceId).catch(err => {
-      this.logger.error(`Cache invalidation failed: ${err.message}`, err.stack);
-    });
-
     // Queue the upload job
-    const result = await this.uploadResults.uploadTestResults(
-      workspaceId,
+    return this.uploadResults.uploadTestResults(
+      session.workspaceId,
       [file],
       session.resultType,
       shouldOverwrite,
       personMatchMode,
       finalOverwriteMode,
-      normalizedScope,
+      normalizeUploadScope(body.scope),
       {
         groupName: body.groupName,
         bookletName: body.bookletName,
@@ -606,16 +570,8 @@ export class WorkspaceTestResultsImportController {
         variableId: body.variableId,
         subform: body.subform
       },
-      request?.user.id
+      requestedByUserId,
+      () => `upload-${session.uploadId}`
     );
-
-    // Cleanup session from Redis
-    await this.cacheService.delete(this.uploadSessionKey(uploadId));
-
-    this.logger.log(
-      `Chunked upload ${uploadId} completed, ${result.length} job(s) queued`
-    );
-
-    return result;
   }
 }

@@ -250,6 +250,27 @@ describe('FileService', () => {
       expect(received).toHaveBeenCalledWith([]);
     });
 
+    it('retries only finalization with the same upload ID after a conflict', () => {
+      jest.useFakeTimers({ doNotFake: ['queueMicrotask'] });
+      try {
+        const received = jest.fn();
+        service.uploadTestResultsChunked(1, file, 'responses', {}).subscribe(received);
+        httpMock.expectOne(`${url}/responses/init`).flush({ uploadId: 'retry', chunkSize: 10, totalChunks: 1 });
+        httpMock.expectOne(`${url}/retry/chunk/0`).flush({});
+        const first = httpMock.expectOne(`${url}/retry/complete`);
+        expect(first.request.headers.get('Authorization')).toBe('Bearer mock-token');
+        first.flush(null, { status: 409, statusText: 'Conflict' });
+        jest.mocked(localStorage.getItem).mockReturnValue('refreshed-token');
+        jest.advanceTimersByTime(1000);
+        const retry = httpMock.expectOne(`${url}/retry/complete`);
+        expect(retry.request.headers.get('Authorization')).toBe('Bearer refreshed-token');
+        retry.flush([{ jobId: 'job' }]);
+        expect(received).toHaveBeenCalledWith([{ jobId: 'job' }]);
+      } finally {
+        jest.useRealTimers();
+      }
+    });
+
     it('stops after a rejected chunk without reporting completion or sending later chunks', () => {
       const progress = jest.fn();
       const failed = jest.fn();
