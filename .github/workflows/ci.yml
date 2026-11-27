@@ -535,6 +535,16 @@ jobs:
           node-version-file: .nvmrc
       - run: node scripts/ci/check-release-version.mjs "$GITHUB_REF_NAME"
 
+  test-release-publisher:
+    name: Test image publishing on a local registry
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - run: bash scripts/ci/test-release-publisher.sh
+
   quality-gates:
     name: Kodierbox required checks
     if: ${{ always() }}
@@ -555,6 +565,7 @@ jobs:
       - scan-postgres17
       - scan-production
       - release-version
+      - test-release-publisher
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
@@ -575,3 +586,42 @@ jobs:
             }
           }
           JS
+
+  publish-images:
+    name: Publish checked images to Docker Hub
+    needs: quality-gates
+    if: >-
+      github.event_name == 'push' && !github.event.deleted &&
+      github.ref_type == 'tag' && vars.DOCKERHUB_RELEASE_ENABLED == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    environment: dockerhub-release
+    concurrency:
+      group: dockerhub-release
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: '{app-images,image-db,image-db-pg17,image-liquibase}'
+          merge-multiple: true
+          path: ${{ runner.temp }}/release-images
+      - name: Sign in to Docker Hub
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/dockerhub-release-config
+          DOCKERHUB_USER: ${{ secrets.DOCKERHUB_USER }}
+          DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
+        run: |
+          : "${DOCKERHUB_USER:?Configure DOCKERHUB_USER in dockerhub-release}"
+          : "${DOCKERHUB_TOKEN:?Configure DOCKERHUB_TOKEN in dockerhub-release}"
+          mkdir -p "$DOCKER_CONFIG"
+          printf '%s\n' "$DOCKERHUB_TOKEN" | docker login --username "$DOCKERHUB_USER" --password-stdin
+      - name: Publish the five image archives from this run
+        env:
+          DOCKER_CONFIG: ${{ runner.temp }}/dockerhub-release-config
+        run: bash scripts/ci/publish-release-images.sh "$GITHUB_REF_NAME" "$RUNNER_TEMP/release-images" docker.io
+      - name: Remove Docker Hub credentials
+        if: ${{ always() }}
+        run: rm -rf -- "$RUNNER_TEMP/dockerhub-release-config"
