@@ -1,7 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { HttpService } from '@nestjs/axios';
 import { getQueueToken } from '@nestjs/bullmq';
-import { getRepositoryToken } from '@nestjs/typeorm';
+import { getDataSourceToken, getRepositoryToken } from '@nestjs/typeorm';
 import { Job, JobsOptions } from 'bullmq';
 import { WorkspaceContentPoolController } from '../workspace/workspace-content-pool.controller';
 import { JwtAuthGuard } from '../../auth/jwt-auth.guard';
@@ -43,6 +43,7 @@ describe('Content-Pool queued work and workspace ownership', () => {
     const module = await Test.createTestingModule({
       controllers: [WorkspaceContentPoolController],
       providers: [
+        { provide: getDataSourceToken(), useValue: {} },
         ContentPoolIntegrationService, JobQueueService,
         { provide: AuthService, useValue: { canAccessWorkSpace: async (_userId: number, workspaceId: number) => workspaceId === 1 } },
         { provide: UsersService, useValue: { getUserIsAdmin: async () => false, getUserAccessLevel: async () => 3 } },
