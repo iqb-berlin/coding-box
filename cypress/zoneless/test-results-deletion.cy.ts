@@ -52,7 +52,7 @@ describe('zoneless test-results deletion', () => {
     cy.wait(['@persons', '@overview']);
     cy.contains('coding-box-test-results button', 'Antworten bereinigen').click();
     cy.wait(['@options', '@variables']);
-    cy.get('coding-box-test-results-response-cleanup-dialog').should('be.visible');
+    cy.contains('coding-box-test-results-response-cleanup-dialog h2', 'Antworten bereinigen').should('be.visible');
     cy.get('coding-box-test-results .delete-progress-container').should('not.exist');
     cy.get('coding-box-test-results .persons-table mat-row').should('have.length', 2);
     cy.contains('coding-box-test-results-response-cleanup-dialog button', 'Abbrechen').click();
