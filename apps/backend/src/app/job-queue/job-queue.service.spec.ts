@@ -56,7 +56,8 @@ describe('JobQueueService', () => {
       queues[11] as never,
       validationTaskRepository as never,
       queues[12] as never,
-      queues[13] as never
+      queues[13] as never,
+      { transaction: jest.fn().mockImplementation(operation => operation({ query: async () => [{ locked: true }] })) } as never
     );
   });
 
@@ -110,6 +111,7 @@ describe('JobQueueService', () => {
   it('adds and retrieves queue jobs', async () => {
     queues[0].getJobs.mockResolvedValue([]);
     queues[6].getJobs.mockResolvedValue([]);
+    queues[4].getJobs.mockResolvedValue([]);
 
     await expect(service.addTestPersonCodingJob({
       workspaceId: 1,
@@ -748,11 +750,9 @@ describe('JobQueueService', () => {
   });
 
   it('checks dependency conflicts and redis status', async () => {
-    await expect(service.assertNoActiveUploadForWorkspace(1)).rejects.toBeInstanceOf(ConflictException);
     await expect(service.assertNoDependencyConflicts('data-export', 1)).rejects.toBeInstanceOf(ConflictException);
 
     queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
-    await expect(service.assertNoActiveUploadForWorkspace(1)).resolves.toBeUndefined();
     await expect(service.assertNoDependencyConflicts('data-export', 1)).resolves.toBeUndefined();
 
     await expect(service.checkRedisConnection()).resolves.toMatchObject({ connected: true });

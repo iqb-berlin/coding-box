@@ -1031,7 +1031,7 @@
     },
     "apps/backend/src/app/database/services/test-results/upload-results.service.ts": {
       "file": {
-        "max-lines": 966
+        "max-lines": 964
       },
       "functions": {
         "class UploadResultsService#1/method buildImportSummary#1": {
@@ -1190,7 +1190,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1198
+        "max-lines": 1191
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {

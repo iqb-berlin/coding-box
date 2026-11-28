@@ -930,7 +930,6 @@ export class UploadResultsService {
 
     this.logger.log(`Queueing upload jobs for workspace ${workspace_id} (files: ${originalFiles.length})`);
 
-    await this.jobQueueService.assertNoActiveUploadForWorkspace(workspace_id);
     await this.jobQueueService.assertNoDependencyConflicts('test-results-upload', workspace_id);
 
     const MAX_FILES_LENGTH = 1000;
@@ -939,25 +938,21 @@ export class UploadResultsService {
       throw new Error(`Too many files: ${originalFiles.length}`);
     }
 
-    const jobPromises = originalFiles.map(file => {
-      // Create lightweight job payload - prevent passing buffer to Redis
+    const files = originalFiles.map(file => {
       const jobFile: QueuedUploadFile = { ...file };
       delete jobFile.buffer;
-
-      return this.jobQueueService.addUploadJob({
-        workspaceId: workspace_id,
-        requestedByUserId,
-        file: jobFile,
-        resultType,
-        overwriteExisting,
-        personMatchMode: personMatchMode || 'strict',
-        overwriteMode,
-        scope,
-        scopeFilters
-      });
+      return jobFile;
     });
-
-    const jobs = await Promise.all(jobPromises);
+    const jobs = await this.jobQueueService.addUploadJobs({
+      workspaceId: workspace_id,
+      requestedByUserId,
+      resultType,
+      overwriteExisting,
+      personMatchMode: personMatchMode || 'strict',
+      overwriteMode,
+      scope,
+      scopeFilters
+    }, files);
     const jobDtos = jobs.map(job => ({ jobId: requireJobId(job) }));
 
     return jobDtos;

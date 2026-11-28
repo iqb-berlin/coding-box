@@ -5,10 +5,11 @@ import {
 } from '@nestjs/common';
 import { InjectQueue } from '@nestjs/bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
-import { In, Repository } from 'typeorm';
+import { DataSource, In, Repository } from 'typeorm';
 import {
   Queue, JobsOptions, Job, JobType
 } from 'bullmq';
+import { startWorkspaceResultJob } from './workspace-result-job-start';
 import { isCancelledExport } from './exceptions/export-job-cancelled.exception';
 import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-analysis-options';
 import { overviewProgress, sanitizeJobData } from './job-queue-overview';
@@ -268,7 +269,8 @@ export class JobQueueService {
     @InjectRepository(ValidationTask)
     private readonly validationTaskRepository: Repository<ValidationTask>,
     @InjectQueue('content-pool') private readonly contentPoolQueue: Queue<ContentPoolJobData, ContentPoolJobResult>,
-    @InjectQueue('coding-reset-preview') private readonly resetPreviewQueue: Queue
+    @InjectQueue('coding-reset-preview') private readonly resetPreviewQueue: Queue,
+    private readonly database: DataSource
   ) { }
 
   async addContentPoolJob(data: ContentPoolJobData): Promise<Job<ContentPoolJobData, ContentPoolJobResult>> {
@@ -654,19 +656,9 @@ export class JobQueueService {
       ...data,
       autoCoderRun: requireAutoCoderRun(data.autoCoderRun)
     };
-    const existing = await this.findActiveJob<TestPersonCodingJobData>(
-      this.testPersonCodingQueue,
-      d => d.workspaceId === validatedData.workspaceId
-    );
-    if (existing) {
-      throw new ConflictException(
-        `A test person coding job is already running for workspace ${validatedData.workspaceId} (job ${existing.id})`
-      );
-    }
-    this.logger.log(
-      `Adding test person coding job for workspace ${validatedData.workspaceId}`
-    );
-    return this.testPersonCodingQueue.add('test-person-coding', validatedData, withQueueJobId(options));
+    return this.startResultJob(data.workspaceId, () => (
+      this.testPersonCodingQueue.add('test-person-coding', validatedData, withQueueJobId(options))
+    ));
   }
 
   async getTestPersonCodingJob(
@@ -752,26 +744,28 @@ export class JobQueueService {
     );
   }
 
-  async addUploadJob(
-    data: TestResultsUploadJobData,
-    options?: JobsOptions
-  ): Promise<Job<TestResultsUploadJobData>> {
-    this.logger.log(
-      `Adding upload job for workspace ${data.workspaceId}, file: ${data.file.originalname}`
+  private startResultJob<T>(workspaceId: number, enqueue: () => Promise<T>): Promise<T> {
+    return startWorkspaceResultJob(
+      this.database,
+      workspaceId,
+      queue => this.hasActiveJobForWorkspace(queue, workspaceId),
+      enqueue
     );
-    return this.testResultsUploadQueue.add('test-results-upload', data, withQueueJobId(options));
   }
 
-  async assertNoActiveUploadForWorkspace(workspaceId: number): Promise<void> {
-    const existing = await this.findActiveJob<TestResultsUploadJobData>(
-      this.testResultsUploadQueue,
-      d => d.workspaceId === workspaceId
-    );
-    if (existing) {
-      throw new ConflictException(
-        `An upload job is already running for workspace ${workspaceId} (job ${existing.id})`
-      );
-    }
+  async addUploadJob(data: TestResultsUploadJobData, options?: JobsOptions): Promise<Job<TestResultsUploadJobData>> {
+    return this.startResultJob(data.workspaceId, () => (
+      this.testResultsUploadQueue.add('test-results-upload', data, withQueueJobId(options))
+    ));
+  }
+
+  async addUploadJobs(
+    data: Omit<TestResultsUploadJobData, 'file'>,
+    files: QueuedUploadFile[]
+  ): Promise<Job<TestResultsUploadJobData>[]> {
+    return this.startResultJob(data.workspaceId, () => this.testResultsUploadQueue.addBulk(files.map(file => ({
+      name: 'test-results-upload', data: { ...data, file }, opts: withQueueJobId()
+    }))));
   }
 
   async getUploadJob(jobId: string): Promise<Job<TestResultsUploadJobData> | null> {
