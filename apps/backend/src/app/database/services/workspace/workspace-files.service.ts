@@ -171,7 +171,7 @@ export class WorkspaceFilesService {
     return this.testcenter.testCenterImport(entries, overwriteFileIds);
   }
 
-  async getUnitContent(workspaceId: number, unitId: number): Promise<string> {
+  async getUnitContent(workspaceId: number, unitId: string): Promise<string> {
     return this.query.getUnitContent(workspaceId, unitId);
   }
 

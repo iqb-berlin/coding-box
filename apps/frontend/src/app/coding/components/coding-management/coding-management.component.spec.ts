@@ -1772,15 +1772,15 @@ describe('CodingManagementComponent', () => {
     });
 
     it('should handle show coding scheme from table component', () => {
-      component.onShowCodingScheme(456);
+      component.onShowCodingScheme('MMV031');
 
-      expect(mockUiService.getCodingSchemeFromUnit).toHaveBeenCalledWith(456);
+      expect(mockUiService.getCodingSchemeFromUnit).toHaveBeenCalledWith('MMV031');
     });
 
     it('should handle show unit XML from table component', () => {
-      component.onShowUnitXml(789);
+      component.onShowUnitXml('MMV031');
 
-      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith(789, expect.anything());
+      expect(mockUiService.showUnitXmlDialog).toHaveBeenCalledWith('MMV031', expect.anything());
     });
 
     it('should load all filtered responses before opening the review dialog', () => {

@@ -807,6 +807,19 @@ describe('CodingJobService', () => {
     expect(codingJobRepository.update).toHaveBeenCalledWith(7, { status: 'open' });
   });
 
+  it.each([
+    [{ scope: 'training' }, 0],
+    [{ trainingId: 12 }, 0],
+    [{ scope: 'training', trainingId: 'none' }, 1],
+    [{ scope: 'productive' }, 1]
+  ] as const)('reconciles productive jobs only for lists that include them (%j)', async (filters, calls) => {
+    codingJobRepository.count.mockResolvedValue(0);
+    codingJobRepository.find.mockResolvedValue([]);
+    codingJobUnitRepository.createQueryBuilder.mockReturnValue(createQueryBuilder(0));
+    await service.getCodingJobs(3, 1, 25, undefined, filters);
+    expect(codingFreshnessService.reconcileAppliedManualCodingJobs).toHaveBeenCalledTimes(calls);
+  });
+
   it('loads coding jobs with assignments, bundles and progress', async () => {
     const job = {
       id: 11,

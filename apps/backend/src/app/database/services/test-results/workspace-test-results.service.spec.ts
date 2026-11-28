@@ -1719,20 +1719,6 @@ describe('WorkspaceTestResultsService', () => {
   });
 
   describe('findFlatResponses', () => {
-    it.each(['v1', 'v2', 'v3'])('filters page and total by the exact %s coding code including zero', async codingVersion => {
-      const page = mockQueryBuilder();
-      const count = mockQueryBuilder();
-      (responseRepository.createQueryBuilder as jest.Mock).mockReturnValueOnce(page).mockReturnValueOnce(count);
-      page.getRawMany.mockResolvedValue([{ codingCode: 0, code: 'person' }]);
-      const [rows] = await service.findFlatResponses(1, {
-        page: 1, limit: 10, codingVersion, codingCode: 0
-      });
-      for (const qb of [page, count]) {
-        expect(qb.andWhere).toHaveBeenCalledWith(`response.code_${codingVersion} = :codingCode`, { codingCode: 0 });
-      }
-      expect(rows[0]).toMatchObject({ code: 'person', codingCode: 0 });
-    });
-
     it('should filter responses correctly', async () => {
       const workspaceId = 1;
       const options = {

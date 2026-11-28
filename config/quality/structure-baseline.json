@@ -67,7 +67,7 @@
     },
     "apps/backend/src/app/admin/workspace/workspace-coding-export.controller.ts": {
       "file": {
-        "max-lines": 1785
+        "max-lines": 1769
       },
       "functions": {
         "class WorkspaceCodingExportController#1/method cancelExportJob#1": {
@@ -163,7 +163,7 @@
           "max-lines-per-function": 128
         },
         "class WorkspaceTestResultsAnalysisController#1/method findFlatResponses#1": {
-          "max-lines-per-function": 106
+          "max-lines-per-function": 109
         }
       }
     },
@@ -489,15 +489,15 @@
     },
     "apps/backend/src/app/database/services/coding/coding-job-query.service.ts": {
       "file": {
-        "max-lines": 1178
+        "max-lines": 1170
       },
       "functions": {
         "class CodingJobQueryService#1/method getCodingJobIssueSummariesByJobIds#1": {
           "max-lines-per-function": 145
         },
         "class CodingJobQueryService#1/method getCodingJobs#1": {
-          "complexity": 22,
-          "max-lines-per-function": 201
+          "complexity": 21,
+          "max-lines-per-function": 195
         }
       }
     },
@@ -573,7 +573,7 @@
     },
     "apps/backend/src/app/database/services/coding/coding-progress.service.ts": {
       "file": {
-        "max-lines": 1547
+        "max-lines": 1546
       },
       "functions": {
         "class CodingProgressService#1/method getVariableCoverageOverview#1": {
@@ -1190,7 +1190,7 @@
     },
     "apps/backend/src/app/job-queue/job-queue.service.ts": {
       "file": {
-        "max-lines": 1199
+        "max-lines": 1198
       },
       "functions": {
         "class JobQueueService#1/method getJobsForWorkspaceDeletion#1": {
@@ -1450,6 +1450,12 @@
           "max-lines-per-function": 115
         }
       }
+    },
+    "apps/frontend/src/app/shared/services/test-result/test-result.service.ts": {
+      "file": {
+        "max-lines": 815
+      },
+      "functions": {}
     },
     "apps/frontend/src/app/ws-admin/components/export/export.component.ts": {
       "file": {},

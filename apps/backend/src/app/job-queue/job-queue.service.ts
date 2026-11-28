@@ -9,6 +9,7 @@ import { In, Repository } from 'typeorm';
 import {
   Queue, JobsOptions, Job, JobType
 } from 'bullmq';
+import { isCancelledExport } from './exceptions/export-job-cancelled.exception';
 import { VariableAnalysisOptions } from '../../../../../api-dto/coding/variable-analysis-options';
 import { overviewProgress, sanitizeJobData } from './job-queue-overview';
 import { ContentPoolJobData, ContentPoolJobResult, validateContentPoolJobData } from '../admin/content-pool/content-pool-job';
@@ -411,19 +412,17 @@ export class JobQueueService {
   private getProcessOverviewStatus(
     queueName: string,
     bullState: string,
-    jobData: unknown,
+    job: Job,
     validationTask?: ProcessOverviewValidationTask
   ): ProcessDto['status'] {
-    if (queueName === 'validation-task') {
-      return this.mapValidationTaskStatus(validationTask?.status, bullState);
-    }
+    if (queueName === 'data-export' && isCancelledExport(bullState, job)) return 'cancelled';
+    if (queueName === 'database-export' && job.data?.isCancelled) return 'cancelled';
+    if (queueName === 'validation-task') return this.mapValidationTaskStatus(validationTask?.status, bullState);
 
     if (
       queueName === 'test-person-coding' &&
       bullState === 'completed' &&
-      jobData &&
-      typeof jobData === 'object' &&
-      (jobData as { isPaused?: unknown }).isPaused === true
+      job.data?.isPaused === true
     ) {
       return 'paused';
     }
@@ -559,7 +558,7 @@ export class JobQueueService {
             const status = this.getProcessOverviewStatus(
               queueName,
               bullState,
-              job.data,
+              job,
               validationTask
             );
             const presentation = overviewProgress(queueName, job.progress);

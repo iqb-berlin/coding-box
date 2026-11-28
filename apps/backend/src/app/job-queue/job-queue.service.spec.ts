@@ -490,6 +490,18 @@ describe('JobQueueService', () => {
     expect(recent.remove).not.toHaveBeenCalled();
   });
 
+  it('shows export percentages, messages and terminal cancellations', async () => {
+    queues.forEach(queue => queue.getJobs.mockResolvedValue([]));
+    queues[2].getJobs.mockResolvedValue([
+      { ...createJob({ workspaceId: 1 }, 'active'), progress: { percentage: 41, message: 'Writing CSV' } },
+      { ...createJob({ workspaceId: 1 }, 'failed'), failedReason: 'Export job job-1 was cancelled' }
+    ]);
+    expect(await service.getAllWorkspaceJobs(1)).toEqual([
+      expect.objectContaining({ status: 'active', progress: 41, data: expect.objectContaining({ progressMessage: 'Writing CSV' }) }),
+      expect.objectContaining({ status: 'cancelled' })
+    ]);
+  });
+
   it('covers all registered process overview queues', async () => {
     const workspaceJobs = await service.getAllWorkspaceJobs(1);
 

@@ -1,4 +1,5 @@
 import { SelectQueryBuilder, ObjectLiteral } from 'typeorm';
+import type { CodingJobListFilters, CodingJobListScope } from './coding-job.types';
 
 export const CODING_JOB_TYPE_CODING_ISSUE_REVIEW = 'coding_issue_review';
 
@@ -21,4 +22,9 @@ export function applyNonCodingIssueReviewJobFilter<T extends ObjectLiteral>(
 
 export function getNonCodingIssueReviewJobSqlCondition(jobAlias: string): string {
   return `(${jobAlias}.job_type IS NULL OR ${jobAlias}.job_type != '${CODING_JOB_TYPE_CODING_ISSUE_REVIEW}')`;
+}
+
+export function getCodingJobTrainingFilter(filters: CodingJobListFilters): CodingJobListScope | number {
+  if (filters.trainingId === 'none') return 'productive';
+  return filters.trainingId ?? filters.scope ?? 'all';
 }

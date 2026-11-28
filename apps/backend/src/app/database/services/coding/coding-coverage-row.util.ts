@@ -1,3 +1,7 @@
+import type { SelectQueryBuilder } from 'typeorm';
+import type { ResponseEntity } from '../../entities/response.entity';
+import { MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES } from '../../utils/manual-coding-candidate.util';
+
 export interface CoverageResponse {
   responseId: number;
   unitName: string;
@@ -32,5 +36,18 @@ export function mapCoverageRow(row: CoverageResponseRow): CoverageResponse {
     personLogin: row.personLogin ?? '',
     personCode: row.personCode ?? '',
     personGroup: row.personGroup ?? ''
+  };
+}
+
+export async function countCoverageStatuses(query: SelectQueryBuilder<ResponseEntity>): Promise<{
+  statusTotal: number; responseAnalysisRawCases: number;
+}> {
+  const counts = await query.select('COUNT(*)', 'statusTotal')
+    .addSelect('COUNT(*) FILTER (WHERE response.status_v1 IN (:...candidateStatuses))', 'responseAnalysisRawCases')
+    .setParameter('candidateStatuses', MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES)
+    .getRawOne<{ statusTotal: string; responseAnalysisRawCases: string }>();
+  return {
+    statusTotal: Number(counts?.statusTotal ?? 0),
+    responseAnalysisRawCases: Number(counts?.responseAnalysisRawCases ?? 0)
   };
 }

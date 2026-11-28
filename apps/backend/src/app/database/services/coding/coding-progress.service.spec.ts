@@ -74,6 +74,14 @@ const createQueryBuilder = (rawResults: unknown[] = []) => {
     });
   });
   queryBuilder.getRawMany = jest.fn().mockResolvedValue(rawResults);
+  queryBuilder.setParameter = jest.fn().mockReturnValue(queryBuilder);
+  queryBuilder.getRawOne = jest.fn(() => {
+    const statuses: number[] = queryBuilder.setParameter.mock.calls.find(([name]) => name === 'candidateStatuses')?.[1] ?? [];
+    return Promise.resolve({
+      statusTotal: String(rawResults.length),
+      responseAnalysisRawCases: String(rawResults.filter(row => statuses.includes(Number((row as { statusV1?: number }).statusV1))).length)
+    });
+  });
   queryBuilder.getCount = jest.fn().mockResolvedValue(0);
   return queryBuilder;
 };
@@ -512,6 +520,8 @@ describe('CodingProgressService variable coverage conflicts', () => {
     await service.getCodingProgressOverview(5);
     await service.getVariableCoverageOverview(5);
 
+    expect(allResponsesQuery.select).toHaveBeenCalledWith('COUNT(*)', 'statusTotal');
+    expect(allResponsesQuery.getRawMany).not.toHaveBeenCalled();
     expectProductiveManualPoolExists(manualPoolQuery);
     expectProductiveManualPoolExists(variableCoverageQuery);
   });

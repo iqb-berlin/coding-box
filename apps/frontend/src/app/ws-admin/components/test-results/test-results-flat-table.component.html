@@ -8,19 +8,6 @@
 
     <div class="table-section">
       <div class="flat-filter-bar">
-        <mat-form-field appearance="outline" class="flat-filter-field">
-          <mat-label>{{ 'coding-management.statistics.coding-version-selector' | translate }}</mat-label>
-          <mat-select [value]="flatFilters().codingVersion" (selectionChange)="setFlatFiltersField('codingVersion', $event.value); onFlatFilterChanged()">
-            <mat-option value="v1">{{ 'coding-management.statistics.first-autocode-run' | translate }}</mat-option>
-            <mat-option value="v2">{{ 'coding-management.statistics.manual-coding-run' | translate }}</mat-option>
-            <mat-option value="v3">{{ 'coding-management.statistics.second-autocode-run' | translate }}</mat-option>
-          </mat-select>
-        </mat-form-field>
-        <mat-form-field appearance="outline" class="flat-filter-field">
-          <mat-label>{{ 'test-results-table.coding-code' | translate }}</mat-label>
-          <input matInput type="number" step="1" [value]="flatFilters().codingCode" #codingCode
-            (input)="onCodingCodeInput(codingCode)" />
-        </mat-form-field>
         <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-sm"
           [class.regex-filter-invalid]="isRegexFilterInvalid('code')">
           <mat-label>{{ 'test-results-table.code' | translate }}</mat-label>
@@ -241,10 +228,6 @@
       } @else {
       <div class="table-container">
         <table mat-table [dataSource]="flatData()" [trackBy]="trackByRow" class="persons-table">
-          <ng-container matColumnDef="codingCode">
-            <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.coding-code' | translate }} ({{ flatFilters().codingVersion }})</th>
-            <td mat-cell *matCellDef="let row">{{ row.codingCode }}</td>
-          </ng-container>
           <ng-container matColumnDef="code">
             <th mat-header-cell *matHeaderCellDef>{{ 'test-results-table.code' | translate }}</th>
             <td mat-cell *matCellDef="let row">{{ row.code }}</td>

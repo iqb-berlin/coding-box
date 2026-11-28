@@ -227,8 +227,6 @@ export type LogAnomalySessionRow = {
 };
 
 export interface FlatResponseOptions {
-  codingVersion?: string;
-  codingCode?: number;
   page: number;
   limit: number;
   code?: string;
@@ -266,7 +264,6 @@ export interface FlatResponseOptions {
 }
 
 export type FlatResponseRow = {
-  codingCode: number | null;
   bookletId: number;
   responseId: number;
   unitId: number;

@@ -197,6 +197,8 @@ describe('TestResultsDeletionFacade', () => {
   it.each(['workspace', 'destroy'] as const)('closes cleanup options on %s and never previews a late confirmation', cancellation => {
     const pending = new Subject<unknown>(); ref.afterClosed.mockReturnValue(pending);
     facade.openResponseCleanupDialog();
+    expect(facade.isDeletingTestPersons()).toBe(false);
+    expect(facade.deleteProgressMessage()).toBe('');
     expect(dialog.open).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ data: { workspaceId: 5 } }));
     if (cancellation === 'workspace') { changeWorkspace(6); changeWorkspace(5); } else fixture.destroy();
     expect(pending.observed).toBe(false); expect(ref.close).toHaveBeenCalled();

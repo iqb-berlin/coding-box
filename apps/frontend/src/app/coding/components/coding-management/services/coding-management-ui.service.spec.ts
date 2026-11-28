@@ -70,7 +70,7 @@ describe('CodingManagementUiService', () => {
       '<Unit><CodingSchemeRef schemer="iqb-schemer@2.5" schemeType="iqb@3.0">DLB004.vocs</CodingSchemeRef></Unit>'
     ));
     mockFileService.getCodingSchemeFile!.mockReturnValue(of({ filename: 'DLB004.vocs', base64Data: '{}', mimeType: 'Resource' }));
-    service.getCodingSchemeFromUnit(123).subscribe(result => {
+    service.getCodingSchemeFromUnit('MMV031').subscribe(result => {
       expect(result).toEqual(reference);
       service.showCodingSchemeDialog(result!);
     });
@@ -138,7 +138,7 @@ describe('CodingManagementUiService', () => {
         return () => callbacks.splice(callbacks.indexOf(callback), 1);
       }
     } as DestroyRef;
-    service.showUnitXmlDialog(7, owner);
+    service.showUnitXmlDialog('MMV031', owner);
     expect(reply.observed).toBe(true);
     callbacks.forEach(callback => callback());
     expect(reply.observed).toBe(false);

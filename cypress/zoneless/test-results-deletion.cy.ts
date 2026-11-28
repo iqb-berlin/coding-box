@@ -43,6 +43,26 @@ describe('zoneless test-results deletion', () => {
     cy.wait('@create');
   }
 
+  it('keeps the person list available while choosing response cleanup options', () => {
+    cy.intercept('GET', '**/api/admin/workspace/5/results/export/options', { body: { units: ['UNIT1'] } }).as('options');
+    cy.intercept('GET', '**/api/admin/workspace/5/files/unit-variables', { body: [] }).as('variables');
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(window => { window.location.hash = '/workspace-admin/5/test-results'; });
+    cy.wait(['@persons', '@overview']);
+    cy.contains('coding-box-test-results button', 'Antworten bereinigen').click();
+    cy.wait(['@options', '@variables']);
+    cy.get('coding-box-test-results-response-cleanup-dialog').should('be.visible');
+    cy.get('coding-box-test-results .delete-progress-container').should('not.exist');
+    cy.get('coding-box-test-results .persons-table mat-row').should('have.length', 2);
+    cy.contains('coding-box-test-results-response-cleanup-dialog button', 'Abbrechen').click();
+    cy.get('coding-box-test-results-response-cleanup-dialog').should('not.exist');
+    cy.then(() => {
+      expect(previews).to.equal(0);
+      expect(posts).to.equal(0);
+    });
+  });
+
   it('cancels a preview without creating a job or clearing the current selection', () => {
     openPreview(); cy.contains('coding-box-test-results-delete-preview-dialog button', 'Abbrechen').click();
     cy.get('coding-box-test-results-delete-preview-dialog').should('not.exist');

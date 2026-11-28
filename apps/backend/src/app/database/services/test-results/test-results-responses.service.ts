@@ -145,7 +145,7 @@ export class TestResultsResponsesService {
       .then(r => Number(r?.cnt || 0));
     const validPage = Math.max(1, Number(options.page || 1));
     const validLimit = Math.min(Math.max(1, Number(options.limit || 50)), MAX_FLAT_RESPONSE_PAGE_SIZE);
-    const pageQuery = this.createFlatResponsePageQuery(rowQuery, validPage, validLimit, Boolean(filters.tags), filters.codingColumn);
+    const pageQuery = this.createFlatResponsePageQuery(rowQuery, validPage, validLimit, Boolean(filters.tags));
     let total: number;
     let raw: Record<string, unknown>[];
     if (filters.responseValue || (filters.regexSearch && filters.response)) {
@@ -176,7 +176,6 @@ export class TestResultsResponsesService {
         responseId: Number(r.responseId),
         unitId: Number(r.unitId),
         personId: Number(r.personId),
-        codingCode: r.codingCode == null ? null : Number(r.codingCode),
         code: String(r.code || ''),
         group: String(r.group || ''),
         login: String(r.login || ''),
@@ -250,8 +249,7 @@ export class TestResultsResponsesService {
     qb: SelectQueryBuilder<ResponseEntity>,
     validPage: number,
     validLimit: number,
-    filterTags: boolean,
-    codingColumn: string
+    filterTags: boolean
   ) {
     // Only aggregate tags for the selected response rows.
     const tagPredicate = filterTags ? 'AND page_tag.tag ILIKE :tags' : '';
@@ -261,7 +259,6 @@ export class TestResultsResponsesService {
         'response.id AS "responseId"',
         'unit.id AS "unitId"',
         'person.id AS "personId"',
-        `${codingColumn} AS "codingCode"`,
         'person.code AS "code"',
         'person.group AS "group"',
         'person.login AS "login"',

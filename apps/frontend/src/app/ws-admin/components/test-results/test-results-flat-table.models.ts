@@ -3,8 +3,6 @@ import { FlatTestResultResponseRow } from '../../../shared/services/test-result/
 export type FlatResponseRow = FlatTestResultResponseRow;
 
 export interface FlatResponseFilters {
-  codingCode: string;
-  codingVersion: string;
   code: string;
   group: string;
   login: string;

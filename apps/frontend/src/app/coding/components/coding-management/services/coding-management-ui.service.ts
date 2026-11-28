@@ -75,10 +75,10 @@ export class CodingManagementUiService {
   /**
      * Gets coding scheme reference from unit XML
      */
-  getCodingSchemeFromUnit(unitId: number): Observable<UnitCodingSchemeRefDto | null> {
+  getCodingSchemeFromUnit(unitId: string): Observable<UnitCodingSchemeRefDto | null> {
     const workspaceId = this.appService.selectedWorkspaceId;
 
-    return this.fileService.getUnitContentXml(workspaceId, unitId.toString()).pipe(
+    return this.fileService.getUnitContentXml(workspaceId, unitId).pipe(
       switchMap(xmlContent => {
         if (!xmlContent) {
           this.snackBar.open(
@@ -208,11 +208,11 @@ export class CodingManagementUiService {
   /**
      * Shows unit XML in a dialog
      */
-  showUnitXmlDialog(unitId: number, owner = this.destroyRef): void {
+  showUnitXmlDialog(unitId: string, owner = this.destroyRef): void {
     const workspaceId = this.appService.selectedWorkspaceId;
 
     this.fileService
-      .getUnitContentXml(workspaceId, unitId.toString())
+      .getUnitContentXml(workspaceId, unitId)
       .pipe(
         takeUntilWorkspaceChanged(this.appService, workspaceId),
         takeUntilDestroyed(owner),

@@ -44,7 +44,7 @@ export class WorkspaceFilesContentController {
   })
   @ApiParam({
     name: 'unit_id',
-    type: Number,
+    type: String,
     required: true,
     description: 'The unique ID of the unit'
   })
@@ -60,14 +60,14 @@ export class WorkspaceFilesContentController {
   @UseGuards(JwtAuthGuard, WorkspaceGuard)
   async getUnitContent(
     @Param('workspace_id') workspace_id: number,
-    @Param('unit_id') unit_id: number
+    @Param('unit_id') unit_id: string
   ): Promise<{ content: string }> {
     if (!workspace_id || workspace_id <= 0) {
       throw new BadRequestException(
         'Invalid workspace ID. Please provide a valid ID.'
       );
     }
-    if (!unit_id || unit_id <= 0) {
+    if (!unit_id?.trim()) {
       throw new BadRequestException(
         'Invalid unit ID. Please provide a valid ID.'
       );

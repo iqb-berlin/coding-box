@@ -335,6 +335,7 @@ describe('CodingManagementManualComponent', () => {
         beginManualCodingPlanningSnapshot(): number;
         saveManualCodingPlanningSnapshot: jest.Mock;
         getResponseAnalysis: jest.Mock;
+        getVariableCoverageOverview: jest.Mock;
         setResponseAnalysisGuardRunning: (
           workspaceId: number,
           isRunning: boolean
@@ -364,12 +365,17 @@ describe('CodingManagementManualComponent', () => {
         }
       )));
 
+    const variableCoverage = new Subject<never>();
+    jest.spyOn(componentInternals.testPersonCodingService, 'getVariableCoverageOverview').mockReturnValue(variableCoverage);
+    statisticsFacade().loadVariableCoverageOverview();
+    expect(variableCoverage.observed).toBe(true);
     component.loadResponseAnalysis();
     expect(component.isLoadingResponseAnalysis()).toBe(true);
 
     component.onManualTabChanged(2);
     componentInternals.trySavePlanningDataBundleSnapshot();
 
+    expect(variableCoverage.observed).toBe(false);
     expect(responseAnalysisUnsubscribed).toBe(true);
     expect(component.isLoadingResponseAnalysis()).toBe(false);
     expect(componentInternals.hasLoadedPlanningDataBundle).toBe(false);

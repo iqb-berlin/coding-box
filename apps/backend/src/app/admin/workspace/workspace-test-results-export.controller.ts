@@ -13,6 +13,7 @@ import {
 } from '@nestjs/swagger';
 import { Request, Response } from 'express';
 import * as fs from 'fs';
+import { isCancelledExport } from '../../job-queue/exceptions/export-job-cancelled.exception';
 import { WorkspaceDownloadTicket, workspaceDownloadPath } from './workspace-download-ticket';
 import { WORKSPACE_SQLITE_RETENTION_MS } from '../database/database-export-retention';
 import { isTestDataCsvExport, requireJobId, withQueueJobId } from '../../job-queue/job-queue.util';
@@ -66,29 +67,7 @@ export class WorkspaceTestResultsExportController {
     state: string,
     job: Job<ExportJobData>
   ): string {
-    const failedReason = job.failedReason;
-    const failedBecauseCancelled = typeof failedReason === 'string' &&
-      (
-        failedReason.includes('ExportJobCancelledException') ||
-        /^Export job .* was cancelled$/.test(failedReason)
-      );
-
-    if (
-      job.data?.isCancelled === true &&
-      (
-        state === 'waiting' ||
-        state === 'delayed' ||
-        state === 'active' ||
-        state === 'completed' ||
-        state === 'failed'
-      )
-    ) {
-      return 'cancelled';
-    }
-
-    if (state === 'failed' && failedBecauseCancelled) {
-      return 'cancelled';
-    }
+    if (isCancelledExport(state, job)) return 'cancelled';
 
     return state;
   }

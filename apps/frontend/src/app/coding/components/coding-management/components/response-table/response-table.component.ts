@@ -85,8 +85,8 @@ export class ResponseTableComponent implements OnChanges {
 
   readonly pageChange = output<PageEvent>();
   readonly replayClick = output<Success>();
-  readonly showCodingScheme = output<number>();
-  readonly showUnitXml = output<number>();
+  readonly showCodingScheme = output<string>();
+  readonly showUnitXml = output<string>();
   readonly reviewClick = output<void>();
   readonly sortChange = output<Sort>();
 
@@ -145,11 +145,11 @@ export class ResponseTableComponent implements OnChanges {
     this.replayClick.emit(response);
   }
 
-  onShowCodingScheme(unitName: number): void {
+  onShowCodingScheme(unitName: string): void {
     this.showCodingScheme.emit(unitName);
   }
 
-  onShowUnitXml(unitName: number): void {
+  onShowUnitXml(unitName: string): void {
     this.showUnitXml.emit(unitName);
   }
 

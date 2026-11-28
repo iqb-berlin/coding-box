@@ -186,26 +186,6 @@ describePostgres('Flat response IDs and totals against PostgreSQL', () => {
     await expectResponses({ logAnomalies: 'debug' }, []);
   });
 
-  it('shows and filters the selected coding run independently of the person code', async () => {
-    await db.query(`INSERT INTO "${schema}".response (id, unitid, variableid, status, value, code_v1, code_v2, code_v3)
-      VALUES (71, 1, 'CODING_CODE', 3, '2', 0, NULL, 1), (72, 1, 'CODING_CODE', 3, '1', 1, 0, NULL)`);
-    try {
-      const filters = { response: 'CODING_CODE', code: 'A' };
-      await expectResponses({ ...filters, codingCode: 0 }, [71]);
-      await expectResponses({ ...filters, codingVersion: 'v2', codingCode: 0 }, [72]);
-      await expectResponses({ ...filters, codingVersion: 'v3', codingCode: 0 }, []);
-      const [rows] = await service.findFlatResponses(42, {
-        ...filters, page: 1, limit: 10, codingVersion: 'v3'
-      });
-      expect(rows).toEqual(expect.arrayContaining([
-        expect.objectContaining({ responseId: 71, codingCode: 1, code: 'A' }),
-        expect.objectContaining({ responseId: 72, codingCode: null, code: 'A' })
-      ]));
-    } finally {
-      await db.query(`DELETE FROM "${schema}".response WHERE id IN (71, 72)`);
-    }
-  });
-
   it('applies person, booklet and unit regexes before collecting log matches', async () => {
     const filters = {
       logAnomalies: 'connection_lost',

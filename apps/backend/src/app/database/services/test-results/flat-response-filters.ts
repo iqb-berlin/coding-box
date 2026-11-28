@@ -34,8 +34,6 @@ function parseResponseStatus(raw: string): number | null {
 export function normalizeFlatResponseFilters(options: Omit<FlatResponseOptions, 'page' | 'limit'>) {
   const responseStatus = (options.responseStatus || '').trim();
   return {
-    codingColumn: `response.code_${options.codingVersion === 'v2' || options.codingVersion === 'v3' ? options.codingVersion : 'v1'}`,
-    codingCode: options.codingCode,
     code: (options.code || '').trim(),
     group: (options.group || '').trim(),
     login: (options.login || '').trim(),
@@ -83,9 +81,6 @@ export function applyFlatResponseFilters(qb: ResponseQuery, filters: FlatRespons
     applyFilterOptionText(qb, filters);
   } else {
     applyFlatResponseTextFilters(qb, filters);
-    if (filters.codingCode !== undefined) {
-      qb.andWhere(`${filters.codingColumn} = :codingCode`, { codingCode: filters.codingCode });
-    }
   }
   applyResponseFilters(qb, filters, purpose);
   applyProcessingFilters(qb, filters);
