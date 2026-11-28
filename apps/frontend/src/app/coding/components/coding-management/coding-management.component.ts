@@ -828,7 +828,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       });
   }
 
-  onShowCodingScheme(unitId: number): void {
+  onShowCodingScheme(unitId: string): void {
     this.uiService.getCodingSchemeFromUnit(unitId)
       .pipe(takeUntil(this.destroy$))
       .subscribe(codingSchemeRef => {
@@ -838,7 +838,7 @@ export class CodingManagementComponent implements OnInit, OnDestroy {
       });
   }
 
-  onShowUnitXml(unitId: number): void {
+  onShowUnitXml(unitId: string): void {
     this.uiService.showUnitXmlDialog(unitId, this.destroyRef);
   }
 

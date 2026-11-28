@@ -42,7 +42,9 @@ export class WorkspaceResultsDownloadController {
     }
     const metadata = await this.getResultsCsv(workspaceId, jobId);
     const date = new Date().toISOString().slice(0, 10);
-    response.download(metadata.filePath, `export-results-by-version-${date}.csv`, {
+    const version = request.query?.version;
+    const prefix = version === 'v1' || version === 'v2' || version === 'v3' ? `coding-results-${version}` : 'export-results-by-version';
+    response.download(metadata.filePath, `${prefix}-${date}.csv`, {
       headers: { 'Cache-Control': 'no-store, no-transform' }
     });
   }

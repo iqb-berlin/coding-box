@@ -36,6 +36,18 @@ describe('WorkspaceResultsDownloadController', () => {
       { headers: { 'Cache-Control': 'no-store, no-transform' } });
   });
 
+  it('preserves the coding overview filename for a selected version', async () => {
+    const { controller, response } = setup();
+    await controller.prepare(1, 'test', request(`${route}/prepare`), response);
+    const [name, token] = response.cookie.mock.calls[0];
+    const req = request(`${route}/file?version=v2`, `${name}=${token}`);
+    Object.assign(req, { query: { version: 'v2' } });
+    await controller.download(1, 'test', req, response);
+    expect(response.download).toHaveBeenCalledWith('/private/results.csv',
+      expect.stringMatching(/^coding-results-v2-/),
+      expect.anything());
+  });
+
   it('checks artifact scope before issuing a ticket and rejects unsigned downloads', async () => {
     const { controller, getArtifact, response } = setup();
     await expect(controller.download(1, 'test', request(`${route}/file`), response)).rejects.toThrow('Export download unavailable');

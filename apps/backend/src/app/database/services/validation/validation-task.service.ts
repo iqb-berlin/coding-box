@@ -70,6 +70,8 @@ export class ValidationTaskService {
       }
     }
 
+    await this.jobQueueService.assertNoDependencyConflicts('validation-task', workspaceId);
+
     let progressMessage: string | undefined;
     if (validationType === 'testFiles') {
       progressMessage = 'Testdateien werden auf Änderungen geprüft...';

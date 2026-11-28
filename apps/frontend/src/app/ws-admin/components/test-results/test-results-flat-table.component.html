@@ -102,7 +102,7 @@
           <mat-option [value]="opt">{{ opt }}</mat-option>
           }
         </mat-autocomplete>
-        <mat-form-field appearance="outline" class="flat-filter-field flat-filter-field-lg">
+        <mat-form-field appearance="outline" class="flat-filter-field">
           <mat-label>{{ 'test-results-table.response-value' | translate }}</mat-label>
           <input matInput [ngModel]="flatFilters().responseValue" (ngModelChange)="setFlatFiltersField('responseValue', $event); onFlatFilterChanged()"
             [matTooltip]="'search-filter.response-value-prefix-hint' | translate" />
@@ -202,13 +202,15 @@
             </mat-option>
           </mat-select>
         </mat-form-field>
-        <button mat-icon-button (click)="openFlatSettings()" [attr.aria-label]="'accessibility.actions.open-flat-settings' | translate">
-          <mat-icon>settings</mat-icon>
-        </button>
-        <button mat-icon-button type="button" (click)="clearFlatFilters()" [matTooltip]="'test-results-table.reset-filters' | translate"
-          [attr.aria-label]="'test-results-table.reset-filters' | translate">
-          <mat-icon>clear</mat-icon>
-        </button>
+        <div class="flat-filter-actions">
+          <button mat-icon-button (click)="openFlatSettings()" [attr.aria-label]="'accessibility.actions.open-flat-settings' | translate">
+            <mat-icon>settings</mat-icon>
+          </button>
+          <button mat-icon-button type="button" (click)="clearFlatFilters()" [matTooltip]="'test-results-table.reset-filters' | translate"
+            [attr.aria-label]="'test-results-table.reset-filters' | translate">
+            <mat-icon>clear</mat-icon>
+          </button>
+        </div>
       </div>
 
       @if (isLoadingFlat()) {

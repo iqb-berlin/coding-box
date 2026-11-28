@@ -8,6 +8,7 @@ import {
 import { Response, Request } from 'express';
 import * as fs from 'fs';
 import { Readable } from 'stream';
+import { isCancelledExport } from '../../job-queue/exceptions/export-job-cancelled.exception';
 import { requireJobId } from '../../job-queue/job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
 import type { RequestBody } from '../../../../../../api-dto/request-contracts';
@@ -94,26 +95,7 @@ export class WorkspaceCodingExportController {
     state: string,
     job: { data?: { isCancelled?: boolean }; failedReason?: string }
   ): ExportJobStateDto {
-    const failedReason = job.failedReason;
-    const failedBecauseCancelled =
-      typeof failedReason === 'string' &&
-      (failedReason.includes('ExportJobCancelledException') ||
-        /^Export job .* was cancelled$/.test(failedReason));
-
-    if (
-      job.data?.isCancelled === true &&
-      (state === 'waiting' ||
-        state === 'delayed' ||
-        state === 'active' ||
-        state === 'completed' ||
-        state === 'failed')
-    ) {
-      return 'cancelled';
-    }
-
-    if (state === 'failed' && failedBecauseCancelled) {
-      return 'cancelled';
-    }
+    if (isCancelledExport(state, job)) return 'cancelled';
 
     switch (state) {
       case 'completed':

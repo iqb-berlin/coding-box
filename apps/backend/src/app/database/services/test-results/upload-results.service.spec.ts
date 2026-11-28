@@ -118,12 +118,19 @@ describe('UploadResultsService', () => {
     expect(service).toBeDefined();
   });
 
-  it('passes the trusted initiating user to the queued import without storing file buffers', async () => {
+  it('enqueues the complete batch with trusted provenance and without file buffers', async () => {
     const queue = (service as unknown as { jobQueueService: JobQueueService }).jobQueueService;
-    jest.mocked(queue.addUploadJob).mockResolvedValue({ id: '123' } as never);
-    await service.uploadTestResults(3, [{ buffer: Buffer.from('raw answers'), originalname: 'results.csv' } as FileIo], 'responses', false, 'strict', 'skip', 'person', undefined, 7);
-    expect(queue.addUploadJob).toHaveBeenCalledWith(expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }));
-    expect(jest.mocked(queue.addUploadJob).mock.calls[0][0].file).not.toHaveProperty('buffer');
+    jest.mocked(queue.addUploadJobs).mockResolvedValue([{ id: '123' }, { id: '124' }] as never);
+    const files = ['one.csv', 'two.csv'].map(originalname => ({
+      buffer: Buffer.from('raw answers'), originalname
+    } as FileIo));
+    await expect(service.uploadTestResults(3, files, 'responses', false, 'strict', 'skip', 'person', undefined, 7))
+      .resolves.toEqual([{ jobId: '123' }, { jobId: '124' }]);
+    expect(queue.addUploadJobs).toHaveBeenCalledTimes(1);
+    expect(queue.addUploadJobs).toHaveBeenCalledWith(
+      expect.objectContaining({ workspaceId: 3, requestedByUserId: 7 }),
+      [{ originalname: 'one.csv' }, { originalname: 'two.csv' }]
+    );
   });
 
   it('records failed import outcomes with trusted provenance and no file contents or names', async () => {

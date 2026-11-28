@@ -193,6 +193,7 @@ export class ManualCodingPlanningFacade {
   discardPendingPlanningDataBundle(): void {
     if (this.isPlanningDataBundleLoadPending) {
       this.resetPlanningDataBundleState();
+      this.statistics.cancelPlanningRequests();
     }
   }
 

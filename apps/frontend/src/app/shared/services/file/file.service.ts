@@ -401,7 +401,7 @@ export class FileService {
     return this.http
       .get<{
       content: string;
-    }>(`${this.serverUrl}admin/workspace/${workspaceId}/unit/${unitId}/content`, { headers: this.authHeader })
+    }>(`${this.serverUrl}admin/workspace/${workspaceId}/unit/${encodeURIComponent(unitId)}/content`, { headers: this.authHeader })
       .pipe(
         map(response => response.content),
         catchError(() => of(null))

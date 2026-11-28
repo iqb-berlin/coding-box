@@ -77,14 +77,14 @@ describe('ResponseTableComponent', () => {
 
   it('should emit showCodingScheme when coding scheme button is clicked', () => {
     jest.spyOn(component.showCodingScheme, 'emit');
-    component.onShowCodingScheme(123);
-    expect(component.showCodingScheme.emit).toHaveBeenCalledWith(123);
+    component.onShowCodingScheme('MMV031');
+    expect(component.showCodingScheme.emit).toHaveBeenCalledWith('MMV031');
   });
 
   it('should emit showUnitXml when unit name is clicked', () => {
     jest.spyOn(component.showUnitXml, 'emit');
-    component.onShowUnitXml(456);
-    expect(component.showUnitXml.emit).toHaveBeenCalledWith(456);
+    component.onShowUnitXml('MMV031');
+    expect(component.showUnitXml.emit).toHaveBeenCalledWith('MMV031');
   });
 
   it('should format status string correctly', () => {

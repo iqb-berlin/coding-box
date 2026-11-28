@@ -102,12 +102,13 @@ export class TestResultsDeletionFacade {
 
   openResponseCleanupDialog(): void {
     if (this.isDeleteJobRunning() || !this.appService.selectedWorkspaceId) return;
-    const operation = this.begin();
+    const workspaceId = this.appService.selectedWorkspaceId;
     const ref = this.dialog.open(TestResultsResponseCleanupDialogComponent, {
-      width: '640px', maxWidth: '95vw', data: { workspaceId: operation.workspaceId }
+      width: '640px', maxWidth: '95vw', data: { workspaceId }
     });
-    this.scoped(ref.afterClosed(), operation).pipe(take(1), finalize(() => ref.close?.())).subscribe(request => {
-      this.clearOperation();
+    ref.afterClosed().pipe(
+      take(1), takeUntil(this.cancelled), takeUntilWorkspaceChanged(this.appService, workspaceId), takeUntilDestroyed(this.destroyRef), finalize(() => ref.close?.())
+    ).subscribe(request => {
       if (request) this.confirmAndStartResponseCleanup(request);
     });
   }

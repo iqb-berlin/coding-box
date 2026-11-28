@@ -99,6 +99,7 @@ export class DatabaseExportService {
     const parameters = workspaceId === undefined ? [] : [workspaceId];
     const configs = workspaceId === undefined ? await this.getSystemExportTables(manager) : this.getWorkspaceExportTables();
     const tables: ResolvedExportTable[] = [];
+    let countMs = 0;
     for (const config of configs) {
       await this.throwIfCancelled(isCancelled);
       const columns = await this.getTableColumns(config.name, manager);
@@ -106,10 +107,13 @@ export class DatabaseExportService {
         this.logger.warn(`Table ${config.name} not found, skipping...`);
         continue;
       }
+      const countStarted = performance.now();
       const [result] = await manager.query(`SELECT COUNT(*) AS count FROM (${config.query}) export_rows`, parameters);
+      countMs += performance.now() - countStarted;
       tables.push({ ...config, columns, rowCount: Number(result.count) });
     }
 
+    this.logger.log(`SQLite export row counts: ${Math.round(countMs)} ms`);
     await this.reportProgress(onProgress, 3, 'Tabellenanalyse abgeschlossen');
     const totalRows = tables.reduce((sum, table) => sum + table.rowCount, 0);
     let processedRows = 0;
@@ -161,41 +165,40 @@ export class DatabaseExportService {
     await manager.query(`DECLARE export_rows_cursor NO SCROLL CURSOR FOR
       SELECT * FROM (${table.query}) export_rows ORDER BY ${orderBy}`, parameters);
     const names = table.columns.map(column => this.quoteIdentifier(column.column_name));
-    const sql = `INSERT INTO ${this.quoteIdentifier(table.name)} (${names.join(', ')}) VALUES (${names.map(() => '?').join(', ')})`;
-    const statement = await new Promise<sqlite3.Statement>((resolve, reject) => {
-      const prepared = db.prepare(sql, error => (error ? reject(error) : resolve(prepared)));
-    });
+    const insert = `INSERT INTO ${this.quoteIdentifier(table.name)} (${names.join(', ')}) VALUES `;
+    const tuple = `(${names.map(() => '?').join(', ')})`;
+    // Also works with SQLite builds limited to 999 bind parameters per statement.
+    const batchSize = Math.max(1, Math.floor(999 / names.length));
     let written = 0;
-    try {
-      while (written < table.rowCount) {
-        await this.throwIfCancelled(isCancelled);
-        const rows: Record<string, unknown>[] = await manager.query('FETCH FORWARD 1000 FROM export_rows_cursor');
-        if (!rows.length) throw new Error(`Incomplete export of ${table.name}: ${written}/${table.rowCount} rows`);
-        await this.runSqlite(db, 'BEGIN TRANSACTION');
-        try {
-          for (const row of rows) {
-            const values = table.columns.map(column => this.normalizeSqliteValue(row[column.column_name]));
-            await new Promise<void>((resolve, reject) => {
-              statement.run(values, error => (error ? reject(error) : resolve()));
-            });
-          }
-          await this.runSqlite(db, 'COMMIT');
-        } catch (error) {
-          await this.runSqlite(db, 'ROLLBACK');
-          throw error;
+    let insertMs = 0;
+    while (written < table.rowCount) {
+      await this.throwIfCancelled(isCancelled);
+      const rows: Record<string, unknown>[] = await manager.query('FETCH FORWARD 1000 FROM export_rows_cursor');
+      if (!rows.length) throw new Error(`Incomplete export of ${table.name}: ${written}/${table.rowCount} rows`);
+      const insertStarted = performance.now();
+      await this.runSqlite(db, 'BEGIN TRANSACTION');
+      try {
+        for (let offset = 0; offset < rows.length; offset += batchSize) {
+          const batch = rows.slice(offset, offset + batchSize);
+          const values = batch.flatMap(row => table.columns.map(column => this.normalizeSqliteValue(row[column.column_name])));
+          await this.runSqlite(db, insert + batch.map(() => tuple).join(', '), values);
         }
-        written += rows.length;
-        await reportWritten(written);
+        await this.runSqlite(db, 'COMMIT');
+      } catch (error) {
+        await this.runSqlite(db, 'ROLLBACK');
+        throw error;
       }
-    } finally {
-      await promisify(statement.finalize.bind(statement))();
+      insertMs += performance.now() - insertStarted;
+      written += rows.length;
+      await reportWritten(written);
     }
     await manager.query('CLOSE export_rows_cursor');
+    this.logger.log(`SQLite insert into ${table.name}: ${written} rows in ${Math.round(insertMs)} ms`);
   }
 
-  private runSqlite(db: sqlite3.Database, sql: string): Promise<void> {
+  private runSqlite(db: sqlite3.Database, sql: string, values: unknown[] = []): Promise<void> {
     return new Promise((resolve, reject) => {
-      db.run(sql, error => (error ? reject(error) : resolve()));
+      db.run(sql, values, error => (error ? reject(error) : resolve()));
     });
   }
 

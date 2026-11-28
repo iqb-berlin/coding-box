@@ -64,6 +64,17 @@ describe('Zoneless information dialogs from the results table', () => {
     cy.then(() => { expect(unexpectedRequests).to.deep.equal([]); });
   });
 
+  it('keeps both filter actions together at wide and narrow widths', () => {
+    for (const width of [2400, 390]) {
+      cy.viewport(width, 1000);
+      cy.get('.flat-filter-actions button').should($buttons => {
+        const [settings, reset] = Array.from($buttons, button => button.getBoundingClientRect());
+        expect(reset.top).to.be.closeTo(settings.top, 1);
+        expect(reset.left - settings.right).to.be.closeTo(4, 1);
+      });
+    }
+  });
+
   it('renders independently delayed frequencies and note indicators after the rows', () => {
     let releaseFrequencies: () => void;
     let releaseNotes: () => void;

@@ -7,6 +7,7 @@ import {
   provideHttpClient,
   withInterceptorsFromDi
 } from '@angular/common/http';
+import { SUPPRESS_GLOBAL_HTTP_ERROR } from '../../../core/interceptors/http-error-context';
 import { VariableAnalysisService } from './variable-analysis.service';
 import { SERVER_URL } from '../../../injection-tokens';
 import { CodingBackgroundJobsService } from '../../../coding/services/coding-background-jobs.service';
@@ -207,6 +208,7 @@ describe('VariableAnalysisService', () => {
           r.params.get('sortBy') === 'count' &&
           r.params.get('sortDirection') === 'desc'
       );
+      expect(req.request.context.get(SUPPRESS_GLOBAL_HTTP_ERROR)).toBe(true);
       expect(req.request.method).toBe('GET');
       req.flush({});
     });

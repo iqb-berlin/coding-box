@@ -178,6 +178,33 @@ describe('Zoneless asynchronous coding dialogs', () => {
       .should('contain.text', 'REOPENED_DIALOG').and('not.contain.text', 'CLOSED_DIALOG');
   });
 
+  it('downloads each CSV version from the coding overview through the browser', () => {
+    const base = '/api/admin/workspace/5/coding/export';
+    cy.intercept('GET', '**/coding/export-missings-profiles', { body: [{ id: 4, label: 'IQB-Standard' }] });
+    openManagement();
+    loadStatistics();
+    for (const version of ['v1', 'v2', 'v3']) {
+      const job = `${base}/job/job-${version}`;
+      const filename = `coding-results-${version}-${new Date().toISOString().slice(0, 10)}.csv`;
+      const csv = `version;code\n${version};0\n`;
+      cy.intercept('POST', base + '/start', req => {
+        expect(req.body).to.include({ version, format: 'csv', exportType: 'results-by-version' });
+        req.reply({ jobId: `job-${version}` });
+      });
+      cy.intercept('GET', job, { body: { status: 'completed', progress: 100 } });
+      cy.intercept('GET', job + '/download/prepare', { body: {} }).as(`prepare-${version}`);
+      cy.intercept({ method: 'GET', pathname: job + '/download/file', query: { version } }, {
+        headers: { 'content-disposition': `attachment; filename="${filename}"`, 'content-type': 'text/csv' }, body: csv
+      }).as(`file-${version}`);
+      cy.get('coding-box-statistics-card .download-results-button').click();
+      cy.get(`coding-box-download-coding-results-dialog mat-radio-button[value="${version}"] label`).click();
+      cy.contains('coding-box-download-coding-results-dialog button', 'Herunterladen').click();
+      cy.wait(`@prepare-${version}`);
+      cy.wait(`@file-${version}`);
+      cy.readFile(`cypress/downloads/${filename}`).should('equal', csv);
+    }
+  });
+
   for (const outcome of ['loaded', 'failed']) {
     it(`settles the delayed ${outcome} Missing profiles and download button`, () => {
       const profilesGate = createResponseGate();

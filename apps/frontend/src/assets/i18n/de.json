@@ -1625,6 +1625,9 @@
     }
   },
   "ws-settings": {
+    "create-new-database": "Neue SQLite-Datei erstellen",
+    "download-ready-database": "Fertige SQLite-Datei herunterladen",
+    "database-retention": "Der letzte fertige Export steht ab Fertigstellung 24 Stunden lang zum erneuten Download bereit.",
     "access-token": "Zugangstoken",
     "generate-token": "Token generieren",
     "generate-token-description": "Generieren Sie ein Zugangstoken für externe Replay-Links in diesem Arbeitsbereich.",
@@ -2123,7 +2126,7 @@
       "error-excel": "Fehler beim Abrufen der Kodierergebnisse (Excel)",
       "success-excel": "Kodierergebnisse wurden als Excel erfolgreich heruntergeladen.",
       "no-entries": "Keine Einträge in den Kodierergebnissen gefunden.",
-      "download-started": "Download gestartet...",
+      "download-started": "Download im Browser gestartet",
       "download-failed": "Download fehlgeschlagen",
       "download-complete": "Download abgeschlossen",
       "download-cancelled": "Download abgebrochen",

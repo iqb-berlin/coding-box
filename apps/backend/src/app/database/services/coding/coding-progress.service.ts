@@ -6,7 +6,9 @@ import {
   Brackets, Repository,
   SelectQueryBuilder
 } from 'typeorm';
-import { CoverageResponse, CoverageResponseRow, mapCoverageRow } from './coding-coverage-row.util';
+import {
+  CoverageResponse, countCoverageStatuses, CoverageResponseRow, mapCoverageRow
+} from './coding-coverage-row.util';
 import { getDefinitionVariables, loadDefinitionBundles } from './coding-definition-variables.util';
 import { getErrorMessage, getErrorStack } from '../../../utils/error.util';
 import { statusStringToNumber } from '../../utils/response-status-converter';
@@ -57,7 +59,7 @@ interface CoverageAggregation {
 
 interface CoverageResponseScope {
   aggregation: CoverageAggregation;
-  allResponses: CoverageResponse[];
+  statusTotal: number;
   manualResponses: CoverageResponse[];
   responseAnalysisRawCases: number;
   excludedSourceSummary: ManualCodingExcludedSourceSummary;
@@ -270,7 +272,7 @@ export class CodingProgressService {
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
-      statusTotalCasesToCode: responseScope.allResponses.length,
+      statusTotalCasesToCode: responseScope.statusTotal,
       responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
@@ -388,7 +390,7 @@ export class CodingProgressService {
       aggregationActive: effectiveProgress.aggregationActive,
       aggregationThreshold: effectiveProgress.aggregationThreshold,
       aggregatedDuplicateCases: effectiveProgress.aggregatedDuplicateCases,
-      statusTotalIncompleteResponses: responseScope.allResponses.length,
+      statusTotalIncompleteResponses: responseScope.statusTotal,
       responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
@@ -459,7 +461,7 @@ export class CodingProgressService {
       aggregationActive: effectiveCoverage.aggregationActive,
       aggregationThreshold: effectiveCoverage.aggregationThreshold,
       aggregatedDuplicateCases: effectiveCoverage.aggregatedDuplicateCases,
-      statusTotalCasesToCode: responseScope.allResponses.length,
+      statusTotalCasesToCode: responseScope.statusTotal,
       responseAnalysisRawCases: responseScope.responseAnalysisRawCases,
       coveredSourceVariableCount:
         responseScope.excludedSourceSummary.coveredSourceVariableCount,
@@ -498,9 +500,9 @@ export class CodingProgressService {
     ]);
     const aggregation = { threshold, matchingFlags };
     const needsValues = threshold !== null && !matchingFlags.includes('NO_AGGREGATION');
-    const [allResponses, manualPoolResponses] = await Promise.all([
-      this.getCoverageResponses(workspaceId, false, needsValues),
-      this.getCoverageResponses(workspaceId, true, needsValues)
+    const [statusCounts, manualPoolResponses] = await Promise.all([
+      this.getCoverageQuery(workspaceId, false).then(countCoverageStatuses),
+      this.getCoverageResponses(workspaceId, needsValues)
     ]);
     const codingIncompleteStatus = statusStringToNumber('CODING_INCOMPLETE');
     const intendedIncompleteStatus = statusStringToNumber('INTENDED_INCOMPLETE');
@@ -550,12 +552,8 @@ export class CodingProgressService {
 
     return {
       aggregation,
-      allResponses,
+      ...statusCounts,
       manualResponses,
-      responseAnalysisRawCases: allResponses.filter(response => (
-        response.statusV1 !== null &&
-        MANUAL_CODING_DEFAULT_CANDIDATE_STATUSES.includes(response.statusV1)
-      )).length,
       excludedSourceSummary
     };
   }
@@ -680,14 +678,9 @@ export class CodingProgressService {
     };
   }
 
-  private async getCoverageResponses(
-    workspaceId: number,
-    manualPoolOnly = false,
-    needsValues = true
-  ): Promise<CoverageResponse[]> {
-    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
-    const query = this.responseRepository
-      .createQueryBuilder('response')
+  private async getCoverageResponses(workspaceId: number, needsValues: boolean): Promise<CoverageResponse[]> {
+    const query = await this.getCoverageQuery(workspaceId, true);
+    const raw = await query
       .select('response.id', 'responseId')
       .addSelect(needsValues ? 'response.value' : 'NULL', 'value')
       .addSelect('response.code_v2', 'codeV2')
@@ -699,13 +692,21 @@ export class CodingProgressService {
       .addSelect("COALESCE(person.login, '')", 'personLogin')
       .addSelect("COALESCE(person.code, '')", 'personCode')
       .addSelect("COALESCE(person.group, '')", 'personGroup')
+      .orderBy('response.id', 'ASC')
+      .getRawMany<CoverageResponseRow>();
+    return raw.map(mapCoverageRow);
+  }
+
+  private async getCoverageQuery(workspaceId: number, manualPoolOnly: boolean): Promise<SelectQueryBuilder<ResponseEntity>> {
+    const exclusions = await this.workspaceExclusionService.resolveExclusionsForQueries(workspaceId);
+    const query = this.responseRepository
+      .createQueryBuilder('response')
       .leftJoin('response.unit', 'unit')
       .leftJoin('unit.booklet', 'booklet')
       .leftJoin('booklet.bookletinfo', 'bookletinfo')
       .leftJoin('booklet.person', 'person')
       .where('person.workspace_id = :workspaceId', { workspaceId })
-      .andWhere('person.consider = :consider', { consider: true })
-      .orderBy('response.id', 'ASC');
+      .andWhere('person.consider = :consider', { consider: true });
     this.applyManualProgressStatusFilter(query, 'andWhere');
 
     if (manualPoolOnly) {
@@ -740,8 +741,7 @@ export class CodingProgressService {
           'coverageResponses'
       }
     );
-    const raw = await query.getRawMany<CoverageResponseRow>();
-    return raw.map(mapCoverageRow);
+    return query;
   }
 
   private async getAssignedCoverageResponseRows(workspaceId: number): Promise<number[]> {

@@ -62,6 +62,7 @@ describe('CodingManagementService', () => {
       getCodingResultsByVersionAsExcel: jest.fn(),
       startExportJob: jest.fn(),
       getExportJobStatus: jest.fn(),
+      prepareResultsCsvDownload: jest.fn(),
       downloadExportFile: jest.fn(),
       cancelExportJob: jest.fn()
     } as unknown as jest.Mocked<CodingExportService>;
@@ -489,6 +490,25 @@ describe('CodingManagementService', () => {
   });
 
   describe('downloadCodingResults', () => {
+    it.each(['v1', 'v2', 'v3'] as const)('hands the %s CSV to the native download manager on HTTPS', async version => {
+      const original = Object.getOwnPropertyDescriptor(window, 'isSecureContext');
+      Object.defineProperty(window, 'isSecureContext', { configurable: true, value: true });
+      const click = jest.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined);
+      try {
+        exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'saved', message: 'started' }));
+        exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);
+        exportServiceMock.prepareResultsCsvDownload.mockReturnValue(of('/file'));
+        await service.downloadCodingResults(version, 'csv', 7, false);
+        expect(exportServiceMock.prepareResultsCsvDownload).toHaveBeenCalledWith(1, 'saved');
+        expect(exportServiceMock.downloadExportFile).not.toHaveBeenCalled();
+        expect(click).toHaveBeenCalled();
+      } finally {
+        click.mockRestore();
+        if (original) Object.defineProperty(window, 'isSecureContext', original);
+        else Reflect.deleteProperty(window, 'isSecureContext');
+      }
+    });
+
     it('should pass response value option to background export job', async () => {
       exportServiceMock.startExportJob.mockReturnValue(of({ jobId: 'job-1', message: 'started' }));
       exportServiceMock.getExportJobStatus.mockReturnValue(of({ status: 'completed', progress: 100 }) as never);

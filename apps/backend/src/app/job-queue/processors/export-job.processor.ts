@@ -6,6 +6,7 @@ import { Job } from 'bullmq';
 import * as path from 'path';
 import * as fs from 'fs';
 import { pipeline } from 'stream/promises';
+import { removeExpiredWorkspaceDatabase } from '../../admin/database/database-export-retention';
 import { WorkspaceWorkerHost } from '../workspace-worker-host';
 import { requireJobId, rethrowJobError } from '../job-queue.util';
 import { getErrorMessage, getErrorStack } from '../../utils/error.util';
@@ -66,7 +67,7 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
 
   async onModuleInit(): Promise<void> {
     const tempDir = this.getExportTempDir();
-    this.ensureExportTempDir(tempDir);
+    fs.mkdirSync(tempDir, { recursive: true });
     await this.cleanupExpiredExportFiles(tempDir);
     this.expiredFileCleanupTimer = setInterval(
       () => this.cleanupExpiredExportFiles(tempDir, true),
@@ -88,12 +89,6 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
 
   private getExportTempDir(): string {
     return path.join(process.cwd(), 'temp');
-  }
-
-  private ensureExportTempDir(tempDir: string): void {
-    if (!fs.existsSync(tempDir)) {
-      fs.mkdirSync(tempDir, { recursive: true });
-    }
   }
 
   private createExportWorkingDirectory(tempDir: string, jobId: string): string {
@@ -229,6 +224,10 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
       for (const entry of entries) {
         const expiredPath = path.join(tempDir, entry.name);
         try {
+          if (entry.isFile()) {
+            await removeExpiredWorkspaceDatabase(expiredPath, this.jobQueueService);
+            continue;
+          }
           if (
             !entry.isDirectory() ||
             !entry.name.startsWith(
@@ -374,7 +373,7 @@ export class ExportJobProcessor extends WorkspaceWorkerHost implements OnModuleI
       await this.checkCancellation(job);
       await this.updateJobProgress(job, 10, { phase: 'preparing' });
       const tempDir = this.getExportTempDir();
-      this.ensureExportTempDir(tempDir);
+      fs.mkdirSync(tempDir, { recursive: true });
       await this.cleanupExpiredExportFiles(tempDir);
       workingDirectory = this.createExportWorkingDirectory(tempDir, jobId);
       await this.startExportWorkingDirectoryLease(workingDirectory, jobId);

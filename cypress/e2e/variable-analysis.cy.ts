@@ -1,4 +1,28 @@
 describe('Answer-value and assigned-code analysis', () => {
+  it('offers recalculation without a global error when the last result has expired', () => {
+    cy.mockKeycloakAuthentication();
+    cy.stubWorkspace({ workspaceId: 5 });
+    cy.intercept('GET', '**/api/workspace/5/settings/*', { body: { value: '{"enabled":false}' } });
+    cy.intercept('GET', '**/test-results/?*', { body: { data: [], total: 0 } });
+    cy.intercept('GET', '**/test-results/overview', { body: { testPersons: 1, uniqueResponses: 1 } }).as('overview');
+    cy.intercept('GET', '**/results/export/jobs', { body: [] });
+    cy.intercept('GET', '**/files/unit-variables', { body: [] });
+    cy.intercept({ method: 'GET', pathname: '/api/admin/workspace/5/variable-analysis/jobs' }, { body: [{
+      id: 'expired', status: 'completed', type: 'variable-analysis', created_at: new Date().toISOString(), analysisMode: 'values'
+    }] });
+    cy.intercept('GET', '**/variable-analysis/jobs/expired/results/page?*', {
+      statusCode: 400, body: { code: 'VARIABLE_ANALYSIS_EXPIRED', message: 'Job has no cached results' }
+    }).as('expired');
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/5/test-results'; });
+    cy.wait('@overview');
+    cy.contains('button', 'Antwortwertanalyse').click();
+    cy.wait('@expired');
+    cy.contains('coding-box-variable-analysis-dialog button', 'Erneut berechnen').should('be.visible');
+    cy.contains('mat-snack-bar-container', 'Job has no cached results').should('not.exist');
+  });
+
   it('lets the first analysis select assigned codes and a coding run before creating a job', () => {
     cy.viewport(1800, 1000);
     cy.mockKeycloakAuthentication();

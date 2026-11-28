@@ -17,6 +17,7 @@ describe('ValidationTaskService', () => {
     deleteAllInvalidResponses: jest.Mock;
   };
   let jobQueueService: {
+    assertNoDependencyConflicts: jest.Mock;
     addValidationTaskJob: jest.Mock;
     getValidationTaskRecovery: jest.Mock;
   };
@@ -40,6 +41,7 @@ describe('ValidationTaskService', () => {
       deleteAllInvalidResponses: jest.fn()
     };
     jobQueueService = {
+      assertNoDependencyConflicts: jest.fn(),
       addValidationTaskJob: jest.fn(),
       getValidationTaskRecovery: jest.fn().mockResolvedValue(new Map())
     };
@@ -71,6 +73,14 @@ describe('ValidationTaskService', () => {
     }).compile();
 
     service = module.get<ValidationTaskService>(ValidationTaskService);
+  });
+
+  it('checks dependencies before persisting a new validation task', async () => {
+    jobQueueService.assertNoDependencyConflicts.mockRejectedValue(new Error('busy'));
+    await expect(service.createValidationTask(7, 'testTakers')).rejects.toThrow('busy');
+    expect(jobQueueService.assertNoDependencyConflicts).toHaveBeenCalledWith('validation-task', 7);
+    expect(taskRepository.save).not.toHaveBeenCalled();
+    expect(jobQueueService.addValidationTaskJob).not.toHaveBeenCalled();
   });
 
   it('returns a waiting state for an interrupted validation without persisting stale progress', async () => {

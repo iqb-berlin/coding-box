@@ -52,7 +52,7 @@ integration('BullMQ with real Redis and the production Nest worker', () => {
       providers: [
         JobQueueService, TestPersonCodingProcessor, CodingResetPreviewProcessor,
         { provide: CodingResetPreviewService, useValue: { preview: previewRun } },
-        { provide: getDataSourceToken(), useValue: {} },
+        { provide: getDataSourceToken(), useValue: { transaction: jest.fn().mockImplementation(operation => operation({ query: async () => [{ locked: true }] })) } },
         { provide: AutocoderRunService, useValue: { run } },
         { provide: getRepositoryToken(ValidationTask), useValue: { find: jest.fn().mockResolvedValue([]) } }
       ]

@@ -329,10 +329,18 @@
             @if (isExporting()) {
               {{ 'ws-settings.exporting' | translate }}
             } @else {
-              {{ 'ws-settings.export-database' | translate }}
+              {{ (databaseExport.availableFile() ? 'ws-settings.create-new-database' : 'ws-settings.export-database') | translate }}
             }
           </button>
+          @if (databaseExport.availableFile()) {
+            <button mat-stroked-button (click)="databaseExport.downloadWorkspaceFile()">
+              <mat-icon>download</mat-icon>{{ 'ws-settings.download-ready-database' | translate }}
+            </button>
+          }
         </div>
+        @if (databaseExport.availableFile()) {
+          <p>{{ 'ws-settings.database-retention' | translate }}</p>
+        }
         @if (isExporting()) {
           <div class="export-progress">
             <mat-progress-bar mode="determinate" [value]="databaseExportProgress()"></mat-progress-bar>

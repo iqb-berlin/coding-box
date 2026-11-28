@@ -16,7 +16,9 @@ import { applyResolvedExclusionsToQuery, isExcludedByResolvedExclusions, Workspa
 import { formatCodingTestPersonFromUnit, generateCodingProgressKey } from './coding-progress-key.util';
 import { CodingJobFreshnessImpactDto } from '../../../../../../../api-dto/coding/job-refresh.dto';
 import { CodingFreshnessService } from './coding-freshness.service';
-import { applyNonCodingIssueReviewJobFilter, CODING_JOB_TYPE_CODING_ISSUE_REVIEW, isCodingIssueReviewJobType } from './coding-job-type.util';
+import {
+  applyNonCodingIssueReviewJobFilter, getCodingJobTrainingFilter, CODING_JOB_TYPE_CODING_ISSUE_REVIEW, isCodingIssueReviewJobType
+} from './coding-job-type.util';
 import {
   CodingJobIssueSummary, CodingJobListFilters, CodingJobCountRow, JOB_DEFINITION_DELETE_READY_STATUSES
 } from './coding-job.types';
@@ -570,17 +572,13 @@ export class CodingJobQueryService {
         jobName: `%${normalizedJobName}%`
       });
     }
-    if (filters.scope === 'training') {
+    const training = getCodingJobTrainingFilter(filters);
+    if (training === 'training') {
       queryBuilder.andWhere('coding_job.training_id IS NOT NULL');
-    } else if (filters.scope === 'productive') {
+    } else if (training === 'productive') {
       queryBuilder.andWhere('coding_job.training_id IS NULL');
-    }
-    if (filters.trainingId === 'none') {
-      queryBuilder.andWhere('coding_job.training_id IS NULL');
-    } else if (typeof filters.trainingId === 'number') {
-      queryBuilder.andWhere('coding_job.training_id = :trainingId', {
-        trainingId: filters.trainingId
-      });
+    } else if (typeof training === 'number') {
+      queryBuilder.andWhere('coding_job.training_id = :trainingId', { trainingId: training });
     }
     this.applyNonCodingIssueReviewJobFilter(
       queryBuilder,
@@ -934,12 +932,6 @@ export class CodingJobQueryService {
       };
     }
 
-    await this.codingFreshnessService?.reconcileAppliedManualCodingJobs(
-      workspaceId,
-      'RESET',
-      'current'
-    );
-
     const jobWhere: Record<string, unknown> = { workspace_id: workspaceId };
     if (filteredJobIds) {
       jobWhere.id = In(filteredJobIds);
@@ -953,15 +945,14 @@ export class CodingJobQueryService {
     if (normalizedJobName) {
       jobWhere.name = ILike(`%${normalizedJobName}%`);
     }
-    if (filters.scope === 'training') {
+    const training = getCodingJobTrainingFilter(filters);
+    if (typeof training === 'number') {
+      jobWhere.training_id = training;
+    } else if (training === 'training') {
       jobWhere.training_id = Not(IsNull());
-    } else if (filters.scope === 'productive') {
-      jobWhere.training_id = IsNull();
-    }
-    if (filters.trainingId === 'none') {
-      jobWhere.training_id = IsNull();
-    } else if (typeof filters.trainingId === 'number') {
-      jobWhere.training_id = filters.trainingId;
+    } else {
+      if (training === 'productive') jobWhere.training_id = IsNull();
+      await this.codingFreshnessService?.reconcileAppliedManualCodingJobs(workspaceId, 'RESET', 'current');
     }
 
     const visibleJobWhere = this.withoutCodingIssueReviewJobWhere(jobWhere);

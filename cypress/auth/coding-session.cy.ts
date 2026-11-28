@@ -851,21 +851,22 @@ describe('real Keycloak coding session', () => {
         request.continue();
       }
     }).as('databaseExportStatus');
-    cy.intercept('GET', '**/export/sqlite/job/*/download').as('downloadDatabaseExport');
+    cy.intercept('GET', /\/export\/sqlite\/job\/[^/]+\/download(?:\/file)?$/).as('downloadDatabaseExport');
     cy.get('coding-box-ws-settings .database-export-card button')
-      .contains('Datenbank exportieren').click();
+      .contains(/Datenbank exportieren|Neue SQLite-Datei erstellen/).click();
     cy.wait('@startDatabaseExport').its('response.statusCode').should('eq', 201);
     for (let poll = 0; poll < 3; poll += 1) {
       cy.wait('@databaseExportStatus').its('response.body.status').should('eq', 'running');
       cy.get('coding-box-ws-settings .database-export-card .progress-text')
         .should('contain.text', '42%');
-      cy.get('coding-box-ws-settings .database-export-actions button')
-        .should('contain.text', 'Exportiere...')
+      cy.contains('coding-box-ws-settings .database-export-actions button', 'Exportiere...')
+        .should('be.visible')
         .and('be.disabled');
     }
     cy.get('coding-box-ws-settings .database-export-card .export-progress')
       .should('be.visible');
     cy.then(() => { releaseExportCompletion = true; });
+    cy.contains('coding-box-ws-settings .database-export-actions button', 'Fertige SQLite-Datei herunterladen', { timeout: 120_000 }).click();
     cy.wait('@downloadDatabaseExport', { timeout: 120_000 })
       .its('response.statusCode').should('eq', 200);
     cy.get('coding-box-ws-settings .database-export-card .export-progress')

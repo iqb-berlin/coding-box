@@ -9,6 +9,29 @@ describe('Database exports from settings', () => {
     cy.intercept('GET', '**/api/admin/content-pool/settings', { body: { enabled: false, baseUrl: '', hasApplicationToken: false } });
   });
 
+  it('downloads the same completed workspace file again after reopening settings', () => {
+    const base = '**/api/admin/workspace/5/export/sqlite';
+    cy.intercept('GET', `${base}/available`, { body: { readyJobId: 'saved' } }).as('available');
+    cy.intercept('POST', `${base}/job`, { statusCode: 500 }).as('newJob');
+    cy.intercept('GET', `${base}/job/saved/download/prepare`, { body: {} }).as('prepare');
+    cy.intercept('GET', `${base}/job/saved/download/file`, {
+      headers: { 'content-disposition': 'attachment; filename="saved.sqlite"' }, body: 'retained file'
+    }).as('file');
+    cy.visit('/');
+    cy.wait('@authData');
+    cy.window().then(win => { win.location.hash = '/workspace-admin/5/settings'; });
+    cy.wait('@available');
+    cy.contains('button', 'Fertige SQLite-Datei herunterladen').click();
+    cy.wait('@prepare');
+    cy.wait('@file');
+    cy.reload();
+    cy.wait('@available');
+    cy.contains('button', 'Fertige SQLite-Datei herunterladen').click();
+    cy.wait('@prepare');
+    cy.wait('@file');
+    cy.get('@newJob.all').should('have.length', 0);
+  });
+
   const scopes = [
     { name: 'system', route: '/admin/settings', api: '/admin/database/export/sqlite', file: 'database-export', host: 'coding-box-sys-admin-settings' },
     { name: 'workspace', route: '/workspace-admin/5/settings', api: '/admin/workspace/5/export/sqlite', file: 'workspace-5-export', host: 'coding-box-ws-settings' }
@@ -30,15 +53,27 @@ describe('Database exports from settings', () => {
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(win => { win.location.hash = scope.route; });
-      cy.get(scope.host).find('.database-export-card button').as('export').click();
+      cy.get(scope.host).find('.database-export-card button').first().as('export').click();
       cy.wait('@start');
       cy.get('@export').should('be.disabled');
       cy.wait('@status');
       cy.get(scope.host).find('.export-progress').should('contain.text', '42%');
       cy.wait('@status');
-      cy.wait('@download');
+      if (scope.name === 'workspace') {
+        cy.intercept('GET', `**/api${scope.api}/job/export-1/download/prepare`, { body: {} }).as('prepare');
+        cy.intercept('GET', `**/api${scope.api}/job/export-1/download/file`, {
+          headers: { 'content-disposition': 'attachment; filename="workspace-5-export-1.sqlite"' },
+          body: 'synthetic sqlite export'
+        }).as('nativeDownload');
+        cy.contains('button', 'Fertige SQLite-Datei herunterladen').click();
+        cy.wait('@prepare');
+        cy.wait('@nativeDownload');
+      } else {
+        cy.wait('@download');
+      }
       cy.get('@export').should('not.be.disabled');
-      cy.readFile(`cypress/downloads/${scope.file}-${new Date().toISOString().slice(0, 10)}.sqlite`)
+      const name = scope.name === 'workspace' ? 'workspace-5-export-1' : `${scope.file}-${new Date().toISOString().slice(0, 10)}`;
+      cy.readFile(`cypress/downloads/${name}.sqlite`)
         .should('equal', 'synthetic sqlite export');
       cy.get(scope.host).find('.export-error').should('not.exist');
       cy.window().should('not.have.property', 'Zone');
@@ -53,7 +88,7 @@ describe('Database exports from settings', () => {
       cy.visit('/');
       cy.wait('@authData');
       cy.window().then(win => { win.location.hash = scope.route; });
-      cy.get(scope.host).find('.database-export-card button').as('export').click();
+      cy.get(scope.host).find('.database-export-card button').first().as('export').click();
       cy.wait('@failed');
       cy.get(scope.host).find('.export-error').should('contain.text', 'Synthetischer Exportfehler');
       cy.get('@export').should('not.be.disabled').click();

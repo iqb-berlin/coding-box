@@ -2,6 +2,7 @@ import { Injectable, inject, OnDestroy } from '@angular/core';
 import { HttpClient, HttpParams } from '@angular/common/http';
 import { Observable, Subscription } from 'rxjs';
 import { finalize } from 'rxjs/operators';
+import { suppressGlobalHttpErrorContext } from '../../../core/interceptors/http-error-context';
 import { VariableAnalysisOptions } from '../../../../../../../api-dto/coding/variable-analysis-options';
 import { SERVER_URL } from '../../../injection-tokens';
 import { VariableAnalysisJobDto } from '../../../models/variable-analysis-job.dto';
@@ -271,7 +272,7 @@ export class VariableAnalysisService implements OnDestroy {
 
     return this.http.get<VariableAnalysisResultPageDto>(
       `${this.serverUrl}admin/workspace/${workspaceId}/variable-analysis/jobs/${jobId}/results/page`,
-      { headers: this.authHeader, params }
+      { headers: this.authHeader, params, context: suppressGlobalHttpErrorContext() }
     );
   }
 

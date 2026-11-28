@@ -21,6 +21,8 @@ import type { ManualCodingPlanningSnapshot, ManualCodingFreshnessJobSummary as M
 import { CaseCoverageOverview, CodingProgressOverview, TestPersonCodingService } from '../../services/test-person-coding.service';
 import { buildManualFreshnessJobSummary, hasCodingIssuesForCompletedJob, isCodingJobReadyForApply } from './manual-coding-job-summary';
 
+const planningRequestKeys = ['variables', 'cases', 'progress', 'incomplete', 'scope', 'availability', 'jobs', 'conflicts', 'applied'];
+
 /** Statistics for one mounted manual-coding view. Each query replaces its predecessor. */
 @Injectable()
 export class ManualCodingStatisticsFacade {
@@ -149,6 +151,12 @@ export class ManualCodingStatisticsFacade {
   readonly isLoadingCodingFreshness = this.isLoadingCodingFreshnessState.asReadonly();
   private lastCodingFreshnessRefreshAt = 0;
 
+  cancelPlanningRequests(): void {
+    for (const key of planningRequestKeys) {
+      this.requests.get(key)?.unsubscribe();
+    }
+  }
+
   cancelFreshness(clearSummary = false): void {
     this.requests.get('freshness')?.unsubscribe();
     if (clearSummary) this.codingFreshnessSummaryState.set(null);
@@ -226,7 +234,7 @@ export class ManualCodingStatisticsFacade {
         if (this.appService.selectedWorkspaceId !== workspaceId) return;
         received = true;
         fail();
-        if (['progress', 'variables', 'cases', 'jobs', 'conflicts', 'incomplete', 'scope', 'availability', 'applied'].includes(key)) this.failedSubject.next();
+        if (planningRequestKeys.includes(key)) this.failedSubject.next();
       }
     });
     requestSlot.add(request);
